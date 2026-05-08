@@ -1,0 +1,231 @@
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Breath</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --deep-space: #030508;
+            --nebula-purple: #0a0a15;
+            --quantum-blue: #050810;
+            --bioluminescent-cyan: #00f5d4;
+            --bioluminescent-violet: #7c3aed;
+            --bioluminescent-teal: #14b8a6;
+            --soft-white: rgba(255, 255, 255, 0.95);
+            --muted-cyan: rgba(0, 255, 247, 0.15);
+            --glow-amber: #fbbf24;
+        }
+        
+        body {
+            background: var(--deep-space);
+            overflow: hidden;
+            font-family: 'Cormorant Garamond', serif;
+            cursor: crosshair;
+        }
+        
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .ui-overlay {
+            position: fixed;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .title-container {
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        
+        .title {
+            font-size: clamp(1.5rem, 4vw, 3rem);
+            font-weight: 300;
+            letter-spacing: 0.4em;
+            color: var(--soft-white);
+            text-transform: uppercase;
+            opacity: 0.7;
+            text-shadow: 0 0 30px var(--bioluminescent-cyan);
+        }
+        
+        .subtitle {
+            font-size: clamp(0.7rem, 1.5vw, 1rem);
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            color: var(--soft-white);
+            opacity: 0.4;
+            margin-top: 0.5rem;
+        }
+        
+        .status-container {
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            animation: fadeIn 2s ease-out 1s forwards;
+            opacity: 0;
+        }
+        
+        .status {
+            font-size: clamp(0.6rem, 1.2vw, 0.9rem);
+            font-weight: 300;
+            letter-spacing: 0.2em;
+            color: var(--soft-white);
+            opacity: 0.5;
+        }
+        
+        .breath-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--bioluminescent-cyan);
+            box-shadow: 0 0 20px var(--bioluminescent-cyan);
+            margin: 0 auto 0.8rem;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        .breath-indicator.active {
+            opacity: 0.8;
+            animation: breathe 8s ease-in-out infinite;
+        }
+        
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(2.5); opacity: 0.85; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes glowPulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 247, 0.15); }
+            50% { box-shadow: 0 0 25px rgba(0, 255, 247, 0.35); }
+        }
+        
+        .title-container {
+            animation: fadeIn 2s ease-out forwards;
+        }
+        
+        .subtitle {
+            animation: fadeIn 2s ease-out 0.5s forwards;
+            opacity: 0;
+        }
+            position: fixed;
+            bottom: 6rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            color: var(--soft-white);
+            opacity: 0.25;
+            pointer-events: none;
+            transition: opacity 1s ease;
+        }
+        
+        .hint.hidden {
+            opacity: 0;
+        }
+        
+        .quantum-state {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            text-align: right;
+        }
+        
+        .state-label {
+            font-size: 0.6rem;
+            letter-spacing: 0.2em;
+            color: var(--soft-white);
+            opacity: 0.3;
+        }
+        
+        .state-value {
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            color: var(--bioluminescent-violet);
+            opacity: 0.6;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .audio-toggle {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            pointer-events: auto;
+            cursor: pointer;
+            padding: 0.8rem 1.2rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--soft-white);
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+        
+        .audio-toggle:hover {
+            background: rgba(255, 255, 255, 0.08);
+            opacity: 0.8;
+        }
+        
+        .audio-toggle.active {
+            border-color: var(--bioluminescent-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 247, 0.2);
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            color: var(--soft-white);
+            opacity: 0.3;
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(10, 10, 18, 0.7) 100%);
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="vignette"></div>
+    
+    <div class="ui-overlay title-container">
+        <h1 class="title">Quantum Breath</h1>
+        <p class="subtitle">meditation on uncertainty</p>
+    </div>
+    
+    <div class="quantum-state">
+        <div class="state-label">ENTANGLEMENT</div>
+        <div class="state-value" id="entanglement-value">0.00</div>
+    </div>
+    
+    <div class="connection-status" id="connection-status">● SINGLE NODE</div>
+    
+    <div class="ui-overlay status-container">

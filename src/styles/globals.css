@@ -1,0 +1,454 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   GIA DESIGN SYSTEM — v2.2.0
+   Dark, refined, next-gen personal AI workspace
+   ============================================================ */
+
+:root {
+  /* Core palette */
+  --gia-bg:          #0a0a0f;
+  --gia-surface:     #111118;
+  --gia-surface-2:   #18181f;
+  --gia-surface-3:   #202028;
+  --gia-border:      rgba(255,255,255,0.07);
+  --gia-border-2:    rgba(255,255,255,0.12);
+  --gia-text:        #f0f0f5;
+  --gia-muted:       #8888a0;
+  --gia-muted-2:     #5a5a70;
+
+  /* Accent — electric violet */
+  --gia-accent:      #a855f7;
+  --gia-accent-rgb:  168, 85, 247;
+  --gia-accent-dim:  rgba(168, 85, 247, 0.15);
+  --gia-accent-glow: rgba(168, 85, 247, 0.3);
+
+  /* Module accent colors */
+  --mod-chat:     168, 85, 247;   /* violet */
+  --mod-analyst:  59, 130, 246;   /* blue */
+  --mod-writer:   236, 72, 153;   /* pink */
+  --mod-planner:  16, 185, 129;   /* emerald */
+  --mod-settings: 148, 163, 184;  /* slate */
+
+  /* Ambient glow system */
+  --glow-color:   var(--mod-chat);
+  --glow-opacity: 0.25;
+  --glow-size:    80px;
+  --glow-speed:   4s;
+
+  /* Spacing / radius */
+  --radius-sm:  10px;
+  --radius-md:  14px;
+  --radius-lg:  20px;
+  --radius-xl:  28px;
+}
+
+/* ============================================================
+   BASE RESET
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--gia-bg);
+  color: var(--gia-text);
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.015em;
+  line-height: 1.5;
+}
+
+/* Safe area insets for notched phones */
+#root {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--gia-surface-3);
+  border-radius: 3px;
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ============================================================
+   AMBIENT GLOW SYSTEM
+   ============================================================ */
+@keyframes glow-breathe {
+  0%, 100% { opacity: var(--glow-opacity); transform: scale(1); }
+  50%       { opacity: calc(var(--glow-opacity) * 1.6); transform: scale(1.1); }
+}
+@keyframes glow-pulse-fast {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 0.8; }
+}
+
+.ambient-glow {
+  position: absolute;
+  inset: -30px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(var(--glow-color), var(--glow-opacity)) 0%,
+    rgba(var(--glow-color), 0) 70%
+  );
+  filter: blur(var(--glow-size));
+  animation: glow-breathe var(--glow-speed) ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+[data-intent="thinking"] .ambient-glow {
+  animation: glow-pulse-fast 1.2s ease-in-out infinite;
+}
+
+/* ============================================================
+   TAILWIND THEME EXTENSIONS
+   ============================================================ */
+@theme {
+  --color-gia-bg:       #0a0a0f;
+  --color-gia-surface:  #111118;
+  --color-gia-surface2: #18181f;
+  --color-gia-surface3: #202028;
+  --color-gia-accent:   #a855f7;
+  --color-gia-text:     #f0f0f5;
+  --color-gia-muted:    #8888a0;
+  --color-gia-border:   rgba(255,255,255,0.07);
+}
+
+/* ============================================================
+   GLASS CARD COMPONENT
+   ============================================================ */
+.gia-card {
+  background: var(--gia-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gia-border);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.gia-card:hover {
+  border-color: var(--gia-border-2);
+}
+.gia-card-glass {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gia-border);
+}
+
+/* ============================================================
+   INPUT COMPONENT
+   ============================================================ */
+.gia-input {
+  background: var(--gia-surface-2);
+  border: 1px solid var(--gia-border);
+  border-radius: var(--radius-md);
+  color: var(--gia-text);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.gia-input::placeholder { color: var(--gia-muted-2); }
+.gia-input:focus {
+  border-color: rgba(var(--gia-accent-rgb), 0.4);
+  box-shadow: 0 0 0 3px rgba(var(--gia-accent-rgb), 0.08);
+}
+
+/* ============================================================
+   BUTTON COMPONENT
+   ============================================================ */
+.gia-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  outline: none;
+}
+.gia-btn-primary {
+  background: var(--gia-accent);
+  color: white;
+}
+.gia-btn-primary:hover { opacity: 0.9; }
+.gia-btn-primary:active { transform: scale(0.97); }
+.gia-btn-ghost {
+  background: transparent;
+  color: var(--gia-muted);
+  border: 1px solid var(--gia-border);
+}
+.gia-btn-ghost:hover {
+  background: var(--gia-surface-2);
+  color: var(--gia-text);
+}
+
+/* ============================================================
+   PILL / BADGE
+   ============================================================ */
+.gia-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.gia-pill-accent {
+  background: rgba(var(--gia-accent-rgb), 0.15);
+  color: var(--gia-accent);
+  border: 1px solid rgba(var(--gia-accent-rgb), 0.25);
+}
+.gia-pill-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.gia-pill-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+.nav-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gia-accent);
+}
+
+/* ============================================================
+   MESSAGE BUBBLES
+   ============================================================ */
+.msg-user {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+  border-radius: 18px 18px 4px 18px;
+}
+.msg-assistant {
+  background: var(--gia-surface-2);
+  border: 1px solid var(--gia-border);
+  border-radius: 4px 18px 18px 18px;
+  color: var(--gia-text);
+}
+.msg-error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px 18px 18px 18px;
+  color: #f87171;
+}
+
+/* ============================================================
+   MARKDOWN CONTENT
+   ============================================================ */
+.gia-markdown {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--gia-text);
+}
+.gia-markdown h1 { font-size: 20px; font-weight: 700; margin: 16px 0 8px; color: var(--gia-text); }
+.gia-markdown h2 { font-size: 16px; font-weight: 600; margin: 14px 0 6px; color: var(--gia-text); }
+.gia-markdown h3 { font-size: 14px; font-weight: 600; margin: 12px 0 4px; color: var(--gia-text); }
+.gia-markdown p  { margin: 6px 0; }
+.gia-markdown ul, .gia-markdown ol { margin: 8px 0; padding-left: 20px; }
+.gia-markdown li { margin: 3px 0; }
+.gia-markdown a  { color: var(--gia-accent); text-decoration: underline; text-underline-offset: 2px; }
+.gia-markdown strong { font-weight: 600; color: white; }
+.gia-markdown em { font-style: italic; color: var(--gia-muted); }
+.gia-markdown code {
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.gia-markdown blockquote {
+  border-left: 3px solid var(--gia-accent);
+  padding-left: 12px;
+  margin: 10px 0;
+  color: var(--gia-muted);
+  font-style: italic;
+}
+.gia-markdown hr {
+  border: none;
+  border-top: 1px solid var(--gia-border);
+  margin: 16px 0;
+}
+.gia-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 12px 0;
+}
+.gia-markdown th {
+  background: var(--gia-surface-3);
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid var(--gia-border);
+}
+.gia-markdown td {
+  padding: 5px 10px;
+  border: 1px solid var(--gia-border);
+}
+.gia-markdown tr:nth-child(even) td { background: var(--gia-surface-2); }
+
+/* ============================================================
+   CODE BLOCK
+   ============================================================ */
+.code-block {
+  margin: 10px 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--gia-border);
+}
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gia-surface-3);
+  padding: 6px 12px;
+}
+.code-block-lang {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--gia-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.code-block-body {
+  background: #0d0d14;
+  padding: 14px;
+  overflow-x: auto;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.6;
+  color: #e2e8f0;
+  white-space: pre;
+}
+
+/* ============================================================
+   THINKING / LOADING STATES
+   ============================================================ */
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%       { opacity: 1; transform: scale(1); }
+}
+.thinking-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gia-accent);
+  animation: thinking-pulse 1.4s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.16s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.32s; }
+
+/* ============================================================
+   HAPTIC FEEDBACK ANIMATION
+   ============================================================ */
+@keyframes tap-scale {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+.tap-feedback:active { animation: tap-scale 0.12s ease; }
+
+/* ============================================================
+   SLIDE IN TRANSITIONS
+   ============================================================ */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.25s ease forwards; }
+.animate-fade-in  { animation: fade-in 0.2s ease forwards; }
+
+/* ============================================================
+   TERMINAL FONT
+   ============================================================ */
+.font-terminal {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ============================================================
+   EXAM / QUIZ SPECIFIC
+   ============================================================ */
+.exam-option {
+  background: var(--gia-surface-2);
+  border: 1px solid var(--gia-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+  color: var(--gia-text);
+  text-align: left;
+  width: 100%;
+}
+.exam-option:hover {
+  border-color: rgba(var(--gia-accent-rgb), 0.4);
+  background: var(--gia-surface-3);
+}
+.exam-option.correct {
+  border-color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+}
+.exam-option.wrong {
+  border-color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+}
+.exam-option.selected {
+  border-color: rgba(var(--gia-accent-rgb), 0.6);
+  background: rgba(var(--gia-accent-rgb), 0.1);
+}
+
+/* ============================================================
+   NOISE TEXTURE OVERLAY (subtle depth)
+   ============================================================ */
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}

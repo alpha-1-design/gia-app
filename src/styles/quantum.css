@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap');
+
+:root {
+    --deep-space: #030508;
+    --nebula-purple: #0a0a15;
+    --quantum-blue: #050810;
+    --bioluminescent-cyan: #00f5d4;
+    --bioluminescent-violet: #7c3aed;
+    --bioluminescent-teal: #14b8a6;
+    --soft-white: rgba(255, 255, 255, 0.95);
+    --muted-cyan: rgba(0, 255, 247, 0.15);
+    --glow-amber: #fbbf24;
+}
+
+body {
+    background: var(--deep-space);
+    overflow: hidden;
+    font-family: 'Cormorant Garamond', serif;
+    cursor: crosshair;
+}
+
+#canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+}
