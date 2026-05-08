@@ -315,10 +315,15 @@ const EngineRoom: React.FC = () => {
         <input
           ref={inputRef} type="text" value={input}
           onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown}
-          className="flex-1 bg-transparent border-none outline-none text-zinc-100 caret-emerald-400"
+          className="flex-1 bg-transparent border-none outline-none text-zinc-100 caret-emerald-400 min-w-0"
           autoComplete="off" spellCheck={false} autoCapitalize="off"
+          inputMode="text" enterKeyHint="send"
           disabled={busy}
         />
+        <button type="submit" disabled={busy || !input.trim()} 
+          className="text-emerald-500 hover:text-emerald-400 disabled:text-zinc-700 transition-colors">
+          <ArrowLeft size={18} className="rotate-180" />
+        </button>
       </form>
     </div>
   );

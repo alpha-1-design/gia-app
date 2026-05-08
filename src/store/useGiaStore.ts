@@ -171,13 +171,17 @@ export const useGiaStore = create<GiaState>()(
 
       hibernateSessions: () => {
         const { sessions, activeSessionId } = get();
-        // Keep only the active session and the last 3 most recent sessions fully in memory.
-        // For others, we "hibernate" them by emptying their messages array.
-        // Since we use IndexedDB for persistence, the full data is safe on disk.
+        // Skip hibernation if we have very few sessions
+        if (sessions.length <= 4) return;
+
         set((s) => ({
           sessions: s.sessions.map((sess, idx) => {
             if (sess.id === activeSessionId || idx < 4) return sess;
-            return { ...sess, messages: [] }; // Hibernated
+            // Hibernating by emptying messages array is DANGEROUS with persist().
+            // Instead, we should mark it as hibernated and handle loading logic,
+            // or simply remove the feature if memory isn't a critical issue yet.
+            // For now, let's just keep the data safe.
+            return sess; 
           }),
         }));
       },
