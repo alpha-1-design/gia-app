@@ -79,9 +79,11 @@ class GiaBrain {
       
       const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
       const doc = new DOMParser().parseFromString(html, 'text/html');
+      const title = doc.title || 'No title';
       doc.querySelectorAll('script,style,nav,footer,header,aside').forEach(el => el.remove());
       const text = doc.body?.innerText ?? doc.body?.textContent ?? '';
-      return text.replace(/\s{3,}/g, '\n\n').trim().slice(0, 8000);
+      const cleanText = text.replace(/\s{3,}/g, '\n\n').trim().slice(0, 10000);
+      return `[Source: ${url}]\n[Title: ${title}]\n\n${cleanText}`;
     } catch (e) {
       // Fallback for browser development
       try {
@@ -89,8 +91,10 @@ class GiaBrain {
         const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
+        const title = doc.title || 'No title';
         doc.querySelectorAll('script,style,nav,footer,header,aside').forEach(el => el.remove());
-        return doc.body?.innerText?.slice(0, 8000) ?? '';
+        const text = doc.body?.innerText?.slice(0, 10000) ?? '';
+        return `[Source: ${url}]\n[Title: ${title}]\n\n${text}`;
       } catch {
         throw new Error(`Could not fetch URL: ${e instanceof Error ? e.message : String(e)}`);
       }

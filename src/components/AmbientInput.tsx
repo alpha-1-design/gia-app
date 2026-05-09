@@ -1,6 +1,8 @@
-import React, { useRef, useEffect } from 'react';
-import { Send, Loader2, Square } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Send, Loader2, Square, Mic, MicOff, Sparkles } from 'lucide-react';
 import { useGiaStore, IntentState } from '../store/useGiaStore';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import GiaBrain from '../services/GiaBrain';
 
 interface AmbientInputProps {
   value: string;
@@ -11,6 +13,7 @@ interface AmbientInputProps {
   disabled?: boolean;
   isLoading?: boolean;
   multiline?: boolean;
+  autoFocus?: boolean;
 }
 
 const STATE_GLOW: Record<IntentState, string> = {
@@ -29,13 +32,77 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   disabled = false,
   isLoading = false,
   multiline = false,
+  autoFocus = false,
 }) => {
-  const { intentState } = useGiaStore();
+  const { intentState, addNotification } = useGiaStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
 
   const color = STATE_GLOW[intentState] ?? STATE_GLOW.idle;
   const isActive = intentState !== 'idle' || value.length > 0;
+
+  const toggleListening = async () => {
+    if (isListening) {
+      await SpeechRecognition.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const { available } = await SpeechRecognition.available();
+      if (!available) {
+        addNotification('Speech recognition not available.');
+        return;
+      }
+
+      const perm = await SpeechRecognition.requestPermissions();
+      if (perm.speechRecognition !== 'granted') {
+        addNotification('Microphone permission denied.');
+        return;
+      }
+
+      setIsListening(true);
+      const result = await SpeechRecognition.start({
+        language: 'en-US',
+        partialResults: true,
+        popup: true,
+      });
+
+      if (result.matches && result.matches.length > 0) {
+        const transcript = result.matches[0];
+        onChange(transcript);
+        
+        // Auto-refine if it's long enough
+        if (transcript.split(' ').length > 5) {
+          refineSpeech(transcript);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    } finally {
+      setIsListening(false);
+    }
+  };
+
+  const refineSpeech = async (text: string) => {
+    setIsRefining(true);
+    try {
+      const res = await GiaBrain.generate({
+        prompt: text,
+        systemPrompt: "You are a speech correction assistant. Fix any obvious typos, misheard words, or grammar issues in the provided transcript while keeping the user's intent identical. Respond ONLY with the corrected text, no explanations.",
+        temperature: 0.1,
+        maxTokens: 500,
+      });
+      if (res.text) onChange(res.text.trim());
+    } catch (e) {
+      console.error('Refinement failed', e);
+    } finally {
+      setIsRefining(false);
+    }
+  };
 
   // Auto-resize textarea
   useEffect(() => {
@@ -69,6 +136,11 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
     onKeyDown: handleKeyDown,
     placeholder,
     disabled: disabled || isLoading,
+    autoComplete: 'on',
+    autoCorrect: 'on',
+    autoCapitalize: 'sentences' as const,
+    spellCheck: true,
+    inputMode: 'text' as const,
     style: {
       background: 'rgba(255,255,255,0.04)',
       border: `1px solid ${borderColor}`,
@@ -98,7 +170,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
             ref={textareaRef}
             {...sharedInputProps}
             rows={1}
-            className="flex-1 py-3 pl-4 pr-12 text-sm outline-none placeholder:opacity-40 resize-none"
+            className="flex-1 py-3 pl-11 pr-12 text-sm outline-none placeholder:opacity-40 resize-none"
             style={{
               ...sharedInputProps.style,
               minHeight: '48px',
@@ -111,8 +183,26 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
             ref={inputRef}
             {...sharedInputProps}
             type="text"
-            className="flex-1 py-3.5 pl-5 pr-14 text-sm outline-none placeholder:opacity-40"
+            className="flex-1 py-3.5 pl-11 pr-14 text-sm outline-none placeholder:opacity-40"
           />
+        )}
+
+        {/* Mic button */}
+        <button
+          type="button"
+          onClick={toggleListening}
+          className="absolute left-1.5 bottom-1.5 w-10 h-10 rounded-full flex items-center justify-center transition-all"
+          style={{ color: isListening ? '#f87171' : 'var(--gia-muted)' }}
+        >
+          {isListening ? <MicOff size={17} className="animate-pulse" /> : <Mic size={17} />}
+        </button>
+
+        {/* Refinement Indicator */}
+        {isRefining && (
+          <div className="absolute left-12 top-1 flex items-center gap-1.5 animate-pulse">
+            <Sparkles size={10} className="text-emerald-400" />
+            <span className="text-[8px] text-emerald-400 font-medium">Polishing...</span>
+          </div>
         )}
 
         {/* Send / Stop button */}

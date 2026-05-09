@@ -38,24 +38,6 @@ const SettingsModule: React.FC = () => {
       className="flex flex-col h-full overflow-y-auto"
       style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}
     >
-      {/* Notifications */}
-      {notifications.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
-            Notifications
-          </p>
-          {notifications.map(n => (
-            <div key={n.id} className="gia-card p-3 flex items-start gap-3" style={{ borderColor: 'rgba(16,185,129,0.2)' }}>
-              <Bell size={13} style={{ color: '#34d399', flexShrink: 0, marginTop: 2 }} />
-              <p className="text-xs flex-1 leading-relaxed" style={{ color: 'var(--gia-text)' }}>{n.message}</p>
-              <button onClick={() => clearNotification(n.id)} style={{ color: 'var(--gia-muted)' }}>
-                <X size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Profile */}
       <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div className="flex items-center justify-between">

@@ -13,17 +13,17 @@ interface SuggestionToastProps {
 
 const SuggestionToast = ({ suggestion, onAccept, onDismiss }: SuggestionToastProps) => {
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="gia-card p-4 flex items-center gap-4 bg-white/90 backdrop-blur-md border-gia-accent/30 shadow-xl min-w-[320px]">
+    <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-500 w-[90%] max-w-[360px]">
+      <div className="gia-card p-4 flex items-center gap-4 bg-zinc-900/95 backdrop-blur-xl border-zinc-800 shadow-2xl">
         <div className="w-10 h-10 bg-gia-accent rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-gia-accent/20">
           <Sparkles size={18} className="text-white" />
         </div>
 
         <div className="flex-1">
-          <p className="text-sm font-medium text-gia-text">
+          <p className="text-sm font-medium text-zinc-100">
             {suggestion.reason}
           </p>
-          <p className="text-[10px] text-gia-muted uppercase tracking-wider font-bold">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mt-0.5">
             Switch to {suggestion.module} view?
           </p>
         </div>
@@ -31,7 +31,7 @@ const SuggestionToast = ({ suggestion, onAccept, onDismiss }: SuggestionToastPro
         <div className="flex gap-2">
           <button
             onClick={onDismiss}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gia-muted"
+            className="p-2 hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
             title="Dismiss"
           >
             <X size={16} />

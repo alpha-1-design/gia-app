@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, BarChart2, PenLine, ListTodo, Settings } from 'lucide-react';
+import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
 import AnalystModule from './modules/AnalystModule';
@@ -52,11 +53,15 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, hibernateSessions } = useGiaStore();
+  const { currentModule, setModule, showTerminal, userProfile, hibernateSessions, notifications, clearNotification } = useGiaStore();
 
   useEffect(() => {
     hibernateSessions();
     const interval = setInterval(hibernateSessions, 300_000);
+    
+    // Request notification permissions
+    LocalNotifications.requestPermissions();
+
     return () => clearInterval(interval);
   }, [hibernateSessions]);
 
@@ -67,6 +72,32 @@ const App: React.FC = () => {
       className="flex flex-col h-full overflow-hidden relative"
       style={{ background: 'var(--gia-bg)' }}
     >
+      {/* Global Notifications */}
+      <div className="fixed top-16 left-0 right-0 z-[60] px-4 pointer-events-none space-y-2">
+        <AnimatePresence>
+          {notifications.map((n) => (
+            <motion.div
+              key={n.id}
+              initial={{ opacity: 0, x: 20, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              className="gia-card p-3.5 flex items-start gap-3 pointer-events-auto shadow-2xl bg-zinc-900/95 backdrop-blur-xl border-zinc-800"
+            >
+              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                <Bell size={14} className="text-emerald-400" />
+              </div>
+              <div className="flex-1 pt-0.5">
+                <p className="text-[13px] font-medium text-zinc-100 leading-tight">{n.message}</p>
+                <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-wider">Just now</p>
+              </div>
+              <button onClick={() => clearNotification(n.id)} className="text-zinc-600 hover:text-zinc-400 p-1">
+                <X size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Ambient background glow that shifts per module */}
       <div
         className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full pointer-events-none"
@@ -92,7 +123,7 @@ const App: React.FC = () => {
               className="gia-pill gia-pill-accent"
               style={{ fontSize: '8px', padding: '2px 6px' }}
             >
-              v2.2
+              v2.2.2
             </span>
           </div>
           <p
@@ -133,9 +164,6 @@ const App: React.FC = () => {
         <div className="flex items-center">
           {MODULES.map((mod) => {
             const active = currentModule === mod.id;
-            const rgbColor = mod.color.replace('var(--mod-', '').replace(')', '');
-            const cssVar = `var(--mod-${rgbColor})`;
-
             return (
               <button
                 key={mod.id}
