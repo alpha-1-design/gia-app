@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
+import { useMemoryStore } from '../store/useMemoryStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -20,6 +21,35 @@ const WriterModule: React.FC = () => {
   const [preview, setPreview] = useState(true);
   const { setIntentState, addNotification } = useGiaStore();
 
+  const DRAFT_KEY = 'gia-writer-draft';
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setDraft(parsed.draft || '');
+        setPrompt(parsed.prompt || '');
+        setFormat(parsed.format || 'Essay');
+        setWordTarget(parsed.wordTarget || 300);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (draft) {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ draft, prompt, format, wordTarget }));
+      } catch {}
+    }
+  }, [draft, prompt, format, wordTarget]);
+
+  const clearDraft = () => {
+    setDraft('');
+    setPrompt('');
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  };
+
   const handleWrite = useCallback(async () => {
     const text = prompt.trim();
     if (!text || loading) return;
@@ -35,6 +65,7 @@ const WriterModule: React.FC = () => {
       });
       setIntentState('responding');
       setTimeout(() => setIntentState('idle'), 2000);
+      useMemoryStore.getState().addMemory({ key: 'writing_format', value: format, category: 'preference', confidence: 0.4 });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setIntentState('idle');
@@ -85,7 +116,7 @@ const WriterModule: React.FC = () => {
             <button onClick={exportDraft} className="gia-btn gia-btn-ghost text-xs py-1 px-2 border-zinc-800">
               <Download size={12} /> Export
             </button>
-            <button onClick={() => setDraft('')} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}>
+            <button onClick={clearDraft} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}>
               <X size={14} />
             </button>
           </div>

@@ -1,29 +1,7 @@
-import React, { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import React from 'react';
+import CodeBlock from './CodeBlock';
 
 interface Props { content: string; className?: string }
-
-const CodeBlock: React.FC<{ lang: string; code: string }> = ({ lang, code }) => {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(code).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className="code-block my-3">
-      <div className="code-block-header">
-        <span className="code-block-lang">{lang || 'code'}</span>
-        <button onClick={copy} className="flex items-center gap-1.5 transition-colors"
-          style={{ fontSize: '10px', color: copied ? '#34d399' : 'var(--gia-muted)' }}>
-          {copied ? <Check size={10} /> : <Copy size={10} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="code-block-body"><code>{code}</code></pre>
-    </div>
-  );
-};
 
 const inlineRender = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~)/g);
@@ -60,7 +38,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
         codeLines.push(lines[i]);
         i++;
       }
-      nodes.push(<CodeBlock key={i} lang={lang} code={codeLines.join('\n')} />);
+      nodes.push(<CodeBlock key={i} lang={lang} code={codeLines.join('\n')} showRun={true} />);
       i++;
       continue;
     }
@@ -164,4 +142,4 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
   );
 };
 
-export default MarkdownRenderer;
+export default React.memo(MarkdownRenderer);

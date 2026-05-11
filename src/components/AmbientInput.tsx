@@ -92,11 +92,28 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
     try {
       const res = await GiaBrain.generate({
         prompt: text,
-        systemPrompt: "You are a speech correction assistant. Fix any obvious typos, misheard words, or grammar issues in the provided transcript while keeping the user's intent identical. Respond ONLY with the corrected text, no explanations.",
-        temperature: 0.1,
+        systemPrompt: `You are a speech polishing assistant. Rewrite the transcript to be clear, grammatically correct, and natural-sounding.
+
+Rules:
+- Fix: punctuation, capitalization, grammar, run-on sentences, filler words ("um", "uh", "like", "you know")
+- Improve: word choice for clarity, sentence flow, structure
+- NEVER change: the user's intent, facts, or meaning
+- NEVER add: extra information, commentary, or questions
+- Output: ONLY the improved text, nothing else
+
+Examples:
+Input: "i wanna make a app for tracking my study times like when i study each subject"
+Output: "I want to build an app for tracking my study sessions — when I study each subject"
+
+Input: "how to calculate the area of a circle if the radius is given"
+Output: "How do you calculate the area of a circle when the radius is given?"`,
+        temperature: 0.2,
         maxTokens: 500,
       });
-      if (res.text) onChange(res.text.trim());
+      if (res.text && res.text.trim() !== text.trim()) {
+        onChange(res.text.trim());
+        addNotification('Speech polished ✓');
+      }
     } catch (e) {
       console.error('Refinement failed', e);
     } finally {

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 
-export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings';
+export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 
 export interface Message {
@@ -30,6 +30,7 @@ export interface ScheduledTask {
   title: string;
   prompt: string;
   cronLabel: string;
+  interval: 'hourly' | 'daily' | 'weekly';
   nextRun: number;
   lastResult?: string;
   status: 'pending' | 'running' | 'done' | 'error';
@@ -67,13 +68,29 @@ interface GiaState {
   clearSession: (sessionId: string) => void;
   getActiveSession: () => ChatSession | null;
   addScheduledTask: (task: ScheduledTask) => void;
-  updateTaskStatus: (id: string, status: ScheduledTask['status'], result?: string) => void;
+  updateTaskStatus: (id: string, status: ScheduledTask['status'], result?: string, nextRun?: number) => void;
   deleteTask: (id: string) => void;
   setUserProfile: (p: Partial<UserProfile>) => void;
   addNotification: (msg: string) => void;
   clearNotification: (id: string) => void;
+  examHistory: ExamResult[];
+  addExamResult: (r: ExamResult) => void;
+  clearExamHistory: () => void;
   // Hibernation support
   hibernateSessions: () => void;
+}
+
+export interface ExamResult {
+  id: string;
+  examSystem: string;
+  subject: string;
+  topic: string;
+  score: number;
+  correct: number;
+  total: number;
+  weakAreas: string[];
+  timestamp: number;
+  timeSpent: number;
 }
 
 const genId = () => Math.random().toString(36).slice(2, 10);
@@ -90,6 +107,7 @@ export const useGiaStore = create<GiaState>()(
       scheduledTasks: [],
       userProfile: { name: '', bio: '', goals: '' },
       notifications: [],
+      examHistory: [],
 
       setModule: (module) => set({ currentModule: module }),
       setIntentState: (state) => set({ intentState: state }),
@@ -157,9 +175,9 @@ export const useGiaStore = create<GiaState>()(
       },
 
       addScheduledTask: (task) => set((s) => ({ scheduledTasks: [task, ...s.scheduledTasks] })),
-      updateTaskStatus: (id, status, result) =>
+      updateTaskStatus: (id, status, result, nextRun) =>
         set((s) => ({
-          scheduledTasks: s.scheduledTasks.map((t) => (t.id === id ? { ...t, status, lastResult: result ?? t.lastResult } : t)),
+          scheduledTasks: s.scheduledTasks.map((t) => (t.id === id ? { ...t, status, lastResult: result ?? t.lastResult, ...(nextRun !== undefined ? { nextRun } : {}) } : t)),
         })),
       deleteTask: (id) => set((s) => ({ scheduledTasks: s.scheduledTasks.filter((t) => t.id !== id) })),
 
@@ -169,22 +187,9 @@ export const useGiaStore = create<GiaState>()(
         set((s) => ({ notifications: [{ id: genId(), message: msg, ts: Date.now() }, ...s.notifications.slice(0, 9)] })),
       clearNotification: (id) => set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 
-      hibernateSessions: () => {
-        const { sessions, activeSessionId } = get();
-        // Skip hibernation if we have very few sessions
-        if (sessions.length <= 4) return;
-
-        set((s) => ({
-          sessions: s.sessions.map((sess, idx) => {
-            if (sess.id === activeSessionId || idx < 4) return sess;
-            // Hibernating by emptying messages array is DANGEROUS with persist().
-            // Instead, we should mark it as hibernated and handle loading logic,
-            // or simply remove the feature if memory isn't a critical issue yet.
-            // For now, let's just keep the data safe.
-            return sess; 
-          }),
-        }));
-      },
+      addExamResult: (r) => set((s) => ({ examHistory: [r, ...s.examHistory].slice(0, 50) })),
+      clearExamHistory: () => set({ examHistory: [] }),
+      hibernateSessions: () => {},
     }),
     {
       name: 'gia-store-v3',
@@ -194,6 +199,7 @@ export const useGiaStore = create<GiaState>()(
         activeSessionId: s.activeSessionId,
         scheduledTasks: s.scheduledTasks,
         userProfile: s.userProfile,
+        examHistory: s.examHistory,
       }),
     }
   )

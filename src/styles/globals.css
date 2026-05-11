@@ -30,6 +30,7 @@
   --mod-writer:   236, 72, 153;   /* pink */
   --mod-planner:  16, 185, 129;   /* emerald */
   --mod-settings: 148, 163, 184;  /* slate */
+  --mod-exam:     245, 158, 11;   /* amber */
 
   /* Ambient glow system */
   --glow-color:   var(--mod-chat);

@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { BarChart2 as BarChartIcon, Loader2, Paperclip, X, TrendingUp as LineChartIcon, Grid, Download, RefreshCw, PieChart as PieChartIcon } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
+import { useMemoryStore } from '../store/useMemoryStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { 
@@ -9,6 +10,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { extractJSON } from '../utils/helpers';
 
 interface DataPoint { label: string; value: number | string; color?: string; [key: string]: any }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
@@ -49,12 +51,13 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
         temperature: 0.25,
         maxTokens: 1500,
       });
-      const clean = res.text.replace(/```json|```/g,'').trim();
-      const s = clean.indexOf('{'); const e = clean.lastIndexOf('}');
-      const parsed = JSON.parse(clean.slice(s, e+1));
+      const parsed = extractJSON(res.text);
       setData((parsed.data ?? []).map((d: any, i: number) => ({ ...d, color: COLORS[i%COLORS.length] })));
       setSummary(parsed.summary ?? '');
       setNarrative(parsed.narrative ?? '');
+      if (parsed.summary) {
+        useMemoryStore.getState().addMemory({ key: 'analysis_' + Date.now().toString(36), value: parsed.summary.slice(0, 200), category: 'fact', confidence: 0.5 });
+      }
       setIntentState('responding');
       setTimeout(() => setIntentState('idle'), 2000);
     } catch (err: unknown) {

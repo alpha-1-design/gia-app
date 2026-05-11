@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
-import { ListTodo, CheckCircle2, Circle, Download, Trash2, Plus, Loader2, Calendar, Clock, X } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { ListTodo, CheckCircle2, Circle, Download, Trash2, Plus, Loader2, Calendar, Clock, X, Edit3 } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { extractJSON } from '../utils/helpers';
 
 interface PlanStep { id: string; title: string; description: string; done: boolean; priority: 'high'|'medium'|'low'; eta?: string }
 const PRIORITY_COLORS = {
@@ -14,6 +15,19 @@ const PRIORITY_COLORS = {
 };
 
 const genId = () => Math.random().toString(36).slice(2, 10);
+
+const getIntervalMs = (interval: string) =>
+  interval === 'hourly' ? 3600000 : interval === 'daily' ? 86400000 : 604800000;
+
+const formatNextRun = (ts: number) => {
+  const diff = ts - Date.now();
+  if (diff <= 0) return 'now';
+  if (diff < 3600000) return `in ${Math.ceil(diff / 60000)}m`;
+  if (diff < 86400000) return `in ${Math.ceil(diff / 3600000)}h`;
+  return `in ${Math.ceil(diff / 86400000)}d`;
+};
+
+const notifId = () => (Date.now() % 100000) + Math.floor(Math.random() * 1000);
 
 const PlannerModule: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -25,7 +39,71 @@ const PlannerModule: React.FC = () => {
   const [schedPrompt, setSchedPrompt] = useState('');
   const [schedInterval, setSchedInterval] = useState('daily');
   const [schedLoading, setSchedLoading] = useState(false);
+  const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const { setIntentState, scheduledTasks, addScheduledTask, updateTaskStatus, deleteTask, addNotification } = useGiaStore();
+  const mountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const handledIdsRef = useRef<Set<string>>(new Set());
+
+  const runTask = useCallback(async (task: ScheduledTask) => {
+    if (handledIdsRef.current.has(task.id)) return;
+    handledIdsRef.current.add(task.id);
+
+    updateTaskStatus(task.id, 'running');
+    try {
+      const res = await GiaBrain.generate({ prompt: task.prompt, maxTokens: 800 });
+      const isRecurring = task.interval && ['hourly', 'daily', 'weekly'].includes(task.interval);
+      if (isRecurring) {
+        const nextRun = Date.now() + getIntervalMs(task.interval);
+        updateTaskStatus(task.id, 'pending', res.text, nextRun);
+        await LocalNotifications.schedule({
+          notifications: [{
+            title: `⏰ ${task.title}`,
+            body: `Next run ${formatNextRun(nextRun)}`,
+            id: notifId(),
+            schedule: { at: new Date(nextRun) },
+            sound: 'default',
+          }],
+        });
+      } else {
+        updateTaskStatus(task.id, 'done', res.text);
+      }
+      addNotification(`✅ ${task.title.slice(0, 30)}`);
+      try {
+        await LocalNotifications.schedule({
+          notifications: [{
+            title: '✅ GIA Task Complete',
+            body: res.text.slice(0, 120),
+            id: notifId(),
+            schedule: { at: new Date(Date.now() + 2000) },
+            sound: 'default',
+          }],
+        });
+      } catch {}
+    } catch {
+      updateTaskStatus(task.id, 'error', 'Task failed.');
+      addNotification(`❌ ${task.title.slice(0, 30)}`);
+    }
+  }, [updateTaskStatus, addNotification]);
+
+  const checkForDueTasks = useCallback(async () => {
+    const tasks = useGiaStore.getState().scheduledTasks;
+    const now = Date.now();
+    for (const task of tasks) {
+      if (task.status === 'pending' && task.nextRun <= now) {
+        runTask(task);
+      }
+    }
+  }, [runTask]);
+
+  useEffect(() => {
+    checkForDueTasks();
+    pollRef.current = setInterval(checkForDueTasks, 60000);
+    return () => {
+      if (mountTimeoutRef.current) clearTimeout(mountTimeoutRef.current);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [checkForDueTasks]);
 
   const handlePlan = useCallback(async () => {
     const text = prompt.trim(); if (!text || loading) return;
@@ -39,9 +117,7 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
         temperature: 0.45,
         maxTokens: 1500,
       });
-      const clean = res.text.replace(/```json|```/g,'').trim();
-      const s = clean.indexOf('{'); const e = clean.lastIndexOf('}');
-      const parsed = JSON.parse(clean.slice(s, e+1));
+      const parsed = extractJSON(res.text);
       setPlanTitle(parsed.title ?? '');
       setSteps((parsed.steps ?? []).map((s: Omit<PlanStep,'done'>) => ({ ...s, done: false })));
       setIntentState('responding');
@@ -57,42 +133,46 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
     setSchedLoading(true);
     try {
       const now = Date.now();
-      const delayMs = schedInterval === 'hourly' ? 3600000 : schedInterval === 'daily' ? 86400000 : 604800000;
+      const delayMs = getIntervalMs(schedInterval);
       const nextRun = now + delayMs;
       const task: ScheduledTask = {
-        id: genId(), title: text.slice(0, 50), prompt: text,
-        cronLabel: schedInterval, nextRun, status: 'pending',
+        id: editingTask?.id || genId(),
+        title: text.slice(0, 50),
+        prompt: text,
+        cronLabel: schedInterval,
+        interval: schedInterval as 'hourly' | 'daily' | 'weekly',
+        nextRun,
+        status: 'pending',
       };
+
+      if (editingTask) {
+        deleteTask(editingTask.id);
+        setEditingTask(null);
+      }
       addScheduledTask(task);
       setSchedPrompt('');
-      
       addNotification(`⏰ Scheduled: ${task.title.slice(0,25)}...`);
 
-      LocalNotifications.schedule({
+      await LocalNotifications.schedule({
         notifications: [{
           title: 'GIA Task Due',
           body: `Time to run: "${task.title}"`,
-          id: parseInt(task.id.replace(/\D/g,'').slice(0,8)) || Math.floor(Math.random()*1000000),
+          id: notifId(),
           schedule: { at: new Date(nextRun) },
           sound: 'default',
-        }]
+        }],
       });
 
-      if (delayMs < 300000) { 
-        setTimeout(async () => {
-          updateTaskStatus(task.id, 'running');
-          try {
-            const res = await GiaBrain.generate({ prompt: text, maxTokens: 800 });
-            updateTaskStatus(task.id, 'done', res.text);
-            addNotification(`✅ Task Done: ${task.title.slice(0,20)}...`);
-          } catch {
-            updateTaskStatus(task.id, 'error', 'Task failed.');
-            addNotification(`❌ Task Failed: ${task.title.slice(0,20)}...`);
-          }
-        }, delayMs);
-      }
-    } finally { setSchedLoading(false); }
-  }, [schedPrompt, schedInterval, schedLoading, addScheduledTask, updateTaskStatus, addNotification]);
+      mountTimeoutRef.current = setTimeout(() => runTask(task), delayMs);
+    } catch {} finally { setSchedLoading(false); }
+  }, [schedPrompt, schedInterval, schedLoading, editingTask, addScheduledTask, updateTaskStatus, deleteTask, addNotification, runTask]);
+
+  const startEdit = (task: ScheduledTask) => {
+    setEditingTask(task);
+    setSchedPrompt(task.prompt);
+    setSchedInterval(task.interval);
+    setTab('schedule');
+  };
 
   const toggleStep = (id: string) => setSteps(p => p.map(s => s.id===id ? {...s,done:!s.done} : s));
   const removeStep = (id: string) => setSteps(p => p.filter(s => s.id !== id));
@@ -103,6 +183,12 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
     const b = new Blob([txt],{type:'text/plain'}); const a = document.createElement('a');
     a.href=URL.createObjectURL(b); a.download=`${planTitle.replace(/\s+/g,'-').toLowerCase()}.md`; a.click();
   };
+
+  const StatusDot = ({ status }: { status: string }) => (
+    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+      status==='done'?'bg-emerald-400':status==='running'?'bg-amber-400 animate-pulse':status==='error'?'bg-rose-400':'bg-zinc-700'
+    }`} />
+  );
 
   return (
     <div className="flex flex-col h-full px-4 py-5 gap-4">
@@ -188,7 +274,16 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
       {tab === 'schedule' && (
         <div className="flex-1 flex flex-col gap-4 overflow-hidden">
           <div className="gia-card p-4 space-y-3 shrink-0">
-            <p className="text-xs font-semibold text-zinc-400">Schedule a recurring task</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-zinc-400">
+                {editingTask ? 'Edit scheduled task' : 'Schedule a recurring task'}
+              </p>
+              {editingTask && (
+                <button onClick={() => { setEditingTask(null); setSchedPrompt(''); }} className="text-[10px] text-zinc-500 flex items-center gap-1">
+                  <X size={10} /> Cancel
+                </button>
+              )}
+            </div>
             <div className="flex gap-2">
               {['hourly','daily','weekly'].map(i => (
                 <button key={i} onClick={() => setSchedInterval(i)}
@@ -210,19 +305,25 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
             )}
             {scheduledTasks.map(task => (
               <div key={task.id} className="gia-card p-3 flex gap-3 items-start">
-                <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                  task.status==='done'?'bg-emerald-400':task.status==='running'?'bg-amber-400 animate-pulse':task.status==='error'?'bg-rose-400':'bg-zinc-700'
-                }`} />
+                <StatusDot status={task.status} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-zinc-100 truncate">{task.title}</p>
-                  <p className="text-[10px] text-zinc-500">{task.cronLabel} · {task.status}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-medium text-zinc-100 truncate">{task.title}</p>
+                    {task.status === 'pending' && (
+                      <span className="text-[9px] text-zinc-500 shrink-0">{formatNextRun(task.nextRun)}</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-zinc-500 capitalize">{task.cronLabel} · {task.status}</p>
                   {task.lastResult && (
                     <div className="mt-2 text-[11px] text-zinc-400 bg-zinc-900 border border-zinc-800 rounded-lg p-2 max-h-20 overflow-y-auto">
-                      <MarkdownRenderer content={task.lastResult.slice(0,200)} />
+                      <MarkdownRenderer content={task.lastResult.slice(0, 200)} />
                     </div>
                   )}
                 </div>
-                <button onClick={() => deleteTask(task.id)} className="text-zinc-700 hover:text-rose-400 transition-colors shrink-0"><Trash2 size={12} /></button>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => startEdit(task)} className="text-zinc-700 hover:text-emerald-400 transition-colors p-1"><Edit3 size={11} /></button>
+                  <button onClick={() => deleteTask(task.id)} className="text-zinc-700 hover:text-rose-400 transition-colors p-1"><Trash2 size={11} /></button>
+                </div>
               </div>
             ))}
           </div>

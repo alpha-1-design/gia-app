@@ -1,18 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X } from 'lucide-react';
+import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
-import AnalystModule from './modules/AnalystModule';
 import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
 import EngineRoom from './components/EngineRoom';
+import ErrorBoundary from './components/ErrorBoundary';
 import './styles/globals.css';
+
+const AnalystModule = lazy(() => import('./modules/AnalystModule'));
+const ExamModule = lazy(() => import('./modules/ExamModule'));
 
 const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string }[] = [
   { id: 'chat',     label: 'Chat',     icon: <MessageCircle size={18} />, color: 'var(--mod-chat)' },
+  { id: 'exam',     label: 'Exam',     icon: <GraduationCap size={18} />, color: 'var(--mod-exam)' },
   { id: 'analyst',  label: 'Analyst',  icon: <BarChart2 size={18} />,    color: 'var(--mod-analyst)' },
   { id: 'writer',   label: 'Writer',   icon: <PenLine size={18} />,      color: 'var(--mod-writer)' },
   { id: 'planner',  label: 'Planner',  icon: <ListTodo size={18} />,     color: 'var(--mod-planner)' },
@@ -21,6 +25,7 @@ const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string
 
 const MODULE_GLOW: Record<Module, string> = {
   chat:     'var(--mod-chat)',
+  exam:     'var(--mod-exam)',
   analyst:  'var(--mod-analyst)',
   writer:   'var(--mod-writer)',
   planner:  'var(--mod-planner)',
@@ -29,12 +34,22 @@ const MODULE_GLOW: Record<Module, string> = {
 
 const ModuleView: React.FC = () => {
   const { currentModule } = useGiaStore();
+  const Fallback = () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="flex flex-col items-center gap-2">
+        <div className="w-4 h-4 rounded-full border-2" style={{ borderColor: 'var(--gia-border)', borderTopColor: '#a855f7' }} />
+        <span className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>Loading...</span>
+      </div>
+    </div>
+  );
+
   const components: Record<Module, React.ReactNode> = {
-    chat:     <ChatModule />,
-    analyst:  <AnalystModule />,
-    writer:   <WriterModule />,
-    planner:  <PlannerModule />,
-    settings: <SettingsModule />,
+    chat:     <ErrorBoundary name="Chat"><ChatModule /></ErrorBoundary>,
+    exam:     <Suspense fallback={<Fallback />}><ErrorBoundary name="Exam"><ExamModule /></ErrorBoundary></Suspense>,
+    analyst:  <Suspense fallback={<Fallback />}><ErrorBoundary name="Analyst"><AnalystModule /></ErrorBoundary></Suspense>,
+    writer:   <ErrorBoundary name="Writer"><WriterModule /></ErrorBoundary>,
+    planner:  <ErrorBoundary name="Planner"><PlannerModule /></ErrorBoundary>,
+    settings: <ErrorBoundary name="Settings"><SettingsModule /></ErrorBoundary>,
   };
   return (
     <AnimatePresence mode="wait">
@@ -53,17 +68,18 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, hibernateSessions, notifications, clearNotification } = useGiaStore();
+  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification } = useGiaStore();
 
   useEffect(() => {
-    hibernateSessions();
-    const interval = setInterval(hibernateSessions, 300_000);
-    
-    // Request notification permissions
     LocalNotifications.requestPermissions();
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [hibernateSessions]);
+  useEffect(() => {
+    if (notifications.length === 0) return;
+    const latest = notifications[0];
+    const timeout = setTimeout(() => clearNotification(latest.id), 5000);
+    return () => clearTimeout(timeout);
+  }, [notifications, clearNotification]);
 
   const activeColor = MODULE_GLOW[currentModule];
 
@@ -123,7 +139,7 @@ const App: React.FC = () => {
               className="gia-pill gia-pill-accent"
               style={{ fontSize: '8px', padding: '2px 6px' }}
             >
-              v2.2.2
+              v2.2.2.0
             </span>
           </div>
           <p
@@ -176,7 +192,7 @@ const App: React.FC = () => {
                   <div
                     className="absolute inset-0 rounded-none pointer-events-none"
                     style={{
-                      background: `radial-gradient(ellipse at 50% 100%, rgba(${mod.id === 'chat' ? '168,85,247' : mod.id === 'analyst' ? '59,130,246' : mod.id === 'writer' ? '236,72,153' : mod.id === 'planner' ? '16,185,129' : '148,163,184'}, 0.1) 0%, transparent 70%)`,
+                      background: `radial-gradient(ellipse at 50% 100%, rgba(${mod.id === 'chat' ? '168,85,247' : mod.id === 'exam' ? '245,158,11' : mod.id === 'analyst' ? '59,130,246' : mod.id === 'writer' ? '236,72,153' : mod.id === 'planner' ? '16,185,129' : '148,163,184'}, 0.1) 0%, transparent 70%)`,
                     }}
                   />
                 )}
@@ -186,7 +202,7 @@ const App: React.FC = () => {
                   transition={{ duration: 0.15 }}
                   style={{
                     color: active
-                      ? (mod.id === 'chat' ? '#a855f7' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8')
+                      ? (mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8')
                       : 'var(--gia-muted)'
                   }}
                 >
@@ -197,7 +213,7 @@ const App: React.FC = () => {
                   className="text-[9px] uppercase tracking-wider font-semibold"
                   style={{
                     color: active
-                      ? (mod.id === 'chat' ? '#a855f7' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8')
+                      ? (mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8')
                       : 'var(--gia-muted-2)'
                   }}
                 >
@@ -210,7 +226,7 @@ const App: React.FC = () => {
                     className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 rounded-full"
                     style={{
                       width: '24px',
-                      background: mod.id === 'chat' ? '#a855f7' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8',
+                      background: mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8',
                     }}
                     transition={{ type: 'spring', bounce: 0.25, duration: 0.35 }}
                   />
