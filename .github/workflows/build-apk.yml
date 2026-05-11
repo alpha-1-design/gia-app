@@ -17,6 +17,8 @@ jobs:
 
       - run: npm ci --legacy-peer-deps
 
+      - run: npm run build
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
