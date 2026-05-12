@@ -55,26 +55,46 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     try {
       if (isCapacitor) {
         const { available } = await SpeechRecognition.available();
-        if (!available) return;
+        if (!available) {
+          setIsListening(false);
+          return;
+        }
+
+        // Start listening. On Android, this usually opens a dialog or listens until a pause.
         const result = await SpeechRecognition.start({
           language: 'en-US',
           partialResults: true,
           popup: false,
         });
+
         if (result?.matches?.length) {
           processTranscript(result.matches[0]);
         }
+
+        // Re-trigger if still active and keepListening is on
+        if (activeRef.current && keepListening) {
+          setTimeout(listenOnce, 500);
+        } else {
+          stopListening();
+        }
       }
-    } catch {}
-  }, [isCapacitor, processTranscript]);
+    } catch (e) {
+      console.error('Speech recognition error:', e);
+      if (activeRef.current && keepListening) {
+        setTimeout(listenOnce, 2000); // Retry after delay
+      } else {
+        stopListening();
+      }
+    }
+  }, [isCapacitor, processTranscript, keepListening, stopListening]);
 
   const startListening = useCallback(async () => {
+    if (activeRef.current) return;
     activeRef.current = true;
     setIsListening(true);
 
     if (isCapacitor) {
       listenOnce();
-      pollRef.current = setInterval(listenOnce, 4000);
     } else {
       try {
         const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;

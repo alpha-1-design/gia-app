@@ -2,6 +2,7 @@ name: Build APK
 
 on:
   push:
+    branches: [ "main" ]
     tags: [ 'v*.*.*.*' ]
 
 permissions:
@@ -36,13 +37,25 @@ jobs:
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
 
+      - name: Build release APK
+        run: cd android && ./gradlew assembleRelease --no-daemon
+
       - uses: actions/upload-artifact@v4
         with:
-          name: GIA-debug-${{ github.ref_name }}
+          name: GIA-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GIA-release-unsigned
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/release/app-release-unsigned.apk

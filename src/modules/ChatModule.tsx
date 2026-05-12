@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Bot, User, AlertCircle, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon,
-  Brain, ChevronDown, Sparkles, GraduationCap, Code2,
-  BookOpen, Zap, Undo2, Search, RotateCcw, Headphones,
+  Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
+  BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, FileCode,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import JSZip from 'jszip';
 import GiaBrain from '../services/GiaBrain';
+import TTSService from '../services/TTSService';
 import { useGiaStore, Message } from '../store/useGiaStore';
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -88,6 +90,8 @@ const ChatModule: React.FC = () => {
   });
   
 
+  const [showTools, setShowTools] = useState(false);
+
   const activeSession = getActiveSession();
   const messages = activeSession?.messages ?? [];
 
@@ -117,6 +121,7 @@ const ChatModule: React.FC = () => {
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
+    TTSService.stop();
     setLoading(false);
     setStreamingMsgId(null);
     setIntentState('idle');
@@ -158,6 +163,7 @@ const ChatModule: React.FC = () => {
       });
       if (!ctrl.signal.aborted) {
         updateMessage(activeSessionId!, asstId, accumulated);
+        TTSService.speak(accumulated);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -228,6 +234,7 @@ const ChatModule: React.FC = () => {
     };
 
     addMessage(sessionId, userMsg);
+    TTSService.stop();
     const sentAttachments = [...attachments];
     setInput('');
     setAttachments([]);
@@ -272,15 +279,20 @@ const ChatModule: React.FC = () => {
       let accumulated = '';
       setIntentState('responding');
 
-      const handsOffPrefix = handsOff ? `[Hands-off mode active — you can control GIA's features with these commands embedded in your response (they'll be hidden from the user):
-- [GIA:switch:module] — switch to chat/exam/analyst/writer/planner/settings
-- [GIA:search:on/off] — toggle web search
-- [GIA:think:on/off] — toggle extended thinking
-- [GIA:notify:message] — show a notification
-Use them naturally when the user's request calls for it. For example: "Let me analyze that [GIA:switch:analyst]" or "I'll search the web [GIA:search:on]"]\n\n` : '';
+      const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You can control the app. Use these hidden tags in your response ONLY when requested:
+- [GIA:switch:MODULE] (chat, exam, analyst, writer, planner, settings)
+- [GIA:search:on/off] (web search)
+- [GIA:think:on/off] (extended thinking)
+- [GIA:notify:TEXT] (show toast)
+Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
+
+      const stateContext = `[SYSTEM: Current Feature State:
+- Web Search: ${webSearch ? 'ON' : 'OFF'}
+- Extended Thinking: ${extThinking ? 'ON' : 'OFF'}
+- Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}]\n\n`;
 
       const res = await GiaBrain.generate({
-        prompt: handsOffPrefix + prompt, history,
+        prompt: stateContext + handsOffPrefix + prompt, history,
         images: brainImages,
         useWebSearch: webSearch,
         useExtendedThinking: extThinking,
@@ -300,6 +312,7 @@ Use them naturally when the user's request calls for it. For example: "Let me an
         } else {
           updateMessage(sessionId!, asstId, finalText);
         }
+        TTSService.speak(cleanText);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -321,12 +334,41 @@ Use them naturally when the user's request calls for it. For example: "Let me an
   }, [input, attachments, loading, activeSessionId, messages, webSearch, extThinking, createSession, addMessage, updateMessage, updateSessionTitle, setIntentState, handsOff]);
 
   const parseCommands = useCallback((text: string, sessionId: string) => {
-    if (!handsOff) return text;
     const commandRegex = /\[GIA:(\w+)(?::([^\]]+))?\]/g;
     let match;
     let clean = text;
     while ((match = commandRegex.exec(text)) !== null) {
       const [full, action, param] = match;
+      
+      // Zip command is always parsed, even if handsOff is off (it's a tool, not just a control)
+      if (action === 'zip') {
+        const zipName = param || 'gia-project.zip';
+        const zip = new JSZip();
+        const fileRegex = /\[FILE:([\s\S]+?)\]\n([\s\S]+?)(?=\[FILE:|\[GIA:|$)/g;
+        let fileMatch;
+        let filesFound = 0;
+        while ((fileMatch = fileRegex.exec(text)) !== null) {
+          zip.file(fileMatch[1].trim(), fileMatch[2].trim());
+          filesFound++;
+        }
+        if (filesFound > 0) {
+          zip.generateAsync({ type: 'blob' }).then((content) => {
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = zipName;
+            a.click();
+            URL.revokeObjectURL(url);
+            addNotification(`Created ZIP with ${filesFound} files`);
+          });
+          clean = clean.replace(full, `\n\n*📦 GIA has bundled this project into **${zipName}**. Check your downloads.*`);
+        } else {
+          clean = clean.replace(full, '');
+        }
+        continue;
+      }
+
+      if (!handsOff) continue;
       clean = clean.replace(full, '');
       switch (action) {
         case 'switch':
@@ -545,24 +587,12 @@ Use them naturally when the user's request calls for it. For example: "Let me an
                     const history = msgs.slice(0, msgIndex - 1)
                       .filter(m => !m.thinking && m.content)
                       .map(m => ({ role: m.role, content: m.content }));
-                    let accumulated = '';
-                    setIntentState('responding');
-                    await GiaBrain.generate({
-                      prompt: originalPrompt,
-                      history,
-                      useWebSearch: webSearch,
-                      useExtendedThinking: extThinking,
-                      onStream: (chunk) => {
-                        accumulated += chunk;
-                        updateMessage(activeSessionId!, newAsstId, accumulated);
-                      },
-                    });
-                    if (!abortRef.current?.signal.aborted) {
-                      updateMessage(activeSessionId!, newAsstId, accumulated);
-                    }
-                  } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : 'Retry failed.';
-                    updateMessage(activeSessionId!, newAsstId, msg);
+                    
+                    const res = await GiaBrain.generate({ prompt: originalPrompt, history });
+                    updateMessage(activeSessionId, newAsstId, res.text);
+                    TTSService.speak(res.text);
+                  } catch (e: any) {
+                    updateMessage(activeSessionId, newAsstId, e.message || 'Retry failed');
                   } finally {
                     setLoading(false);
                     setStreamingMsgId(null);
@@ -570,25 +600,41 @@ Use them naturally when the user's request calls for it. For example: "Let me an
                   }
                 }}
               >
-                <div className={`inline-block max-w-full px-4 py-3 ${msg.role === 'user' ? 'msg-user text-sm' : msg.error ? 'msg-error w-full' : 'msg-assistant w-full'}`}>
-                  {msg.thinking ? <div className="flex gap-1.5 py-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : msg.role === 'assistant' && !msg.error ? <MarkdownRenderer content={msg.content} /> : <p className="text-sm leading-relaxed">{msg.content}</p>}
-                  {msg.attachments?.filter(a => !a.preview).map(att => (
-                    <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.1)' }}><Paperclip size={10} /> {att.name}</div>
-                  ))}
-                  {msg.error && (
-                    <button onClick={() => {
-                      const msgIndex = messages.findIndex(m => m.id === msg.id);
-                      const userMsgIndex = msgIndex > 0 ? msgIndex - 1 : -1;
-                      const userMsg = userMsgIndex >= 0 ? messages[userMsgIndex] : null;
-                      if (userMsg && userMsg.role === 'user' && activeSessionId) {
-                        setInput(userMsg.content);
-                        addNotification('Error message selected — edit and resend');
-                      }
-                    }}
-                      className="mt-2 text-[10px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors"
-                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-                      <RotateCcw size={10} /> Retry
-                    </button>
+                <div 
+                  className={`p-3.5 rounded-2xl relative select-none ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : 'bg-zinc-900/50 border border-zinc-800'}`}
+                  style={{
+                    borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
+                    borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
+                  }}
+                >
+                  {msg.thinking ? (
+                    <div className="flex gap-1.5 items-center py-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                    </div>
+                  ) : msg.error ? (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-sm leading-relaxed" style={{ color: '#f87171' }}>{msg.content}</p>
+                      <button onClick={() => {
+                        const userMsgIndex = messages.findIndex(m => m.id === msg.id) - 1;
+                        if (userMsgIndex >= 0 && activeSessionId) {
+                          setInput(messages[userMsgIndex].content);
+                          addNotification('Edit and resend');
+                        }
+                      }} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] w-fit" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>
+                        <RotateCcw size={10} /> Edit & Resend
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <MarkdownRenderer content={msg.content} />
+                      {msg.attachments?.filter(a => !a.preview).map(att => (
+                        <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                          <Paperclip size={10} /> {att.name}
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
               </MessageContextMenu>
@@ -652,25 +698,63 @@ Use them naturally when the user's request calls for it. For example: "Let me an
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
-          {[
-            { label: 'File', icon: Paperclip, onClick: () => fileRef.current?.click(), active: false },
-            { label: 'Image', icon: ImageIcon, onClick: () => imgRef.current?.click(), active: false },
-            { label: 'Search', icon: Globe, onClick: () => setWebSearch(w => !w), active: webSearch, activeColor: '#3b82f6' },
-            { label: 'Think', icon: Brain, onClick: () => setExtThinking(t => !t), active: extThinking, activeColor: '#f59e0b' },
-            { label: 'Hands-off', icon: Zap, onClick: () => setHandsOff(h => !h), active: handsOff, activeColor: '#a855f7' },
-            { label: 'Listen', icon: Headphones, onClick: () => { setVoiceEnabled(v => !v); if (!voiceEnabled) voiceControl.startListening(); else voiceControl.stopListening(); }, active: voiceEnabled, activeColor: '#ec4899' },
-          ].map((tool) => (
-            <button key={tool.label} onClick={tool.onClick} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback" style={{ background: tool.active ? `${tool.activeColor}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.activeColor}40` : 'var(--gia-border)'}`, color: tool.active ? tool.activeColor : 'var(--gia-muted)', fontWeight: 500 }}>
-              {(tool.active && tool.label === 'Listen' && voiceControl.isHearing) ? (
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#ec4899' }} />
-                  <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#ec4899' }} />
-                </span>
-              ) : <tool.icon size={11} />}
-              {tool.active && tool.label === 'Listen' && voiceControl.isHearing ? 'Hearing' : tool.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <button 
+            onClick={() => setShowTools(!showTools)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors tap-feedback"
+            style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
+          >
+            <motion.div animate={{ rotate: showTools ? 180 : 0 }}>
+              <ChevronRight size={14} />
+            </motion.div>
+          </button>
+
+          <div className="flex-1 overflow-hidden">
+            <AnimatePresence initial={false}>
+              {showTools ? (
+                <motion.div 
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 'auto', opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  className="flex items-center gap-1.5 flex-nowrap"
+                >
+                  {[
+                    { label: 'File', icon: Paperclip, onClick: () => fileRef.current?.click(), active: false },
+                    { label: 'Image', icon: ImageIcon, onClick: () => imgRef.current?.click(), active: false },
+                    { label: 'Search', icon: Globe, onClick: () => setWebSearch(w => !w), active: webSearch, activeColor: '#3b82f6' },
+                    { label: 'Think', icon: Brain, onClick: () => setExtThinking(t => !t), active: extThinking, activeColor: '#f59e0b' },
+                    { label: 'Hands-off', icon: Zap, onClick: () => setHandsOff(h => !h), active: handsOff, activeColor: '#a855f7' },
+                    { label: 'Listen', icon: Headphones, onClick: () => { setVoiceEnabled(v => !v); if (!voiceEnabled) voiceControl.startListening(); else voiceControl.stopListening(); }, active: voiceEnabled, activeColor: '#ec4899' },
+                  ].map((tool) => (
+                    <button key={tool.label} onClick={tool.onClick} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.activeColor}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.activeColor}40` : 'var(--gia-border)'}`, color: tool.active ? tool.activeColor : 'var(--gia-muted)', fontWeight: 500 }}>
+                      {(tool.active && tool.label === 'Listen' && voiceControl.isHearing) ? (
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#ec4899' }} />
+                          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#ec4899' }} />
+                        </span>
+                      ) : <tool.icon size={11} />}
+                      {tool.active && tool.label === 'Listen' && voiceControl.isHearing ? 'Hearing' : tool.label}
+                    </button>
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-2"
+                >
+                  <div className="flex -space-x-1.5">
+                    {webSearch && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-blue-500/20 text-blue-400"><Globe size={10} /></div>}
+                    {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
+                    {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
+                  </div>
+                  <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
+                    {(!webSearch && !extThinking && !handsOff) ? 'Tools hidden' : 'Active tools'}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
         <AmbientInput value={input} onChange={setInput} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
       </div>

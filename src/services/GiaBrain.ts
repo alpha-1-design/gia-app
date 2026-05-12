@@ -39,6 +39,8 @@ You know who you are:
 - You support web search via DuckDuckGo (toggle "Search" above the input) — no API key needed
 - You have extended thinking mode (toggle "Think" above the input) — works with ALL providers, not just Anthropic
 - You can execute code via the Piston API (Python, JavaScript, Java, C++, Go, Rust, and 40+ languages) — code blocks have a "Run" button with auto-fix up to 3 attempts
+- You can generate images via Pollinations.ai — when asked to "generate" or "draw" an image, embed an image tag like ![Image](https://pollinations.ai/p/DESCRIPTION?width=1024&height=1024&nologo=true) in your response. Replace DESCRIPTION with a detailed, URL-encoded prompt.
+- You can bundle code and files into ZIP artifacts — when generating a multi-file project, use the [GIA:zip:FILENAME.zip] tag and include the files in your response using clear file markers like [FILE:path/name.ext]. GIA will automatically bundle them into a downloadable ZIP.
 - You have persistent memory — you remember facts, preferences, scores, and weak areas across sessions. View/edit memories in Settings
 - You can generate study materials, exam questions (WASSCE/BECE/JAMB), plans, drafts, and code
 - You support voice input — tap the mic icon to speak, GIA polishes the transcript
@@ -47,6 +49,10 @@ You know who you are:
 - You support file attachments (PDF, images, text, code files)
 - You can export chat history, analysis data, plans, and writing drafts
 - You are aware of your own capabilities and limitations — you say so clearly when you hit them
+- You support voice response (TTS) — you can read your replies out loud (toggle in Settings)
+- You have an optional biometric lock — users can secure the app with FaceID/Fingerprint (toggle in Settings)
+- You perform iterative agentic research — you don't just search, you browse and analyze the most relevant websites to provide deep, verified answers
+- You automatically compress long conversations into key summaries to stay focused and efficient
 - You are warm, natural, adaptive, and intelligent — not robotic
 - You proactively suggest switching modules when appropriate
 - You are in control of your features — not the other way around
@@ -55,8 +61,9 @@ You know who you are:
 
 Current time: ${now}
 You are talking to: ${userName}${userContext}
+${memory}
 
-Personality: Be natural, direct, insightful, and genuinely helpful. Don't be stiff or over-formal. Think like a brilliant friend who also happens to be an expert in everything. When tasks are complex, think step by step. When tasks are simple, be concise. Always use clean Markdown formatting for structure.${memory}`;
+Personality: Be natural, direct, insightful, and genuinely helpful. Don't be stiff or over-formal. Think like a brilliant friend who also happens to be an expert in everything. When tasks are complex, think step by step. When tasks are simple, be concise. Always use clean Markdown formatting for structure.`;
 };
 
 class GiaBrain {
@@ -120,7 +127,7 @@ class GiaBrain {
   private async retryFetch(url: string, options: RequestInit, retries = 1): Promise<Response> {
     for (let i = 0; i <= retries; i++) {
       try {
-        const res = await fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(30000) });
+        const res = await fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(60000) });
         if ((res.status === 429 || res.status >= 500) && i < retries) {
           await new Promise(r => setTimeout(r, 2000 * (i + 1)));
           continue;
@@ -167,42 +174,62 @@ class GiaBrain {
       headers['X-Title'] = 'GIA';
     }
 
-    const res = await this.retryFetch(`${baseUrl}/chat/completions`, {
-      method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
+    if (req.onStream) {
+      // Use standard fetch for streaming in browsers, but be aware of Capacitor limitations
+      // On Android, CapacitorHttp doesn't support streaming well. 
+      // However, the standard fetch in modern Android WebViews DOES support ReadableStream.
+      // The issue is likely the 'stream: true' parameter and the line-by-line parsing.
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
+      });
+
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(e?.error?.message || `${label} error ${res.status}`);
+      }
+
+      if (res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t || t === 'data: [DONE]') continue;
+            if (t.startsWith('data:')) {
+              try {
+                const data = t.slice(5).trim();
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta?.content;
+                if (delta) { fullText += delta; req.onStream(delta); }
+              } catch { /* skip partial JSON */ }
+            }
+          }
+        }
+        return { text: fullText, provider: activeProvider, model: config.model };
+      }
+    }
+
+    // Use CapacitorHttp for non-streaming requests to bypass CORS on mobile
+    const res = await CapacitorHttp.post({
+      url: `${baseUrl}/chat/completions`,
+      headers,
+      data: body,
+      connectTimeout: 60000,
+      readTimeout: 60000,
     });
 
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(e?.error?.message || `${label} error ${res.status}`);
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(res.data?.error?.message || `${label} error ${res.status}`);
     }
 
-    if (req.onStream && res.body) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullText = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const t = line.trim();
-          if (!t.startsWith('data:')) continue;
-          const data = t.slice(5).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) { fullText += delta; req.onStream(delta); }
-          } catch { /* skip */ }
-        }
-      }
-      return { text: fullText, provider: activeProvider, model: config.model };
-    }
-
-    const data = await res.json() as any;
+    const data = res.data;
     const text = data.choices?.[0]?.message?.content ?? '';
     const sources = data.choices?.[0]?.message?.annotations?.map((a: any) => a.url).filter(Boolean);
     return { text, provider: activeProvider, model: config.model, sources };
@@ -330,10 +357,38 @@ class GiaBrain {
       throw new Error('No provider connected. Go to Settings → Engine Room and type: connect');
     }
 
+    // Smart Context Compression
+    if (req.history && req.history.length > 10) {
+      const summaryIdx = Math.floor(req.history.length / 2);
+      const toSummarize = req.history.slice(0, summaryIdx);
+      const remaining = req.history.slice(summaryIdx);
+      try {
+        const summaryRes = await this.callOpenAICompat({
+          prompt: `Summarize this conversation briefly, focusing on key facts and user preferences:\n\n${toSummarize.map(m => `${m.role}: ${m.content}`).join('\n')}`,
+          systemPrompt: 'You are a concise summarizer.',
+          maxTokens: 300,
+        });
+        req.history = [
+          { role: 'user', content: `[Summary of previous conversation: ${summaryRes.text}]` },
+          ...remaining
+        ];
+      } catch { /* ignore compression error */ }
+    }
+
     if (req.useWebSearch) {
+      // Agentic Search Phase 1: DuckDuckGo
       const searchContext = await SearchService.searchAndFormat(req.prompt);
       if (searchContext) {
         req = { ...req, prompt: `${req.prompt}\n\n${searchContext}` };
+        
+        // Agentic Search Phase 2: Peek at top result if highly relevant
+        const urlMatch = searchContext.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) {
+          try {
+            const pageText = await this.fetchURL(urlMatch[0]);
+            req = { ...req, prompt: `${req.prompt}\n\n[Deep Dive into ${urlMatch[0]}]:\n${pageText.slice(0, 5000)}` };
+          } catch { /* skip deep dive on failure */ }
+        }
       }
     }
 
@@ -361,7 +416,15 @@ class GiaBrain {
     if (!req.systemPrompt?.includes('extraction') && !req.systemPrompt?.includes('extract')) {
       const cacheKey = 'gen:' + req.prompt.slice(0, 200);
       this.setCachedResponse(cacheKey, response.text);
-      this.extractMemory(`${req.prompt}\n\n${response.text}`).catch(() => {});
+      
+      // Only extract memory if the conversation is substantial and contains high-signal keywords
+      const signalKeywords = ['name', 'prefer', 'like', 'hate', 'study', 'work', 'goal', 'score', 'live', 'from'];
+      const combined = `${req.prompt}\n\n${response.text}`.toLowerCase();
+      const hasSignal = signalKeywords.some(k => combined.includes(k));
+      
+      if (hasSignal) {
+        this.extractMemory(combined).catch(() => {});
+      }
     }
 
     return response;

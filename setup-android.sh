@@ -32,6 +32,9 @@ permissions = """
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -48,6 +51,17 @@ if "android.permission.INTERNET" not in content:
         permissions + "\n    <application",
         1
     )
+
+# Add TTS query
+if "<queries>" not in content:
+    queries = """
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+"""
+    content = content.replace("</manifest>", queries + "\n</manifest>")
 
 # Enable cleartext traffic
 if "usesCleartextTraffic" not in content:

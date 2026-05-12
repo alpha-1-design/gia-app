@@ -1,3 +1,5 @@
+import { CapacitorHttp } from '@capacitor/core';
+
 export interface CodeRunRequest {
   language: string;
   code: string;
@@ -73,16 +75,16 @@ class CodeRunner {
     const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
 
     try {
-      const res = await fetch(this.getEndpoint(), {
-        method: 'POST',
+      const res = await CapacitorHttp.post({
+        url: this.getEndpoint(),
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        data: {
           language: lang,
           version: '*',
           files: [{ name: `main.${lang}`, content: req.code }],
           stdin: req.stdin || '',
           args: req.args || [],
-        }),
+        },
       });
 
       if (res.status === 429 && attempts < maxAttempts) {
@@ -90,9 +92,9 @@ class CodeRunner {
         return this.run(req, attempts + 1);
       }
 
-      if (!res.ok) throw new Error(`Piston error ${res.status}`);
+      if (res.status < 200 || res.status >= 300) throw new Error(`Piston error ${res.status}`);
 
-      const data = await res.json();
+      const data = res.data;
       const run = data.run || {};
       const result: CodeRunResult = {
         output: run.stdout || '',
@@ -137,9 +139,13 @@ class CodeRunner {
 
   async getRuntimes(): Promise<PistonRuntime[]> {
     try {
-      const res = await fetch(PISTON_RUNTIMES_URL, { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      const res = await CapacitorHttp.get({
+        url: PISTON_RUNTIMES_URL,
+        connectTimeout: 10000,
+        readTimeout: 10000,
+      });
+      if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
+      return res.data;
     } catch {
       return Object.entries(LANGUAGE_MAP).map(([alias, name]) => ({
         language: name, version: '*', aliases: [alias],
@@ -150,17 +156,19 @@ class CodeRunner {
   async testEndpoint(url: string): Promise<{ ok: boolean; message: string }> {
     try {
       const runtimeUrl = url.replace('/execute', '/runtimes');
-      const res = await fetch(runtimeUrl, { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) {
-        const testRes = await fetch(url, {
-          method: 'POST', signal: AbortSignal.timeout(10000),
+      const res = await CapacitorHttp.get({ url: runtimeUrl, connectTimeout: 10000, readTimeout: 10000 });
+      if (res.status < 200 || res.status >= 300) {
+        const testRes = await CapacitorHttp.post({
+          url,
+          connectTimeout: 10000,
+          readTimeout: 10000,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ language: 'python', version: '*', files: [{ name: 'main.py', content: 'print("ok")' }] }),
+          data: { language: 'python', version: '*', files: [{ name: 'main.py', content: 'print("ok")' }] },
         });
-        if (!testRes.ok) return { ok: false, message: `Endpoint error ${testRes.status}` };
+        if (testRes.status < 200 || testRes.status >= 300) return { ok: false, message: `Endpoint error ${testRes.status}` };
         return { ok: true, message: 'Connected (execute endpoint)' };
       }
-      const data = await res.json();
+      const data = res.data;
       const count = Array.isArray(data) ? data.length : 0;
       return { ok: true, message: `Connected — ${count} runtimes available` };
     } catch (e) {

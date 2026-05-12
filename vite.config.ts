@@ -19,15 +19,15 @@ export default defineConfig({
   build: {
     // Ensure assets are bundled cleanly for WebView
     assetsDir: 'assets',
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
-          motion: ['framer-motion'],
-          store: ['zustand'],
-          recharts: ['recharts'],
-          ui: ['lucide-react'],
-          qrcode: ['qrcode'],
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-ui': ['lucide-react'],
+          'vendor-recharts': ['recharts'],
+          'vendor-utils': ['zustand', 'jszip', 'qrcode'],
         },
       },
     },

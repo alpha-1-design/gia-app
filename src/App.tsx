@@ -1,6 +1,6 @@
 import React, { useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap } from 'lucide-react';
+import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import ChatModule from './modules/ChatModule';
@@ -67,12 +67,23 @@ const ModuleView: React.FC = () => {
   );
 };
 
+import BiometricService from './services/BiometricService';
+
 const App: React.FC = () => {
   const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification } = useGiaStore();
+  const [isLocked, setIsLocked] = React.useState(BiometricService.isLockEnabled());
 
   useEffect(() => {
     LocalNotifications.requestPermissions();
+    if (isLocked) {
+      handleBiometric();
+    }
   }, []);
+
+  const handleBiometric = async () => {
+    const ok = await BiometricService.verify();
+    if (ok) setIsLocked(false);
+  };
 
   useEffect(() => {
     if (notifications.length === 0) return;
@@ -82,6 +93,26 @@ const App: React.FC = () => {
   }, [notifications, clearNotification]);
 
   const activeColor = MODULE_GLOW[currentModule];
+
+  if (isLocked) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-6 bg-zinc-950 px-8 text-center">
+        <div className="w-20 h-20 rounded-3xl bg-violet-600/20 border border-violet-500/20 flex items-center justify-center">
+          <Lock size={32} className="text-violet-500" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-white">GIA Workspace Locked</h2>
+          <p className="text-sm text-zinc-500 mt-2">Biometric authentication is required to access your private workspace.</p>
+        </div>
+        <button 
+          onClick={handleBiometric}
+          className="gia-btn gia-btn-primary px-8 py-3 rounded-2xl font-semibold"
+        >
+          Authenticate
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div

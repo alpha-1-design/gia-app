@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Terminal, Shield, User, X, Save, ChevronRight,
   Wifi, WifiOff, Cpu, Trash2, Brain, Search, Play, Check,
-  Code2, Headphones, Smartphone, ExternalLink, Mail, Globe,
+  Code2, Headphones, Smartphone, ExternalLink, Mail, Globe, Lock,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore, PROVIDER_DEFAULTS, ProviderType } from '../store/useProviderStore';
@@ -201,6 +201,9 @@ const SettingsModule: React.FC = () => {
 
       {/* Voice */}
       <VoiceSection />
+
+      {/* Security */}
+      <SecuritySection />
 
       {/* Code Execution */}
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
@@ -415,9 +418,13 @@ const CodeExecutionSection: React.FC<{ codeEndpoint: string; setCodeEndpoint: (v
   );
 };
 
+import TTSService from '../services/TTSService';
+import BiometricService from '../services/BiometricService';
+
 const VoiceSection: React.FC = () => {
   const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');
   const [keepListening, setKeepListening] = useState(() => localStorage.getItem('gia-keep-listening') !== 'false');
+  const [ttsEnabled, setTtsEnabled] = useState(() => TTSService.isEnabled());
 
   useEffect(() => {
     localStorage.setItem('gia-wake-word', wakeWord);
@@ -469,6 +476,77 @@ const VoiceSection: React.FC = () => {
           <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Stay Listening</p>
           <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
             Keep listening for more wake words after each detection. Off = one-shot.
+          </p>
+        </div>
+      </label>
+
+      <label className="flex items-center gap-3 tap-feedback" style={{ cursor: 'pointer' }}>
+        <div
+          onClick={() => {
+            const newVal = !ttsEnabled;
+            setTtsEnabled(newVal);
+            TTSService.setEnabled(newVal);
+          }}
+          className="w-8 h-4 rounded-full relative transition-all shrink-0"
+          style={{ background: ttsEnabled ? 'rgba(236,72,153,0.4)' : 'rgba(255,255,255,0.1)' }}
+        >
+          <div
+            className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+            style={{ left: ttsEnabled ? '18px' : '2px', background: ttsEnabled ? '#ec4899' : 'var(--gia-muted-2)' }}
+          />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Voice Response (TTS)</p>
+          <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
+            GIA will read her responses out loud.
+          </p>
+        </div>
+      </label>
+    </div>
+  );
+};
+
+const SecuritySection: React.FC = () => {
+  const [lockEnabled, setLockEnabled] = useState(() => BiometricService.isLockEnabled());
+  const [available, setAvailable] = useState(false);
+
+  useEffect(() => {
+    BiometricService.isAvailable().then(setAvailable);
+  }, []);
+
+  return (
+    <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className="flex items-center gap-2">
+        <Lock size={14} style={{ color: '#3b82f6' }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+          Security
+        </span>
+      </div>
+
+      <label className="flex items-center gap-3 tap-feedback" style={{ cursor: 'pointer', opacity: available ? 1 : 0.5 }}>
+        <div
+          onClick={async () => {
+            if (!available) return;
+            const newVal = !lockEnabled;
+            if (newVal) {
+              const ok = await BiometricService.verify();
+              if (!ok) return;
+            }
+            setLockEnabled(newVal);
+            BiometricService.setLockEnabled(newVal);
+          }}
+          className="w-8 h-4 rounded-full relative transition-all shrink-0"
+          style={{ background: lockEnabled ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)' }}
+        >
+          <div
+            className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+            style={{ left: lockEnabled ? '18px' : '2px', background: lockEnabled ? '#3b82f6' : 'var(--gia-muted-2)' }}
+          />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Biometric Lock</p>
+          <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
+            {available ? 'Protect GIA with FaceID/Fingerprint on startup.' : 'Biometrics not supported on this device.'}
           </p>
         </div>
       </label>
