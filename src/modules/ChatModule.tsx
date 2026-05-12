@@ -91,9 +91,20 @@ const ChatModule: React.FC = () => {
   
 
   const [showTools, setShowTools] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const activeSession = getActiveSession();
-  const messages = activeSession?.messages ?? [];
+  const messages: Message[] = activeSession?.messages ?? [];
+
+  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff') => {
+    setIsSyncing(true);
+    if (feature === 'webSearch') setWebSearch(prev => !prev);
+    if (feature === 'extThinking') setExtThinking(prev => !prev);
+    if (feature === 'handsOff') setHandsOff(prev => !prev);
+    
+    // Simulate tiny delay to show sync indicator then clear it
+    setTimeout(() => setIsSyncing(false), 300);
+  }, [setWebSearch, setExtThinking, setHandsOff]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, []);
 
@@ -704,39 +715,41 @@ Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors tap-feedback"
             style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
           >
-            <motion.div animate={{ rotate: showTools ? 180 : 0 }}>
+            <motion.div animate={{ rotate: showTools ? 90 : 0 }}>
               <ChevronRight size={14} />
             </motion.div>
           </button>
 
-          <div className="flex-1 overflow-hidden">
-            <AnimatePresence initial={false}>
+          <div className="flex-1 overflow-hidden flex items-center gap-2">
+            <AnimatePresence initial={false} mode="wait">
               {showTools ? (
                 <motion.div 
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 'auto', opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  className="flex items-center gap-1.5 flex-nowrap"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: '100%', opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1"
                 >
-                  {[
-                    { label: 'File', icon: Paperclip, onClick: () => fileRef.current?.click(), active: false },
-                    { label: 'Image', icon: ImageIcon, onClick: () => imgRef.current?.click(), active: false },
-                    { label: 'Search', icon: Globe, onClick: () => setWebSearch(w => !w), active: webSearch, activeColor: '#3b82f6' },
-                    { label: 'Think', icon: Brain, onClick: () => setExtThinking(t => !t), active: extThinking, activeColor: '#f59e0b' },
-                    { label: 'Hands-off', icon: Zap, onClick: () => setHandsOff(h => !h), active: handsOff, activeColor: '#a855f7' },
-                    { label: 'Listen', icon: Headphones, onClick: () => { setVoiceEnabled(v => !v); if (!voiceEnabled) voiceControl.startListening(); else voiceControl.stopListening(); }, active: voiceEnabled, activeColor: '#ec4899' },
-                  ].map((tool) => (
-                    <button key={tool.label} onClick={tool.onClick} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.activeColor}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.activeColor}40` : 'var(--gia-border)'}`, color: tool.active ? tool.activeColor : 'var(--gia-muted)', fontWeight: 500 }}>
-                      {(tool.active && tool.label === 'Listen' && voiceControl.isHearing) ? (
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#ec4899' }} />
-                          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#ec4899' }} />
-                        </span>
-                      ) : <tool.icon size={11} />}
-                      {tool.active && tool.label === 'Listen' && voiceControl.isHearing ? 'Hearing' : tool.label}
-                    </button>
-                  ))}
+                {[
+                  { label: 'Search', feature: 'webSearch', icon: Globe, active: webSearch, color: '#3b82f6' },
+                  { label: 'Think', feature: 'extThinking', icon: Brain, active: extThinking, color: '#f59e0b' },
+                  { label: 'Hands-off', feature: 'handsOff', icon: Zap, active: handsOff, color: '#a855f7' },
+                  { label: 'Listen', feature: 'listen', icon: Headphones, active: voiceEnabled, color: '#ec4899' },
+                ].map((tool) => (
+                  <button key={tool.label} onClick={() => {
+                    if (tool.feature === 'listen') {
+                      setVoiceEnabled(v => !v); 
+                      if (!voiceEnabled) voiceControl.startListening(); 
+                      else voiceControl.stopListening();
+                    } else {
+                      toggleFeature(tool.feature as any);
+                    }
+                  }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
+                    <tool.icon size={11} />
+                    {tool.label}
+                  </button>
+                ))}
                 </motion.div>
+
               ) : (
                 <motion.div 
                   initial={{ opacity: 0 }}
@@ -748,8 +761,9 @@ Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
                     {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
                     {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
                   </div>
+                  {isSyncing && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
                   <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                    {(!webSearch && !extThinking && !handsOff) ? 'Tools hidden' : 'Active tools'}
+                    {isSyncing ? 'Syncing...' : (!webSearch && !extThinking && !handsOff) ? 'No active tools' : 'Tools active'}
                   </span>
                 </motion.div>
               )}
