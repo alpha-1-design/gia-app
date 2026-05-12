@@ -143,16 +143,18 @@ class GiaBrain {
   }
 
   private async callOpenAICompat(req: BrainRequest): Promise<BrainResponse> {
-    const { providers, activeProvider } = useProviderStore.getState();
+    const { activeProvider, providers } = useProviderStore.getState();
     const config = providers[activeProvider];
     const { baseUrl, label } = PROVIDER_DEFAULTS[activeProvider];
 
+    const messages = [
+      { role: 'system', content: req.systemPrompt || buildGiaSystem() },
+      ...this.buildMessages(req)
+    ];
+
     const body: any = {
       model: config.model,
-      messages: [
-        { role: 'system', content: req.systemPrompt || buildGiaSystem() },
-        ...this.buildMessages(req),
-      ],
+      messages,
       temperature: req.temperature ?? 0.7,
       max_tokens: req.maxTokens ?? 2048,
       stream: !!req.onStream,
@@ -160,9 +162,7 @@ class GiaBrain {
 
     if (req.useExtendedThinking) {
       body.temperature = undefined;
-      if (req.systemPrompt) {
-        body.messages[0] = { role: 'system', content: `${req.systemPrompt}\n\nThink step-by-step before answering. Show your reasoning inside  tags, then provide your final answer.` };
-      }
+      body.messages[0].content += `\n\nThink step-by-step before answering. Show your reasoning inside <think> tags, then provide your final answer.`;
     }
 
     const headers: Record<string, string> = {
@@ -174,65 +174,46 @@ class GiaBrain {
       headers['X-Title'] = 'GIA';
     }
 
-    if (req.onStream) {
-      // Use standard fetch for streaming in browsers, but be aware of Capacitor limitations
-      // On Android, CapacitorHttp doesn't support streaming well. 
-      // However, the standard fetch in modern Android WebViews DOES support ReadableStream.
-      // The issue is likely the 'stream: true' parameter and the line-by-line parsing.
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
-      });
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
+    });
 
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        throw new Error(e?.error?.message || `${label} error ${res.status}`);
-      }
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({})) as any;
+      throw new Error(e?.error?.message || `${label} error ${res.status}`);
+    }
 
-      if (res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullText = '';
+    if (req.onStream && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
           for (const line of lines) {
             const t = line.trim();
             if (!t || t === 'data: [DONE]') continue;
-            if (t.startsWith('data:')) {
+            if (t.startsWith('data: ')) {
               try {
-                const data = t.slice(5).trim();
-                const parsed = JSON.parse(data);
-                const delta = parsed.choices?.[0]?.delta?.content;
-                if (delta) { fullText += delta; req.onStream(delta); }
-              } catch { /* skip partial JSON */ }
+                const json = JSON.parse(t.slice(6));
+                const delta = json.choices[0].delta.content;
+                if (delta) {
+                  fullText += delta;
+                  req.onStream(delta);
+                }
+              } catch { continue; }
             }
           }
         }
-        return { text: fullText, provider: activeProvider, model: config.model };
-      }
+      } catch (e) { console.error('Stream error:', e); }
+      return { text: fullText, provider: activeProvider, model: config.model };
     }
 
-    // Use CapacitorHttp for non-streaming requests to bypass CORS on mobile
-    const res = await CapacitorHttp.post({
-      url: `${baseUrl}/chat/completions`,
-      headers,
-      data: body,
-      connectTimeout: 60000,
-      readTimeout: 60000,
-    });
-
-    if (res.status < 200 || res.status >= 300) {
-      throw new Error(res.data?.error?.message || `${label} error ${res.status}`);
-    }
-
-    const data = res.data;
-    const text = data.choices?.[0]?.message?.content ?? '';
-    const sources = data.choices?.[0]?.message?.annotations?.map((a: any) => a.url).filter(Boolean);
-    return { text, provider: activeProvider, model: config.model, sources };
+    const data = await res.json();
+    return { text: data.choices[0].message.content, provider: activeProvider, model: config.model };
   }
 
   private async callAnthropic(req: BrainRequest): Promise<BrainResponse> {
