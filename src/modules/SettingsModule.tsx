@@ -170,11 +170,19 @@ const SettingsModule: React.FC = () => {
           {skills.map(skill => (
             <div key={skill.id} className="p-3 rounded-xl border border-zinc-800 bg-zinc-900/30">
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-zinc-100">{skill.name}</span>
-                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 uppercase tracking-tighter">{skill.category}</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <input
+                    value={skill.name}
+                    onChange={(e) => {
+                      const newSkills = skills.map(s => s.id === skill.id ? { ...s, name: e.target.value } : s);
+                      useGiaStore.setState({ skills: newSkills });
+                    }}
+                    className="text-xs font-bold bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-violet-500 outline-none transition-colors flex-1 min-w-0"
+                    style={{ color: 'var(--gia-text)' }}
+                  />
+                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 uppercase tracking-tighter shrink-0">{skill.category}</span>
                 </div>
-                <button onClick={() => removeSkill(skill.id)} className="text-zinc-600 hover:text-rose-500"><Trash2 size={12} /></button>
+                <button onClick={() => removeSkill(skill.id)} className="text-zinc-600 hover:text-rose-500 shrink-0 ml-2"><Trash2 size={12} /></button>
               </div>
               <textarea 
                 value={skill.systemPrompt}
@@ -239,6 +247,7 @@ const SettingsModule: React.FC = () => {
           onClick={() => {
             if (confirm('Clear all chat history? This cannot be undone.')) {
               useGiaStore.setState({ sessions: [], activeSessionId: null });
+              setTimeout(() => useGiaStore.getState().createSession(), 0);
             }
           }}
           className="gia-btn flex items-center gap-2 w-full"

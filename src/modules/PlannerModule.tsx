@@ -4,8 +4,7 @@ import GiaBrain from '../services/GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { LocalNotifications } from '@capacitor/local-notifications';
-import { extractJSON } from '../utils/helpers';
+import { extractJSON, getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
 
 interface PlanStep { id: string; title: string; description: string; done: boolean; priority: 'high'|'medium'|'low'; eta?: string }
 const PRIORITY_COLORS = {
@@ -15,19 +14,6 @@ const PRIORITY_COLORS = {
 };
 
 const genId = () => Math.random().toString(36).slice(2, 10);
-
-const getIntervalMs = (interval: string) =>
-  interval === 'hourly' ? 3600000 : interval === 'daily' ? 86400000 : 604800000;
-
-const formatNextRun = (ts: number) => {
-  const diff = ts - Date.now();
-  if (diff <= 0) return 'now';
-  if (diff < 3600000) return `in ${Math.ceil(diff / 60000)}m`;
-  if (diff < 86400000) return `in ${Math.ceil(diff / 3600000)}h`;
-  return `in ${Math.ceil(diff / 86400000)}d`;
-};
-
-const notifId = () => (Date.now() % 100000) + Math.floor(Math.random() * 1000);
 
 const PlannerModule: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -43,9 +29,13 @@ const PlannerModule: React.FC = () => {
   const { setIntentState, scheduledTasks, addScheduledTask, updateTaskStatus, deleteTask, addNotification } = useGiaStore();
   const mountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (mountTimeoutRef.current) clearTimeout(mountTimeoutRef.current);
+    };
+  }, []);
+
   const runTask = useCallback(async (task: ScheduledTask) => {
-    // This is now handled by SchedulerService.ts globally,
-    // but we keep it here for immediate execution of newly created tasks
     if (task.status === 'running') return;
 
     updateTaskStatus(task.id, 'running');
@@ -55,30 +45,10 @@ const PlannerModule: React.FC = () => {
       if (isRecurring) {
         const nextRun = Date.now() + getIntervalMs(task.interval);
         updateTaskStatus(task.id, 'pending', res.text, nextRun);
-        await LocalNotifications.schedule({
-          notifications: [{
-            title: `⏰ ${task.title}`,
-            body: `Next run ${formatNextRun(nextRun)}`,
-            id: notifId(),
-            schedule: { at: new Date(nextRun) },
-            sound: 'default',
-          }],
-        });
       } else {
         updateTaskStatus(task.id, 'done', res.text);
       }
       addNotification(`✅ ${task.title.slice(0, 30)}`);
-      try {
-        await LocalNotifications.schedule({
-          notifications: [{
-            title: '✅ GIA Task Complete',
-            body: res.text.slice(0, 120),
-            id: notifId(),
-            schedule: { at: new Date(Date.now() + 2000) },
-            sound: 'default',
-          }],
-        });
-      } catch {}
     } catch {
       updateTaskStatus(task.id, 'error', 'Task failed.');
       addNotification(`❌ ${task.title.slice(0, 30)}`);
@@ -133,16 +103,6 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
       setSchedPrompt('');
       addNotification(`⏰ Scheduled: ${task.title.slice(0,25)}...`);
 
-      await LocalNotifications.schedule({
-        notifications: [{
-          title: 'GIA Task Due',
-          body: `Time to run: "${task.title}"`,
-          id: notifId(),
-          schedule: { at: new Date(nextRun) },
-          sound: 'default',
-        }],
-      });
-
       mountTimeoutRef.current = setTimeout(() => runTask(task), delayMs);
     } catch {} finally { setSchedLoading(false); }
   }, [schedPrompt, schedInterval, schedLoading, editingTask, addScheduledTask, updateTaskStatus, deleteTask, addNotification, runTask]);
@@ -161,7 +121,9 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
   const exportPlan = () => {
     const txt = `# ${planTitle}\n\n` + steps.map((s,i) => `${i+1}. [${s.done?'x':' '}] **${s.title}** (${s.priority})${s.eta?` — ${s.eta}`:''}\n   ${s.description}`).join('\n\n');
     const b = new Blob([txt],{type:'text/plain'}); const a = document.createElement('a');
-    a.href=URL.createObjectURL(b); a.download=`${planTitle.replace(/\s+/g,'-').toLowerCase()}.md`; a.click();
+    a.href=URL.createObjectURL(b); a.download=`${planTitle.replace(/\s+/g,'-').toLowerCase()}.md`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   };
 
   const StatusDot = ({ status }: { status: string }) => (

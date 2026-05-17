@@ -6,13 +6,13 @@ interface Props { content: string; className?: string }
 const inlineRender = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~)/g);
   return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**'))
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
       return <strong key={i}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('~~') && part.endsWith('~~'))
+    if (part.startsWith('~~') && part.endsWith('~~') && part.length > 4)
       return <del key={i} style={{ color: 'var(--gia-muted)' }}>{part.slice(2, -2)}</del>;
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2)
+    if (part.startsWith('*') && part.endsWith('*') && part.length >= 3)
       return <em key={i}>{part.slice(1, -1)}</em>;
-    if (part.startsWith('`') && part.endsWith('`') && part.length > 2)
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 3)
       return <code key={i} style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc', padding: '1px 6px', borderRadius: '5px', fontSize: '12px', fontFamily: 'JetBrains Mono, monospace' }}>{part.slice(1, -1)}</code>;
     const link = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
     if (link)
@@ -44,12 +44,19 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
     }
 
     // Table
-    if (line.includes('|') && lines[i + 1]?.includes('---')) {
-      const headers = line.split('|').filter(c => c.trim()).map(c => c.trim());
-      i += 2; // skip separator
+    if (line.includes('|') && lines[i + 1]?.match(/^\s*\|?\s*:?-+:?\s*\|/)) {
+      const headers = line.split('|').map(c => c.trim());
+      if (headers.length >= 2 && headers[0] === '' && headers[headers.length - 1] === '') {
+        headers.shift(); headers.pop();
+      }
+      i += 2;
       const rows: string[][] = [];
       while (i < lines.length && lines[i].includes('|')) {
-        rows.push(lines[i].split('|').filter(c => c.trim()).map(c => c.trim()));
+        const cells = lines[i].split('|').map(c => c.trim());
+        if (cells.length >= 2 && cells[0] === '' && cells[cells.length - 1] === '') {
+          cells.shift(); cells.pop();
+        }
+        rows.push(cells);
         i++;
       }
       nodes.push(

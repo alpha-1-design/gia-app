@@ -1,8 +1,6 @@
 export function extractJSON(text: string): any {
-  // 1. Clean the text of markdown formatting
   let cleaned = text.replace(/```json|```/g, '').trim();
 
-  // 2. Locate the first '[' and last ']' (array) or '{' and '}' (object)
   const firstArray = cleaned.indexOf('[');
   const lastArray = cleaned.lastIndexOf(']');
   const firstObj = cleaned.indexOf('{');
@@ -11,7 +9,6 @@ export function extractJSON(text: string): any {
   let start = -1;
   let end = -1;
 
-  // Decide if we should treat it as an array (usually the case for lists of questions)
   if (firstArray !== -1 && lastArray > firstArray) {
     start = firstArray;
     end = lastArray + 1;
@@ -27,9 +24,27 @@ export function extractJSON(text: string): any {
   try {
     return JSON.parse(jsonCandidate);
   } catch (e) {
-    // If strict JSON.parse fails, it might be due to trailing commas or malformed content in AI response
-    // Attempt to fix common JSON errors
-    const fixedCandidate = jsonCandidate.replace(/,\s*([\]}])/g, '$1');
-    return JSON.parse(fixedCandidate);
+    let fixed = jsonCandidate
+      .replace(/,\s*([\]}])/g, '$1')
+      .replace(/([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+      .replace(/,\s*$/gm, '')
+      .replace(/\/\/.*$/gm, '');
+    if (fixed !== jsonCandidate) {
+      try { return JSON.parse(fixed); } catch {}
+    }
+    throw e;
   }
 }
+
+export const getIntervalMs = (interval: string) =>
+  interval === 'hourly' ? 3600000 : interval === 'daily' ? 86400000 : 604800000;
+
+export const formatNextRun = (ts: number) => {
+  const diff = ts - Date.now();
+  if (diff <= 0) return 'now';
+  if (diff < 3600000) return `in ${Math.ceil(diff / 60000)}m`;
+  if (diff < 86400000) return `in ${Math.ceil(diff / 3600000)}h`;
+  return `in ${Math.ceil(diff / 86400000)}d`;
+};
+
+export const notifId = () => (Date.now() % 100000) + Math.floor(Math.random() * 1000);

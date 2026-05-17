@@ -35,6 +35,11 @@ const PISTON_URL = 'https://emkc.org/api/v2/piston/execute';
 const PISTON_RUNTIMES_URL = 'https://emkc.org/api/v2/piston/runtimes';
 const HISTORY_KEY = 'gia-code-history';
 
+const isNative =
+  typeof window !== 'undefined' &&
+  typeof (window as any).Capacitor !== 'undefined' &&
+  (window as any).Capacitor.isNativePlatform?.();
+
 const LANGUAGE_MAP: Record<string, string> = {
   'python': 'python',
   'py': 'python',
@@ -70,40 +75,57 @@ class CodeRunner {
   setEndpoint(url: string) { this.userEndpoint = url; }
   getEndpoint() { return this.userEndpoint || PISTON_URL; }
 
-  async run(req: CodeRunRequest, attempts = 0): Promise<CodeRunResult> {
+  async run(req: CodeRunRequest, attempts = 0, signal?: AbortSignal): Promise<CodeRunResult> {
     const maxAttempts = 3;
     const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
 
-    // Split code if it looks like a multi-file request (GIA might try to pass multiple files)
+    if (signal?.aborted) return { output: '', error: 'Request aborted', exitCode: 1, language: lang, version: '' };
+
     const files = [{ name: `main.${lang}`, content: req.code }];
 
     try {
-      const res = await CapacitorHttp.post({
-        url: this.getEndpoint(),
-        headers: { 'Content-Type': 'application/json' },
-        data: {
-          language: lang,
-          version: '*',
-          files: files,
-          stdin: req.stdin || '',
-          args: req.args || [],
-          compile_timeout: 10000,
-          run_timeout: 3000,
-          max_process_count: 64
-        },
-      });
+      let data: any;
+      const body = {
+        language: lang,
+        version: '*',
+        files: files,
+        stdin: req.stdin || '',
+        args: req.args || [],
+        compile_timeout: 30000,
+        run_timeout: 15000,
+        max_process_count: 64,
+      };
 
-      if (res.status === 429 && attempts < maxAttempts) {
-        await new Promise(r => setTimeout(r, 2000 * (attempts + 1)));
-        return this.run(req, attempts + 1);
+      if (isNative) {
+        const res = await CapacitorHttp.post({
+          url: this.getEndpoint(),
+          headers: { 'Content-Type': 'application/json' },
+          data: body,
+        });
+        if (res.status < 200 || res.status >= 300) {
+          throw new Error(`Piston error ${res.status}: ${JSON.stringify(res.data)}`);
+        }
+        data = res.data;
+      } else {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        const onAbort = () => controller.abort();
+        signal?.addEventListener('abort', onAbort);
+
+        const res = await fetch(this.getEndpoint(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onAbort);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => 'Unknown error');
+          throw new Error(`Piston error ${res.status}: ${errText}`);
+        }
+        data = await res.json();
       }
-
-      if (res.status < 200 || res.status >= 300) {
-        const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-        throw new Error(`Piston error ${res.status}: ${errText}`);
-      }
-
-      const data = res.data;
       const run = data.run || {};
       const result: CodeRunResult = {
         output: (run.stdout || '').trim(),
@@ -113,7 +135,6 @@ class CodeRunner {
         version: data.version || '',
       };
 
-      // If output is empty and no error, but exit code is non-zero
       if (!result.output && !result.error && result.exitCode !== 0) {
         result.error = `Process exited with code ${result.exitCode}`;
       }
@@ -152,15 +173,21 @@ class CodeRunner {
     }
   }
 
-  async getRuntimes(): Promise<PistonRuntime[]> {
-    try {
-      const res = await CapacitorHttp.get({
-        url: PISTON_RUNTIMES_URL,
-        connectTimeout: 10000,
-        readTimeout: 10000,
-      });
+  private async fetchJSON(url: string, options?: RequestInit): Promise<any> {
+    if (isNative) {
+      const method = (options?.method || 'GET').toLowerCase() as 'get' | 'post';
+      const res = await (CapacitorHttp as any)[method]({ url, connectTimeout: 10000, readTimeout: 10000, ...(options?.body ? { data: JSON.parse(options.body as string) } : {}), ...(options?.headers || {}) });
       if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
       return res.data;
+    }
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async getRuntimes(): Promise<PistonRuntime[]> {
+    try {
+      return await this.fetchJSON(PISTON_RUNTIMES_URL);
     } catch {
       return Object.entries(LANGUAGE_MAP).map(([alias, name]) => ({
         language: name, version: '*', aliases: [alias],
@@ -171,23 +198,20 @@ class CodeRunner {
   async testEndpoint(url: string): Promise<{ ok: boolean; message: string }> {
     try {
       const runtimeUrl = url.replace('/execute', '/runtimes');
-      const res = await CapacitorHttp.get({ url: runtimeUrl, connectTimeout: 10000, readTimeout: 10000 });
-      if (res.status < 200 || res.status >= 300) {
-        const testRes = await CapacitorHttp.post({
-          url,
-          connectTimeout: 10000,
-          readTimeout: 10000,
-          headers: { 'Content-Type': 'application/json' },
-          data: { language: 'python', version: '*', files: [{ name: 'main.py', content: 'print("ok")' }] },
-        });
-        if (testRes.status < 200 || testRes.status >= 300) return { ok: false, message: `Endpoint error ${testRes.status}` };
-        return { ok: true, message: 'Connected (execute endpoint)' };
-      }
-      const data = res.data;
+      const data = await this.fetchJSON(runtimeUrl);
       const count = Array.isArray(data) ? data.length : 0;
       return { ok: true, message: `Connected — ${count} runtimes available` };
-    } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : 'Connection failed' };
+    } catch {
+      try {
+        await this.fetchJSON(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: 'python', version: '*', files: [{ name: 'main.py', content: 'print("ok")' }] }),
+        });
+        return { ok: true, message: 'Connected (execute endpoint)' };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : 'Connection failed' };
+      }
     }
   }
 

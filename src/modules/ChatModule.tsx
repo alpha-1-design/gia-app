@@ -40,6 +40,8 @@ const QUICK_STARTS = [
   { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b' },
 ];
 
+const LONG_MSG_CHARS = 3000;
+
 const ChatModule: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,6 +54,8 @@ const ChatModule: React.FC = () => {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [undoMsg, setUndoMsg] = useState<{ id: string; sessionId: string; backup: any[] } | null>(null);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
+  const [showThoughts, setShowThoughts] = useState<Set<string>>(new Set());
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -126,7 +130,12 @@ const ChatModule: React.FC = () => {
     if (voiceEnabled) {
       voiceControl.startListening();
     }
-  }, []);
+    return () => {
+      if (voiceEnabled) {
+        voiceControl.stopListening();
+      }
+    };
+  }, [voiceEnabled, voiceControl]);
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen') => {
     setIsSyncing(true);
@@ -171,10 +180,23 @@ const ChatModule: React.FC = () => {
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
     TTSService.stop();
+    if (streamingMsgId && activeSessionId) {
+      const session = useGiaStore.getState().sessions.find(s => s.id === activeSessionId);
+      const ghost = session?.messages.find(m => m.id === streamingMsgId);
+      if (ghost && (!ghost.content || ghost.thinking)) {
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === activeSessionId
+              ? { ...s, messages: s.messages.filter(m => m.id !== streamingMsgId), updatedAt: Date.now() }
+              : s
+          ),
+        });
+      }
+    }
     setLoading(false);
     setStreamingMsgId(null);
     setIntentState('idle');
-  }, [setIntentState]);
+  }, [setIntentState, streamingMsgId, activeSessionId]);
 
   const handleContinue = useCallback(async (msgId: string) => {
     if (!activeSessionId || loading) return;
@@ -200,18 +222,55 @@ const ChatModule: React.FC = () => {
         .filter(m => !m.thinking && m.content)
         .map(m => ({ role: m.role, content: m.content }));
       let accumulated = '';
+      let thoughtsAccumulated = '';
+      let inThinkBlock = false;
       setIntentState('responding');
       await GiaBrain.generate({
+        signal: ctrl.signal,
         prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
         history: [...history, { role: 'assistant', content: lastContent }],
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
-          accumulated += chunk;
-          updateMessage(activeSessionId!, asstId, accumulated);
+          let remaining = chunk;
+          let displayChunk = '';
+          while (remaining.length > 0) {
+            if (inThinkBlock) {
+              const endIdx = remaining.indexOf('</think>');
+              if (endIdx >= 0) {
+                thoughtsAccumulated += remaining.slice(0, endIdx);
+                remaining = remaining.slice(endIdx + 8);
+                inThinkBlock = false;
+              } else {
+                thoughtsAccumulated += remaining;
+                remaining = '';
+              }
+            } else {
+              const startIdx = remaining.indexOf('<think>');
+              if (startIdx >= 0) {
+                displayChunk += remaining.slice(0, startIdx);
+                remaining = remaining.slice(startIdx + 7);
+                inThinkBlock = true;
+              } else {
+                displayChunk += remaining;
+                remaining = '';
+              }
+            }
+          }
+          accumulated += displayChunk;
+          updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated || undefined);
+        },
+        onThought: (thought) => {
+          thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
+          updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
         },
       });
       if (!ctrl.signal.aborted) {
-        updateMessage(activeSessionId!, asstId, accumulated);
+        if (inThinkBlock && thoughtsAccumulated) {
+          accumulated += '<think>' + thoughtsAccumulated;
+          thoughtsAccumulated = '';
+          inThinkBlock = false;
+        }
+        updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || accumulated, thoughtsAccumulated || undefined);
         TTSService.speak(accumulated);
       }
     } catch (err: unknown) {
@@ -258,7 +317,19 @@ const ChatModule: React.FC = () => {
     addNotification('Message restored');
   }, [undoMsg, addNotification]);
 
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value);
+    if (value === '/') {
+      setShowSkillPicker(true);
+    }
+  }, []);
+
   const handleSend = useCallback(async () => {
+    if (input.trim() === '/') {
+      setShowSkillPicker(true);
+      setInput('');
+      return;
+    }
     if (input.trim().startsWith('/')) {
       setShowSkillPicker(true);
       return;
@@ -295,8 +366,9 @@ const ChatModule: React.FC = () => {
     setLoading(true);
     setIntentState('thinking');
 
-    if (messages.length === 0 && text) {
-      updateSessionTitle(sessionId, text.slice(0, 45) + (text.length > 45 ? '…' : ''));
+    if (messages.length === 0) {
+      const titleText = text || fileNames || 'Attached files';
+      updateSessionTitle(sessionId, titleText.slice(0, 45) + (titleText.length > 45 ? '…' : ''));
     }
 
     let prompt = text;
@@ -327,10 +399,12 @@ const ChatModule: React.FC = () => {
         .map(m => ({ role: m.role, content: m.content }));
 
       const brainImages = sentAttachments
-        .filter(a => a.type.startsWith('image/'))
-        .map(a => ({ name: a.name, type: a.type, data: a.preview || '' }));
+        .filter(a => a.type.startsWith('image/') && a.preview)
+        .map(a => ({ name: a.name, type: a.type, data: a.preview! }));
 
       let accumulated = '';
+      let thoughtsAccumulated = '';
+      let inThinkBlock = false;
       setIntentState('responding');
 
       const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
@@ -341,28 +415,88 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 - Extended Thinking: ${extThinking ? 'ON' : 'OFF'}
 - Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}]\n\n`;
 
+      const processStreamChunk = (chunk: string) => {
+        if (ctrl.signal.aborted) return;
+        let remaining = chunk;
+        let displayChunk = '';
+        while (remaining.length > 0) {
+          if (inThinkBlock) {
+            const endIdx = remaining.indexOf('</think>');
+            if (endIdx >= 0) {
+              thoughtsAccumulated += remaining.slice(0, endIdx);
+              remaining = remaining.slice(endIdx + 8);
+              inThinkBlock = false;
+            } else {
+              thoughtsAccumulated += remaining;
+              remaining = '';
+            }
+          } else {
+            const startIdx = remaining.indexOf('<think>');
+            if (startIdx >= 0) {
+              displayChunk += remaining.slice(0, startIdx);
+              remaining = remaining.slice(startIdx + 7);
+              inThinkBlock = true;
+            } else {
+              displayChunk += remaining;
+              remaining = '';
+            }
+          }
+        }
+        accumulated += displayChunk;
+        const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
+        updateMessage(sessionId!, asstId, displayText || '…', thoughtsAccumulated || undefined);
+      };
+
       const res = await GiaBrain.generate({
+        signal: ctrl.signal,
         prompt: stateContext + handsOffPrefix + prompt, history,
         images: brainImages,
         useWebSearch: webSearch,
         useExtendedThinking: extThinking,
         temperature: extThinking ? undefined : 0.7,
-        onStream: (chunk) => {
-          if (ctrl.signal.aborted) return;
-          accumulated += chunk;
-          updateMessage(sessionId!, asstId, accumulated);
-        },
+        onStream: (chunk) => processStreamChunk(chunk),
         onThought: (thought) => {
+          thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
+          updateMessage(sessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           setShowConsole(true);
         }
       });
 
-      if (!ctrl.signal.aborted) {
-        const finalText = res.text || accumulated;
-        updateMessage(sessionId!, asstId, finalText);
-        TTSService.speak(finalText);
+      if (ctrl.signal.aborted) return;
+
+      // Safeguard: if <think> was never closed, treat it as literal text
+      if (inThinkBlock && thoughtsAccumulated) {
+        accumulated += '<think>' + thoughtsAccumulated;
+        thoughtsAccumulated = '';
+        inThinkBlock = false;
       }
+
+      if (res.text === '__CLARIFICATION__') {
+        const stored = useGiaStore.getState().clarification;
+        if (stored) {
+          useGiaStore.setState({
+            clarification: { ...stored, sessionId: sessionId!, assistantMsgId: asstId },
+          });
+          updateMessage(sessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim(), thoughtsAccumulated || undefined);
+        }
+        setIntentState('idle');
+        return;
+      }
+
+      const rawContent = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
+      const finalText = rawContent || (() => {
+        // Non-streaming fallback: parse <think> from res.text
+        const t = (res.text || '').replace(/```tool[\s\S]*?```/g, '').trim();
+        const m = t.match(/<think>([\s\S]*?)<\/think>/);
+        if (m) {
+          thoughtsAccumulated = m[1].trim();
+          return t.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        }
+        return t;
+      })();
+      updateMessage(sessionId!, asstId, finalText, thoughtsAccumulated || undefined);
+      TTSService.speak(finalText);
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
@@ -382,6 +516,110 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     }
   }, [input, attachments, loading, activeSessionId, messages, webSearch, extThinking, createSession, addMessage, updateMessage, updateSessionTitle, setIntentState, handsOff]);
 
+  const handleClarificationAnswer = useCallback(async (answer: string) => {
+    const clarification = useGiaStore.getState().clarification;
+    if (!clarification) return;
+    useGiaStore.getState().setClarification(null);
+
+    const sessionId = clarification.sessionId || activeSessionId;
+    if (!sessionId) return;
+
+    addMessage(sessionId, {
+      id: genId(), role: 'user', content: answer, timestamp: Date.now(),
+    });
+
+    const asstId = genId();
+    addMessage(sessionId, {
+      id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
+    });
+    setStreamingMsgId(asstId);
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setIntentState('responding');
+
+    try {
+      const allMsgs = messages
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role, content: m.content }));
+      allMsgs.push({ role: 'user', content: answer });
+
+      let accumulated = '';
+      let thoughtsAccumulated = '';
+      let inThinkBlock = false;
+      await GiaBrain.generate({
+        signal: ctrl.signal,
+        prompt: '', history: allMsgs,
+        useWebSearch: webSearch,
+        useExtendedThinking: extThinking,
+        temperature: extThinking ? undefined : 0.7,
+        onStream: (chunk) => {
+          if (ctrl.signal.aborted) return;
+          let remaining = chunk;
+          let displayChunk = '';
+          while (remaining.length > 0) {
+            if (inThinkBlock) {
+              const endIdx = remaining.indexOf('</think>');
+              if (endIdx >= 0) {
+                thoughtsAccumulated += remaining.slice(0, endIdx);
+                remaining = remaining.slice(endIdx + 8);
+                inThinkBlock = false;
+              } else {
+                thoughtsAccumulated += remaining;
+                remaining = '';
+              }
+            } else {
+              const startIdx = remaining.indexOf('<think>');
+              if (startIdx >= 0) {
+                displayChunk += remaining.slice(0, startIdx);
+                remaining = remaining.slice(startIdx + 7);
+                inThinkBlock = true;
+              } else {
+                displayChunk += remaining;
+                remaining = '';
+              }
+            }
+          }
+          accumulated += displayChunk;
+          const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
+          updateMessage(sessionId, asstId, displayText || '…', thoughtsAccumulated || undefined);
+        },
+        onThought: (thought) => {
+          thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
+          updateMessage(sessionId, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
+          useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+          setShowConsole(true);
+        }
+      });
+      if (!ctrl.signal.aborted) {
+        if (inThinkBlock && thoughtsAccumulated) {
+          accumulated += '<think>' + thoughtsAccumulated;
+          thoughtsAccumulated = '';
+          inThinkBlock = false;
+        }
+        updateMessage(sessionId, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || accumulated, thoughtsAccumulated || undefined);
+        TTSService.speak(accumulated);
+      }
+    } catch (err: unknown) {
+      if (!ctrl.signal.aborted) {
+        const msg = err instanceof Error ? err.message : 'Something went wrong.';
+        updateMessage(sessionId, asstId, msg);
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, error: true } : m) }
+              : s
+          ),
+        });
+      }
+    } finally {
+      setLoading(false);
+      setStreamingMsgId(null);
+      setIntentState('idle');
+    }
+  }, [activeSessionId, messages, webSearch, extThinking, addMessage, updateMessage, setIntentState]);
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
@@ -389,8 +627,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     for (const file of files) {
       await new Promise<void>((resolve) => {
         const reader = new FileReader();
+        const onError = () => { newAtts.push({ name: file.name, type: file.type || 'application/octet-stream', content: `Failed to read file: ${file.name}` }); resolve(); };
         if (isImage || file.type.startsWith('image/')) {
           reader.onload = () => { newAtts.push({ name: file.name, type: file.type, content: '', preview: reader.result as string }); resolve(); };
+          reader.onerror = onError;
           reader.readAsDataURL(file);
         } else if (file.type === 'application/pdf') {
           reader.onload = async () => {
@@ -402,9 +642,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             }
             resolve();
           };
+          reader.onerror = onError;
           reader.readAsDataURL(file);
         } else {
-          reader.onload = () => { newAtts.push({ name: file.name, type: file.type, content: reader.result as string }); resolve(); };
+          reader.onload = () => { newAtts.push({ name: file.name, type: file.type || 'text/plain', content: reader.result as string }); resolve(); };
+          reader.onerror = onError;
           reader.readAsText(file);
         }
       });
@@ -428,8 +670,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${activeSession.title}.txt`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   };
 
   if (showHistory) {
@@ -566,9 +810,18 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                   const originalPrompt = msgs[msgIndex - 1]?.content || '';
                   if (!originalPrompt) return;
 
-                  const newAsstId = genId();
-                  addMessage(activeSessionId, { id: newAsstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true });
-                  setStreamingMsgId(newAsstId);
+                  const ctrl = new AbortController();
+                  abortRef.current = ctrl;
+
+                  updateMessage(activeSessionId, id, '');
+                  useGiaStore.setState({
+                    sessions: useGiaStore.getState().sessions.map(s =>
+                      s.id === activeSessionId
+                        ? { ...s, messages: s.messages.map(m => m.id === id ? { ...m, thinking: true, error: false } : m) }
+                        : s
+                    ),
+                  });
+                  setStreamingMsgId(id);
                   setLoading(true);
                   setIntentState('thinking');
 
@@ -576,12 +829,35 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                     const history = msgs.slice(0, msgIndex - 1)
                       .filter(m => !m.thinking && m.content)
                       .map(m => ({ role: m.role, content: m.content }));
-                    
-                    const res = await GiaBrain.generate({ prompt: originalPrompt, history });
-                    updateMessage(activeSessionId, newAsstId, res.text);
-                    TTSService.speak(res.text);
+
+                    let accumulated = '';
+                    setIntentState('responding');
+                    await GiaBrain.generate({
+                      signal: ctrl.signal,
+                      prompt: originalPrompt,
+                      history,
+                      useWebSearch: webSearch,
+                      useExtendedThinking: extThinking,
+                      onStream: (chunk) => {
+                        if (ctrl.signal.aborted) return;
+                        accumulated += chunk;
+                        updateMessage(activeSessionId!, id, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…');
+                      },
+                    });
+                    if (!ctrl.signal.aborted) {
+                      updateMessage(activeSessionId!, id, accumulated);
+                      TTSService.speak(accumulated);
+                    }
                   } catch (e: any) {
-                    updateMessage(activeSessionId, newAsstId, e.message || 'Retry failed');
+                    if (!ctrl.signal.aborted) {
+                      useGiaStore.setState({
+                        sessions: useGiaStore.getState().sessions.map(s =>
+                          s.id === activeSessionId
+                            ? { ...s, messages: s.messages.map(m => m.id === id ? { ...m, content: e.message || 'Retry failed', error: true, thinking: false } : m) }
+                            : s
+                        ),
+                      });
+                    }
                   } finally {
                     setLoading(false);
                     setStreamingMsgId(null);
@@ -615,9 +891,46 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                         <RotateCcw size={10} /> Edit & Resend
                       </button>
                     </div>
-                  ) : (
+                    ) : (
                     <>
-                      <MarkdownRenderer content={msg.content} />
+                      {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
+                        <>
+                          <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} />
+                          <button onClick={() => setExpandedMsgs(prev => new Set(prev).add(msg.id))} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+                            Show more ({Math.ceil((msg.content.length - LONG_MSG_CHARS) / 1000)}k+ chars)
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <MarkdownRenderer content={msg.content} />
+                          {expandedMsgs.has(msg.id) && (
+                            <button onClick={() => setExpandedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+                              Show less
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {msg.thoughts && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => setShowThoughts(prev => {
+                              const n = new Set(prev);
+                              n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id);
+                              return n;
+                            })}
+                            className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-lg transition-colors"
+                            style={{ background: 'rgba(251,191,36,0.1)', color: '#f59e0b', border: '1px solid rgba(251,191,36,0.2)' }}
+                          >
+                            <Brain size={10} />
+                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} thinking
+                          </button>
+                          {showThoughts.has(msg.id) && (
+                            <div className="mt-1.5 p-2.5 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)', color: '#d4a574' }}>
+                              {msg.thoughts}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {msg.attachments?.filter(a => !a.preview).map(att => (
                         <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>
                           <Paperclip size={10} /> {att.name}
@@ -630,6 +943,33 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             </div>
           </motion.div>
         ))}
+
+        {useGiaStore.getState().clarification && (() => {
+          const c = useGiaStore.getState().clarification!;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center px-4 py-3 mx-4 rounded-2xl"
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+            >
+              <p className="text-xs font-medium mb-2.5 text-center leading-relaxed" style={{ color: 'var(--gia-text)' }}>{c.question}</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {c.options.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => handleClarificationAnswer(opt)}
+                    disabled={loading}
+                    className="px-4 py-2 rounded-xl text-xs font-medium transition-all tap-feedback disabled:opacity-40"
+                    style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          );
+        })()}
       </div>
 
       <AnimatePresence>
@@ -664,7 +1004,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       </AnimatePresence>
 
         <div className="px-4 pb-5 pt-1 shrink-0">
-        <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml" />
+        <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 
         {attachments.length > 0 && (
@@ -715,12 +1055,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 </button>
                 <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
                 {[
-                  { label: 'Search', feature: 'webSearch', icon: Globe, active: webSearch, color: '#3b82f6' },
-                  { label: 'Think', feature: 'extThinking', icon: Brain, active: extThinking, color: '#f59e0b' },
-                  { label: 'Hands-off', feature: 'handsOff', icon: Zap, active: handsOff, color: '#a855f7' },
-                  { label: 'Listen', feature: 'listen', icon: Headphones, active: voiceEnabled, color: '#ec4899' },
+                  { label: 'Search', feature: 'webSearch' as const, icon: Globe, active: webSearch, color: '#3b82f6' },
+                  { label: 'Think', feature: 'extThinking' as const, icon: Brain, active: extThinking, color: '#f59e0b' },
+                  { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
+                  { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
                 ].map((tool) => (
-                  <button key={tool.label} onClick={() => toggleFeature(tool.feature as any)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
+                  <button key={tool.label} onClick={() => toggleFeature(tool.feature)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
                     <tool.icon size={11} />
                     {tool.label}
                   </button>
@@ -747,7 +1087,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             </AnimatePresence>
           </div>
         </div>
-        <AmbientInput value={input} onChange={setInput} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
+        <AmbientInput value={input} onChange={handleInputChange} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
       </div>
 
       <AnimatePresence>

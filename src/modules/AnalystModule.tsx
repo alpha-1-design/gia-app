@@ -31,10 +31,18 @@ const AnalystModule: React.FC = () => {
 
   const getVal = (v: any) => typeof v === 'number' ? v : parseFloat(v) || 0;
 
+  const [fileTruncated, setFileTruncated] = useState(false);
+
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { setFileData(reader.result as string); setFileName(file.name); };
+    reader.onload = () => {
+      const content = reader.result as string;
+      setFileData(content);
+      setFileName(file.name);
+      setFileTruncated(content.length > 8000);
+    };
+    reader.onerror = () => { addNotification(`Failed to read ${file.name}`); };
     reader.readAsText(file); e.target.value = '';
   };
 
@@ -88,7 +96,9 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       console.error('Export failed', e);
       const csv = 'Label,Value\n' + data.map(d => `"${d.label}",${d.value}`).join('\n');
       const blob = new Blob([csv], {type:'text/csv'});
-      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='analysis.csv'; a.click();
+      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='analysis.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     }
   };
 
@@ -109,9 +119,16 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       </div>
 
       {fileName && (
-        <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-2 shrink-0">
-          <span className="text-xs text-indigo-400 flex-1 truncate">📎 {fileName}</span>
-          <button onClick={() => { setFileData(null); setFileName(''); }} className="text-zinc-500 hover:text-rose-400"><X size={13} /></button>
+        <div className="flex flex-col gap-1 shrink-0">
+          <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-2">
+            <span className="text-xs text-indigo-400 flex-1 truncate">📎 {fileName}</span>
+            <button onClick={() => { setFileData(null); setFileName(''); setFileTruncated(false); }} className="text-zinc-500 hover:text-rose-400"><X size={13} /></button>
+          </div>
+          {fileTruncated && (
+            <p className="text-[10px] text-amber-400 flex items-center gap-1 px-1">
+              File truncated to first 8000 characters for analysis
+            </p>
+          )}
         </div>
       )}
 

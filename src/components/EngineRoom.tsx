@@ -26,7 +26,7 @@ const PROVIDER_ALIAS: Record<string, ProviderType> = {
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
-  mk('info', '║        GIA ENGINE ROOM  v2.2.0           ║'),
+  mk('info', '║        GIA ENGINE ROOM  v2.3.0           ║'),
   mk('info', '║   6 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
@@ -234,8 +234,8 @@ const EngineRoom: React.FC = () => {
       disconnectProvider(p);
       push(mk('res', `✓ ${PROVIDER_DEFAULTS[p].label} disconnected.`));
       if (activeProvider === p) {
-        // Find another enabled provider to set as active
-        const other = ALL_PROVIDERS.find(x => x !== p && providers[x].enabled);
+        const currentProviders = useProviderStore.getState().providers;
+        const other = ALL_PROVIDERS.find(x => x !== p && currentProviders[x]?.enabled);
         if (other) setActiveProvider(other);
       }
       return;
@@ -253,6 +253,7 @@ const EngineRoom: React.FC = () => {
 
     if (cmd === 'clear') { 
       setHistory([BOOT[0], BOOT[1], BOOT[2], BOOT[3]]);
+      lid = 0;
       return; 
     }
 

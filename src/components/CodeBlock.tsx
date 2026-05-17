@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Copy, Check, Play, RotateCcw, Download, Loader2, AlertCircle } from 'lucide-react';
 import CodeRunner, { CodeRunResult } from '../services/CodeRunner';
 
@@ -15,6 +15,7 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
   const [autoFixAttempt, setAutoFixAttempt] = useState(0);
   const [currentCode, setCurrentCode] = useState(code);
   const [showDiff, setShowDiff] = useState(false);
+  const fixedCodesRef = useRef(new Set<string>());
 
   const copy = () => {
     navigator.clipboard.writeText(currentCode).catch(() => {});
@@ -23,12 +24,19 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
   };
 
   const download = () => {
-    const blob = new Blob([currentCode], { type: 'text/plain' });
+    const extMap: Record<string, string> = { javascript: 'js', typescript: 'ts' };
+    const ext = extMap[lang] || lang || 'txt';
+    const mimeMap: Record<string, string> = { js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', md: 'text/markdown', json: 'application/json', html: 'text/html', css: 'text/css' };
+    const mime = mimeMap[ext] || 'text/plain';
+    const blob = new Blob([currentCode], { type: mime });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `code.${lang || 'txt'}`;
+    a.href = url;
+    a.download = `gia-code.${ext}`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const handleRun = async () => {
@@ -40,10 +48,12 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
       const res = await CodeRunner.run({ language: lang, code: currentCode });
       setResult(res);
 
-      if (res.error && res.exitCode !== 0 && autoFixAttempt < 3) {
+      if (res.error && res.exitCode !== 0 && autoFixAttempt < 2) {
         setAutoFixAttempt(prev => prev + 1);
+        if (fixedCodesRef.current.has(currentCode)) return;
+        fixedCodesRef.current.add(currentCode);
         const fixed = await CodeRunner.autoFix(currentCode, lang, res.error);
-        if (fixed && fixed !== currentCode) {
+        if (fixed && fixed !== currentCode && !fixedCodesRef.current.has(fixed)) {
           setCurrentCode(fixed);
           setShowDiff(true);
         }

@@ -1,10 +1,23 @@
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
+const cleanTTS = (text: string) =>
+  text
+    .replace(/\[GIA:.*?\]/g, '')
+    .replace(/```[\s\S]*?```/g, 'Code block omitted.')
+    .replace(/[*_#~`]/g, '')
+    .trim();
+
+const isNative =
+  typeof window !== 'undefined' &&
+  typeof (window as any).Capacitor !== 'undefined' &&
+  (window as any).Capacitor.isNativePlatform?.();
+
 class TTSService {
   private static instance: TTSService;
   static getInstance() { if (!this.instance) this.instance = new TTSService(); return this.instance; }
 
   private enabled: boolean = localStorage.getItem('gia-tts-enabled') === 'true';
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
 
   setEnabled(v: boolean) {
     this.enabled = v;
@@ -15,33 +28,34 @@ class TTSService {
 
   async speak(text: string) {
     if (!this.enabled) return;
-    try {
-      // Clean markdown for better speech
-      const cleanText = text
-        .replace(/\[GIA:.*?\]/g, '')
-        .replace(/```[\s\S]*?```/g, 'Code block omitted.')
-        .replace(/[*_#~`]/g, '')
-        .trim();
-        
-      if (!cleanText) return;
+    const cleanText = cleanTTS(text);
+    if (!cleanText) return;
 
-      await TextToSpeech.speak({
-        text: cleanText,
-        lang: 'en-US',
-        rate: 1.0,
-        pitch: 1.0,
-        volume: 1.0,
-        category: 'playback',
-      });
-    } catch (e) {
-      console.error('TTS error:', e);
+    if (isNative) {
+      try {
+        await TextToSpeech.speak({ text: cleanText, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' });
+      } catch (e) { console.error('TTS native error:', e); }
+    } else {
+      try {
+        window.speechSynthesis?.cancel();
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        this.currentUtterance = utterance;
+        window.speechSynthesis?.speak(utterance);
+      } catch (e) { console.error('TTS web error:', e); }
     }
   }
 
   async stop() {
-    try {
-      await TextToSpeech.stop();
-    } catch {}
+    if (isNative) {
+      try { await TextToSpeech.stop(); } catch {}
+    } else {
+      window.speechSynthesis?.cancel();
+      this.currentUtterance = null;
+    }
   }
 }
 

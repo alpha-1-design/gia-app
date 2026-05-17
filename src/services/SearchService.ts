@@ -26,7 +26,8 @@ class SearchService {
     } catch {
       try {
         const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`)}`;
-        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+        const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(10000) : undefined;
+        const res = await fetch(proxyUrl, { signal: timeoutSignal });
         const html = await res.text();
         return this.parseResults(html);
       } catch {
@@ -38,47 +39,48 @@ class SearchService {
   private parseResults(html: string): SearchResult[] {
     const results: SearchResult[] = [];
     const doc = new DOMParser().parseFromString(html, 'text/html');
+    const seen = new Set<string>();
 
-    const rows = doc.querySelectorAll('.result, .web-result, .results_links');
-    if (rows.length > 0) {
-      rows.forEach((row) => {
-        const linkEl = row.querySelector('a[href]');
-        const snippetEl = row.querySelector('.snippet, .result__snippet, .result-snippet');
-        if (!linkEl) return;
-        const title = linkEl.textContent?.trim() || '';
-        let url = linkEl.getAttribute('href') || '';
-        if (url.startsWith('//')) url = 'https:' + url;
-        const snippet = snippetEl?.textContent?.trim() || '';
-        if (title && url) results.push({ title, url, snippet });
-      });
+    const addResult = (el: Element) => {
+      const link = el.tagName === 'A' ? el : el.querySelector('a[href]');
+      if (!link) return;
+      let url = link.getAttribute('href') || '';
+      const title = link.textContent?.trim() || '';
+      if (!title || !url || seen.has(title)) return;
+      // Skip navigation/utility links
+      if (url.startsWith('#') || url.startsWith('/')) return;
+      if (url.startsWith('//')) url = 'https:' + url;
+      const snippet = el.querySelector('.snippet, .result__snippet, .result-snippet, .kHJ7Cb, .VwiC3b, .lEBKkf, span')?.textContent?.trim() || '';
+      seen.add(title);
+      results.push({ title, url, snippet });
+    };
+
+    // Strategy 1: DuckDuckGo HTML results (classic)
+    const articles = doc.querySelectorAll('article[data-testid="result"]');
+    if (articles.length > 0) {
+      articles.forEach(addResult);
+      return results.slice(0, 7);
     }
 
-    const tableResults = doc.querySelectorAll('table tr');
-    if (results.length === 0 && tableResults.length > 0) {
-      tableResults.forEach((row) => {
-        const tds = row.querySelectorAll('td');
-        if (tds.length >= 3) {
-          const link = tds[0].querySelector('a');
-          if (link) {
-            results.push({
-              title: link.textContent?.trim() || '',
-              url: link.getAttribute('href') || '',
-              snippet: tds[1]?.textContent?.trim() || '',
-            });
-          }
-        }
-      });
-    }
+    // Strategy 2: Modern DDG result links
+    const resultLinks = doc.querySelectorAll('a.result__a, .result-link, .results_links a');
+    resultLinks.forEach(addResult);
 
-    const linkResults = doc.querySelectorAll('a.result-link, a.result__a');
     if (results.length === 0) {
-      linkResults.forEach((link) => {
-        const snippet = link.parentElement?.querySelector('.result__snippet, .snippet')?.textContent?.trim() || '';
-        results.push({
-          title: link.textContent?.trim() || '',
-          url: link.getAttribute('href') || '',
-          snippet,
-        });
+      // Strategy 3: Generic link + snippet patterns
+      doc.querySelectorAll('.result, .web-result, .results_links_deep, .nrn, .web-result-item').forEach(addResult);
+    }
+
+    if (results.length === 0) {
+      // Strategy 4: Fallback — any reasonable external link with text
+      doc.querySelectorAll('a[href^="http"]').forEach((link) => {
+        const text = link.textContent?.trim();
+        if (text && text.length > 10 && !seen.has(text)) {
+          const parent = link.parentElement;
+          const snippet = parent?.textContent?.replace(text, '').trim()?.slice(0, 200) || '';
+          seen.add(text);
+          results.push({ title: text.slice(0, 100), url: link.getAttribute('href') || '', snippet });
+        }
       });
     }
 

@@ -15,6 +15,7 @@ export interface Message {
   sources?: string[];
   model?: string;
   thinking?: boolean;
+  thoughts?: string;
 }
 
 export interface ChatSession {
@@ -58,6 +59,13 @@ export interface UserProfile {
   goals: string;
 }
 
+export interface Clarification {
+  question: string;
+  options: string[];
+  sessionId: string;
+  assistantMsgId: string;
+}
+
 interface GiaState {
   currentModule: Module;
   intentState: IntentState;
@@ -77,8 +85,10 @@ interface GiaState {
   webSearch: boolean;
   extThinking: boolean;
   handsOff: boolean;
+  clarification: Clarification | null;
 
   setModule: (module: Module) => void;
+  setClarification: (c: Clarification | null) => void;
   setIntentState: (state: IntentState) => void;
   setShowTerminal: (show: boolean) => void;
   setWebSearch: (enabled: boolean) => void;
@@ -89,7 +99,7 @@ interface GiaState {
   createSession: () => string;
   setActiveSession: (id: string) => void;
   addMessage: (sessionId: string, msg: Message) => void;
-  updateMessage: (sessionId: string, msgId: string, content: string) => void;
+  updateMessage: (sessionId: string, msgId: string, content: string, thoughts?: string) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
   forkSession: (sessionId: string, fromIndex: number) => string;
@@ -196,8 +206,10 @@ export const useGiaStore = create<GiaState>()(
       webSearch: false,
       extThinking: false,
       handsOff: false,
+      clarification: null,
 
       setModule: (module) => set({ currentModule: module }),
+      setClarification: (c) => set({ clarification: c }),
       setIntentState: (state) => set({ intentState: state }),
       setShowTerminal: (show) => set({ showTerminal: show }),
       setWebSearch: (enabled) => set({ webSearch: enabled }),
@@ -223,11 +235,11 @@ export const useGiaStore = create<GiaState>()(
           ),
         })),
 
-      updateMessage: (sessionId, msgId, content) =>
+      updateMessage: (sessionId, msgId, content, thoughts) =>
         set((s) => ({
           sessions: s.sessions.map((sess) =>
             sess.id === sessionId
-              ? { ...sess, messages: sess.messages.map((m) => (m.id === msgId ? { ...m, content, thinking: false } : m)) }
+              ? { ...sess, messages: sess.messages.map((m) => (m.id === msgId ? { ...m, content, ...(thoughts !== undefined ? { thoughts } : {}), thinking: false } : m)) }
               : sess
           ),
         })),
@@ -280,9 +292,25 @@ export const useGiaStore = create<GiaState>()(
 
       addExamResult: (r) => set((s) => ({ examHistory: [r, ...s.examHistory].slice(0, 50) })),
       clearExamHistory: () => set({ examHistory: [] }),
-      hibernateSessions: () => {},
+      hibernateSessions: () => {
+        const { sessions } = get();
+        const active = sessions.find(s => s.id === get().activeSessionId);
+        if (!active) return;
+        const inactive = sessions.filter(s => s.id !== active.id && s.messages.length > 0);
+        if (inactive.length <= 5) return;
+        const toArchive = inactive.slice(0, inactive.length - 5).map(s => ({
+          ...s, messages: s.messages.slice(0, 1).map(m => ({ ...m, content: `Archived — ${m.content.slice(0, 100)}` }))
+        }));
+        set((s) => ({
+          sessions: s.sessions.map(sess =>
+            toArchive.find(a => a.id === sess.id)
+              ? { ...sess, messages: sess.messages.slice(0, 1).map(m => ({ ...m, content: `Archived — ${m.content.slice(0, 100)}` })) }
+              : sess
+          ),
+        }));
+      },
       setSkill: (id) => set({ activeSkillId: id }),
-      addSkill: (skill) => set((s) => ({ skills: [...s.skills, skill] })),
+      addSkill: (skill) => set((s) => ({ skills: s.skills.find(sk => sk.id === skill.id) ? s.skills : [...s.skills, skill] })),
       removeSkill: (id) => set((s) => ({ skills: s.skills.filter(sk => sk.id !== id) })),
       addConsoleLog: (log) => set((s) => ({
         consoleLogs: [...s.consoleLogs, { ...log, id: Math.random().toString(36).slice(2), timestamp: Date.now() }].slice(-100)

@@ -82,7 +82,7 @@ const WriterModule: React.FC = () => {
 
   const exportDraft = async () => {
     try {
-      const fileName = `gia-draft-${Date.now()}.md`;
+      const fileName = `${format.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.md`;
       await Filesystem.writeFile({
         path: fileName,
         data: draft,
@@ -96,8 +96,10 @@ const WriterModule: React.FC = () => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `gia-draft-${Date.now()}.txt`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(a.href);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     }
   };
 

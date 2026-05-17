@@ -1,5 +1,6 @@
 import GiaBrain from './GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
+import { useProviderStore } from '../store/useProviderStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
 const getIntervalMs = (interval: string) =>
@@ -33,11 +34,14 @@ class SchedulerService {
     if (this.handledIds.has(task.id)) return;
     this.handledIds.add(task.id);
 
-    const { updateTaskStatus, addNotification } = useGiaStore.getState();
+    const { updateTaskStatus, addNotification, activeSkillId, skills } = useGiaStore.getState();
+    const { activeProvider, providers } = useProviderStore.getState();
     updateTaskStatus(task.id, 'running');
 
     try {
-      const res = await GiaBrain.generate({ prompt: task.prompt, maxTokens: 800 });
+      const skillName = skills.find(s => s.id === activeSkillId)?.name || 'General';
+      const contextPrompt = `[Context: Skill=${skillName}, Provider=${activeProvider}, Model=${providers[activeProvider]?.model || 'unknown'}]\n\n${task.prompt}`;
+      const res = await GiaBrain.generate({ prompt: contextPrompt, maxTokens: 800 });
       const isRecurring = task.interval && ['hourly', 'daily', 'weekly'].includes(task.interval);
 
       if (isRecurring) {

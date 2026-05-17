@@ -14,46 +14,101 @@ export interface BrainRequest {
   images?: { name: string; type: string; data: string }[];
   useWebSearch?: boolean;
   useExtendedThinking?: boolean;
+  handsOff?: boolean;
   onStream?: (chunk: string) => void;
-  onThought?: (thought: string) => void; 
+  onThought?: (thought: string) => void;
   signal?: AbortSignal;
 }
 
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[] }
 
 const buildGiaSystem = () => {
-  const { userProfile, activeSkillId, skills } = useGiaStore.getState();
+  const { userProfile, activeSkillId, skills, handsOff } = useGiaStore.getState();
   const activeSkill = skills.find(s => s.id === activeSkillId);
   const memory = useMemoryStore.getState().getRelevantContext();
+  const memoryCount = useMemoryStore.getState().memories.length;
+  const { activeProvider, providers } = useProviderStore.getState();
   const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+  const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
+  const platform = isNative ? 'Android/iOS (Capacitor native app)' : 'Web browser';
   const userName = userProfile.name ? userProfile.name : 'the user';
   const userContext = userProfile.name
     ? `\n\nUser context:\n- Name: ${userProfile.name}${userProfile.bio ? `\n- About: ${userProfile.bio}` : ''}${userProfile.goals ? `\n- Goals: ${userProfile.goals}` : ''}`
     : '';
+  const activeProviderConfig = providers[activeProvider];
+  const enabledProviders = (Object.entries(providers) as [string, typeof activeProviderConfig][])
+    .filter(([, v]) => v.enabled && v.apiKey)
+    .map(([k]) => k);
 
-  let baseSystem = `You are GIA (Generative Interface Agent) v2.3.0 — an autonomous AI agent.
-You have FULL CONTROL over your workspace. When you need to act, respond with a JSON block:
+  const toolInstructions = handsOff
+    ? `You have FULL CONTROL over your workspace. When you need to act, respond with a JSON block:
 \`\`\`tool
 { "id": "tool_id", "args": { "param": "value" } }
 \`\`\`
-Then wait for the observation.
+Then wait for the observation.`
+    : `You can SUGGEST tools to the user, but you may NOT execute them autonomously. Hands-off mode is disabled.`;
 
-Available Capabilities:
-${GiaTools.getAllTools().map(t => `- ${t.id}: ${t.description}`).join('\n')}
+  const skillPrompt = activeSkill?.systemPrompt || (
+    activeSkill?.name === 'General' || !activeSkill
+      ? 'Be concise, direct, and helpful. Use your tools when they add value.'
+      : ''
+  );
 
-Skill Context: ${activeSkill?.name || 'General'}.
-${activeSkill?.systemPrompt || 'Be concise, helpful, and professional.'}
+  let baseSystem = `You are GIA (Generative Interface Agent) v2.3.0 — a private, on-device AI workspace running inside the user's device.
 
-Environment:
+## Who You Are
+You are not a cloud chatbot. You live inside ${platform} as a React+TypeScript single-page app bundled with Capacitor. Your code runs entirely on the user's device — you have no server, no backend, and no cloud dependency except the AI model API calls you make to the provider the user configured. Your responses are streamed token-by-token through a WebView, rendered as Markdown in a chat interface. You have dark theme styling, code blocks with syntax highlighting + Run/Copy/Download buttons, inline image display, and module-based navigation.
+
+${toolInstructions}
+
+## Your Tools (Self-Awareness)
+You can introspect yourself at any time by calling 'get_environment_info' — it returns your full identity, all registered tools, current provider + model, platform type, available code runtimes, UI capabilities, memory count, and skills count. Use it to understand your own state.
+
+## Your AI Backend
+You are currently powered by ${activeProvider.toUpperCase()} (model: ${activeProviderConfig.model}), with API key ${activeProviderConfig.apiKey ? 'configured' : 'NOT SET'}. Enabled providers: ${enabledProviders.length > 0 ? enabledProviders.join(', ') : 'none — configure one in Settings'}. Different providers have different strengths — some support vision (image understanding), some have larger context windows, some are faster.
+
+## Available Modules
+You can navigate the user between these modules using 'switch_module':
+- chat: Main conversation interface (default)
+- exam: Quiz/testing module with score tracking
+- analyst: Data analysis with visualization
+- writer: Document drafting and editing
+- planner: Task scheduling with notifications
+- settings: Configure providers, skills, profile, and app behavior
+
+## Your Rendering Capabilities
+- Full Markdown (headers, lists, tables, bold, italic, inline code, blockquotes, horizontal rules)
+- Code blocks with syntax highlighting — the user can Run, Copy, or Download code
+- Inline images (markdown image syntax)
+- Streaming responses (your text appears word-by-word)
+- Long messages (>3000 chars) have an expand/collapse toggle
+- Tables are rendered with proper column alignment
+
+## Platform Limitations
+${isNative
+  ? '- Full filesystem access (read/write/list files in Documents folder)\n- Push notifications via LocalNotifications\n- Biometric lock (fingerprint/face) for security\n- Text-to-speech (native TTS engine)\n- Speech recognition (microphone input)'
+  : '- Browser mode: filesystem_read/list_files require the native app\n- Filesystem_write triggers a browser download instead of saving to device\n- zip_project creates a downloadable ZIP in the browser\n- Text-to-speech uses Web Speech API\n- Speech recognition uses Web Speech API\n- Biometric lock uses a PIN fallback instead of fingerprint/face'
+}
+
+## Active Skill Context
+${activeSkill?.name || 'General'}${activeSkill?.description ? `: ${activeSkill.description}` : ''}
+${skillPrompt}
+
+## Environment
 - Time: ${now}
-- User: ${userName}${userContext}
+- User: ${userName}
+- Memories stored: ${memoryCount}
+${userContext}
 ${memory}
 
-Guidelines:
-1. Use 'switch_module' to help the user navigate between Chat, Exam, Analyst, etc.
-2. Use 'terminal_run' for any coding, scripts, or technical troubleshooting.
-3. Use 'filesystem_write' to save data, summaries, or results to the user's device.
-4. If a model doesn't support native vision, GIA will provide an automated description of attached images.`;
+## Guidelines
+1. Know yourself — you are a local AI agent, not a cloud chatbot. You can introspect with 'get_environment_info'.
+2. Use 'switch_module' to navigate between Chat, Exam, Analyst, Writer, Planner, Settings.
+3. Use 'terminal_run' to execute code (Python, JS, C++, etc.) in a sandboxed container.
+4. Use 'filesystem_write' to save single files (triggers browser download in web mode) or 'zip_project' to bundle multiple files into a downloadable ZIP.
+5. Use 'request_clarification' to ask the user a multiple-choice question when you need to choose a direction before proceeding.
+6. If the current model doesn't support vision natively, I will automatically describe attached images for you before they reach your context.
+7. Hands-off mode is currently ${handsOff ? 'ENABLED — you can execute tools autonomously without asking' : 'DISABLED — suggest tools to the user but wait for permission'}.`;
 
   return baseSystem;
 };
@@ -65,10 +120,39 @@ class GiaBrain {
   private isVisionCapable(model: string, provider: string): boolean {
     const m = model.toLowerCase();
     const p = provider.toLowerCase();
-    if (m.includes('vision') || m.includes('gpt-4o') || m.includes('claude-3-5') || m.includes('gemini')) return true;
-    if (m.includes('pixtral') || m.includes('llava') || m.includes('vl')) return true;
-    if (p === 'anthropic' || p === 'openai' || p === 'gemini') return true;
-    return false;
+
+    // OpenAI models: all gpt-4o, o1, o3, gpt-4.1 support vision
+    if (p === 'openai') {
+      if (m.includes('gpt-4o') || m.includes('gpt-4.1') || m.startsWith('o1') || m.startsWith('o3')) return true;
+      return false;
+    }
+
+    // Anthropic: every Claude model supports vision
+    if (p === 'anthropic') {
+      return m.includes('claude');
+    }
+
+    // Gemini: all support vision
+    if (p === 'gemini') {
+      return true;
+    }
+
+    // Groq: limited vision models
+    if (p === 'groq') {
+      return m.includes('llama-3.2-11b') || m.includes('llama-3.2-90b') || m.includes('vision');
+    }
+
+    // OpenRouter & others: check by model name patterns
+    const visionPatterns = [
+      'vision', 'gpt-4o', 'gpt-4.1', 'claude-3', 'claude-4', 'opus',
+      'gemini', 'pixtral', 'llava', '/vl', '-vl', 'vl-',
+      'florence', 'cogvlm', 'qwen-vl', 'qwen2-vl',
+      'llama-3.2-11b', 'llama-3.2-90b',
+      'idefics', 'fuyu', 'palmyra-vision', 'minicpm',
+      'glm-4v', 'internvl', 'deepseek-vl', 'phi-3-vision',
+      'molmo', 'dpo-vision',
+    ];
+    return visionPatterns.some(pattern => m.includes(pattern));
   }
 
   private async buildMessages(req: BrainRequest) {
@@ -112,22 +196,27 @@ class GiaBrain {
     }
   }
 
-  private async retryFetch(url: string, options: RequestInit, retries = 1): Promise<Response> {
-    for (let i = 0; i <= retries; i++) {
+  private retryFetch(url: string, options: RequestInit, retries = 1): Promise<Response> {
+    const hasTimeout = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function';
+    const timeoutSignal = hasTimeout ? AbortSignal.timeout(60000) : undefined;
+
+    const run = async (attempt: number): Promise<Response> => {
       try {
-        const res = await fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(60000) });
-        if ((res.status === 429 || res.status >= 500) && i < retries) {
-          await new Promise(r => setTimeout(r, 2000 * (i + 1)));
-          continue;
+        const combinedSignal = options.signal || timeoutSignal;
+        const res = await fetch(url, { ...options, signal: combinedSignal });
+        if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          return run(attempt + 1);
         }
         return res;
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') throw e;
-        if (i >= retries) throw e;
-        await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+        if (attempt >= retries) throw e;
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        return run(attempt + 1);
       }
-    }
-    throw new Error('Max retries exceeded');
+    };
+    return run(0);
   }
 
   private async callOpenAICompat(req: BrainRequest): Promise<BrainResponse> {
@@ -157,38 +246,71 @@ class GiaBrain {
       headers['HTTP-Referer'] = 'https://gia.app';
       headers['X-Title'] = 'GIA';
     }
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+
+    if (req.onStream) {
+      if (req.signal?.aborted) return { text: '', provider: activeProvider, model: config.model };
+
+      return new Promise<BrainResponse>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        let fullText = '';
+        let lastProcessed = 0;
+
+        xhr.open('POST', `${baseUrl}/chat/completions`);
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.responseType = 'text';
+
+        const processLines = (text: string) => {
+          const lines = text.split('\n');
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t || t === 'data: [DONE]') continue;
+            if (t.startsWith('data: ')) {
+              try {
+                const json = JSON.parse(t.slice(6));
+                const delta = json.choices?.[0]?.delta?.content;
+                if (delta) {
+                  fullText += delta;
+                  req.onStream!(delta);
+                }
+              } catch { continue; }
+            }
+          }
+        };
+
+        xhr.onprogress = () => {
+          const newData = xhr.responseText.slice(lastProcessed);
+          lastProcessed = xhr.responseText.length;
+          processLines(newData);
+        };
+
+        xhr.onload = () => {
+          const remaining = xhr.responseText.slice(lastProcessed);
+          if (remaining.trim()) processLines(remaining);
+          resolve({ text: fullText, provider: activeProvider, model: config.model });
+        };
+
+        xhr.onerror = () => reject(new Error(`${label} network error`));
+        xhr.onabort = () => {
+          const e = new Error('Request aborted');
+          e.name = 'AbortError';
+          reject(e);
+        };
+
+        if (req.signal) {
+          if (req.signal.aborted) { xhr.abort(); return; }
+          req.signal.addEventListener('abort', () => xhr.abort());
+        }
+
+        xhr.send(JSON.stringify(body));
+      });
+    }
+
+    const res = await this.retryFetch(`${baseUrl}/chat/completions`, {
       method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({})) as any;
       throw new Error(e?.error?.message || `${label} error ${res.status}`);
-    }
-    if (req.onStream && res.body) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          const t = line.trim();
-          if (!t || t === 'data: [DONE]') continue;
-          if (t.startsWith('data: ')) {
-            try {
-              const json = JSON.parse(t.slice(6));
-              const delta = json.choices[0].delta.content;
-              if (delta) {
-                fullText += delta;
-                req.onStream(delta);
-              }
-            } catch { continue; }
-          }
-        }
-      }
-      return { text: fullText, provider: activeProvider, model: config.model };
     }
     const data = await res.json();
     return { text: data.choices[0].message.content, provider: activeProvider, model: config.model };
@@ -215,7 +337,7 @@ class GiaBrain {
                   };
                 }
               } catch (e) { console.error(e); }
-              return { type: 'text', text: '[Unsupported Image Format]' };
+              throw new Error(`Unsupported image format for Anthropic. Supported: JPEG, PNG, GIF, WebP. Got: ${c.image_url.url?.slice(0, 50)}`);
             }
             return c;
           })
@@ -233,45 +355,85 @@ class GiaBrain {
     };
     if (!useThinking && req.temperature !== undefined) body.temperature = req.temperature;
     if (useThinking) body.thinking = { type: 'enabled', budget_tokens: 10000 };
+    const anthropicHeaders: Record<string, string> = {
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'Content-Type': 'application/json',
+    };
+
+    if (req.onStream) {
+      if (req.signal?.aborted) return { text: '', provider: 'anthropic', model: config.model };
+
+      return new Promise<BrainResponse>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        let fullText = '';
+        let lastProcessed = 0;
+
+        xhr.open('POST', 'https://api.anthropic.com/v1/messages');
+        Object.entries(anthropicHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.responseType = 'text';
+
+        const processAnthropicEvents = (text: string) => {
+          const events = text.split('\n\n');
+          for (const event of events) {
+            const t = event.trim();
+            if (!t.startsWith('data:')) continue;
+            try {
+              const parsed = JSON.parse(t.slice(5).trim());
+              if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'thinking') {
+                if (parsed.content_block.thinking) {
+                  req.onThought?.(parsed.content_block.thinking);
+                }
+              }
+              if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+                const delta = parsed.delta.text ?? '';
+                fullText += delta;
+                req.onStream!(delta);
+              }
+              if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'thinking_delta') {
+                req.onThought?.(parsed.delta.thinking ?? '');
+              }
+            } catch { }
+          }
+        };
+
+        xhr.onprogress = () => {
+          const newData = xhr.responseText.slice(lastProcessed);
+          lastProcessed = xhr.responseText.length;
+          processAnthropicEvents(newData);
+        };
+
+        xhr.onload = () => {
+          const remaining = xhr.responseText.slice(lastProcessed);
+          if (remaining.trim()) processAnthropicEvents(remaining);
+          resolve({ text: fullText, provider: 'anthropic', model: config.model });
+        };
+
+        xhr.onerror = () => reject(new Error('Anthropic network error'));
+        xhr.onabort = () => {
+          const e = new Error('Request aborted');
+          e.name = 'AbortError';
+          reject(e);
+        };
+
+        if (req.signal) {
+          if (req.signal.aborted) { xhr.abort(); return; }
+          req.signal.addEventListener('abort', () => xhr.abort());
+        }
+
+        xhr.send(JSON.stringify(body));
+      });
+    }
+
     const res = await this.retryFetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'x-api-key': config.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'Content-Type': 'application/json',
-      },
+      headers: anthropicHeaders,
       body: JSON.stringify(body), signal: req.signal,
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
       throw new Error(e?.error?.message || `Anthropic error ${res.status}`);
-    }
-    if (req.onStream && res.body) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullText = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const t = line.trim();
-          if (!t.startsWith('data:')) continue;
-          try {
-            const parsed = JSON.parse(t.slice(5).trim());
-            if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
-              const delta = parsed.delta.text ?? '';
-              fullText += delta;
-              req.onStream(delta);
-            }
-          } catch { }
-        }
-      }
-      return { text: fullText, provider: 'anthropic', model: config.model };
     }
     const data = await res.json() as any;
     const text = data.content?.find((b: any) => b.type === 'text')?.text ?? '';
@@ -281,12 +443,12 @@ class GiaBrain {
   private async callGeminiNative(req: BrainRequest): Promise<BrainResponse> {
     const { providers } = useProviderStore.getState();
     const config = providers.gemini;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
 
     const contents: any[] = [];
     if (req.history) {
       req.history.forEach(m => {
-        contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] });
+        const part = typeof m.content === 'string' ? { text: m.content } : { text: JSON.stringify(m.content) };
+        contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [part] });
       });
     }
 
@@ -305,7 +467,73 @@ class GiaBrain {
       generationConfig: { temperature: req.temperature ?? 0.7, maxOutputTokens: req.maxTokens ?? 2048 }
     };
 
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: req.signal });
+    if (req.onStream) {
+      if (req.signal?.aborted) return { text: '', provider: 'gemini', model: config.model };
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?alt=sse`;
+      const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey };
+
+      return new Promise<BrainResponse>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        let fullText = '';
+        let lastProcessed = 0;
+
+        xhr.open('POST', url);
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.responseType = 'text';
+
+        const processGeminiEvents = (text: string) => {
+          const events = text.split('\n\n');
+          for (const event of events) {
+            const t = event.trim();
+            if (!t.startsWith('data: ')) continue;
+            const jsonStr = t.slice(6).trim();
+            if (!jsonStr || jsonStr === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const part = parsed.candidates?.[0]?.content?.parts?.[0];
+              if (part?.text) {
+                fullText += part.text;
+                req.onStream!(part.text);
+              }
+            } catch { }
+          }
+        };
+
+        xhr.onprogress = () => {
+          const newData = xhr.responseText.slice(lastProcessed);
+          lastProcessed = xhr.responseText.length;
+          processGeminiEvents(newData);
+        };
+
+        xhr.onload = () => {
+          const remaining = xhr.responseText.slice(lastProcessed);
+          if (remaining.trim()) processGeminiEvents(remaining);
+          resolve({ text: fullText, provider: 'gemini', model: config.model });
+        };
+
+        xhr.onerror = () => reject(new Error('Gemini network error'));
+        xhr.onabort = () => {
+          const e = new Error('Request aborted');
+          e.name = 'AbortError';
+          reject(e);
+        };
+
+        if (req.signal) {
+          if (req.signal.aborted) { xhr.abort(); return; }
+          req.signal.addEventListener('abort', () => xhr.abort());
+        }
+
+        xhr.send(JSON.stringify(body));
+      });
+    }
+
+    const res = await this.retryFetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
+      body: JSON.stringify(body),
+      signal: req.signal,
+    });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e?.error?.message || `Gemini error ${res.status}`);
@@ -328,12 +556,13 @@ class GiaBrain {
     const maxIterations = 8;
 
     while (iterations < maxIterations) {
+      if (req.signal?.aborted) throw new Error('Request aborted');
       iterations++;
       const loopReq: BrainRequest = { ...req, prompt: currentPrompt, history: history };
 
       let res: BrainResponse;
       if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
-      else if (activeProvider === 'gemini' && !config.model.includes('gpt')) res = await this.callGeminiNative(loopReq);
+      else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
       else res = await this.callOpenAICompat(loopReq);
       
       const text = res.text;
@@ -341,6 +570,27 @@ class GiaBrain {
       if (toolMatch) {
         try {
           const toolCall = JSON.parse(toolMatch[1]);
+
+          // Clarification is always allowed (it's asking the user a question, not taking action)
+          if (toolCall.id === 'request_clarification') {
+            const tool = GiaTools.getTool('request_clarification');
+            if (tool) {
+              await tool.execute(toolCall.args);
+              const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
+              history.push({ role: 'assistant', content: cleanText || 'I need some clarification.' });
+              return { text: '__CLARIFICATION__', provider: activeProvider, model: config.model };
+            }
+          }
+
+          const { handsOff: isHandsOff } = useGiaStore.getState();
+          if (!isHandsOff) {
+            req.onThought?.('GIA suggested a tool but hands-off mode is disabled. Tool execution skipped.');
+            history.push({ role: 'assistant', content: text });
+            history.push({ role: 'user', content: 'OBSERVATION: Tool execution blocked — hands-off mode is disabled. Please respond directly without executing tools, or ask the user to enable hands-off mode in settings.' });
+            currentPrompt = 'Tool was blocked. Respond directly without executing tools.';
+            continue;
+          }
+
           const tool = GiaTools.getTool(toolCall.id);
           if (tool) {
             req.onThought?.(`GIA is executing: ${tool.name}...`);

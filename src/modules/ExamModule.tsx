@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GraduationCap, Clock, CheckCircle2, XCircle, Brain, BarChart3, Loader2, BookOpen, FileText, RefreshCw, ChevronRight, Award, AlertTriangle, Trash2 } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore, ExamResult } from '../store/useGiaStore';
@@ -60,6 +60,7 @@ const ExamModule: React.FC = () => {
   const [startTime, setStartTime] = useState(0);
   const [showPastQuestions, setShowPastQuestions] = useState(false);
   const { addNotification } = useGiaStore();
+  const submitQuizRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (tab === 'setup') fetchSubjects();
@@ -71,7 +72,7 @@ const ExamModule: React.FC = () => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           setTimerActive(false);
-          handleSubmitQuiz();
+          submitQuizRef.current();
           return 0;
         }
         return prev - 1;
@@ -205,6 +206,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
     });
     addNotification(`📝 ${examSystem} ${subject} quiz: ${correct}/${questions.length} (${Math.round((correct / questions.length) * 100)}%)`);
   };
+  submitQuizRef.current = handleSubmitQuiz;
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);

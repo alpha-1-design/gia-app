@@ -1,8 +1,14 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Send, Loader2, Square, Mic, MicOff, Sparkles } from 'lucide-react';
 import { useGiaStore, IntentState } from '../store/useGiaStore';
-import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import GiaBrain from '../services/GiaBrain';
+
+const isNative =
+  typeof window !== 'undefined' &&
+  typeof (window as any).Capacitor !== 'undefined' &&
+  (window as any).Capacitor.isNativePlatform?.();
+
+const webSpeechAvailable = typeof window !== 'undefined' && typeof window.webkitSpeechRecognition !== 'undefined';
 
 interface AmbientInputProps {
   value: string;
@@ -37,33 +43,78 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   const { intentState, addNotification } = useGiaStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const refineAbortRef = useRef<AbortController | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
+
+  useEffect(() => () => refineAbortRef.current?.abort(), []);
 
   const color = STATE_GLOW[intentState] ?? STATE_GLOW.idle;
   const isActive = intentState !== 'idle' || value.length > 0;
 
   const toggleListening = async () => {
     if (isListening) {
-      await SpeechRecognition.stop();
+      if (isNative && typeof SpeechRecognition !== 'undefined') {
+        const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+        await SpeechRecognition.stop();
+      } else if (webSpeechAvailable) {
+        window.speechSynthesis?.cancel();
+      } else {
+        try { await (await import('@capacitor-community/speech-recognition')).SpeechRecognition.stop(); } catch {}
+      }
       setIsListening(false);
       return;
     }
 
+    setIsListening(true);
+    addNotification('Listening...');
+
+    // Web Speech API fallback
+    if (webSpeechAvailable && !isNative) {
+      try {
+        const recognition = new (window as any).webkitSpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          onChange(transcript);
+          if (transcript.split(' ').length > 5) {
+            refineSpeech(transcript);
+          }
+        };
+
+        recognition.onerror = () => {
+          addNotification('Speech recognition error.');
+        };
+
+        recognition.start();
+      } catch (e) {
+        console.error(e);
+        addNotification('Speech recognition not available.');
+        setIsListening(false);
+      }
+      return;
+    }
+
+    // Native Capacitor path
     try {
+      const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
       const { available } = await SpeechRecognition.available();
       if (!available) {
         addNotification('Speech recognition not available.');
+        setIsListening(false);
         return;
       }
 
       const perm = await SpeechRecognition.requestPermissions();
       if (perm.speechRecognition !== 'granted') {
         addNotification('Microphone permission denied.');
+        setIsListening(false);
         return;
       }
 
-      setIsListening(true);
       const result = await SpeechRecognition.start({
         language: 'en-US',
         partialResults: true,
@@ -73,15 +124,12 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
       if (result.matches && result.matches.length > 0) {
         const transcript = result.matches[0];
         onChange(transcript);
-        
-        // Auto-refine if it's long enough
         if (transcript.split(' ').length > 5) {
           refineSpeech(transcript);
         }
       }
     } catch (e) {
       console.error(e);
-      setIsListening(false);
     } finally {
       setIsListening(false);
     }
@@ -89,9 +137,11 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
 
   const refineSpeech = async (text: string) => {
     setIsRefining(true);
+    const ctrl = new AbortController();
     try {
       const res = await GiaBrain.generate({
         prompt: text,
+        signal: ctrl.signal,
         systemPrompt: `You are a speech polishing assistant. Rewrite the transcript to be clear, grammatically correct, and natural-sounding.
 
 Rules:

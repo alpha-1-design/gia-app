@@ -3,6 +3,8 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import CodeRunner from './CodeRunner';
 import { useGiaStore } from '../store/useGiaStore';
 
+const isNativePlatform = () => typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform();
+
 export interface ToolResult {
   success: boolean;
   content: string;
@@ -44,6 +46,9 @@ class GiaTools {
       name: 'filesystem_read',
       description: 'Read the content of a file from the local filesystem.',
       execute: async ({ path }) => {
+        if (!isNativePlatform()) {
+          return { success: false, content: '', error: 'Filesystem access is only available on the GIA mobile app (Android/iOS). You are running in a browser where this is not supported. Please download the app or copy the file content manually.' };
+        }
         try {
           const result = await Filesystem.readFile({
             path,
@@ -62,6 +67,21 @@ class GiaTools {
       name: 'filesystem_write',
       description: 'Write or update a file on the local filesystem.',
       execute: async ({ path, content }) => {
+        if (!isNativePlatform()) {
+          const ext = path.split('.').pop()?.toLowerCase() || 'txt';
+          const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
+          const mime = mimeMap[ext] || 'text/plain';
+          const blob = new Blob([content], { type: mime });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = path.split('/').pop() || 'file.txt';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          return { success: true, content: `File "${path}" is ready for download. Your browser should have prompted you to save it.` };
+        }
         try {
           await Filesystem.writeFile({
             path,
@@ -100,17 +120,54 @@ class GiaTools {
     this.tools.set('get_environment_info', {
       id: 'get_environment_info',
       name: 'get_environment_info',
-      description: 'Get details about GIA environment, available runtimes, and system state.',
+      description: 'Get full introspection of GIA identity, architecture, capabilities, and environment. Use this to understand what you are and what you can do.',
       execute: async () => {
         try {
           const runtimes = await CodeRunner.getRuntimes();
           const { activeProvider, providers } = (await import('../store/useProviderStore')).useProviderStore.getState();
+          const store = useGiaStore.getState();
+          const config = providers[activeProvider];
           const info = {
-            version: '2.3.0.0',
-            runtimes: runtimes.map(r => r.language).slice(0, 10),
-            provider: activeProvider,
-            model: providers[activeProvider].model,
-            capabilities: ['web_search', 'terminal_run', 'filesystem', 'image_gen', 'biometrics']
+            identity: {
+              name: 'GIA',
+              fullName: 'Generative Interface Agent',
+              version: '2.3.0.0',
+              tagline: 'Private on-device AI workspace',
+              platform: isNativePlatform() ? 'Android/iOS (Capacitor)' : 'Browser (Web)',
+              architecture: 'React 18 + TypeScript + Zustand + Vite + Capacitor',
+            },
+            currentProvider: {
+              name: activeProvider,
+              label: config.label || activeProvider,
+              model: config.model,
+              apiKeySet: !!config.apiKey,
+              baseUrl: config.baseUrl,
+            },
+            availableProviders: Object.entries(providers).map(([k, v]) => ({
+              name: k,
+              label: v.label || k,
+              model: v.model,
+              enabled: v.enabled,
+              apiKeySet: !!v.apiKey,
+            })),
+            tools: GiaTools.getAllTools().map(t => ({
+              id: t.id,
+              name: t.name,
+              description: t.description,
+            })),
+            modules: ['chat', 'exam', 'analyst', 'writer', 'planner', 'settings'],
+            codeRuntimes: runtimes.map(r => ({ language: r.language, version: r.version })).slice(0, 20),
+            uiCapabilities: {
+              rendersMarkdown: true,
+              syntaxHighlighting: true,
+              codeExecution: true,
+              inlineImages: true,
+              streamingResponses: true,
+              fileDownloads: true,
+              zipBundling: true,
+            },
+            memory: (await import('../store/useMemoryStore')).useMemoryStore.getState().memories.length,
+            skills: store.skills?.length || 0,
           };
           return { success: true, content: JSON.stringify(info, null, 2) };
         } catch (e: any) {
@@ -124,6 +181,9 @@ class GiaTools {
       name: 'list_files',
       description: 'List files in a directory.',
       execute: async ({ path = '' }) => {
+        if (!isNativePlatform()) {
+          return { success: false, content: '', error: 'Filesystem access is only available on the GIA mobile app (Android/iOS). You are running in a browser.' };
+        }
         try {
           const result = await Filesystem.readdir({
             path,
@@ -204,10 +264,20 @@ class GiaTools {
           const zip = new JSZip();
 
           if (files && Array.isArray(files)) {
-            files.forEach((f: any) => zip.file(f.path, f.content));
+            files.forEach((f: any) => {
+              const name = f.path.replace(/\\/g, '/');
+              if (f.content && typeof f.content === 'string') {
+                zip.file(name, f.content, { binary: false });
+              } else {
+                zip.file(name, JSON.stringify(f.content), { binary: false });
+              }
+            });
           }
 
           if (paths && Array.isArray(paths)) {
+            if (!isNativePlatform()) {
+              return { success: false, content: '', error: 'Reading files from device paths is only supported on the GIA mobile app. Use the "files" parameter to provide content directly instead.' };
+            }
             for (const p of paths) {
               try {
                 const res = await Filesystem.readFile({ path: p, directory: Directory.Documents, encoding: Encoding.UTF8 });
@@ -218,38 +288,62 @@ class GiaTools {
             }
           }
 
-          const blob = await zip.generateAsync({ type: 'blob' });
-          
-          // Save to filesystem for GIA to be able to "provide" it later
-          const reader = new FileReader();
-          const base64Promise = new Promise<string>((resolve) => {
-            reader.onloadend = () => {
-              const base64data = reader.result as string;
-              resolve(base64data.split(',')[1]);
-            };
-          });
-          reader.readAsDataURL(blob);
-          const base64 = await base64Promise;
-
-          await Filesystem.writeFile({
-            path: filename,
-            data: base64,
-            directory: Directory.Documents,
+          useGiaStore.getState().addNotification(`Packaging ${filename}...`);
+          const blob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+            if (metadata.percent % 25 === 0) {
+              useGiaStore.getState().addNotification(`Zipping: ${Math.round(metadata.percent)}%`);
+            }
           });
 
-          // Also trigger download for UX
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = filename;
+          document.body.appendChild(a);
           a.click();
-          URL.revokeObjectURL(url);
+          document.body.removeChild(a);
 
-          useGiaStore.getState().addNotification(`GIA bundled ${filename}`);
-          return { success: true, content: `Successfully created ${filename} and saved to Documents.` };
+          if (isNativePlatform()) {
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64data = reader.result as string;
+                resolve(base64data.split(',')[1]);
+              };
+              reader.onerror = () => reject(new Error('Failed to read zip blob'));
+              reader.readAsDataURL(blob);
+            });
+
+            await Filesystem.writeFile({
+              path: filename,
+              data: base64,
+              directory: Directory.Documents,
+            });
+            useGiaStore.getState().addNotification(`✅ ${filename} saved to Documents`);
+            return { success: true, content: `Successfully created ${filename} and saved to your Documents folder.` };
+          }
+
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          useGiaStore.getState().addNotification(`✅ ${filename} ready — check downloads`);
+          return { success: true, content: `Successfully created ${filename}. Your browser should have prompted you to download it.` };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }
+      }
+    });
+
+    this.tools.set('request_clarification', {
+      id: 'request_clarification',
+      name: 'request_clarification',
+      description: 'Ask the user a clarifying multiple-choice question when you need more information before proceeding. Provide 2-4 concise options.',
+      execute: async ({ question, options }) => {
+        useGiaStore.getState().setClarification({
+          question: question || 'Could you clarify?',
+          options: Array.isArray(options) && options.length >= 2 ? options : ['Yes', 'No'],
+          sessionId: useGiaStore.getState().activeSessionId || '',
+          assistantMsgId: '',
+        });
+        return { success: true, content: '__CLARIFICATION__' };
       }
     });
 
