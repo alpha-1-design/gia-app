@@ -9,6 +9,8 @@ import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
 import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
+import GiaConsole from './components/GiaConsole';
+import SchedulerService from './services/SchedulerService';
 import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
@@ -70,11 +72,12 @@ const ModuleView: React.FC = () => {
 import BiometricService from './services/BiometricService';
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification } = useGiaStore();
+  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole } = useGiaStore();
   const [isLocked, setIsLocked] = React.useState(BiometricService.isLockEnabled());
 
   useEffect(() => {
     LocalNotifications.requestPermissions();
+    SchedulerService.start();
     if (isLocked) {
       handleBiometric();
     }
@@ -170,7 +173,7 @@ const App: React.FC = () => {
               className="gia-pill gia-pill-accent"
               style={{ fontSize: '8px', padding: '2px 6px' }}
             >
-              v2.2.2.0
+              v2.3.0.0
             </span>
           </div>
           <p
@@ -280,6 +283,16 @@ const App: React.FC = () => {
           >
             <EngineRoom />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showConsole && (
+          <GiaConsole
+            logs={consoleLogs}
+            isVisible={showConsole}
+            onClose={() => setShowConsole(false)}
+          />
         )}
       </AnimatePresence>
     </div>

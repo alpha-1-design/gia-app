@@ -4,18 +4,21 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, FileCode,
+  Terminal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
-import { useGiaStore, Message } from '../store/useGiaStore';
+import { useGiaStore, Message, Skill } from '../store/useGiaStore';
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import MessageContextMenu from '../components/MessageContextMenu';
 import AmbientInput from '../components/AmbientInput';
 import PDFService from '../services/PDFService';
 import { useVoiceControl } from '../hooks/useVoiceControl';
+import SkillPicker from '../components/SkillPicker';
+import GiaConsole from '../components/GiaConsole';
 
 const genId = () => Math.random().toString(36).slice(2, 10);
 
@@ -41,9 +44,6 @@ const ChatModule: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
-  const [webSearch, setWebSearch] = useState(false);
-  const [extThinking, setExtThinking] = useState(false);
-  const [handsOff, setHandsOff] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
@@ -51,6 +51,7 @@ const ChatModule: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [undoMsg, setUndoMsg] = useState<{ id: string; sessionId: string; backup: any[] } | null>(null);
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -63,6 +64,11 @@ const ChatModule: React.FC = () => {
     addMessage, updateMessage, updateSessionTitle, deleteSession,
     forkSession, clearSession, setModule, getActiveSession, userProfile,
     setIntentState, addNotification,
+    setShowConsole, showConsole, consoleLogs,
+    webSearch, setWebSearch,
+    extThinking, setExtThinking,
+    handsOff, setHandsOff,
+    skills, activeSkillId, setSkill
   } = useGiaStore();
 
   const { providers, activeProvider } = useProviderStore();
@@ -82,9 +88,29 @@ const ChatModule: React.FC = () => {
     }
   }, [addNotification]);
 
+  const handleVoiceTranscript = useCallback(async (transcript: string) => {
+    if (!transcript.trim()) return;
+    
+    // Polishing logic
+    addNotification('Polishing transcript...');
+    try {
+      const brain = (await import('../services/GiaBrain')).default;
+      const res = await brain.generate({
+        prompt: `The following is a raw voice-to-text transcript. Please polish it for clarity, grammar, and punctuation while maintaining the original intent and tone. Return ONLY the polished text.\n\nRaw Transcript: "${transcript}"`,
+        temperature: 0.3,
+        maxTokens: 1000,
+      });
+      setInput(res.text.trim());
+    } catch (e) {
+      // Fallback to raw if polishing fails
+      setInput(transcript);
+    }
+  }, [addNotification, setInput]);
+
   const voiceControl = useVoiceControl({
     wakeWord: wakeWordRef.current,
     onWakeWord: handleWakeWord,
+    onTranscript: handleVoiceTranscript, // New callback for non-wake-word speech
     keepListening: keepListeningRef.current,
     autoStopAfter: 120000,
   });
@@ -96,15 +122,27 @@ const ChatModule: React.FC = () => {
   const activeSession = getActiveSession();
   const messages: Message[] = activeSession?.messages ?? [];
 
-  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff') => {
+  useEffect(() => {
+    if (voiceEnabled) {
+      voiceControl.startListening();
+    }
+  }, []);
+
+  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen') => {
     setIsSyncing(true);
-    if (feature === 'webSearch') setWebSearch(prev => !prev);
-    if (feature === 'extThinking') setExtThinking(prev => !prev);
-    if (feature === 'handsOff') setHandsOff(prev => !prev);
+    if (feature === 'webSearch') setWebSearch(!webSearch);
+    if (feature === 'extThinking') setExtThinking(!extThinking);
+    if (feature === 'handsOff') setHandsOff(!handsOff);
+    if (feature === 'listen') {
+      const newState = !voiceEnabled;
+      setVoiceEnabled(newState);
+      if (newState) voiceControl.startListening();
+      else voiceControl.stopListening();
+    }
     
     // Simulate tiny delay to show sync indicator then clear it
     setTimeout(() => setIsSyncing(false), 300);
-  }, [setWebSearch, setExtThinking, setHandsOff]);
+  }, [setWebSearch, setExtThinking, setHandsOff, webSearch, extThinking, handsOff, voiceEnabled, voiceControl]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, []);
 
@@ -221,8 +259,13 @@ const ChatModule: React.FC = () => {
   }, [undoMsg, addNotification]);
 
   const handleSend = useCallback(async () => {
+    if (input.trim().startsWith('/')) {
+      setShowSkillPicker(true);
+      return;
+    }
+
     let text = input.trim();
-    if (text.length > 8000) {
+    if (text.length > 12000) { // Increased limit
       const fileName = `long-input-${Date.now()}.txt`;
       setAttachments(prev => [...prev, { name: fileName, type: 'text/plain', content: text }]);
       text = 'I have attached a long text file for you to analyze.';
@@ -260,7 +303,7 @@ const ChatModule: React.FC = () => {
     if (sentAttachments.length > 0) {
       const fileContext = sentAttachments
         .filter(a => !a.type.startsWith('image/'))
-        .map(a => `\n[BEGIN FILE: ${a.name}]\n${a.content.slice(0, 20000)}\n[END FILE]`)
+        .map(a => `\n[BEGIN FILE: ${a.name}]\n${a.content.slice(0, 30000)}\n[END FILE]`)
         .join('\n\n');
       const imgContext = sentAttachments
         .filter(a => a.type.startsWith('image/'))
@@ -290,12 +333,8 @@ const ChatModule: React.FC = () => {
       let accumulated = '';
       setIntentState('responding');
 
-      const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You can control the app. Use these hidden tags in your response ONLY when requested:
-- [GIA:switch:MODULE] (chat, exam, analyst, writer, planner, settings)
-- [GIA:search:on/off] (web search)
-- [GIA:think:on/off] (extended thinking)
-- [GIA:notify:TEXT] (show toast)
-Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
+      const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
+To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the file contents in \`[FILE:path] content [FILE]\` format.]\n\n` : '';
 
       const stateContext = `[SYSTEM: Current Feature State:
 - Web Search: ${webSearch ? 'ON' : 'OFF'}
@@ -313,17 +352,16 @@ Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
           accumulated += chunk;
           updateMessage(sessionId!, asstId, accumulated);
         },
+        onThought: (thought) => {
+          useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+          setShowConsole(true);
+        }
       });
 
       if (!ctrl.signal.aborted) {
         const finalText = res.text || accumulated;
-        const cleanText = parseCommands(finalText, sessionId);
-        if (cleanText !== finalText) {
-          updateMessage(sessionId!, asstId, cleanText);
-        } else {
-          updateMessage(sessionId!, asstId, finalText);
-        }
-        TTSService.speak(cleanText);
+        updateMessage(sessionId!, asstId, finalText);
+        TTSService.speak(finalText);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -343,66 +381,6 @@ Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
       setIntentState('idle');
     }
   }, [input, attachments, loading, activeSessionId, messages, webSearch, extThinking, createSession, addMessage, updateMessage, updateSessionTitle, setIntentState, handsOff]);
-
-  const parseCommands = useCallback((text: string, sessionId: string) => {
-    const commandRegex = /\[GIA:(\w+)(?::([^\]]+))?\]/g;
-    let match;
-    let clean = text;
-    while ((match = commandRegex.exec(text)) !== null) {
-      const [full, action, param] = match;
-      
-      // Zip command is always parsed, even if handsOff is off (it's a tool, not just a control)
-      if (action === 'zip') {
-        const zipName = param || 'gia-project.zip';
-        const zip = new JSZip();
-        const fileRegex = /\[FILE:([\s\S]+?)\]\n([\s\S]+?)(?=\[FILE:|\[GIA:|$)/g;
-        let fileMatch;
-        let filesFound = 0;
-        while ((fileMatch = fileRegex.exec(text)) !== null) {
-          zip.file(fileMatch[1].trim(), fileMatch[2].trim());
-          filesFound++;
-        }
-        if (filesFound > 0) {
-          zip.generateAsync({ type: 'blob' }).then((content) => {
-            const url = URL.createObjectURL(content);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = zipName;
-            a.click();
-            URL.revokeObjectURL(url);
-            addNotification(`Created ZIP with ${filesFound} files`);
-          });
-          clean = clean.replace(full, `\n\n*📦 GIA has bundled this project into **${zipName}**. Check your downloads.*`);
-        } else {
-          clean = clean.replace(full, '');
-        }
-        continue;
-      }
-
-      if (!handsOff) continue;
-      clean = clean.replace(full, '');
-      switch (action) {
-        case 'switch':
-          if (['chat', 'exam', 'analyst', 'writer', 'planner', 'settings'].includes(param)) {
-            setModule(param as any);
-            addNotification(`Switched to ${param}`);
-          }
-          break;
-        case 'search':
-          if (param === 'on') setWebSearch(true);
-          if (param === 'off') setWebSearch(false);
-          break;
-        case 'think':
-          if (param === 'on') setExtThinking(true);
-          if (param === 'off') setExtThinking(false);
-          break;
-        case 'notify':
-          addNotification(param || 'GIA says hi');
-          break;
-      }
-    }
-    return clean.replace(/\s{2,}/g, ' ').trim();
-  }, [handsOff, setModule, addNotification, setWebSearch, setExtThinking]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
     const files = Array.from(e.target.files ?? []);
@@ -729,21 +707,20 @@ Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
                 exit={{ width: 0, opacity: 0 }}
                 className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1"
                 >
+                <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+                  <Paperclip size={11} /> File
+                </button>
+                <button onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+                  <ImageIcon size={11} /> Photo
+                </button>
+                <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
                 {[
                   { label: 'Search', feature: 'webSearch', icon: Globe, active: webSearch, color: '#3b82f6' },
                   { label: 'Think', feature: 'extThinking', icon: Brain, active: extThinking, color: '#f59e0b' },
                   { label: 'Hands-off', feature: 'handsOff', icon: Zap, active: handsOff, color: '#a855f7' },
                   { label: 'Listen', feature: 'listen', icon: Headphones, active: voiceEnabled, color: '#ec4899' },
                 ].map((tool) => (
-                  <button key={tool.label} onClick={() => {
-                    if (tool.feature === 'listen') {
-                      setVoiceEnabled(v => !v); 
-                      if (!voiceEnabled) voiceControl.startListening(); 
-                      else voiceControl.stopListening();
-                    } else {
-                      toggleFeature(tool.feature as any);
-                    }
-                  }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
+                  <button key={tool.label} onClick={() => toggleFeature(tool.feature as any)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
                     <tool.icon size={11} />
                     {tool.label}
                   </button>
@@ -772,6 +749,27 @@ Example: "Switching... [GIA:switch:analyst]"]\n\n` : '';
         </div>
         <AmbientInput value={input} onChange={setInput} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
       </div>
+
+      <AnimatePresence>
+        {showSkillPicker && (
+          <SkillPicker 
+            skills={skills}
+            activeSkillId={activeSkillId || 'core-general'}
+            onSelect={(skillId) => {
+              setSkill(skillId);
+              setShowSkillPicker(false);
+              setInput('');
+              addNotification(`Skill active: ${skills.find((s: Skill) => s.id === skillId)?.name}`);
+            }}
+            onClose={() => setShowSkillPicker(false)}
+          />
+        )}
+      </AnimatePresence>
+      <GiaConsole
+        logs={consoleLogs}
+        isVisible={showConsole}
+        onClose={() => setShowConsole(false)}
+      />
     </div>
   );
 };

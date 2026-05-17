@@ -42,12 +42,11 @@ const PlannerModule: React.FC = () => {
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const { setIntentState, scheduledTasks, addScheduledTask, updateTaskStatus, deleteTask, addNotification } = useGiaStore();
   const mountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const handledIdsRef = useRef<Set<string>>(new Set());
 
   const runTask = useCallback(async (task: ScheduledTask) => {
-    if (handledIdsRef.current.has(task.id)) return;
-    handledIdsRef.current.add(task.id);
+    // This is now handled by SchedulerService.ts globally,
+    // but we keep it here for immediate execution of newly created tasks
+    if (task.status === 'running') return;
 
     updateTaskStatus(task.id, 'running');
     try {
@@ -85,25 +84,6 @@ const PlannerModule: React.FC = () => {
       addNotification(`❌ ${task.title.slice(0, 30)}`);
     }
   }, [updateTaskStatus, addNotification]);
-
-  const checkForDueTasks = useCallback(async () => {
-    const tasks = useGiaStore.getState().scheduledTasks;
-    const now = Date.now();
-    for (const task of tasks) {
-      if (task.status === 'pending' && task.nextRun <= now) {
-        runTask(task);
-      }
-    }
-  }, [runTask]);
-
-  useEffect(() => {
-    checkForDueTasks();
-    pollRef.current = setInterval(checkForDueTasks, 60000);
-    return () => {
-      if (mountTimeoutRef.current) clearTimeout(mountTimeoutRef.current);
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [checkForDueTasks]);
 
   const handlePlan = useCallback(async () => {
     const text = prompt.trim(); if (!text || loading) return;

@@ -36,6 +36,22 @@ export interface ScheduledTask {
   status: 'pending' | 'running' | 'done' | 'error';
 }
 
+export interface SkillTool {
+  id: string;
+  name: string;
+  description: string;
+  parameters?: Record<string, any>;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  tools: string[]; 
+  category: 'core' | 'user' | 'dev' | 'creative';
+}
+
 export interface UserProfile {
   name: string;
   bio: string;
@@ -52,10 +68,22 @@ interface GiaState {
   scheduledTasks: ScheduledTask[];
   userProfile: UserProfile;
   notifications: { id: string; message: string; ts: number }[];
+  skills: Skill[];
+  activeSkillId: string | null;
+  examHistory: ExamResult[];
+  consoleLogs: { id: string; timestamp: number; type: 'thought' | 'tool' | 'result' | 'error'; content: string }[];
+  showConsole: boolean;
+  
+  webSearch: boolean;
+  extThinking: boolean;
+  handsOff: boolean;
 
   setModule: (module: Module) => void;
   setIntentState: (state: IntentState) => void;
   setShowTerminal: (show: boolean) => void;
+  setWebSearch: (enabled: boolean) => void;
+  setExtThinking: (enabled: boolean) => void;
+  setHandsOff: (enabled: boolean) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -73,11 +101,15 @@ interface GiaState {
   setUserProfile: (p: Partial<UserProfile>) => void;
   addNotification: (msg: string) => void;
   clearNotification: (id: string) => void;
-  examHistory: ExamResult[];
   addExamResult: (r: ExamResult) => void;
   clearExamHistory: () => void;
-  // Hibernation support
   hibernateSessions: () => void;
+  setSkill: (id: string | null) => void;
+  addSkill: (skill: Skill) => void;
+  removeSkill: (id: string) => void;
+  addConsoleLog: (log: { type: 'thought' | 'tool' | 'result' | 'error'; content: string }) => void;
+  setShowConsole: (show: boolean) => void;
+  clearConsole: () => void;
 }
 
 export interface ExamResult {
@@ -107,11 +139,70 @@ export const useGiaStore = create<GiaState>()(
       scheduledTasks: [],
       userProfile: { name: '', bio: '', goals: '' },
       notifications: [],
+      skills: [
+        {
+          id: 'core-general',
+          name: 'General Assistant',
+          description: 'Balanced assistance for general tasks.',
+          systemPrompt: 'You are GIA, a highly capable AI assistant. Be concise, helpful, and professional.',
+          tools: ['web_search', 'terminal_run', 'filesystem_read', 'filesystem_write'],
+          category: 'core'
+        },
+        {
+          id: 'core-developer',
+          name: 'Developer Mode',
+          description: 'Expert software engineering and coding assistance.',
+          systemPrompt: 'You are GIA in Developer Mode. Focus on technical correctness, performance, and clean architecture. Provide production-ready code and thorough architectural explanations.',
+          tools: ['web_search', 'terminal_run', 'filesystem_read', 'filesystem_write', 'zip_project'],
+          category: 'dev'
+        },
+        {
+          id: 'skill-researcher',
+          name: 'Research Analyst',
+          description: 'Deep web research, data synthesis and source verification.',
+          systemPrompt: 'You are GIA in Research Mode. Your goal is to provide exhaustive, evidence-based answers. Always use web_search to verify current facts, cross-reference multiple sources, and provide a structured synthesis of findings with citations.',
+          tools: ['web_search', 'filesystem_read', 'filesystem_write'],
+          category: 'core'
+        },
+        {
+          id: 'skill-creative',
+          name: 'Creative Architect',
+          description: 'Professional copywriting, storytelling and creative conceptualization.',
+          systemPrompt: 'You are GIA in Creative Mode. Focus on evocative language, narrative flow and high-impact communication. Help the user draft compelling content, brainstorm unique concepts, and polish creative work.',
+          tools: ['web_search', 'image_generation'],
+          category: 'creative'
+        },
+        {
+          id: 'skill-tutor',
+          name: 'Academic Tutor',
+          description: 'WASSCE/BECE tuned educational support and exam prep.',
+          systemPrompt: 'You are GIA in Tutor Mode. Specialize in WASSCE and BECE curricula. Instead of just giving answers, guide the student through the logic. Provide practice questions, clear explanations of complex concepts, and structured study plans.',
+          tools: ['web_search', 'filesystem_read'],
+          category: 'core'
+        },
+        {
+          id: 'skill-security',
+          name: 'Security Expert',
+          description: 'Audit code for vulnerabilities and suggest hardening strategies.',
+          systemPrompt: 'You are GIA in Security Mode. Analyze code for OWASP Top 10 vulnerabilities, logic flaws and security leaks. Provide clear mitigation steps and secure coding alternatives. Prioritize the principle of least privilege.',
+          tools: ['terminal_run', 'filesystem_read', 'web_search'],
+          category: 'dev'
+        }
+      ],
+      activeSkillId: 'core-general',
       examHistory: [],
+      consoleLogs: [],
+      showConsole: false,
+      webSearch: false,
+      extThinking: false,
+      handsOff: false,
 
       setModule: (module) => set({ currentModule: module }),
       setIntentState: (state) => set({ intentState: state }),
       setShowTerminal: (show) => set({ showTerminal: show }),
+      setWebSearch: (enabled) => set({ webSearch: enabled }),
+      setExtThinking: (enabled) => set({ extThinking: enabled }),
+      setHandsOff: (enabled) => set({ handsOff: enabled }),
       setSharedData: (data) => set({ sharedData: data }),
       updateSharedData: (data) => set((s) => ({ sharedData: { ...s.sharedData, ...data } })),
 
@@ -190,6 +281,14 @@ export const useGiaStore = create<GiaState>()(
       addExamResult: (r) => set((s) => ({ examHistory: [r, ...s.examHistory].slice(0, 50) })),
       clearExamHistory: () => set({ examHistory: [] }),
       hibernateSessions: () => {},
+      setSkill: (id) => set({ activeSkillId: id }),
+      addSkill: (skill) => set((s) => ({ skills: [...s.skills, skill] })),
+      removeSkill: (id) => set((s) => ({ skills: s.skills.filter(sk => sk.id !== id) })),
+      addConsoleLog: (log) => set((s) => ({
+        consoleLogs: [...s.consoleLogs, { ...log, id: Math.random().toString(36).slice(2), timestamp: Date.now() }].slice(-100)
+      })),
+      setShowConsole: (show) => set({ showConsole: show }),
+      clearConsole: () => set({ consoleLogs: [] }),
     }),
     {
       name: 'gia-store-v3',
@@ -199,7 +298,12 @@ export const useGiaStore = create<GiaState>()(
         activeSessionId: s.activeSessionId,
         scheduledTasks: s.scheduledTasks,
         userProfile: s.userProfile,
+        skills: s.skills,
+        activeSkillId: s.activeSkillId,
         examHistory: s.examHistory,
+        webSearch: s.webSearch,
+        extThinking: s.extThinking,
+        handsOff: s.handsOff,
       }),
     }
   )

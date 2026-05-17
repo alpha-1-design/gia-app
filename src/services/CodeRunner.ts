@@ -74,6 +74,9 @@ class CodeRunner {
     const maxAttempts = 3;
     const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
 
+    // Split code if it looks like a multi-file request (GIA might try to pass multiple files)
+    const files = [{ name: `main.${lang}`, content: req.code }];
+
     try {
       const res = await CapacitorHttp.post({
         url: this.getEndpoint(),
@@ -81,9 +84,12 @@ class CodeRunner {
         data: {
           language: lang,
           version: '*',
-          files: [{ name: `main.${lang}`, content: req.code }],
+          files: files,
           stdin: req.stdin || '',
           args: req.args || [],
+          compile_timeout: 10000,
+          run_timeout: 3000,
+          max_process_count: 64
         },
       });
 
@@ -92,17 +98,26 @@ class CodeRunner {
         return this.run(req, attempts + 1);
       }
 
-      if (res.status < 200 || res.status >= 300) throw new Error(`Piston error ${res.status}`);
+      if (res.status < 200 || res.status >= 300) {
+        const errText = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+        throw new Error(`Piston error ${res.status}: ${errText}`);
+      }
 
       const data = res.data;
       const run = data.run || {};
       const result: CodeRunResult = {
-        output: run.stdout || '',
-        error: run.stderr || run.output || null,
+        output: (run.stdout || '').trim(),
+        error: (run.stderr || run.output || null),
         exitCode: run.code ?? 0,
         language: lang,
-        version: data.language?.version || '',
+        version: data.version || '',
       };
+
+      // If output is empty and no error, but exit code is non-zero
+      if (!result.output && !result.error && result.exitCode !== 0) {
+        result.error = `Process exited with code ${result.exitCode}`;
+      }
+
       this.saveRun({ id: crypto.randomUUID(), ts: Date.now(), language: lang, code: req.code, output: result.output, error: result.error, exitCode: result.exitCode });
       return result;
     } catch (e) {

@@ -1,93 +1,54 @@
-# GIA v2.2.2.0 — User Manual
+# GIA v2.3.0.0 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
-## Modules
+## 🚀 Version 2.3.0.0: The Neural Update
+This version transforms GIA into a fully autonomous agent with persistent voice control and advanced tool capabilities.
 
-| Module | What it does |
-|--------|-------------|
-| **Chat** | General AI conversation with web search, extended thinking, file uploads, voice input |
-| **Exam** | WASSCE/BECE/JAMB quiz engine with timed exams, study mode, past questions, auto-grading |
-| **Analyst** | Data analysis with auto-generated charts (bar, pie, line, table) |
-| **Writer** | Draft emails, essays, blog posts, reports, stories, and more |
-| **Planner** | Step-by-step plans + recurring scheduled tasks with notifications |
-| **Settings** | Profile, memory browser, providers, code endpoint, privacy |
+## 🧠 Core Modules
 
-## Features
+| Module | Purpose |
+|--------|---------|
+| **Chat** | The primary workspace. Access autonomous tools and multi-modal AI. |
+| **Analyst** | Deep research and data analysis mode with persistent memory. |
+| **Writer** | Specialized environment for professional drafting and creative work. |
+| **Planner** | Task management and goal-oriented execution. |
+| **Exam** | Educational assessment and WASSCE-tuned testing. |
+| **Settings** | Configuration, Skill Management, and Engine Room (API keys). |
 
-### Web Search
-Tap the **Search** button above the input to enable DuckDuckGo web search. Results are injected into the AI's context. No API key needed.
+## 🛠 Features & Capabilities
 
-### Extended Thinking
-Tap the **Think** button for step-by-step reasoning before answers. Works with all providers (not just Anthropic).
+### ⚡ Neural Command Palette (/)
+Tap `/` in the Chat module to open the command palette. Instantly switch between **Developer Mode**, **General Assistant**, or your own **Custom Skills**.
 
-### Code Execution
-Code blocks in responses show a **Run** button. GIA executes via the Piston API (40+ languages). If the code errors, GIA auto-fixes up to 3 times. Set a custom endpoint in **Settings → Code Execution**.
+### 🎙 Persistent Voice Summons
+GIA now listens for her wake word ("Hey Gia") even while the app is in the background (requires Overlay Permission in Settings).
+- **Voice Polishing:** GIA automatically cleans up voice transcripts for better clarity.
 
-### Voice Input
-Tap the mic icon and speak. GIA transcribes and polishes the transcript for clarity.
+### 🤖 Autonomous Tools (Hands-off Mode)
+Enable **Hands-off Mode** to allow GIA to use her tools autonomously:
+- **web_search:** Real-time information retrieval.
+- **terminal_run:** Execute code and technical scripts.
+- **filesystem_read/write:** Manage files directly on your device.
+- **image_generation:** Create AI art and diagrams.
+- **zip_project:** Bundle your workspace into a .zip file.
 
-### Message Actions
-**Long-press** (or right-click) any message to show the context menu:
-- Copy, Edit, Retry, Continue, Fork, Delete
-- Deleted messages can be **Undone** within 5 seconds
+### 📸 Multi-Modal Uploads
+- **Images:** Upload UI screenshots or photos for vision analysis.
+- **Documents:** GIA processes PDFs, text, and code files (up to 30,000 characters).
 
-### Quick Start Cards
-On empty Chat, tap a quick-start card to instantly set up:
-- Exam Prep, BECE Prep, Code Help, Summarize URL, Plan My Week
+## ⚙️ How to Add Skills
+1. Go to **Settings → Neural Skills**.
+2. Click **+** to create a new specialist.
+3. Define the **System Prompt** (how GIA should behave).
+4. Select the **Tools** GIA is allowed to use for that skill.
+5. Your new skill will now appear in the `/` command palette.
 
-### Memory
-GIA automatically extracts key facts from conversations (profile, subjects, scores, weak areas). Browse and edit memories in **Settings → Memory**.
-
-### File Attachments
-Attach files (PDF, images, text, code) via the paperclip icon. PDFs are automatically extracted. Images are sent to the AI for analysis.
-
-### Scheduler
-In **Planner → Schedule**, set recurring tasks (hourly/daily/weekly). GIA runs the task at the scheduled time and sends a notification with the result preview.
-
-### Exam Mode
-- Select exam system: WASSCE, BECE, JAMB, or Custom
-- Modes: Study (with explanations), Quiz, Timed Exam, Past Questions
-- Subjects and topics are fetched dynamically by AI
-- Results are saved and viewable in **Past Results** on the setup screen
-- Weak areas are identified and shown after each quiz
-
-### History
-View all chat sessions by tapping the history icon (top-left of Chat). Search sessions by title. Create new sessions or delete old ones.
-
-### Notifications
-Global notifications appear at the top of the screen and auto-dismiss after 5 seconds.
-
-## Keyboard Shortcuts
-
-- **Enter** — Send message
-- **Shift+Enter** — New line (in multiline mode)
-
-## Data & Privacy
-
-- All data stays on your device (IndexedDB/localStorage)
-- No backend, no data collection, no accounts
-- API keys are stored locally and never sent anywhere except to your chosen provider
-- Chats, memories, settings, and exam history persist across sessions
-
-## Provider Setup
-
-1. Go to **Settings → Engine Room**
-2. Type the number of your provider (1-6)
-3. Enter your API key
-4. Select a model
-
-Supported: OpenRouter, Anthropic, OpenAI, Gemini, Groq, OpenCode
-
-## Tips
-
-- Enable **Search** when asking about current events or specific facts
-- Use **Think** for math, logic, and complex reasoning
-- In Exam Mode, use **Study** mode first for explanations, then **Timed Exam** to test yourself
-- Long-press messages instead of using the inline buttons for cleaner UI
-- Check **Settings → Memory** to see what GIA remembers about you
-- Set a custom code endpoint in Settings if you need persistent packages
+## 🖥 Engine Room
+Connect to AI providers in the Engine Room:
+- **OpenRouter, Anthropic, OpenAI, Gemini, Groq.**
+- **Sub-Agent Delegation:** GIA can now call specific providers to handle sub-tasks autonomously.
 
 ---
-
 *Built by Samuel Mensah · Alpha-1 Studio, Ghana*
+*GIA is private. Your keys and data stay on your device.*

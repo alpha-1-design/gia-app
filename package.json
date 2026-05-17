@@ -1,7 +1,7 @@
 {
   "name": "gia-app",
   "private": true,
-  "version": "2.2.2.0",
+  "version": "2.3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,6 +21,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/local-notifications": "^8.1.0",
     "@capgo/capacitor-native-biometric": "^8.4.5",
+    "@emotion/is-prop-valid": "^1.4.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "jszip": "^3.10.1",

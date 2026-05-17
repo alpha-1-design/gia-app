@@ -3,8 +3,9 @@ import {
   Terminal, Shield, User, X, Save, ChevronRight,
   Wifi, WifiOff, Cpu, Trash2, Brain, Search, Play, Check,
   Code2, Headphones, Smartphone, ExternalLink, Mail, Globe, Lock,
+  Plus, Zap, Sparkles
 } from 'lucide-react';
-import { useGiaStore } from '../store/useGiaStore';
+import { useGiaStore, Skill } from '../store/useGiaStore';
 import { useProviderStore, PROVIDER_DEFAULTS, ProviderType } from '../store/useProviderStore';
 import CodeRunner from '../services/CodeRunner';
 import { useMemoryStore, MemoryCategory } from '../store/useMemoryStore';
@@ -22,7 +23,10 @@ const PROVIDER_COLORS: Record<ProviderType, string> = {
 };
 
 const SettingsModule: React.FC = () => {
-  const { setShowTerminal, userProfile, setUserProfile, notifications, clearNotification } = useGiaStore();
+  const { 
+    setShowTerminal, userProfile, setUserProfile, notifications, 
+    clearNotification, skills, addSkill, removeSkill, addNotification 
+  } = useGiaStore();
   const { providers, activeProvider } = useProviderStore();
 
   const [editProfile, setEditProfile] = useState(false);
@@ -110,8 +114,6 @@ const SettingsModule: React.FC = () => {
         onClick={() => setShowTerminal(true)}
         className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback"
         style={{ transition: 'border-color 0.2s' }}
-        onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(168,85,247,0.3)')}
-        onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--gia-border)')}
       >
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
@@ -137,81 +139,97 @@ const SettingsModule: React.FC = () => {
         </div>
       </button>
 
-      {/* Connected providers summary */}
-      <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div className="flex items-center gap-2">
-          <Cpu size={14} style={{ color: '#3b82f6' }} />
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
-            Providers
-          </span>
+      {/* Skills Management */}
+      <div className="gia-card p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap size={14} style={{ color: '#f59e0b' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+              Neural Skills
+            </span>
+          </div>
+          <button 
+            onClick={() => {
+              addSkill({
+                id: Math.random().toString(36).slice(2, 10),
+                name: 'New Specialist',
+                description: 'Custom AI Persona',
+                systemPrompt: 'You are an expert in...',
+                tools: ['web_search'],
+                category: 'user'
+              });
+              addNotification('Skill added');
+            }}
+            className="p-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-100"
+          >
+            <Plus size={14} />
+          </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {ALL_PROVIDERS.map(p => {
-            const cfg = providers[p];
-            const def = PROVIDER_DEFAULTS[p];
-            const isActive = activeProvider === p;
-            const color = PROVIDER_COLORS[p];
-            return (
-              <div key={p} className="flex items-center gap-3">
-                <div
-                  className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: `${color}20` }}
-                >
-                  {cfg.enabled
-                    ? <Wifi size={11} style={{ color }} />
-                    : <WifiOff size={11} style={{ color: 'var(--gia-muted-2)' }} />}
+        <div className="space-y-3">
+          {skills.map(skill => (
+            <div key={skill.id} className="p-3 rounded-xl border border-zinc-800 bg-zinc-900/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-zinc-100">{skill.name}</span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 uppercase tracking-tighter">{skill.category}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium" style={{ color: cfg.enabled ? 'var(--gia-text)' : 'var(--gia-muted)' }}>
-                    {def.label}
-                  </p>
-                  {cfg.enabled && (
-                    <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{cfg.model}</p>
-                  )}
-                </div>
-                {isActive && cfg.enabled && (
-                  <span className="gia-pill gia-pill-accent" style={{ fontSize: '8px', padding: '1px 6px' }}>Active</span>
-                )}
+                <button onClick={() => removeSkill(skill.id)} className="text-zinc-600 hover:text-rose-500"><Trash2 size={12} /></button>
               </div>
-            );
-          })}
+              <textarea 
+                value={skill.systemPrompt}
+                onChange={(e) => {
+                  const newSkills = skills.map(s => s.id === skill.id ? { ...s, systemPrompt: e.target.value } : s);
+                  useGiaStore.setState({ skills: newSkills });
+                }}
+                className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg p-2 text-[10px] text-zinc-400 focus:ring-0 min-h-[60px] font-mono"
+              />
+              <div className="flex flex-wrap gap-1 mt-2">
+                {['web_search', 'terminal_run', 'filesystem_read', 'filesystem_write', 'image_generation'].map(t => (
+                  <button 
+                    key={t}
+                    onClick={() => {
+                      const has = skill.tools.includes(t);
+                      const tools = has ? skill.tools.filter(x => x !== t) : [...skill.tools, t];
+                      const newSkills = skills.map(s => s.id === skill.id ? { ...s, tools } : s);
+                      useGiaStore.setState({ skills: newSkills });
+                    }}
+                    className={`text-[8px] px-2 py-0.5 rounded-full border transition-all ${skill.tools.includes(t) ? 'border-violet-500/50 text-violet-400 bg-violet-500/5' : 'border-zinc-800 text-zinc-600'}`}
+                  >
+                    {t.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-
-        <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-          Open Engine Room to add/remove providers.
-        </p>
       </div>
 
-      {/* Memory */}
       <MemorySection />
 
-      {/* Privacy */}
       <div className="gia-card p-4 flex items-start gap-3">
         <Shield size={14} style={{ color: '#34d399', flexShrink: 0, marginTop: 2 }} />
         <div>
-          <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Privacy First</p>
-          <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
-            GIA runs entirely on-device. No backend, no data collection.
-            Your chats are stored locally in IndexedDB — encrypted at rest
-            by your device. API keys never leave your device.
+          <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Advanced Permissions</p>
+          <p className="text-[11px] mt-1 text-zinc-500 leading-relaxed">
+            Enable <strong>Display over other apps</strong> to allow GIA to wake up and appear over your current task when you say the wake word.
           </p>
+          <button 
+            onClick={() => {
+              addNotification('Opening settings. Enable "Display over other apps" manually.');
+              alert('Please go to Settings > Apps > GIA > Display over other apps (or Overlay) and enable it to allow GIA to wake up over other apps.');
+            }}
+            className="gia-btn mt-3 text-[10px] px-3 py-1.5 border-emerald-500/20 text-emerald-400 bg-emerald-500/5"
+          >
+            Grant Overlay Permission
+          </button>
         </div>
       </div>
 
-      {/* Voice */}
       <VoiceSection />
-
-      {/* Security */}
       <SecuritySection />
-
-      {/* Code Execution */}
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
-
-      {/* Code History */}
       <CodeHistorySection />
-
-      {/* Install GIA */}
       <InstallSection />
 
       {/* Danger zone */}
@@ -232,7 +250,7 @@ const SettingsModule: React.FC = () => {
 
       {/* Version */}
       <p className="text-center text-[10px] py-2" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.2.2.0 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        GIA v2.3.0 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
     </div>
   );
