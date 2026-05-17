@@ -2,6 +2,7 @@ import { CapacitorHttp } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import CodeRunner from './CodeRunner';
 import { useGiaStore } from '../store/useGiaStore';
+import { PROVIDER_DEFAULTS } from '../store/useProviderStore';
 
 const isNativePlatform = () => typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform();
 
@@ -138,19 +139,19 @@ class GiaTools {
             },
             currentProvider: {
               name: activeProvider,
-              label: config.label || activeProvider,
+              label: PROVIDER_DEFAULTS[activeProvider]?.label || activeProvider,
               model: config.model,
               apiKeySet: !!config.apiKey,
-              baseUrl: config.baseUrl,
+              baseUrl: PROVIDER_DEFAULTS[activeProvider]?.baseUrl || '',
             },
             availableProviders: Object.entries(providers).map(([k, v]) => ({
               name: k,
-              label: v.label || k,
+              label: PROVIDER_DEFAULTS[k as keyof typeof PROVIDER_DEFAULTS]?.label || k,
               model: v.model,
               enabled: v.enabled,
               apiKeySet: !!v.apiKey,
             })),
-            tools: GiaTools.getAllTools().map(t => ({
+            tools: this.getAllTools().map(t => ({
               id: t.id,
               name: t.name,
               description: t.description,

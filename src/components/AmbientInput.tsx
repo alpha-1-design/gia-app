@@ -8,7 +8,7 @@ const isNative =
   typeof (window as any).Capacitor !== 'undefined' &&
   (window as any).Capacitor.isNativePlatform?.();
 
-const webSpeechAvailable = typeof window !== 'undefined' && typeof window.webkitSpeechRecognition !== 'undefined';
+const webSpeechAvailable = typeof window !== 'undefined' && typeof (window as any).webkitSpeechRecognition !== 'undefined';
 
 interface AmbientInputProps {
   value: string;
@@ -54,7 +54,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
 
   const toggleListening = async () => {
     if (isListening) {
-      if (isNative && typeof SpeechRecognition !== 'undefined') {
+      if (isNative && typeof (window as any).SpeechRecognition !== 'undefined') {
         const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
         await SpeechRecognition.stop();
       } else if (webSpeechAvailable) {
