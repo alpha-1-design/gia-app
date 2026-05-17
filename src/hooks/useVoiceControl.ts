@@ -4,7 +4,6 @@ import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 export interface VoiceControlConfig {
   wakeWord?: string;
   onWakeWord?: (transcript: string) => void;
-  onResult?: (text: string) => void;
   onTranscript?: (text: string) => void;
   autoStopAfter?: number;
   keepListening?: boolean;
@@ -14,7 +13,6 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const {
     wakeWord = 'hey gia',
     onWakeWord,
-    onResult,
     onTranscript,
     autoStopAfter = 60000,
     keepListening = false,
@@ -24,6 +22,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const [isHearing, setIsHearing] = useState(false);
   const activeRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastResultRef = useRef(0);
   const srRef = useRef<any>(null);
   const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
 
@@ -32,7 +31,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     try {
       const status = await SpeechRecognition.checkPermissions();
       if (status.speechRecognition === 'granted') return true;
-      
+
       const newStatus = await SpeechRecognition.requestPermissions();
       return newStatus.speechRecognition === 'granted';
     } catch (e) {
@@ -58,13 +57,13 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
   const processTranscript = useCallback((text: string) => {
     if (!text) return;
-    onResult?.(text);
+    lastResultRef.current = Date.now();
     onTranscript?.(text);
     if (text.toLowerCase().includes(wakeWord.toLowerCase())) {
       onWakeWord?.(text);
       if (!keepListening) stopListening();
     }
-  }, [wakeWord, onWakeWord, onResult, onTranscript, keepListening, stopListening]);
+  }, [wakeWord, onWakeWord, onTranscript, keepListening, stopListening]);
 
   const listenOnce = useCallback(async () => {
     if (!activeRef.current) return;
@@ -82,13 +81,16 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           popup: false,
         });
 
-        if (result?.matches?.length) {
+        const hadResult = result?.matches?.length && result.matches[0]?.length > 0;
+        if (hadResult) {
           processTranscript(result.matches[0]);
         }
 
-        // Continuous listening logic for wake word
+        const gap = Date.now() - lastResultRef.current;
+        const backoff = hadResult ? 1000 : Math.max(2000, 2000 - gap);
+
         if (activeRef.current && (keepListening || wakeWord)) {
-          setTimeout(listenOnce, 300);
+          timeoutRef.current = setTimeout(listenOnce, backoff);
         } else {
           stopListening();
         }
@@ -96,7 +98,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     } catch (e) {
       console.error('Speech recognition error:', e);
       if (activeRef.current && (keepListening || wakeWord)) {
-        setTimeout(listenOnce, 1000);
+        timeoutRef.current = setTimeout(listenOnce, 2000);
       } else {
         stopListening();
       }
@@ -105,7 +107,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
   const startListening = useCallback(async () => {
     if (activeRef.current) return;
-    
+
     const granted = await requestPermissions();
     if (!granted) {
       console.error('Microphone permission denied');

@@ -72,7 +72,8 @@ const ChatModule: React.FC = () => {
     webSearch, setWebSearch,
     extThinking, setExtThinking,
     handsOff, setHandsOff,
-    skills, activeSkillId, setSkill
+    skills, activeSkillId, setSkill,
+    wakeWord
   } = useGiaStore();
 
   const { providers, activeProvider } = useProviderStore();
@@ -80,11 +81,10 @@ const ChatModule: React.FC = () => {
   const providerConnected = providers[activeProvider]?.enabled ?? false;
   const activeModel = providers[activeProvider]?.model ?? '';
 
-  const wakeWordRef = useRef(localStorage.getItem('gia-wake-word') || 'hey gia');
   const keepListeningRef = useRef(localStorage.getItem('gia-keep-listening') !== 'false');
 
   const handleWakeWord = useCallback((transcript: string) => {
-    const ww = localStorage.getItem('gia-wake-word') || 'hey gia';
+    const ww = useGiaStore.getState().wakeWord;
     const query = transcript.replace(new RegExp(ww, 'i'), '').trim();
     if (query) {
       setInput(query);
@@ -94,25 +94,37 @@ const ChatModule: React.FC = () => {
 
   const handleVoiceTranscript = useCallback(async (transcript: string) => {
     if (!transcript.trim()) return;
-    
-    // Polishing logic
+
+    // Short phrases: no polishing needed
+    if (transcript.split(' ').length < 8) {
+      setInput(transcript);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
+
     addNotification('Polishing transcript...');
     try {
       const brain = (await import('../services/GiaBrain')).default;
       const res = await brain.generate({
+        signal: ctrl.signal,
         prompt: `The following is a raw voice-to-text transcript. Please polish it for clarity, grammar, and punctuation while maintaining the original intent and tone. Return ONLY the polished text.\n\nRaw Transcript: "${transcript}"`,
         temperature: 0.3,
         maxTokens: 1000,
       });
-      setInput(res.text.trim());
+      clearTimeout(timeout);
+      if (res.text && !ctrl.signal.aborted) {
+        setInput(res.text.trim());
+      }
     } catch (e) {
-      // Fallback to raw if polishing fails
+      clearTimeout(timeout);
       setInput(transcript);
     }
   }, [addNotification, setInput]);
 
   const voiceControl = useVoiceControl({
-    wakeWord: wakeWordRef.current,
+    wakeWord,
     onWakeWord: handleWakeWord,
     onTranscript: handleVoiceTranscript, // New callback for non-wake-word speech
     keepListening: keepListeningRef.current,
@@ -183,20 +195,26 @@ const ChatModule: React.FC = () => {
     if (streamingMsgId && activeSessionId) {
       const session = useGiaStore.getState().sessions.find(s => s.id === activeSessionId);
       const ghost = session?.messages.find(m => m.id === streamingMsgId);
-      if (ghost && (!ghost.content || ghost.thinking)) {
-        useGiaStore.setState({
-          sessions: useGiaStore.getState().sessions.map(s =>
-            s.id === activeSessionId
-              ? { ...s, messages: s.messages.filter(m => m.id !== streamingMsgId), updatedAt: Date.now() }
-              : s
-          ),
-        });
+      if (ghost) {
+        if (!ghost.content && ghost.thinking) {
+          // Empty ghost — delete it
+          useGiaStore.setState({
+            sessions: useGiaStore.getState().sessions.map(s =>
+              s.id === activeSessionId
+                ? { ...s, messages: s.messages.filter(m => m.id !== streamingMsgId), updatedAt: Date.now() }
+                : s
+            ),
+          });
+        } else if (ghost.content) {
+          // Had partial response — keep it with stop indicator
+          updateMessage(activeSessionId, streamingMsgId, ghost.content + '\n\n*[Response stopped]*');
+        }
       }
     }
     setLoading(false);
     setStreamingMsgId(null);
     setIntentState('idle');
-  }, [setIntentState, streamingMsgId, activeSessionId]);
+  }, [setIntentState, streamingMsgId, activeSessionId, updateMessage]);
 
   const handleContinue = useCallback(async (msgId: string) => {
     if (!activeSessionId || loading) return;
@@ -770,6 +788,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           </div>
         )}
 
+        {!providerConnected && !loading && (
+          <div className="px-4 py-3 mx-4 rounded-2xl text-center" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Go to Settings → Engine Room and type: <code className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'rgba(0,0,0,0.3)' }}>connect</code></p>
+          </div>
+        )}
+
         {messages.map((msg, i) => (
           <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
@@ -873,10 +898,34 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                   }}
                 >
                   {msg.thinking ? (
-                    <div className="flex gap-1.5 items-center py-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                    <div>
+                      <div className="flex gap-1.5 items-center py-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                        <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                      </div>
+                      {msg.thoughts && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => setShowThoughts(prev => {
+                              const n = new Set(prev);
+                              n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id);
+                              return n;
+                            })}
+                            className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-lg transition-colors"
+                            style={{ background: 'rgba(251,191,36,0.1)', color: '#f59e0b', border: '1px solid rgba(251,191,36,0.2)' }}
+                          >
+                            <Brain size={10} />
+                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} thinking
+                          </button>
+                          {showThoughts.has(msg.id) && (
+                            <div className="mt-1.5 p-2.5 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)', color: '#d4a574' }}>
+                              {msg.thoughts}
+                              {msg.thinking && <span className="animate-pulse">▍</span>}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : msg.error ? (
                     <div className="flex flex-col gap-2">
@@ -1087,7 +1136,26 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             </AnimatePresence>
           </div>
         </div>
-        <AmbientInput value={input} onChange={handleInputChange} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
+        {/* Floating stop button */}
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="flex justify-center pb-2"
+            >
+              <button
+                onClick={handleStop}
+                className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all shadow-lg"
+                style={{ background: 'rgba(239,68,68,0.9)', color: 'white' }}
+              >
+                <Square size={12} className="fill-white" /> Stop generating
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AmbientInput value={input} onChange={handleInputChange} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
       </div>
 
       <AnimatePresence>

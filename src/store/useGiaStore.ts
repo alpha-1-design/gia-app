@@ -86,6 +86,7 @@ interface GiaState {
   extThinking: boolean;
   handsOff: boolean;
   clarification: Clarification | null;
+  wakeWord: string;
 
   setModule: (module: Module) => void;
   setClarification: (c: Clarification | null) => void;
@@ -94,6 +95,7 @@ interface GiaState {
   setWebSearch: (enabled: boolean) => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
+  setWakeWord: (word: string) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -207,6 +209,7 @@ export const useGiaStore = create<GiaState>()(
       extThinking: false,
       handsOff: false,
       clarification: null,
+      wakeWord: localStorage.getItem('gia-wake-word') || 'hey gia',
 
       setModule: (module) => set({ currentModule: module }),
       setClarification: (c) => set({ clarification: c }),
@@ -215,6 +218,10 @@ export const useGiaStore = create<GiaState>()(
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
       setHandsOff: (enabled) => set({ handsOff: enabled }),
+      setWakeWord: (word) => {
+        localStorage.setItem('gia-wake-word', word);
+        set({ wakeWord: word });
+      },
       setSharedData: (data) => set({ sharedData: data }),
       updateSharedData: (data) => set((s) => ({ sharedData: { ...s.sharedData, ...data } })),
 

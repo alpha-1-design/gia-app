@@ -278,15 +278,17 @@ class GiaBrain {
         };
 
         xhr.onprogress = () => {
+          const currentLen = xhr.responseText.length;
           const newData = xhr.responseText.slice(lastProcessed);
-          lastProcessed = xhr.responseText.length;
+          lastProcessed = currentLen;
           processLines(newData);
         };
 
         xhr.onload = () => {
           const remaining = xhr.responseText.slice(lastProcessed);
           if (remaining.trim()) processLines(remaining);
-          resolve({ text: fullText, provider: activeProvider, model: config.model });
+          if (!fullText.trim()) reject(new Error(`${label} returned empty response`));
+          else resolve({ text: fullText, provider: activeProvider, model: config.model });
         };
 
         xhr.onerror = () => reject(new Error(`${label} network error`));
@@ -399,15 +401,17 @@ class GiaBrain {
         };
 
         xhr.onprogress = () => {
+          const currentLen = xhr.responseText.length;
           const newData = xhr.responseText.slice(lastProcessed);
-          lastProcessed = xhr.responseText.length;
+          lastProcessed = currentLen;
           processAnthropicEvents(newData);
         };
 
         xhr.onload = () => {
           const remaining = xhr.responseText.slice(lastProcessed);
           if (remaining.trim()) processAnthropicEvents(remaining);
-          resolve({ text: fullText, provider: 'anthropic', model: config.model });
+          if (!fullText.trim()) reject(new Error('Anthropic returned empty response'));
+          else resolve({ text: fullText, provider: 'anthropic', model: config.model });
         };
 
         xhr.onerror = () => reject(new Error('Anthropic network error'));
@@ -501,15 +505,17 @@ class GiaBrain {
         };
 
         xhr.onprogress = () => {
+          const currentLen = xhr.responseText.length;
           const newData = xhr.responseText.slice(lastProcessed);
-          lastProcessed = xhr.responseText.length;
+          lastProcessed = currentLen;
           processGeminiEvents(newData);
         };
 
         xhr.onload = () => {
           const remaining = xhr.responseText.slice(lastProcessed);
           if (remaining.trim()) processGeminiEvents(remaining);
-          resolve({ text: fullText, provider: 'gemini', model: config.model });
+          if (!fullText.trim()) reject(new Error('Gemini returned empty response'));
+          else resolve({ text: fullText, provider: 'gemini', model: config.model });
         };
 
         xhr.onerror = () => reject(new Error('Gemini network error'));
@@ -554,6 +560,7 @@ class GiaBrain {
     let history = req.history ? [...req.history] : [];
     let iterations = 0;
     const maxIterations = 8;
+    let clarificationAttempts = 0;
 
     while (iterations < maxIterations) {
       if (req.signal?.aborted) throw new Error('Request aborted');
@@ -571,8 +578,26 @@ class GiaBrain {
         try {
           const toolCall = JSON.parse(toolMatch[1]);
 
-          // Clarification is always allowed (it's asking the user a question, not taking action)
+          // sub_agent_call is handled inline, never goes through tool registry
+          if (toolCall.id === 'sub_agent_call') {
+            const { provider, prompt: subPrompt } = toolCall.args;
+            req.onThought?.(`Delegating to sub-agent (${provider})...`);
+            const subRes = await this.delegateTask(provider, subPrompt, req.signal);
+            history.push({ role: 'assistant', content: text });
+            history.push({ role: 'user', content: `SUB-AGENT (${provider}): ${subRes}` });
+            currentPrompt = `Sub-agent finished. Continue based on their response.`;
+            continue;
+          }
+
+          // Clarification — always allowed but max 1 per generate() to prevent looping
           if (toolCall.id === 'request_clarification') {
+            if (clarificationAttempts >= 1) {
+              history.push({ role: 'assistant', content: text });
+              history.push({ role: 'user', content: 'OBSERVATION: Clarification already asked. Respond directly without asking again.' });
+              currentPrompt = 'Clarification already used. Respond directly.';
+              continue;
+            }
+            clarificationAttempts++;
             const tool = GiaTools.getTool('request_clarification');
             if (tool) {
               await tool.execute(toolCall.args);
@@ -600,14 +625,6 @@ class GiaBrain {
             history.push({ role: 'user', content: obs });
             useGiaStore.getState().addConsoleLog({ type: result.success ? 'tool' : 'error', content: `Tool: ${toolCall.id}\nResult: ${result.content.slice(0, 500)}` });
             currentPrompt = `Tool finished. Observation: ${obs}`;
-            continue;
-          } else if (toolCall.id === 'sub_agent_call') {
-            const { provider, prompt } = toolCall.args;
-            req.onThought?.(`Delegating to sub-agent (${provider})...`);
-            const subRes = await this.delegateTask(provider, prompt, req.signal);
-            history.push({ role: 'assistant', content: text });
-            history.push({ role: 'user', content: `SUB-AGENT (${provider}): ${subRes}` });
-            currentPrompt = `Sub-agent finished. Continue based on their response.`;
             continue;
           }
         } catch (e: any) {

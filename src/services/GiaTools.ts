@@ -4,7 +4,40 @@ import CodeRunner from './CodeRunner';
 import { useGiaStore } from '../store/useGiaStore';
 import { PROVIDER_DEFAULTS } from '../store/useProviderStore';
 
-const isNativePlatform = () => typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform();
+const isNative = () => typeof (window as any).Capacitor?.getPlatform === 'function'
+  ? (window as any).Capacitor.getPlatform() === 'android'
+  : false;
+
+const blobUrls = new Set<string>();
+
+const revokeAllBlobUrls = () => {
+  blobUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
+  blobUrls.clear();
+};
+
+const blobToBase64 = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64data = reader.result as string;
+      resolve(base64data.split(',')[1]);
+    };
+    reader.onerror = () => reject(new Error('Failed to read blob data'));
+    reader.readAsDataURL(blob);
+  });
+
+const triggerDownload = (blob: Blob, filename: string) => {
+  revokeAllBlobUrls();
+  const url = URL.createObjectURL(blob);
+  blobUrls.add(url);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => { blobUrls.delete(url); URL.revokeObjectURL(url); }, 10000);
+};
 
 export interface ToolResult {
   success: boolean;
@@ -47,15 +80,9 @@ class GiaTools {
       name: 'filesystem_read',
       description: 'Read the content of a file from the local filesystem.',
       execute: async ({ path }) => {
-        if (!isNativePlatform()) {
-          return { success: false, content: '', error: 'Filesystem access is only available on the GIA mobile app (Android/iOS). You are running in a browser where this is not supported. Please download the app or copy the file content manually.' };
-        }
+        if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
         try {
-          const result = await Filesystem.readFile({
-            path,
-            directory: Directory.Documents,
-            encoding: Encoding.UTF8,
-          });
+          const result = await Filesystem.readFile({ path, directory: Directory.Documents, encoding: Encoding.UTF8 });
           return { success: true, content: result.data as string };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
@@ -68,50 +95,31 @@ class GiaTools {
       name: 'filesystem_write',
       description: 'Write or update a file on the local filesystem.',
       execute: async ({ path, content }) => {
-        if (!isNativePlatform()) {
-          const ext = path.split('.').pop()?.toLowerCase() || 'txt';
-          const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
-          const mime = mimeMap[ext] || 'text/plain';
-          const blob = new Blob([content], { type: mime });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = path.split('/').pop() || 'file.txt';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(url), 10000);
-          return { success: true, content: `File "${path}" is ready for download. Your browser should have prompted you to save it.` };
+        if (isNative()) {
+          try {
+            await Filesystem.writeFile({ path, data: content, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
+            await Filesystem.stat({ path, directory: Directory.Documents });
+            return { success: true, content: `File written to ${path} (verified)` };
+          } catch (e: any) {
+            return { success: false, content: '', error: e.message };
+          }
         }
-        try {
-          await Filesystem.writeFile({
-            path,
-            data: content,
-            directory: Directory.Documents,
-            encoding: Encoding.UTF8,
-            recursive: true
-          });
-          return { success: true, content: `File written to ${path}` };
-        } catch (e: any) {
-          return { success: false, content: '', error: e.message };
-        }
+        const ext = path.split('.').pop()?.toLowerCase() || 'txt';
+        const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
+        const blob = new Blob([content], { type: mimeMap[ext] || 'text/plain' });
+        triggerDownload(blob, path.split('/').pop() || 'file.txt');
+        return { success: true, content: `File "${path}" ready for download.` };
       }
     });
 
     this.tools.set('terminal_run', {
       id: 'terminal_run',
       name: 'terminal_run',
-      description: 'Execute scripts or complex logic in a sandboxed container. Supports Python, JS, C++, etc. Use this for computations, data processing, or verifying code before saving.',
+      description: 'Execute scripts in a sandboxed container (Python, JS, C++).',
       execute: async ({ command, language = 'python' }) => {
         try {
-          const result = await CodeRunner.run({
-            language,
-            code: command
-          });
-          if (result.error) {
-            return { success: false, content: result.output, error: result.error };
-          }
-          return { success: true, content: result.output };
+          const result = await CodeRunner.run({ language, code: command });
+          return result.error ? { success: false, content: result.output, error: result.error } : { success: true, content: result.output };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }
@@ -121,51 +129,39 @@ class GiaTools {
     this.tools.set('get_environment_info', {
       id: 'get_environment_info',
       name: 'get_environment_info',
-      description: 'Get full introspection of GIA identity, architecture, capabilities, and environment. Use this to understand what you are and what you can do.',
+      description: 'Get full introspection of GIA identity, architecture, capabilities, and environment.',
       execute: async () => {
         try {
           const runtimes = await CodeRunner.getRuntimes();
           const { activeProvider, providers } = (await import('../store/useProviderStore')).useProviderStore.getState();
           const store = useGiaStore.getState();
-          const config = providers[activeProvider];
+          const native = isNative();
           const info = {
             identity: {
-              name: 'GIA',
-              fullName: 'Generative Interface Agent',
-              version: '2.3.0.0',
+              name: 'GIA', fullName: 'Generative Interface Agent', version: '2.3.0.0',
               tagline: 'Private on-device AI workspace',
-              platform: isNativePlatform() ? 'Android/iOS (Capacitor)' : 'Browser (Web)',
+              platform: native ? 'Android (Capacitor)' : 'Browser (Web)',
               architecture: 'React 18 + TypeScript + Zustand + Vite + Capacitor',
             },
             currentProvider: {
               name: activeProvider,
               label: PROVIDER_DEFAULTS[activeProvider]?.label || activeProvider,
-              model: config.model,
-              apiKeySet: !!config.apiKey,
+              model: providers[activeProvider]?.model,
+              apiKeySet: !!providers[activeProvider]?.apiKey,
               baseUrl: PROVIDER_DEFAULTS[activeProvider]?.baseUrl || '',
             },
             availableProviders: Object.entries(providers).map(([k, v]) => ({
-              name: k,
-              label: PROVIDER_DEFAULTS[k as keyof typeof PROVIDER_DEFAULTS]?.label || k,
-              model: v.model,
-              enabled: v.enabled,
-              apiKeySet: !!v.apiKey,
+              name: k, label: PROVIDER_DEFAULTS[k as keyof typeof PROVIDER_DEFAULTS]?.label || k,
+              model: v.model, enabled: v.enabled, apiKeySet: !!v.apiKey,
             })),
-            tools: this.getAllTools().map(t => ({
-              id: t.id,
-              name: t.name,
-              description: t.description,
-            })),
+            tools: this.getAllTools().map(t => ({ id: t.id, name: t.name, description: t.description })),
             modules: ['chat', 'exam', 'analyst', 'writer', 'planner', 'settings'],
             codeRuntimes: runtimes.map(r => ({ language: r.language, version: r.version })).slice(0, 20),
             uiCapabilities: {
-              rendersMarkdown: true,
-              syntaxHighlighting: true,
-              codeExecution: true,
-              inlineImages: true,
-              streamingResponses: true,
-              fileDownloads: true,
-              zipBundling: true,
+              rendersMarkdown: true, syntaxHighlighting: true, codeExecution: true,
+              inlineImages: true, streamingResponses: true, zipBundling: true,
+              fileDownloads: !native,
+              filesystemAccess: native,
             },
             memory: (await import('../store/useMemoryStore')).useMemoryStore.getState().memories.length,
             skills: store.skills?.length || 0,
@@ -178,18 +174,12 @@ class GiaTools {
     });
 
     this.tools.set('list_files', {
-      id: 'list_files',
-      name: 'list_files',
+      id: 'list_files', name: 'list_files',
       description: 'List files in a directory.',
       execute: async ({ path = '' }) => {
-        if (!isNativePlatform()) {
-          return { success: false, content: '', error: 'Filesystem access is only available on the GIA mobile app (Android/iOS). You are running in a browser.' };
-        }
+        if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
         try {
-          const result = await Filesystem.readdir({
-            path,
-            directory: Directory.Documents
-          });
+          const result = await Filesystem.readdir({ path, directory: Directory.Documents });
           return { success: true, content: result.files.map(f => f.name).join('\n') };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
@@ -198,15 +188,14 @@ class GiaTools {
     });
 
     this.tools.set('image_generation', {
-      id: 'image_generation',
-      name: 'image_generation',
+      id: 'image_generation', name: 'image_generation',
       description: 'Generate an AI image from a text description.',
       execute: async ({ prompt }) => {
         try {
           const ImageService = (await import('./ImageService')).default;
           const result = await ImageService.generate(prompt);
           if (result.error) return { success: false, content: '', error: result.error };
-          return { success: true, content: `Image generated successfully. URL: ${result.url}${result.revisedPrompt ? `\nRevised Prompt: ${result.revisedPrompt}` : ''}` };
+          return { success: true, content: `Image generated. URL: ${result.url}${result.revisedPrompt ? `\nRevised Prompt: ${result.revisedPrompt}` : ''}` };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }
@@ -214,8 +203,7 @@ class GiaTools {
     });
 
     this.tools.set('switch_module', {
-      id: 'switch_module',
-      name: 'switch_module',
+      id: 'switch_module', name: 'switch_module',
       description: 'Switch the active GIA module (chat, exam, analyst, writer, planner, settings).',
       execute: async ({ module }) => {
         const store = useGiaStore.getState();
@@ -230,8 +218,7 @@ class GiaTools {
     });
 
     this.tools.set('toggle_feature', {
-      id: 'toggle_feature',
-      name: 'toggle_feature',
+      id: 'toggle_feature', name: 'toggle_feature',
       description: 'Enable or disable GIA features (web_search, thinking, hands_off).',
       execute: async ({ feature, enabled }) => {
         const store = useGiaStore.getState();
@@ -239,15 +226,13 @@ class GiaTools {
         else if (feature === 'thinking') store.setExtThinking(enabled);
         else if (feature === 'hands_off') store.setHandsOff(enabled);
         else return { success: false, content: '', error: `Invalid feature: ${feature}` };
-        
         store.addNotification(`GIA turned ${feature} ${enabled ? 'ON' : 'OFF'}`);
         return { success: true, content: `${feature} is now ${enabled ? 'enabled' : 'disabled'}` };
       }
     });
 
     this.tools.set('show_notification', {
-      id: 'show_notification',
-      name: 'show_notification',
+      id: 'show_notification', name: 'show_notification',
       description: 'Show a global notification toast to the user.',
       execute: async ({ message }) => {
         useGiaStore.getState().addNotification(message);
@@ -256,9 +241,8 @@ class GiaTools {
     });
 
     this.tools.set('zip_project', {
-      id: 'zip_project',
-      name: 'zip_project',
-      description: 'Create a ZIP bundle of files. Provide "files" as [{path, content}] OR "paths" as string[] to zip from device.',
+      id: 'zip_project', name: 'zip_project',
+      description: 'Create a ZIP bundle of files. Provide "files" as [{path, content}] OR "paths" as string[] to read from device.',
       execute: async ({ filename = 'project.zip', files, paths }) => {
         try {
           const JSZip = (await import('jszip')).default;
@@ -267,66 +251,33 @@ class GiaTools {
           if (files && Array.isArray(files)) {
             files.forEach((f: any) => {
               const name = f.path.replace(/\\/g, '/');
-              if (f.content && typeof f.content === 'string') {
-                zip.file(name, f.content, { binary: false });
-              } else {
-                zip.file(name, JSON.stringify(f.content), { binary: false });
-              }
+              zip.file(name, typeof f.content === 'string' ? f.content : JSON.stringify(f.content), { binary: false });
             });
           }
 
           if (paths && Array.isArray(paths)) {
-            if (!isNativePlatform()) {
-              return { success: false, content: '', error: 'Reading files from device paths is only supported on the GIA mobile app. Use the "files" parameter to provide content directly instead.' };
-            }
+            if (!isNative()) return { success: false, content: '', error: 'Reading files from device paths requires the GIA mobile app.' };
             for (const p of paths) {
               try {
                 const res = await Filesystem.readFile({ path: p, directory: Directory.Documents, encoding: Encoding.UTF8 });
                 zip.file(p, res.data as string);
-              } catch (e) {
-                console.error(`Skipping ${p}:`, e);
-              }
+              } catch { /* skip unreadable */ }
             }
           }
 
-          useGiaStore.getState().addNotification(`Packaging ${filename}...`);
-          const blob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
-            if (metadata.percent % 25 === 0) {
-              useGiaStore.getState().addNotification(`Zipping: ${Math.round(metadata.percent)}%`);
-            }
-          });
+          useGiaStore.getState().addNotification(`📦 Packaging ${filename}...`);
+          const blob = await zip.generateAsync({ type: 'blob' });
+          useGiaStore.getState().addNotification(`✅ ${filename} ready`);
 
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-          if (isNativePlatform()) {
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64data = reader.result as string;
-                resolve(base64data.split(',')[1]);
-              };
-              reader.onerror = () => reject(new Error('Failed to read zip blob'));
-              reader.readAsDataURL(blob);
-            });
-
-            await Filesystem.writeFile({
-              path: filename,
-              data: base64,
-              directory: Directory.Documents,
-            });
+          if (isNative()) {
+            const base64 = await blobToBase64(blob);
+            await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents });
             useGiaStore.getState().addNotification(`✅ ${filename} saved to Documents`);
-            return { success: true, content: `Successfully created ${filename} and saved to your Documents folder.` };
+            return { success: true, content: `Created ${filename} and saved to your Documents folder.` };
           }
 
-          setTimeout(() => URL.revokeObjectURL(url), 10000);
-          useGiaStore.getState().addNotification(`✅ ${filename} ready — check downloads`);
-          return { success: true, content: `Successfully created ${filename}. Your browser should have prompted you to download it.` };
+          triggerDownload(blob, filename);
+          return { success: true, content: `Created ${filename} — check your downloads.` };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }
@@ -334,9 +285,8 @@ class GiaTools {
     });
 
     this.tools.set('request_clarification', {
-      id: 'request_clarification',
-      name: 'request_clarification',
-      description: 'Ask the user a clarifying multiple-choice question when you need more information before proceeding. Provide 2-4 concise options.',
+      id: 'request_clarification', name: 'request_clarification',
+      description: 'Ask the user a clarifying question when you need more information.',
       execute: async ({ question, options }) => {
         useGiaStore.getState().setClarification({
           question: question || 'Could you clarify?',
@@ -345,16 +295,6 @@ class GiaTools {
           assistantMsgId: '',
         });
         return { success: true, content: '__CLARIFICATION__' };
-      }
-    });
-
-    this.tools.set('sub_agent_call', {
-      id: 'sub_agent_call',
-      name: 'sub_agent_call',
-      description: 'Delegate a complex sub-task to a specific AI provider (openai, anthropic, gemini, etc.).',
-      execute: async ({ provider, prompt }) => {
-        // This is handled internally in GiaBrain.generate loop, but registered here for the prompt.
-        return { success: true, content: 'Delegation request sent to brain loop' };
       }
     });
   }
