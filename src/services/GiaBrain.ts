@@ -1,4 +1,3 @@
-import { CapacitorHttp } from '@capacitor/core';
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
@@ -196,20 +195,6 @@ class GiaBrain {
       msgs.push({ role: 'user', content: req.prompt });
     }
     return msgs;
-  }
-
-  async fetchURL(url: string): Promise<string> {
-    try {
-      const res = await CapacitorHttp.get({ url, connectTimeout: 10000, readTimeout: 10000 });
-      if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
-      const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      doc.querySelectorAll('script,style,nav,footer,header,aside').forEach(el => el.remove());
-      const text = doc.body?.innerText ?? doc.body?.textContent ?? '';
-      return `[Source: ${url}]\n\n${text.replace(/\s{3,}/g, '\n\n').trim().slice(0, 10000)}`;
-    } catch (e) {
-      return `Error fetching URL: ${e instanceof Error ? e.message : String(e)}`;
-    }
   }
 
   private retryFetch(url: string, options: RequestInit, retries = 1): Promise<Response> {

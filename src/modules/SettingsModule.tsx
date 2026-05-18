@@ -284,6 +284,10 @@ const MemorySection: React.FC = () => {
     fact: '#8888a0',
     preference: '#ec4899',
     session_summary: '#6366f1',
+    project: '#22d3ee',
+    correction: '#fb923c',
+    emotion: '#f472b6',
+    goal: '#34d399',
   };
 
   return (
