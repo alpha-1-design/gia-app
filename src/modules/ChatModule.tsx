@@ -4,10 +4,11 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, FileCode,
-  Terminal
+  Terminal, Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
+import { ThinkingPanel } from '../components/ThinkingPanel';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
 import { useGiaStore, Message, Skill } from '../store/useGiaStore';
@@ -56,6 +57,7 @@ const ChatModule: React.FC = () => {
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
   const [showThoughts, setShowThoughts] = useState<Set<string>>(new Set());
+  const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -475,6 +477,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onStream: (chunk) => processStreamChunk(chunk),
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
+          setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
           updateMessage(sessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           setShowConsole(true);
@@ -528,6 +531,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
       setLoading(false);
       setStreamingMsgId(null);
       setIntentState('idle');
@@ -904,28 +908,18 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                         <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
                         <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
                       </div>
-                      {msg.thoughts && (
-                        <div className="mt-2">
-                          <button
-                            onClick={() => setShowThoughts(prev => {
-                              const n = new Set(prev);
-                              n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id);
-                              return n;
-                            })}
-                            className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-lg transition-colors"
-                            style={{ background: 'rgba(251,191,36,0.1)', color: '#f59e0b', border: '1px solid rgba(251,191,36,0.2)' }}
-                          >
-                            <Brain size={10} />
-                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} thinking
-                          </button>
-                          {showThoughts.has(msg.id) && (
-                            <div className="mt-1.5 p-2.5 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)', color: '#d4a574' }}>
-                              {msg.thoughts}
-                              {msg.thinking && <span className="animate-pulse">▍</span>}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {liveThoughts[msg.id] || msg.thoughts ? (
+                        <ThinkingPanel
+                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                          isLive={!!liveThoughts[msg.id]}
+                          isExpanded={showThoughts.has(msg.id) || !!liveThoughts[msg.id]}
+                          onToggle={() => setShowThoughts(prev => {
+                            const n = new Set(prev);
+                            n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id);
+                            return n;
+                          })}
+                        />
+                      ) : null}
                     </div>
                   ) : msg.error ? (
                     <div className="flex flex-col gap-2">
@@ -959,26 +953,17 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                           )}
                         </>
                       )}
-                      {msg.thoughts && (
-                        <div className="mt-2">
-                          <button
-                            onClick={() => setShowThoughts(prev => {
-                              const n = new Set(prev);
-                              n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id);
-                              return n;
-                            })}
-                            className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-lg transition-colors"
-                            style={{ background: 'rgba(251,191,36,0.1)', color: '#f59e0b', border: '1px solid rgba(251,191,36,0.2)' }}
-                          >
-                            <Brain size={10} />
-                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} thinking
-                          </button>
-                          {showThoughts.has(msg.id) && (
-                            <div className="mt-1.5 p-2.5 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)', color: '#d4a574' }}>
-                              {msg.thoughts}
-                            </div>
-                          )}
-                        </div>
+                      {(liveThoughts[msg.id] || msg.thoughts) && (
+                        <ThinkingPanel
+                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                          isLive={!!liveThoughts[msg.id]}
+                          isExpanded={showThoughts.has(msg.id)}
+                          onToggle={() => setShowThoughts(prev => {
+                            const n = new Set(prev);
+                            n.has(msg.id) ? n.delete(msg.id) : n.add(msg.id);
+                            return n;
+                          })}
+                        />
                       )}
                       {msg.attachments?.filter(a => !a.preview).map(att => (
                         <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 
-export type MemoryCategory = 'profile' | 'subject' | 'score' | 'weak_area' | 'fact' | 'preference' | 'session_summary';
+export type MemoryCategory = 'profile' | 'subject' | 'score' | 'weak_area' | 'fact' | 'preference' | 'session_summary' | 'project' | 'correction' | 'emotion' | 'goal';
 
 export interface MemoryEntry {
   id: string;
@@ -26,7 +26,7 @@ interface MemoryState {
   queryMemories: (query: string) => MemoryEntry[];
   deleteMemory: (id: string) => void;
   clearMemories: () => void;
-  getRelevantContext: () => string;
+  getRelevantContext: (query?: string) => string;
 }
 
 export const useMemoryStore = create<MemoryState>()(
@@ -78,30 +78,30 @@ export const useMemoryStore = create<MemoryState>()(
 
       clearMemories: () => set({ memories: [] }),
 
-      getRelevantContext: () => {
+      getRelevantContext: (query?: string) => {
         const { memories } = get();
-        const top = [...memories].sort((a, b) => b.confidence - a.confidence).slice(0, 10);
+        if (memories.length === 0) return '';
+
+        let scored = memories.map(m => ({ ...m, relevanceScore: m.confidence }));
+
+        // Boost memories matching keywords in current query
+        if (query) {
+          const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          scored = scored.map(m => {
+            const text = `${m.key} ${m.value}`.toLowerCase();
+            const matches = words.filter(w => text.includes(w)).length;
+            return { ...m, relevanceScore: m.confidence + (matches * 0.2) };
+          });
+        }
+
+        const top = scored
+          .sort((a, b) => b.relevanceScore - a.relevanceScore)
+          .slice(0, 15);
+
         if (top.length === 0) return '';
 
-        const sections: string[] = [];
-        const byCategory = (cat: MemoryCategory) => top.filter((m) => m.category === cat);
-
-        const profile = byCategory('profile');
-        if (profile.length > 0) sections.push(`GIA knows you: ${profile.map((m) => `${m.key}: ${m.value}`).join(', ')}`);
-
-        const subjects = byCategory('subject');
-        if (subjects.length > 0) sections.push(`Studying: ${subjects.map((m) => m.value).join(', ')}`);
-
-        const weak = byCategory('weak_area');
-        if (weak.length > 0) sections.push(`Weak areas: ${weak.map((m) => m.value).join(', ')}`);
-
-        const scores = byCategory('score');
-        if (scores.length > 0) sections.push(`Recent scores: ${scores.map((m) => `${m.key}: ${m.value}`).join(', ')}`);
-
-        const facts = byCategory('fact').slice(0, 5);
-        if (facts.length > 0) sections.push(`Facts: ${facts.map((m) => m.value).join(', ')}`);
-
-        return sections.length > 0 ? `\n\nStored memory:\n${sections.join('\n')}` : '';
+        const lines = top.map(m => `- ${m.key}: ${m.value}`);
+        return `\n\n## What GIA remembers about you:\n${lines.join('\n')}`;
       },
     }),
     {

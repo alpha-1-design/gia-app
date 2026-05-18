@@ -83,7 +83,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
         const hadResult = result?.matches?.length && result.matches[0]?.length > 0;
         if (hadResult) {
-          processTranscript(result.matches[0]);
+          processTranscript(result.matches![0]);
         }
 
         const gap = Date.now() - lastResultRef.current;

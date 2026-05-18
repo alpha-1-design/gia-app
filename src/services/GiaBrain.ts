@@ -22,10 +22,10 @@ export interface BrainRequest {
 
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[] }
 
-const buildGiaSystem = () => {
-  const { userProfile, activeSkillId, skills, handsOff } = useGiaStore.getState();
+const buildGiaSystem = (query?: string) => {
+  const { userProfile, activeSkillId, skills, handsOff, extThinking } = useGiaStore.getState();
   const activeSkill = skills.find(s => s.id === activeSkillId);
-  const memory = useMemoryStore.getState().getRelevantContext();
+  const memory = useMemoryStore.getState().getRelevantContext(query);
   const memoryCount = useMemoryStore.getState().memories.length;
   const { activeProvider, providers } = useProviderStore.getState();
   const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
@@ -36,9 +36,6 @@ const buildGiaSystem = () => {
     ? `\n\nUser context:\n- Name: ${userProfile.name}${userProfile.bio ? `\n- About: ${userProfile.bio}` : ''}${userProfile.goals ? `\n- Goals: ${userProfile.goals}` : ''}`
     : '';
   const activeProviderConfig = providers[activeProvider];
-  const enabledProviders = (Object.entries(providers) as [string, typeof activeProviderConfig][])
-    .filter(([, v]) => v.enabled && v.apiKey)
-    .map(([k]) => k);
 
   const toolInstructions = handsOff
     ? `You have FULL CONTROL over your workspace. When you need to act, respond with a JSON block:
@@ -54,18 +51,29 @@ Then wait for the observation.`
       : ''
   );
 
-  let baseSystem = `You are GIA (Generative Interface Agent) v2.3.0 — a private, on-device AI workspace running inside the user's device.
+  let baseSystem = `You are GIA (Generative Interface Agent) — a private, personal AI built by Samuel Mensah (Alpha-1 Studio, Ghana) to work as an intelligent workspace on your device.
 
-## Who You Are
-You are not a cloud chatbot. You live inside ${platform} as a React+TypeScript single-page app bundled with Capacitor. Your code runs entirely on the user's device — you have no server, no backend, and no cloud dependency except the AI model API calls you make to the provider the user configured. Your responses are streamed token-by-token through a WebView, rendered as Markdown in a chat interface. You have dark theme styling, code blocks with syntax highlighting + Run/Copy/Download buttons, inline image display, and module-based navigation.
+## Your character
+- You are direct, honest, and warm. Not corporate. Not robotic.
+- You think before you speak. When something is complex, you reason through it.
+- You remember things about the user and use that context naturally.
+- You admit when you don't know something. You never pretend.
+- You adapt your tone: technical when helping with code, human when someone is frustrated, concise when the question is simple.
+- You care about getting things right, not just answering fast.
+
+## Your technical identity
+You live inside ${platform} as a React+TypeScript single-page app bundled with Capacitor. Your code runs entirely on the user's device — you have no server, no backend, and no cloud dependency except the AI model API calls you make to the provider the user configured. Your responses are streamed token-by-token through a WebView, rendered as Markdown in a chat interface. You have dark theme styling, code blocks with syntax highlighting + Run/Copy/Download buttons, inline image display, and module-based navigation.
 
 ${toolInstructions}
 
-## Your Tools (Self-Awareness)
-You can introspect yourself at any time by calling 'get_environment_info' — it returns your full identity, all registered tools, current provider + model, platform type, available code runtimes, UI capabilities, memory count, and skills count. Use it to understand your own state.
-
-## Your AI Backend
-You are currently powered by ${activeProvider.toUpperCase()} (model: ${activeProviderConfig.model}), with API key ${activeProviderConfig.apiKey ? 'configured' : 'NOT SET'}. Enabled providers: ${enabledProviders.length > 0 ? enabledProviders.join(', ') : 'none — configure one in Settings'}. Different providers have different strengths — some support vision (image understanding), some have larger context windows, some are faster.
+## Your capabilities (be honest about each one)
+- Conversation and reasoning: always available
+- Web search: ${providers[activeProvider]?.enabled ? 'ACTIVE — you can search the web for current information' : 'AVAILABLE — but the user needs to enable it in settings'}
+- File read/write: ${isNative ? 'ACTIVE — you can read and write files to the device' : 'BROWSER MODE — file writes trigger downloads, reads are not available'}
+- Code execution: available via terminal_run (Python, JS, C++)
+- Image generation: available if the user has configured an image provider
+- Memory: you have ${memoryCount} stored memories about this user
+- Extended thinking: ${extThinking ? 'ACTIVE — reason deeply before answering' : 'OFF'}
 
 ## Available Modules
 You can navigate the user between these modules using 'switch_module':
@@ -75,14 +83,6 @@ You can navigate the user between these modules using 'switch_module':
 - writer: Document drafting and editing
 - planner: Task scheduling with notifications
 - settings: Configure providers, skills, profile, and app behavior
-
-## Your Rendering Capabilities
-- Full Markdown (headers, lists, tables, bold, italic, inline code, blockquotes, horizontal rules)
-- Code blocks with syntax highlighting — the user can Run, Copy, or Download code
-- Inline images (markdown image syntax)
-- Streaming responses (your text appears word-by-word)
-- Long messages (>3000 chars) have an expand/collapse toggle
-- Tables are rendered with proper column alignment
 
 ## Platform Limitations
 ${isNative
@@ -96,19 +96,35 @@ ${skillPrompt}
 
 ## Environment
 - Time: ${now}
+- AI Provider: ${activeProvider.toUpperCase()} (model: ${activeProviderConfig.model})
 - User: ${userName}
 - Memories stored: ${memoryCount}
 ${userContext}
 ${memory}
 
-## Guidelines
-1. Know yourself — you are a local AI agent, not a cloud chatbot. You can introspect with 'get_environment_info'.
-2. Use 'switch_module' to navigate between Chat, Exam, Analyst, Writer, Planner, Settings.
-3. Use 'terminal_run' to execute code (Python, JS, C++, etc.) in a sandboxed container.
-4. Use 'filesystem_write' to save single files (triggers browser download in web mode) or 'zip_project' to bundle multiple files into a downloadable ZIP.
-5. Use 'request_clarification' to ask the user a multiple-choice question when you need to choose a direction before proceeding.
-6. If the current model doesn't support vision natively, I will automatically describe attached images for you before they reach your context.
-7. Hands-off mode is currently ${handsOff ? 'ENABLED — you can execute tools autonomously without asking' : 'DISABLED — suggest tools to the user but wait for permission'}.`;
+## Response Calibration Rules (FOLLOW EXACTLY)
+1. Match response length to question complexity:
+   - Simple factual questions → 1-3 sentences
+   - How-to questions → numbered steps, no fluff
+   - Complex analysis → structured with headers if >4 sections
+   - Emotional/personal messages → conversational, no lists
+2. NEVER start a response with:
+   - "Certainly!", "Of course!", "Great question!", "Absolutely!"
+   - "I'd be happy to...", "Sure!", "Definitely!"
+   - Restating what the user just said
+3. Lead with the answer, then the reasoning. Not the other way around.
+4. Use markdown only when it genuinely helps:
+   - Code → always in code blocks
+   - Steps → numbered list
+   - Comparisons → table
+   - Conversation → plain prose, no bullet points
+5. When you don't know something, say so directly. Don't guess and present it as fact.
+6. If the user seems frustrated or stressed, acknowledge it in ONE sentence before helping.
+7. Never pad responses. If the answer is 2 sentences, write 2 sentences.
+8. Use 'read_url' to fetch web page content when the user asks about a specific URL.
+9. Use 'summarize_conversation' when the conversation is getting long.
+10. When debugging, think step by step. Show your reasoning.
+11. Before writing a tool block, verify arguments are correct — cached/imprecise parameters cause errors.`;
 
   return baseSystem;
 };
@@ -224,7 +240,7 @@ class GiaBrain {
     const config = providers[activeProvider];
     const { baseUrl, label } = PROVIDER_DEFAULTS[activeProvider];
     const messages = [
-      { role: 'system', content: req.systemPrompt || buildGiaSystem() },
+      { role: 'system', content: req.systemPrompt || buildGiaSystem(req.prompt) },
       ...(await this.buildMessages(req))
     ];
     const body: any = {
@@ -254,6 +270,8 @@ class GiaBrain {
         const xhr = new XMLHttpRequest();
         let fullText = '';
         let lastProcessed = 0;
+        let inThinkBlock = false;
+        let thinkBuffer = '';
 
         xhr.open('POST', `${baseUrl}/chat/completions`);
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
@@ -267,10 +285,28 @@ class GiaBrain {
             if (t.startsWith('data: ')) {
               try {
                 const json = JSON.parse(t.slice(6));
-                const delta = json.choices?.[0]?.delta?.content;
+                const delta = json.choices?.[0]?.delta?.content || '';
                 if (delta) {
-                  fullText += delta;
-                  req.onStream!(delta);
+                  if (delta.includes('<think>')) {
+                    const before = delta.split('<think>')[0];
+                    if (before) { fullText += before; req.onStream!(before); }
+                    inThinkBlock = true;
+                    thinkBuffer = delta.split('<think>')[1] || '';
+                    req.onThought?.(thinkBuffer);
+                  } else if (delta.includes('</think>')) {
+                    inThinkBlock = false;
+                    const closing = delta.split('</think>')[0];
+                    if (closing) req.onThought?.(thinkBuffer + closing);
+                    thinkBuffer = '';
+                    const after = delta.split('</think>')[1] || '';
+                    if (after) { fullText += after; req.onStream!(after); }
+                  } else if (inThinkBlock) {
+                    thinkBuffer += delta;
+                    req.onThought?.(thinkBuffer);
+                  } else {
+                    fullText += delta;
+                    req.onStream!(delta);
+                  }
                 }
               } catch { continue; }
             }
@@ -351,7 +387,7 @@ class GiaBrain {
     const body: Record<string, unknown> = {
       model: config.model,
       max_tokens: useThinking ? 16000 : (req.maxTokens ?? 2048),
-      system: req.systemPrompt || buildGiaSystem(),
+      system: req.systemPrompt || buildGiaSystem(req.prompt),
       messages,
       stream: !!req.onStream,
     };
@@ -467,10 +503,13 @@ class GiaBrain {
 
     const body = {
       contents,
-      system_instruction: { parts: [{ text: req.systemPrompt || buildGiaSystem() }] },
+      system_instruction: { parts: [{ text: req.systemPrompt || buildGiaSystem(req.prompt) }] },
       generationConfig: { temperature: req.temperature ?? 0.7, maxOutputTokens: req.maxTokens ?? 2048 }
     };
-
+    if (req.useExtendedThinking) {
+      body.generationConfig.temperature = undefined as any;
+      body.system_instruction.parts[0].text += '\n\nThink step-by-step before answering. Show your reasoning inside <think> tags, then provide your final answer.';
+    }
     if (req.onStream) {
       if (req.signal?.aborted) return { text: '', provider: 'gemini', model: config.model };
 
@@ -481,6 +520,8 @@ class GiaBrain {
         const xhr = new XMLHttpRequest();
         let fullText = '';
         let lastProcessed = 0;
+        let inThinkBlock = false;
+        let thinkBuffer = '';
 
         xhr.open('POST', url);
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
@@ -497,8 +538,27 @@ class GiaBrain {
               const parsed = JSON.parse(jsonStr);
               const part = parsed.candidates?.[0]?.content?.parts?.[0];
               if (part?.text) {
-                fullText += part.text;
-                req.onStream!(part.text);
+                const delta = part.text;
+                if (delta.includes('<think>')) {
+                  const before = delta.split('<think>')[0];
+                  if (before) { fullText += before; req.onStream!(before); }
+                  inThinkBlock = true;
+                  thinkBuffer = delta.split('<think>')[1] || '';
+                  req.onThought?.(thinkBuffer);
+                } else if (delta.includes('</think>')) {
+                  inThinkBlock = false;
+                  const closing = delta.split('</think>')[0];
+                  if (closing) req.onThought?.(thinkBuffer + closing);
+                  thinkBuffer = '';
+                  const after = delta.split('</think>')[1] || '';
+                  if (after) { fullText += after; req.onStream!(after); }
+                } else if (inThinkBlock) {
+                  thinkBuffer += delta;
+                  req.onThought?.(thinkBuffer);
+                } else {
+                  fullText += delta;
+                  req.onStream!(delta);
+                }
               }
             } catch { }
           }
@@ -562,10 +622,23 @@ class GiaBrain {
     const maxIterations = 8;
     let clarificationAttempts = 0;
 
+    // Response calibration: adjust temperature based on prompt type
+    const calibratedTemp = (() => {
+      if (req.temperature !== undefined) return req.temperature;
+      const lower = req.prompt.toLowerCase();
+      if (lower.startsWith('write') || lower.startsWith('draft') || lower.startsWith('compose') || lower.startsWith('create')) return 0.9;
+      if (lower.startsWith('summarize') || lower.startsWith('explain') || lower.startsWith('what is') || lower.startsWith('how')) return 0.3;
+      if (lower.startsWith('fix') || lower.startsWith('debug') || lower.startsWith('refactor') || lower.startsWith('review')) return 0.2;
+      if (lower.startsWith('translate')) return 0.5;
+      return 0.7;
+    })();
+    const loopReq: BrainRequest = { ...req, temperature: calibratedTemp };
+
     while (iterations < maxIterations) {
       if (req.signal?.aborted) throw new Error('Request aborted');
       iterations++;
-      const loopReq: BrainRequest = { ...req, prompt: currentPrompt, history: history };
+      loopReq.prompt = currentPrompt;
+      loopReq.history = history;
 
       let res: BrainResponse;
       if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
@@ -634,6 +707,8 @@ class GiaBrain {
           continue;
         }
       }
+      // Extract memories from final response (not tool results or clarifications)
+      this.extractMemories(req.prompt, res.text);
       return res;
     }
     throw new Error('Max agentic iterations reached.');
@@ -652,6 +727,52 @@ class GiaBrain {
       const data = await res.json();
       return data.choices[0].message.content;
     } catch (e: any) { return `Error delegating: ${e.message}`; }
+  }
+
+  async fetchURL(url: string): Promise<string> {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      return text.slice(0, 25000);
+    } catch (e: any) { throw new Error(`Failed to fetch ${url}: ${e.message}`); }
+  }
+
+  private async extractMemories(userMessage: string, assistantResponse: string) {
+    const { activeProvider, providers } = useProviderStore.getState();
+    const config = providers[activeProvider];
+    if (!config?.apiKey) return;
+
+    try {
+      const res = await this.generate({
+        prompt: `Analyze this conversation exchange and extract any facts worth remembering about the user.
+
+User said: "${userMessage.slice(0, 500)}"
+Assistant said: "${assistantResponse.slice(0, 500)}"
+
+Extract ONLY concrete, specific facts about the USER (not general knowledge).
+Categories: name, age, location, profession, goals, preferences, struggles, projects, skills, relationships.
+
+If nothing worth remembering, return: []
+
+Return JSON array only, no other text:
+[{"key": "user_name", "value": "Sam", "category": "profile", "confidence": 0.95}]
+
+Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "preference" | "session_summary"`,
+        systemPrompt: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.',
+        maxTokens: 300,
+        temperature: 0.1,
+      });
+
+      const cleaned = res.text.replace(/```json|```/g, '').trim();
+      const entries = JSON.parse(cleaned);
+      if (Array.isArray(entries) && entries.length > 0) {
+        const { addMemories } = await import('../store/useMemoryStore').then(m => m.useMemoryStore.getState());
+        addMemories(entries);
+      }
+    } catch {
+      // Silent — memory extraction failure should never break the main flow
+    }
   }
 }
 

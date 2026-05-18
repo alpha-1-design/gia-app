@@ -284,6 +284,65 @@ class GiaTools {
       }
     });
 
+    this.tools.set('forget_memory', {
+      id: 'forget_memory', name: 'forget_memory',
+      description: 'Delete a specific memory or all memories matching a topic.',
+      execute: async ({ key, all = false }) => {
+        const store = (await import('../store/useMemoryStore')).useMemoryStore.getState();
+        if (all) {
+          store.clearMemories();
+          return { success: true, content: 'All memories cleared.' };
+        }
+        const matches = store.queryMemories(key);
+        matches.forEach(m => store.deleteMemory(m.id));
+        return {
+          success: true,
+          content: matches.length > 0
+            ? `Forgot ${matches.length} memor${matches.length === 1 ? 'y' : 'ies'} about "${key}".`
+            : `No memories found matching "${key}".`
+        };
+      }
+    });
+
+    this.tools.set('read_url', {
+      id: 'read_url', name: 'read_url',
+      description: 'Fetch and read the text content of a URL. Returns up to 25,000 characters.',
+      execute: async ({ url }) => {
+        try {
+          const brain = (await import('./GiaBrain')).default;
+          const content = await brain.fetchURL(url);
+          return { success: true, content };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
+    this.tools.set('summarize_conversation', {
+      id: 'summarize_conversation', name: 'summarize_conversation',
+      description: 'Generate a concise summary of the current conversation to save context space.',
+      execute: async ({ messages: msgs }) => {
+        try {
+          const { activeProvider, providers } = (await import('../store/useProviderStore')).useProviderStore.getState();
+          const config = providers[activeProvider];
+          if (!config?.apiKey) return { success: false, content: '', error: 'No provider configured.' };
+          const textToSummarize = Array.isArray(msgs) ? msgs.map((m: any) => `${m.role}: ${typeof m.content === 'string' ? m.content.slice(0, 1000) : ''}`).join('\n').slice(0, 15000) : '';
+          const res = await fetch(`${PROVIDER_DEFAULTS.openai.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: config.model, messages: [{ role: 'system', content: 'Summarize this conversation concisely. Capture key facts, decisions, and user preferences.' }, { role: 'user', content: textToSummarize }], temperature: 0.3, max_tokens: 512 }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const summary = data.choices?.[0]?.message?.content || data.content || 'Summary unavailable.';
+          return { success: true, content: summary };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
     this.tools.set('request_clarification', {
       id: 'request_clarification', name: 'request_clarification',
       description: 'Ask the user a clarifying question when you need more information.',

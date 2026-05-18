@@ -447,7 +447,6 @@ const CodeExecutionSection: React.FC<{ codeEndpoint: string; setCodeEndpoint: (v
 
 import TTSService from '../services/TTSService';
 import BiometricService from '../services/BiometricService';
-import { useGiaStore } from '../store/useGiaStore';
 
 const VoiceSection: React.FC = () => {
   const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');
