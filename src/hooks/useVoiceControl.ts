@@ -89,7 +89,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         const gap = Date.now() - lastResultRef.current;
         const backoff = hadResult ? 1000 : Math.max(2000, 2000 - gap);
 
-        if (activeRef.current && (keepListening || wakeWord)) {
+        if (activeRef.current && keepListening) {
           timeoutRef.current = setTimeout(listenOnce, backoff);
         } else {
           stopListening();
@@ -97,13 +97,13 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       }
     } catch (e) {
       console.error('Speech recognition error:', e);
-      if (activeRef.current && (keepListening || wakeWord)) {
+      if (activeRef.current && keepListening) {
         timeoutRef.current = setTimeout(listenOnce, 2000);
       } else {
         stopListening();
       }
     }
-  }, [isCapacitor, processTranscript, keepListening, stopListening, wakeWord]);
+  }, [isCapacitor, processTranscript, keepListening, stopListening]);
 
   const startListening = useCallback(async () => {
     if (activeRef.current) return;

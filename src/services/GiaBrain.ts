@@ -160,12 +160,12 @@ class GiaBrain {
     // OpenRouter & others: check by model name patterns
     const visionPatterns = [
       'vision', 'gpt-4o', 'gpt-4.1', 'claude-3', 'claude-4', 'opus',
-      'gemini', 'pixtral', 'llava', '/vl', '-vl', 'vl-',
+      'gemini', 'gemma-3', 'pixtral', 'llava', '/vl', '-vl', 'vl-',
       'florence', 'cogvlm', 'qwen-vl', 'qwen2-vl',
-      'llama-3.2-11b', 'llama-3.2-90b',
+      'llama-3.2', 'llama-4',
       'idefics', 'fuyu', 'palmyra-vision', 'minicpm',
       'glm-4v', 'internvl', 'deepseek-vl', 'phi-3-vision',
-      'molmo', 'dpo-vision',
+      'molmo', 'dpo-vision', 'reka', 'aria',
     ];
     return visionPatterns.some(pattern => m.includes(pattern));
   }
@@ -336,7 +336,9 @@ class GiaBrain {
       throw new Error(e?.error?.message || `${label} error ${res.status}`);
     }
     const data = await res.json();
-    return { text: data.choices[0].message.content, provider: activeProvider, model: config.model };
+    const content = data.choices?.[0]?.message?.content;
+    if (!content?.trim()) throw new Error(`${label} returned empty response`);
+    return { text: content, provider: activeProvider, model: config.model };
   }
 
   private async callAnthropic(req: BrainRequest): Promise<BrainResponse> {
@@ -462,6 +464,7 @@ class GiaBrain {
     }
     const data = await res.json() as any;
     const text = data.content?.find((b: any) => b.type === 'text')?.text ?? '';
+    if (!text.trim()) throw new Error('Anthropic returned empty response');
     return { text, provider: 'anthropic', model: config.model };
   }
 
@@ -591,6 +594,7 @@ class GiaBrain {
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!text.trim()) throw new Error('Gemini returned empty response');
     return { text, provider: 'gemini', model: config.model };
   }
 

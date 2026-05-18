@@ -281,6 +281,7 @@ const ChatModule: React.FC = () => {
         },
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
+          setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
           updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
         },
       });
@@ -609,6 +610,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         },
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
+          setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
           updateMessage(sessionId, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           setShowConsole(true);

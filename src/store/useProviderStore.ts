@@ -92,17 +92,33 @@ export const useProviderStore = create<GiaProviderState>()(
       activeProvider: 'openrouter',
 
       setProviderKey: (p, key) =>
-        set((s) => ({
-          providers: { ...s.providers, [p]: { ...s.providers[p], apiKey: key, enabled: key.trim().length > 0 } },
-        })),
+        set((s) => {
+          const enabled = key.trim().length > 0;
+          const providers = { ...s.providers, [p]: { ...s.providers[p], apiKey: key, enabled } };
+          // Auto-switch to this provider if it's newly enabled and no other provider is active
+          const activeProvider = enabled && !s.providers[p].enabled
+            ? p
+            : s.activeProvider;
+          return { providers, activeProvider };
+        }),
       setProviderModel: (p, model) =>
         set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], model } } })),
       setActiveProvider: (p) => set({ activeProvider: p }),
       disconnectProvider: (p) =>
-        set((s) => ({
-          providers: { ...s.providers, [p]: { ...s.providers[p], apiKey: '', enabled: false } },
-          availableModels: { ...s.availableModels, [p]: STATIC_MODELS[p] },
-        })),
+        set((s) => {
+          const providers = { ...s.providers, [p]: { ...s.providers[p], apiKey: '', enabled: false } };
+          let activeProvider = s.activeProvider;
+          if (p === s.activeProvider) {
+            const fallback = (Object.entries(providers) as [ProviderType, ProviderConfig][])
+              .find(([, cfg]) => cfg.enabled && cfg.apiKey);
+            activeProvider = fallback ? fallback[0] : 'openrouter';
+          }
+          return {
+            providers,
+            activeProvider,
+            availableModels: { ...s.availableModels, [p]: STATIC_MODELS[p] },
+          };
+        }),
 
       fetchModels: async (p): Promise<ModelOption[]> => {
         const { providers } = get();
