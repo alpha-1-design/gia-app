@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+gia-become-claude-spec.md
+gia-bug-report.md
