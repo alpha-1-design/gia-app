@@ -26,10 +26,10 @@ class TTSService {
 
   isEnabled() { return this.enabled; }
 
-  async speak(text: string) {
+  async speak(text: string, isStreaming: boolean = false) {
     if (!this.enabled) return;
     const cleanText = cleanTTS(text);
-    if (!cleanText) return;
+    if (!cleanText || cleanText.length < 2) return;
 
     if (isNative) {
       try {
@@ -37,7 +37,7 @@ class TTSService {
       } catch (e) { console.error('TTS native error:', e); }
     } else {
       try {
-        window.speechSynthesis?.cancel();
+        if (!isStreaming) window.speechSynthesis?.cancel();
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'en-US';
         utterance.rate = 1.0;

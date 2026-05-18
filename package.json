@@ -1,7 +1,7 @@
 {
   "name": "gia-app",
   "private": true,
-  "version": "2.3.0.0",
+  "version": "2.3.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

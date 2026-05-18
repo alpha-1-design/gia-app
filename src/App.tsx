@@ -173,7 +173,7 @@ const App: React.FC = () => {
               className="gia-pill gia-pill-accent"
               style={{ fontSize: '8px', padding: '2px 6px' }}
             >
-              v2.3.0.0
+              v2.3.1.0
             </span>
           </div>
           <p

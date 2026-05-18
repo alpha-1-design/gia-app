@@ -1,8 +1,8 @@
-# GIA v2.3.0.0 — User Manual
+# GIA v2.3.1.0 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
-## 🚀 Version 2.3.0.0: The Neural Update
+## 🚀 Version 2.3.1.0: The Agentic Reasoning Update
 This version transforms GIA into a fully autonomous agent with persistent voice control and advanced tool capabilities.
 
 ## 🧠 Core Modules

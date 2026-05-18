@@ -36,7 +36,12 @@ const triggerDownload = (blob: Blob, filename: string) => {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => { blobUrls.delete(url); URL.revokeObjectURL(url); }, 10000);
+  setTimeout(() => {
+    if (blobUrls.has(url)) {
+      URL.revokeObjectURL(url);
+      blobUrls.delete(url);
+    }
+  }, 30000);
 };
 
 export interface ToolResult {
@@ -138,7 +143,7 @@ class GiaTools {
           const native = isNative();
           const info = {
             identity: {
-              name: 'GIA', fullName: 'Generative Interface Agent', version: '2.3.0.0',
+              name: 'GIA', fullName: 'Generative Interface Agent', version: '2.3.1.0',
               tagline: 'Private on-device AI workspace',
               platform: native ? 'Android (Capacitor)' : 'Browser (Web)',
               architecture: 'React 18 + TypeScript + Zustand + Vite + Capacitor',
@@ -270,10 +275,14 @@ class GiaTools {
           useGiaStore.getState().addNotification(`✅ ${filename} ready`);
 
           if (isNative()) {
-            const base64 = await blobToBase64(blob);
-            await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents });
-            useGiaStore.getState().addNotification(`✅ ${filename} saved to Documents`);
-            return { success: true, content: `Created ${filename} and saved to your Documents folder.` };
+            try {
+              const base64 = await blobToBase64(blob);
+              await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents });
+              useGiaStore.getState().addNotification(`✅ ${filename} saved to Documents`);
+              return { success: true, content: `Created ${filename} and saved to your Documents folder.` };
+            } catch (e: any) {
+              return { success: false, content: '', error: `Native save failed: ${e.message}` };
+            }
           }
 
           triggerDownload(blob, filename);

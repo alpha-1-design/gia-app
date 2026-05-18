@@ -273,17 +273,22 @@ class GiaBrain {
                 const delta = json.choices?.[0]?.delta?.content || '';
                 if (delta) {
                   if (delta.includes('<think>')) {
-                    const before = delta.split('<think>')[0];
+                    const parts = delta.split('<think>');
+                    const before = parts[0];
                     if (before) { fullText += before; req.onStream!(before); }
                     inThinkBlock = true;
-                    thinkBuffer = delta.split('<think>')[1] || '';
+                    thinkBuffer = parts[1] || '';
                     req.onThought?.(thinkBuffer);
                   } else if (delta.includes('</think>')) {
                     inThinkBlock = false;
-                    const closing = delta.split('</think>')[0];
-                    if (closing) req.onThought?.(thinkBuffer + closing);
+                    const parts = delta.split('</think>');
+                    const closing = parts[0];
+                    if (closing) {
+                      thinkBuffer += closing;
+                      req.onThought?.(thinkBuffer);
+                    }
                     thinkBuffer = '';
-                    const after = delta.split('</think>')[1] || '';
+                    const after = parts[1] || '';
                     if (after) { fullText += after; req.onStream!(after); }
                   } else if (inThinkBlock) {
                     thinkBuffer += delta;
@@ -528,15 +533,20 @@ class GiaBrain {
               if (part?.text) {
                 const delta = part.text;
                 if (delta.includes('<think>')) {
-                  const before = delta.split('<think>')[0];
+                  const parts = delta.split('<think>');
+                  const before = parts[0];
                   if (before) { fullText += before; req.onStream!(before); }
                   inThinkBlock = true;
-                  thinkBuffer = delta.split('<think>')[1] || '';
+                  thinkBuffer = parts[1] || '';
                   req.onThought?.(thinkBuffer);
                 } else if (delta.includes('</think>')) {
                   inThinkBlock = false;
-                  const closing = delta.split('</think>')[0];
-                  if (closing) req.onThought?.(thinkBuffer + closing);
+                  const parts = delta.split('</think>');
+                  const closing = parts[0];
+                  if (closing) {
+                    thinkBuffer += closing;
+                    req.onThought?.(thinkBuffer);
+                  }
                   thinkBuffer = '';
                   const after = delta.split('</think>')[1] || '';
                   if (after) { fullText += after; req.onStream!(after); }
@@ -633,7 +643,7 @@ class GiaBrain {
       if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
       else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
       else res = await this.callOpenAICompat(loopReq);
-      
+
       const text = res.text;
       const toolMatch = text.match(/```tool\n([\s\S]*?)\n```/);
       if (toolMatch) {
@@ -699,8 +709,7 @@ class GiaBrain {
       // Extract memories from final response (not tool results or clarifications)
       this.extractMemories(req.prompt, res.text);
       return res;
-    }
-    throw new Error('Max agentic iterations reached.');
+    }    throw new Error('Max agentic iterations reached.');
   }
 
   private async delegateTask(providerName: string, prompt: string, signal?: AbortSignal): Promise<string> {
@@ -708,14 +717,41 @@ class GiaBrain {
     const targetProvider = providerName.toLowerCase();
     const config = providers[targetProvider as keyof typeof providers];
     if (!config || !config.enabled) return `Error: Provider ${providerName} is not configured.`;
+    
     try {
       const { baseUrl } = PROVIDER_DEFAULTS[targetProvider as keyof typeof PROVIDER_DEFAULTS];
-      const body = { model: config.model, messages: [{ role: 'system', content: 'You are a GIA sub-agent.' }, { role: 'user', content: prompt }], temperature: 0.7, max_tokens: 2048 };
-      const res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers: { 'Authorization': `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+      
+      // Sub-agents now get the full GIA system context but are instructed as specialized helpers
+      const systemPrompt = buildGiaSystem(prompt) + "\n\nYou are a specialized GIA sub-agent. Help the main agent fulfill the user's request. You have full tool access.";
+      
+      const body = { 
+        model: config.model, 
+        messages: [
+          { role: 'system', content: systemPrompt }, 
+          { role: 'user', content: prompt }
+        ], 
+        temperature: 0.7, 
+        max_tokens: 4096 
+      };
+
+      // For sub-agents, we do a single generation but we could also loop. 
+      // To keep it simple and avoid depth recursion limits, we do one deep turn.
+      const res = await fetch(`${baseUrl}/chat/completions`, { 
+        method: 'POST', 
+        headers: { 
+          'Authorization': `Bearer ${config.apiKey}`, 
+          'Content-Type': 'application/json' 
+        }, 
+        body: JSON.stringify(body), 
+        signal 
+      });
+      
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      return data.choices[0].message.content;
-    } catch (e: any) { return `Error delegating: ${e.message}`; }
+      return data.choices?.[0]?.message?.content || data.content || "Sub-agent failed to respond.";
+    } catch (e: any) { 
+      return `Error delegating: ${e.message}`; 
+    }
   }
 
   async fetchURL(url: string): Promise<string> {

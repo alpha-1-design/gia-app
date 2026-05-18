@@ -1,4 +1,4 @@
-# GIA v2.3.0 — Generative Interface Agent
+# GIA v2.3.1 — Generative Interface Agent
 
 **GIA (Generative Interface Agent)** is a private, on-device AI workspace that runs entirely inside a Capacitor + React + TypeScript shell. No server, no backend, no cloud dependency except the AI model API calls you explicitly configure.
 

@@ -267,7 +267,8 @@ const ChatModule: React.FC = () => {
             } else {
               const startIdx = remaining.indexOf('<think>');
               if (startIdx >= 0) {
-                displayChunk += remaining.slice(0, startIdx);
+                const before = remaining.slice(0, startIdx);
+                displayChunk += before;
                 remaining = remaining.slice(startIdx + 7);
                 inThinkBlock = true;
               } else {
@@ -277,7 +278,11 @@ const ChatModule: React.FC = () => {
             }
           }
           accumulated += displayChunk;
-          updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated || undefined);
+          const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
+          updateMessage(activeSessionId!, asstId, displayText || '…', thoughtsAccumulated || undefined);
+          if (displayChunk.trim().length > 1) {
+            TTSService.speak(displayChunk, true);
+          }
         },
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
@@ -454,7 +459,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           } else {
             const startIdx = remaining.indexOf('<think>');
             if (startIdx >= 0) {
-              displayChunk += remaining.slice(0, startIdx);
+              const before = remaining.slice(0, startIdx);
+              displayChunk += before;
               remaining = remaining.slice(startIdx + 7);
               inThinkBlock = true;
             } else {
@@ -466,6 +472,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         accumulated += displayChunk;
         const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
         updateMessage(sessionId!, asstId, displayText || '…', thoughtsAccumulated || undefined);
+        
+        // Chunked TTS: speak if we have a significant new piece of text
+        if (displayChunk.trim().length > 1) {
+          TTSService.speak(displayChunk, true);
+        }
       };
 
       const res = await GiaBrain.generate({
@@ -595,7 +606,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             } else {
               const startIdx = remaining.indexOf('<think>');
               if (startIdx >= 0) {
-                displayChunk += remaining.slice(0, startIdx);
+                const before = remaining.slice(0, startIdx);
+                displayChunk += before;
                 remaining = remaining.slice(startIdx + 7);
                 inThinkBlock = true;
               } else {
@@ -607,6 +619,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           accumulated += displayChunk;
           const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
           updateMessage(sessionId, asstId, displayText || '…', thoughtsAccumulated || undefined);
+          if (displayChunk.trim().length > 1) {
+            TTSService.speak(displayChunk, true);
+          }
         },
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;

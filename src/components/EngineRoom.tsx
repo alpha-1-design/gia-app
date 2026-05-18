@@ -26,7 +26,7 @@ const PROVIDER_ALIAS: Record<string, ProviderType> = {
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
-  mk('info', '║        GIA ENGINE ROOM  v2.3.0           ║'),
+  mk('info', '║        GIA ENGINE ROOM  v2.3.1           ║'),
   mk('info', '║   6 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
