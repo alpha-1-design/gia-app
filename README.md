@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![GIA Header](https://raw.githubusercontent.com/alpha-1-design/gia-app/main/public/gia-banner.png)
+![GIA Header](src/assets/hero.png)
 
 [![License: Private](https://img.shields.io/badge/License-Private-red.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.3.1.0-emerald.svg)](package.json)
