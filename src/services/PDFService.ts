@@ -59,9 +59,9 @@ export class PDFService {
     }
   }
 
-  private async extractFromBuffer(buffer: ArrayBuffer): Promise<string> {
+  async extractFromBuffer(buffer: ArrayBuffer): Promise<string> {
     try {
-      const loadingTask = pdfjsLib.getDocument({ data: buffer, disableWorker: true });
+      const loadingTask = pdfjsLib.getDocument({ data: buffer, useSystemFonts: true });
       const pdf = await loadingTask.promise;
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {

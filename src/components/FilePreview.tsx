@@ -25,6 +25,8 @@ const EXT_PREVIEW: Record<string, { icon: React.ReactNode; lang: string }> = {
 
 const getExt = (name: string) => name.split('.').pop()?.toLowerCase() || '';
 
+const isFile = (f: unknown): f is File => f instanceof File;
+
 const PreviewCard: React.FC<{ file: File | { name: string; type: string; data: string }; preview?: string }> = ({ file, preview }) => {
   const [expanded, setExpanded] = useState(false);
   const [extracted, setExtracted] = useState<string | null>(null);
@@ -37,9 +39,8 @@ const PreviewCard: React.FC<{ file: File | { name: string; type: string; data: s
     setLoading(true);
     const load = async () => {
       try {
-        const buf = file instanceof File ? await file.arrayBuffer() : new Uint8Array(atob(file.data.split(',')[1] || file.data).split('').map(c => c.charCodeAt(0))).buffer;
-        const fakeFile = new File([buf], file.name, { type: 'application/pdf' });
-        const text = await PDFService.extractText(fakeFile);
+        const buf = isFile(file) ? await file.arrayBuffer() : new Uint8Array(atob((file.data.split(',')[1] || file.data)).split('').map(c => c.charCodeAt(0))).buffer;
+        const text = await PDFService.extractFromBuffer(buf);
         setExtracted(text.slice(0, 3000));
       } catch { setExtracted('Could not extract text from PDF.'); }
       setLoading(false);
@@ -72,7 +73,7 @@ const PreviewCard: React.FC<{ file: File | { name: string; type: string; data: s
         </div>
       ) : meta.lang ? (
         <pre className="p-3 max-h-48 overflow-y-auto text-[11px] leading-relaxed font-mono" style={{ background: '#0d0d14', color: 'var(--gia-muted)' }}>
-          <code>{file instanceof File ? `[Binary file: ${file.type}]` : file.data.slice(0, 5000)}</code>
+          <code>{isFile(file) ? `[Binary file: ${(file as File).type}]` : (file as { data: string }).data.slice(0, 5000)}</code>
         </pre>
       ) : (
         <div className="p-6 flex flex-col items-center gap-2" style={{ color: 'var(--gia-muted-2)' }}>

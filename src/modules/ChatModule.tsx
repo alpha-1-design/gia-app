@@ -246,7 +246,7 @@ const ChatModule: React.FC = () => {
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
       setIntentState('responding');
-      await GiaBrain.generate({
+      const contRes = await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
         history: [...history, { role: 'assistant', content: lastContent }],
@@ -298,11 +298,11 @@ const ChatModule: React.FC = () => {
           inThinkBlock = false;
         }
         updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || accumulated, thoughtsAccumulated || undefined);
-        if (res.model) {
+        if (contRes.model) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
               s.id === activeSessionId
-                ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, model: res.model } : m) }
+                ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, model: contRes.model } : m) }
                 : s
             ),
           });

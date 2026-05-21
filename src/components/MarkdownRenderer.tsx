@@ -95,7 +95,7 @@ const MathBlock: React.FC<{ formula: string; inline: boolean }> = ({ formula, in
 };
 
 const MermaidDiagram: React.FC<{ definition: string }> = ({ definition }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLPreElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 

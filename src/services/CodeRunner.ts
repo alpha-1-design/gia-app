@@ -38,6 +38,16 @@ const HISTORY_KEY = 'gia-code-history';
 const uuid = () => crypto.randomUUID?.() ?? Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 10)).join('');
 const isNative = isNativePlatform();
 
+const LANGUAGE_MAP: Record<string, string> = {
+  py: 'python', python: 'python', py3: 'python', js: 'javascript', javascript: 'javascript',
+  ts: 'typescript', typescript: 'typescript', tsx: 'typescript', jsx: 'javascript',
+  cpp: 'c++', 'c++': 'c++', c: 'c', cs: 'c#', 'c#': 'c#',
+  java: 'java', rb: 'ruby', ruby: 'ruby', go: 'go', rs: 'rust', rust: 'rust',
+  php: 'php', swift: 'swift', kt: 'kotlin', kotlin: 'kotlin',
+  scala: 'scala', r: 'r', perl: 'perl', lua: 'lua', sh: 'bash', bash: 'bash',
+  sql: 'sql', html: 'html', css: 'css',
+};
+
 class CodeRunner {
   private static instance: CodeRunner;
   static getInstance() { if (!this.instance) this.instance = new CodeRunner(); return this.instance; }

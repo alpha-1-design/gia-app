@@ -5,6 +5,8 @@ import { isNativePlatform } from '../utils/helpers';
 import SearchService from './SearchService';
 import GiaTools, { ToolResult } from './GiaTools';
 
+const isNativeFn = isNativePlatform();
+
 export interface BrainRequest {
   prompt: string;
   systemPrompt?: string;
@@ -72,7 +74,7 @@ ${toolInstructions}
 ## Your capabilities (be honest about each one)
 - Conversation and reasoning: always available
 - Web search: ${providers[activeProvider]?.enabled ? 'ACTIVE — you can search the web for current information' : 'AVAILABLE — but the user needs to enable it in settings'}
-- File read/write: ${isNative ? 'ACTIVE — you can read and write files to the device' : 'BROWSER MODE — file writes trigger downloads, reads are not available'}
+- File read/write: ${isNativeFn ? 'ACTIVE — you can read and write files to the device' : 'BROWSER MODE — file writes trigger downloads, reads are not available'}
 - Code execution: available via terminal_run (Python, JS, C++)
 - Image generation: available if the user has configured an image provider
 - Memory: you have ${memoryCount} stored memories about this user
@@ -88,7 +90,7 @@ You can navigate the user between these modules using 'switch_module':
 - settings: Configure providers, skills, profile, and app behavior
 
 ## Platform Limitations
-${isNative
+${isNativeFn
   ? '- Full filesystem access (read/write/list files in Documents folder)\n- Push notifications via LocalNotifications\n- Biometric lock (fingerprint/face) for security\n- Text-to-speech (native TTS engine)\n- Speech recognition (microphone input)'
   : '- Browser mode: filesystem_read/list_files require the native app\n- Filesystem_write triggers a browser download instead of saving to device\n- zip_project creates a downloadable ZIP in the browser\n- Text-to-speech uses Web Speech API\n- Speech recognition uses Web Speech API\n- Biometric lock uses a PIN fallback instead of fingerprint/face'
 }

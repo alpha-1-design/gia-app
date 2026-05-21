@@ -100,7 +100,7 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
     input.click();
   };
 
-  const categoryCount = (cat: MemoryCategory | 'pinned') => {
+  const categoryCount = (cat: string) => {
     if (cat === 'pinned') return pinnedMemories.length;
     if (cat === 'all') return memories.length;
     return memories.filter(m => m.category === cat).length;
@@ -160,11 +160,11 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
             </div>
 
             <div className="flex gap-1.5 px-4 py-2 overflow-x-auto scrollbar-hide shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
-              {(['all', 'pinned', ...Object.keys(CATEGORY_META)] as const).map(cat => {
+              {(['all', 'pinned', ...Object.keys(CATEGORY_META)] as (MemoryCategory | 'pinned' | 'all')[]).map(cat => {
                 const active = filterCat === cat;
                 const meta = cat === 'all' ? { label: 'All', icon: null, color: '#a855f7' }
                   : cat === 'pinned' ? { label: 'Pinned', icon: <Pin size={9} />, color: '#a855f7' }
-                  : CATEGORY_META[cat as MemoryCategory];
+                  : CATEGORY_META[cat];
                 const count = categoryCount(cat);
                 if (count === 0 && cat !== 'all' && cat !== 'pinned') return null;
                 return (
