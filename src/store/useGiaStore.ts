@@ -87,6 +87,8 @@ interface GiaState {
   handsOff: boolean;
   clarification: Clarification | null;
   wakeWord: string;
+  customInstructions: string;
+  pinnedMemories: string[];
 
   setModule: (module: Module) => void;
   setClarification: (c: Clarification | null) => void;
@@ -119,6 +121,8 @@ interface GiaState {
   setSkill: (id: string | null) => void;
   addSkill: (skill: Skill) => void;
   removeSkill: (id: string) => void;
+  setCustomInstructions: (text: string) => void;
+  togglePinnedMemory: (id: string) => void;
   addConsoleLog: (log: { type: 'thought' | 'tool' | 'result' | 'error'; content: string }) => void;
   setShowConsole: (show: boolean) => void;
   clearConsole: () => void;
@@ -210,6 +214,8 @@ export const useGiaStore = create<GiaState>()(
       handsOff: false,
       clarification: null,
       wakeWord: localStorage.getItem('gia-wake-word') || 'hey gia',
+      customInstructions: localStorage.getItem('gia-custom-instructions') || '',
+      pinnedMemories: JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'),
 
       setModule: (module) => set({ currentModule: module }),
       setClarification: (c) => set({ clarification: c }),
@@ -222,6 +228,17 @@ export const useGiaStore = create<GiaState>()(
         localStorage.setItem('gia-wake-word', word);
         set({ wakeWord: word });
       },
+      setCustomInstructions: (text) => {
+        localStorage.setItem('gia-custom-instructions', text);
+        set({ customInstructions: text });
+      },
+      togglePinnedMemory: (id) => set((s) => {
+        const pinned = s.pinnedMemories.includes(id)
+          ? s.pinnedMemories.filter(pid => pid !== id)
+          : [...s.pinnedMemories, id];
+        localStorage.setItem('gia-pinned-memories', JSON.stringify(pinned));
+        return { pinnedMemories: pinned };
+      }),
       setSharedData: (data) => set({ sharedData: data }),
       updateSharedData: (data) => set((s) => ({ sharedData: { ...s.sharedData, ...data } })),
 

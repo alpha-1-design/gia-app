@@ -10,7 +10,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { extractJSON } from '../utils/helpers';
+import { extractJSON, isNativePlatform } from '../utils/helpers';
 
 interface DataPoint { label: string; value: number | string; color?: string; [key: string]: any }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
@@ -82,24 +82,24 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
   ];
 
   const exportCSV = async () => {
-    try {
-      const csv = 'Label,Value\n' + data.map(d => `"${d.label}",${d.value}`).join('\n');
-      const fileName = `analysis-${Date.now()}.csv`;
-      await Filesystem.writeFile({
-        path: fileName,
-        data: csv,
-        directory: Directory.Documents,
-        encoding: Encoding.UTF8,
-      });
-      addNotification(`📊 Analysis exported to Documents: ${fileName}`);
-    } catch (e) {
-      console.error('Export failed', e);
-      const csv = 'Label,Value\n' + data.map(d => `"${d.label}",${d.value}`).join('\n');
-      const blob = new Blob([csv], {type:'text/csv'});
-      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='analysis.csv';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    const csv = 'Label,Value\n' + data.map(d => `"${d.label}",${d.value}`).join('\n');
+    const fileName = `analysis-${Date.now()}.csv`;
+    if (isNativePlatform()) {
+      try {
+        await Filesystem.writeFile({ path: fileName, data: csv, directory: Directory.Documents, encoding: Encoding.UTF8 });
+        addNotification(`📊 Analysis exported: Documents/${fileName}`);
+        return;
+      } catch (e) {
+        console.error('Native export failed, falling back to browser download:', e);
+      }
     }
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    addNotification(`📊 Analysis exported: ${fileName}`);
   };
 
   return (

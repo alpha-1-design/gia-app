@@ -1,4 +1,5 @@
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import { isNativePlatform } from '../utils/helpers';
 
 const cleanTTS = (text: string) =>
   text
@@ -7,10 +8,7 @@ const cleanTTS = (text: string) =>
     .replace(/[*_#~`]/g, '')
     .trim();
 
-const isNative =
-  typeof window !== 'undefined' &&
-  typeof (window as any).Capacitor !== 'undefined' &&
-  (window as any).Capacitor.isNativePlatform?.();
+const isNative = isNativePlatform();
 
 class TTSService {
   private static instance: TTSService;

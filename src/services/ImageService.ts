@@ -1,4 +1,5 @@
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
+import { isNativePlatform } from '../utils/helpers';
 
 export interface ImageGenResult {
   url: string;
@@ -16,7 +17,7 @@ const IMAGE_MODELS: Record<string, string> = {
   opencode: '', // Not supported
 };
 
-const isNativePlatform = () => typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform();
+const isNative = isNativePlatform();
 
 class ImageService {
   private static instance: ImageService;

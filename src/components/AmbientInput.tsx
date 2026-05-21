@@ -1,11 +1,9 @@
 import React, { useRef, useEffect } from 'react';
 import { Send, Loader2, Square, Mic, MicOff } from 'lucide-react';
 import { useGiaStore, IntentState } from '../store/useGiaStore';
+import { isNativePlatform } from '../utils/helpers';
 
-const isNative =
-  typeof window !== 'undefined' &&
-  typeof (window as any).Capacitor !== 'undefined' &&
-  (window as any).Capacitor.isNativePlatform?.();
+const isNative = isNativePlatform();
 
 interface AmbientInputProps {
   value: string;

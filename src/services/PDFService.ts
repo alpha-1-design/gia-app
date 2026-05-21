@@ -1,7 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 const pdfVersion = pdfjsLib.version;
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+try {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+} catch { /* offline — will use fake worker */ }
 
 const extractPageText = (textContent: any): string => {
   const items: { str: string; x: number; y: number; width: number }[] = textContent.items.map((item: any) => ({
@@ -58,16 +60,32 @@ export class PDFService {
   }
 
   private async extractFromBuffer(buffer: ArrayBuffer): Promise<string> {
-    const loadingTask = pdfjsLib.getDocument({ data: buffer });
-    const pdf = await loadingTask.promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = extractPageText(textContent);
-      fullText += `[Page ${i}]\n${pageText}\n\n`;
+    try {
+      const loadingTask = pdfjsLib.getDocument({ data: buffer, disableWorker: true });
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = extractPageText(textContent);
+        fullText += `[Page ${i}]\n${pageText}\n\n`;
+      }
+      return fullText.trim();
+    } catch {
+      const decoder = new TextDecoder('utf-8');
+      const raw = decoder.decode(buffer);
+      const textStart = raw.indexOf('%PDF') >= 0;
+      if (textStart) {
+        const stripped = raw
+          .replace(/\([^)]*\)/g, m => m.slice(1, -1))
+          .replace(/<[^>]*>/g, '')
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (stripped.length > 20) return stripped.slice(0, 10000);
+      }
+      throw new Error('PDF parsing failed — file may be corrupted or encrypted.');
     }
-    return fullText.trim();
   }
 }
 

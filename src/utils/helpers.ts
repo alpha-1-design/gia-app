@@ -75,3 +75,8 @@ export const formatNextRun = (ts: number) => {
 };
 
 export const notifId = () => (Date.now() % 100000) + Math.floor(Math.random() * 1000);
+
+export const isNativePlatform = () =>
+  typeof window !== 'undefined' &&
+  typeof (window as any).Capacitor !== 'undefined' &&
+  (window as any).Capacitor.isNativePlatform?.();

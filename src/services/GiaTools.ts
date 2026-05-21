@@ -194,13 +194,14 @@ class GiaTools {
 
     this.tools.set('image_generation', {
       id: 'image_generation', name: 'image_generation',
-      description: 'Generate an AI image from a text description.',
+      description: 'Generate an AI image from a text description. Returns a markdown image for inline display.',
       execute: async ({ prompt }) => {
         try {
           const ImageService = (await import('./ImageService')).default;
           const result = await ImageService.generate(prompt);
           if (result.error) return { success: false, content: '', error: result.error };
-          return { success: true, content: `Image generated. URL: ${result.url}${result.revisedPrompt ? `\nRevised Prompt: ${result.revisedPrompt}` : ''}` };
+          const caption = result.revisedPrompt ? `*${result.revisedPrompt}*` : prompt;
+          return { success: true, content: `![${caption}](${result.url})\n${caption}` };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }

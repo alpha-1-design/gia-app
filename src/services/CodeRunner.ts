@@ -1,4 +1,5 @@
 import { CapacitorHttp } from '@capacitor/core';
+import { isNativePlatform } from '../utils/helpers';
 
 export interface CodeRunRequest {
   language: string;
@@ -34,37 +35,8 @@ export interface PistonRuntime {
 const PISTON_URL = 'https://emkc.org/api/v2/piston/execute';
 const PISTON_RUNTIMES_URL = 'https://emkc.org/api/v2/piston/runtimes';
 const HISTORY_KEY = 'gia-code-history';
-
-const isNative =
-  typeof window !== 'undefined' &&
-  typeof (window as any).Capacitor !== 'undefined' &&
-  (window as any).Capacitor.isNativePlatform?.();
-
-const LANGUAGE_MAP: Record<string, string> = {
-  'python': 'python',
-  'py': 'python',
-  'javascript': 'javascript',
-  'js': 'javascript',
-  'typescript': 'typescript',
-  'ts': 'typescript',
-  'java': 'java',
-  'cpp': 'cpp',
-  'c++': 'cpp',
-  'c': 'c',
-  'go': 'go',
-  'rust': 'rust',
-  'rs': 'rust',
-  'swift': 'swift',
-  'kotlin': 'kotlin',
-  'ruby': 'ruby',
-  'rb': 'ruby',
-  'php': 'php',
-  'r': 'r',
-  'sql': 'sql',
-  'bash': 'bash',
-  'sh': 'bash',
-  'html': 'html',
-};
+const uuid = () => crypto.randomUUID?.() ?? Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 10)).join('');
+const isNative = isNativePlatform();
 
 class CodeRunner {
   private static instance: CodeRunner;
@@ -139,7 +111,7 @@ class CodeRunner {
         result.error = `Process exited with code ${result.exitCode}`;
       }
 
-      this.saveRun({ id: crypto.randomUUID(), ts: Date.now(), language: lang, code: req.code, output: result.output, error: result.error, exitCode: result.exitCode });
+      this.saveRun({ id: uuid(), ts: Date.now(), language: lang, code: req.code, output: result.output, error: result.error, exitCode: result.exitCode });
       return result;
     } catch (e) {
       if (attempts < maxAttempts) {
@@ -153,7 +125,7 @@ class CodeRunner {
         language: lang,
         version: '',
       };
-      this.saveRun({ id: crypto.randomUUID(), ts: Date.now(), language: lang, code: req.code, output: result.output, error: result.error, exitCode: result.exitCode });
+      this.saveRun({ id: uuid(), ts: Date.now(), language: lang, code: req.code, output: result.output, error: result.error, exitCode: result.exitCode });
       return result;
     }
   }

@@ -25,6 +25,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const lastResultRef = useRef(0);
   const srRef = useRef<any>(null);
   const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
+  const listeningLoopRef = useRef(false);
 
   const requestPermissions = useCallback(async () => {
     if (!isCapacitor) return true;
@@ -42,6 +43,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
   const stopListening = useCallback(async () => {
     activeRef.current = false;
+    listeningLoopRef.current = false;
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = undefined; }
     try {
       if (isCapacitor) {
@@ -55,23 +57,37 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     setIsHearing(false);
   }, [isCapacitor]);
 
+  const wakeWordRef = useRef(wakeWord);
+  const keepListeningRef = useRef(keepListening);
+  const onWakeWordRef = useRef(onWakeWord);
+  const onTranscriptRef = useRef(onTranscript);
+  wakeWordRef.current = wakeWord;
+  keepListeningRef.current = keepListening;
+  onWakeWordRef.current = onWakeWord;
+  onTranscriptRef.current = onTranscript;
+
   const processTranscript = useCallback((text: string) => {
     if (!text) return;
+    const cleaned = text.replace(/[^\w\s']/g, '').trim();
+    if (cleaned.length < 2) return;
     lastResultRef.current = Date.now();
-    onTranscript?.(text);
-    if (text.toLowerCase().includes(wakeWord.toLowerCase())) {
-      onWakeWord?.(text);
-      if (!keepListening) stopListening();
+    onTranscriptRef.current?.(cleaned);
+    const hasWakeWord = text.toLowerCase().includes(wakeWordRef.current.toLowerCase());
+    if (hasWakeWord) {
+      onWakeWordRef.current?.(text);
+      if (!keepListeningRef.current) stopListening();
     }
-  }, [wakeWord, onWakeWord, onTranscript, keepListening, stopListening]);
+  }, [stopListening]);
 
   const listenOnce = useCallback(async () => {
-    if (!activeRef.current) return;
+    if (!activeRef.current || listeningLoopRef.current) return;
+    listeningLoopRef.current = true;
     try {
       if (isCapacitor) {
         const { available } = await SpeechRecognition.available();
         if (!available) {
           setIsListening(false);
+          listeningLoopRef.current = false;
           return;
         }
 
@@ -86,10 +102,10 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           processTranscript(result.matches![0]);
         }
 
-        const gap = Date.now() - lastResultRef.current;
-        const backoff = hadResult ? 1000 : Math.max(2000, 2000 - gap);
+        const backoff = hadResult ? 1500 : 3000;
+        listeningLoopRef.current = false;
 
-        if (activeRef.current && keepListening) {
+        if (activeRef.current && keepListeningRef.current) {
           timeoutRef.current = setTimeout(listenOnce, backoff);
         } else {
           stopListening();
@@ -97,13 +113,14 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       }
     } catch (e) {
       console.error('Speech recognition error:', e);
-      if (activeRef.current && keepListening) {
-        timeoutRef.current = setTimeout(listenOnce, 2000);
+      listeningLoopRef.current = false;
+      if (activeRef.current && keepListeningRef.current) {
+        timeoutRef.current = setTimeout(listenOnce, 3000);
       } else {
         stopListening();
       }
     }
-  }, [isCapacitor, processTranscript, keepListening, stopListening]);
+  }, [isCapacitor, processTranscript, stopListening]);
 
   const startListening = useCallback(async () => {
     if (activeRef.current) return;
@@ -144,10 +161,10 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       } catch { stopListening(); }
     }
 
-    if (autoStopAfter > 0 && !wakeWord) {
+    if (autoStopAfter > 0 && !keepListeningRef.current) {
       timeoutRef.current = setTimeout(() => stopListening(), autoStopAfter);
     }
-  }, [isCapacitor, listenOnce, processTranscript, autoStopAfter, stopListening, requestPermissions, wakeWord]);
+  }, [isCapacitor, listenOnce, processTranscript, autoStopAfter, stopListening, requestPermissions]);
 
   useEffect(() => {
     return () => { activeRef.current = false; stopListening(); };

@@ -92,10 +92,24 @@ class SearchService {
     if (results.length === 0) return '';
 
     const formatted = results.map((r, i) =>
+      `[${i + 1}] [${r.title}](${r.url})\n    > ${r.snippet}`
+    ).join('\n');
+
+    return `## Web Search: "${query}"\n\n${formatted}\n\n*(Cite sources as [1], [2], etc. when using this information.)*`;
+  }
+
+  async searchWithSources(query: string): Promise<{ content: string; sources: { title: string; url: string }[] }> {
+    const results = await this.search(query);
+    if (results.length === 0) return { content: '', sources: [] };
+
+    const content = results.map((r, i) =>
       `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.snippet}`
     ).join('\n\n');
 
-    return `WEB SEARCH RESULTS for "${query}":\n\n${formatted}\n\nUse these results to inform your response. Cite sources naturally.`;
+    return {
+      content: `WEB SEARCH RESULTS for "${query}":\n\n${content}\n\nUse these results to inform your response. Cite sources using [1], [2], etc.`,
+      sources: results.map(r => ({ title: r.title, url: r.url })),
+    };
   }
 }
 

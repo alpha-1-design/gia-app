@@ -20,6 +20,7 @@ import PDFService from '../services/PDFService';
 import { useVoiceControl } from '../hooks/useVoiceControl';
 import SkillPicker from '../components/SkillPicker';
 import GiaConsole from '../components/GiaConsole';
+import { KnowledgePanel } from '../components/KnowledgePanel';
 
 const genId = () => Math.random().toString(36).slice(2, 10);
 
@@ -58,6 +59,7 @@ const ChatModule: React.FC = () => {
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
   const [showThoughts, setShowThoughts] = useState<Set<string>>(new Set());
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
+  const [showKnowledge, setShowKnowledge] = useState(false);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -199,7 +201,6 @@ const ChatModule: React.FC = () => {
       const ghost = session?.messages.find(m => m.id === streamingMsgId);
       if (ghost) {
         if (!ghost.content && ghost.thinking) {
-          // Empty ghost — delete it
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
               s.id === activeSessionId
@@ -207,9 +208,9 @@ const ChatModule: React.FC = () => {
                 : s
             ),
           });
-        } else if (ghost.content) {
-          // Had partial response — keep it with stop indicator
-          updateMessage(activeSessionId, streamingMsgId, ghost.content + '\n\n*[Response stopped]*');
+        } else {
+          const finalContent = (ghost.content || '') + '\n\n*— Response stopped —*';
+          updateMessage(activeSessionId, streamingMsgId, finalContent, ghost.thoughts);
         }
       }
     }
@@ -297,12 +298,28 @@ const ChatModule: React.FC = () => {
           inThinkBlock = false;
         }
         updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || accumulated, thoughtsAccumulated || undefined);
+        if (res.model) {
+          useGiaStore.setState({
+            sessions: useGiaStore.getState().sessions.map(s =>
+              s.id === activeSessionId
+                ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, model: res.model } : m) }
+                : s
+            ),
+          });
+        }
         TTSService.speak(accumulated);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Continue failed.';
-        updateMessage(activeSessionId!, asstId, msg);
+        updateMessage(activeSessionId!, asstId, '⚠️ ' + msg);
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === activeSessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, error: true } : m) }
+              : s
+          ),
+        });
       }
     } finally {
       setLoading(false);
@@ -492,7 +509,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
           updateMessage(sessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
-          setShowConsole(true);
         }
       });
 
@@ -519,7 +535,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
       const rawContent = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
       const finalText = rawContent || (() => {
-        // Non-streaming fallback: parse <think> from res.text
         const t = (res.text || '').replace(/```tool[\s\S]*?```/g, '').trim();
         const m = t.match(/<think>([\s\S]*?)<\/think>/);
         if (m) {
@@ -529,6 +544,15 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         return t;
       })();
       updateMessage(sessionId!, asstId, finalText, thoughtsAccumulated || undefined);
+      if (res.model) {
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, model: res.model } : m) }
+              : s
+          ),
+        });
+      }
       TTSService.speak(finalText);
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -740,19 +764,30 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {sessions.filter(s => s.title.toLowerCase().includes(historySearch.toLowerCase())).map((sess) => (
-            <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: 'var(--gia-text)' }}>{sess.title}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{sess.messages.length} msgs · {new Date(sess.updatedAt).toLocaleDateString()}</p>
+          {sessions.filter(s => {
+            if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
+            if (!historySearch) return false;
+            return s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()));
+          }).map((sess) => {
+            const matchCount = historySearch ? sess.messages.filter(m => m.content.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
+            return (
+              <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--gia-text)' }}>{sess.title}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{sess.messages.length} msgs · {new Date(sess.updatedAt).toLocaleDateString()}{matchCount > 0 ? ` · ${matchCount} match${matchCount > 1 ? 'es' : ''}` : ''}</p>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); deleteSession(sess.id); }} className="p-1.5 rounded-lg transition-colors text-zinc-600 hover:text-rose-400">
+                  <Trash2 size={13} />
+                </button>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); deleteSession(sess.id); }} className="p-1.5 rounded-lg transition-colors text-zinc-600 hover:text-rose-400">
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-          {sessions.filter(s => s.title.toLowerCase().includes(historySearch.toLowerCase())).length === 0 && (
-            <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found</p>
+            );
+          })}
+          {sessions.filter(s => {
+            if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
+            if (!historySearch) return false;
+            return s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()));
+          }).length === 0 && (
+            <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
           )}
         </div>
       </div>
@@ -777,15 +812,16 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             <div className="w-1.5 h-1.5 rounded-full" style={{ background: providerConnected ? '#34d399' : '#f87171' }} />
             {providerLabel}
           </div>
+          <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Download size={13} /></button>
           <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Trash2 size={13} /></button>
           <button onClick={createSession} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Plus size={13} /></button>
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 pb-36 space-y-3 relative z-0">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pb-16 animate-fade-in">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pb-32 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
               <Bot size={26} style={{ color: '#a855f7' }} />
             </div>
@@ -810,9 +846,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
 
         {!providerConnected && !loading && (
-          <div className="px-4 py-3 mx-4 rounded-2xl text-center" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+          <div onClick={() => useGiaStore.getState().setModule('settings')} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Go to Settings → Engine Room and type: <code className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'rgba(0,0,0,0.3)' }}>connect</code></p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Tap to go to Settings → Engine Room and type: <code className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'rgba(0,0,0,0.3)' }}>connect</code></p>
           </div>
         )}
 
@@ -878,7 +914,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
                     let accumulated = '';
                     setIntentState('responding');
-                    await GiaBrain.generate({
+                    const genRes = await GiaBrain.generate({
                       signal: ctrl.signal,
                       prompt: originalPrompt,
                       history,
@@ -892,6 +928,15 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                     });
                     if (!ctrl.signal.aborted) {
                       updateMessage(activeSessionId!, id, accumulated);
+                      if (genRes.model) {
+                        useGiaStore.setState({
+                          sessions: useGiaStore.getState().sessions.map(s =>
+                            s.id === activeSessionId
+                              ? { ...s, messages: s.messages.map(m => m.id === id ? { ...m, model: genRes.model } : m) }
+                              : s
+                          ),
+                        });
+                      }
                       TTSService.speak(accumulated);
                     }
                   } catch (e: any) {
@@ -912,10 +957,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 }}
               >
                 <div 
-                  className={`p-3.5 rounded-2xl relative select-none ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : 'bg-zinc-900/50 border border-zinc-800'}`}
+                  className={`p-3.5 rounded-2xl relative select-none transition-shadow ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : 'bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/60'}`}
                   style={{
                     borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                     borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
+                    boxShadow: msg.role === 'assistant' && !msg.error && !msg.thinking ? '0 1px 8px rgba(0,0,0,0.15)' : 'none',
                   }}
                 >
                   {msg.thinking ? (
@@ -953,6 +999,26 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                     </div>
                     ) : (
                     <>
+                      {msg.role === 'assistant' && (
+                        <div className="flex items-center gap-1.5 mb-1.5 ml-0.5">
+                          <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
+                            {msg.model ? `via ${msg.model}` : 'GIA'}
+                          </span>
+                          {msg.thinking ? (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
+                              Thinking…
+                            </span>
+                          ) : streamingMsgId === msg.id ? (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
+                              Generating…
+                            </span>
+                          ) : (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+                              Done
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
                         <>
                           <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} />
@@ -961,14 +1027,17 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                           </button>
                         </>
                       ) : (
-                        <>
+                        <div className="token-reveal">
                           <MarkdownRenderer content={msg.content} />
+                          {streamingMsgId === msg.id && msg.content && (
+                            <span className="stream-cursor ml-0.5">▋</span>
+                          )}
                           {expandedMsgs.has(msg.id) && (
                             <button onClick={() => setExpandedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
                               Show less
                             </button>
                           )}
-                        </>
+                        </div>
                       )}
                       {(liveThoughts[msg.id] || msg.thoughts) && (
                         <ThinkingPanel
@@ -981,6 +1050,19 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                             return n;
                           })}
                         />
+                      )}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {msg.sources.map((src, si) => {
+                            const url = typeof src === 'string' ? src : (src as any).url || src;
+                            const title = typeof src === 'string' ? url : (src as any).title || `Source ${si + 1}`;
+                            return (
+                              <a key={si} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] transition-colors hover:opacity-80" style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.15)' }}>
+                                <Globe size={9} /> {title.slice(0, 40)}
+                              </a>
+                            );
+                          })}
+                        </div>
                       )}
                       {msg.attachments?.filter(a => !a.preview).map(att => (
                         <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -1031,6 +1113,18 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
 
+      {loading && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={handleStop}
+          className="absolute right-4 bottom-[84px] w-8 h-8 rounded-full flex items-center justify-center shadow-lg z-10 transition-colors"
+          style={{ background: '#7c3aed', border: '1px solid rgba(168,85,247,0.4)' }}
+        >
+          <Square size={12} className="text-white" />
+        </motion.button>
+      )}
+
       {/* Undo toast */}
       <AnimatePresence>
         {undoMsg && (
@@ -1054,7 +1148,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
 
-        <div className="px-4 pb-5 pt-1 shrink-0">
+        <div className="px-4 pb-5 pt-1 sticky bottom-0 z-10 bg-transparent backdrop-blur-xl">
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 
@@ -1175,6 +1269,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           />
         )}
       </AnimatePresence>
+      {showKnowledge && <KnowledgePanel onClose={() => setShowKnowledge(false)} />}
       <GiaConsole
         logs={consoleLogs}
         isVisible={showConsole}

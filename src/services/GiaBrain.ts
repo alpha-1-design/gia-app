@@ -1,6 +1,7 @@
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { isNativePlatform } from '../utils/helpers';
 import SearchService from './SearchService';
 import GiaTools, { ToolResult } from './GiaTools';
 
@@ -22,14 +23,17 @@ export interface BrainRequest {
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[] }
 
 const buildGiaSystem = (query?: string) => {
-  const { userProfile, activeSkillId, skills, handsOff, extThinking } = useGiaStore.getState();
+  const { userProfile, activeSkillId, skills, handsOff, extThinking, customInstructions, pinnedMemories } = useGiaStore.getState();
   const activeSkill = skills.find(s => s.id === activeSkillId);
-  const memory = useMemoryStore.getState().getRelevantContext(query);
-  const memoryCount = useMemoryStore.getState().memories.length;
+  const memStore = useMemoryStore.getState();
+  const memory = memStore.getRelevantContext(query);
+  const memoryCount = memStore.memories.length;
+  const pinnedMems = pinnedMemories.length > 0
+    ? memStore.memories.filter(m => pinnedMemories.includes(m.id))
+    : [];
   const { activeProvider, providers } = useProviderStore.getState();
   const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
-  const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
-  const platform = isNative ? 'Android/iOS (Capacitor native app)' : 'Web browser';
+  const platform = isNativePlatform() ? 'Android/iOS (Capacitor native app)' : 'Web browser';
   const userName = userProfile.name ? userProfile.name : 'the user';
   const userContext = userProfile.name
     ? `\n\nUser context:\n- Name: ${userProfile.name}${userProfile.bio ? `\n- About: ${userProfile.bio}` : ''}${userProfile.goals ? `\n- Goals: ${userProfile.goals}` : ''}`
@@ -100,6 +104,8 @@ ${skillPrompt}
 - Memories stored: ${memoryCount}
 ${userContext}
 ${memory}
+${pinnedMems.length > 0 ? `\n## Pinned Knowledge (always relevant)\n${pinnedMems.map(m => `- ${m.key}: ${m.value}`).join('\n')}` : ''}
+${customInstructions ? `\n## Custom Instructions from User\n${customInstructions}` : ''}
 
 ## Response Calibration Rules (FOLLOW EXACTLY)
 1. Match response length to question complexity:
@@ -131,6 +137,8 @@ ${memory}
 class GiaBrain {
   private static instance: GiaBrain;
   static getInstance() { if (!this.instance) this.instance = new GiaBrain(); return this.instance; }
+
+  private extractingMemories = false;
 
   private isVisionCapable(model: string, provider: string): boolean {
     const m = model.toLowerCase();
@@ -236,8 +244,13 @@ class GiaBrain {
       stream: !!req.onStream,
     };
     if (req.useExtendedThinking) {
-      body.temperature = undefined;
-      body.messages[0].content += `\n\nThink step-by-step before answering. Show your reasoning inside <think> tags, then provide your final answer.`;
+      const modelLower = config.model.toLowerCase();
+      if (modelLower.startsWith('o1') || modelLower.startsWith('o3') || modelLower.startsWith('o4')) {
+        (body as any).reasoning_effort = 'high';
+      } else {
+        body.temperature = undefined;
+        body.messages[0].content += `\n\nThink step-by-step before answering. Show your reasoning inside <think> tags, then provide your final answer.`;
+      }
     }
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.apiKey}`,
@@ -257,64 +270,77 @@ class GiaBrain {
         let lastProcessed = 0;
         let inThinkBlock = false;
         let thinkBuffer = '';
+        let processing = false;
+        let pendingBuffer = '';
 
         xhr.open('POST', `${baseUrl}/chat/completions`);
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
         xhr.responseType = 'text';
 
-        const processLines = (text: string) => {
-          const lines = text.split('\n');
-          for (const line of lines) {
-            const t = line.trim();
-            if (!t || t === 'data: [DONE]') continue;
-            if (t.startsWith('data: ')) {
-              try {
-                const json = JSON.parse(t.slice(6));
-                const delta = json.choices?.[0]?.delta?.content || '';
-                if (delta) {
-                  if (delta.includes('<think>')) {
-                    const parts = delta.split('<think>');
-                    const before = parts[0];
-                    if (before) { fullText += before; req.onStream!(before); }
-                    inThinkBlock = true;
-                    thinkBuffer = parts[1] || '';
-                    req.onThought?.(thinkBuffer);
-                  } else if (delta.includes('</think>')) {
-                    inThinkBlock = false;
-                    const parts = delta.split('</think>');
-                    const closing = parts[0];
-                    if (closing) {
-                      thinkBuffer += closing;
+        const drain = () => {
+          if (processing) return;
+          processing = true;
+          while (pendingBuffer) {
+            const chunk = pendingBuffer;
+            pendingBuffer = '';
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              const t = line.trim();
+              if (!t || t === 'data: [DONE]') continue;
+              if (t.startsWith('data: ')) {
+                try {
+                  const json = JSON.parse(t.slice(6));
+                  const delta = json.choices?.[0]?.delta?.content || '';
+                  if (delta) {
+                    if (delta.includes('<think>')) {
+                      const parts = delta.split('<think>');
+                      const before = parts[0];
+                      if (before) { fullText += before; req.onStream!(before); }
+                      inThinkBlock = true;
+                      thinkBuffer = parts[1] || '';
                       req.onThought?.(thinkBuffer);
+                    } else if (delta.includes('</think>')) {
+                      inThinkBlock = false;
+                      const parts = delta.split('</think>');
+                      const closing = parts[0];
+                      if (closing) {
+                        thinkBuffer += closing;
+                        req.onThought?.(thinkBuffer);
+                      }
+                      thinkBuffer = '';
+                      const after = parts[1] || '';
+                      if (after) { fullText += after; req.onStream!(after); }
+                    } else if (inThinkBlock) {
+                      thinkBuffer += delta;
+                      req.onThought?.(thinkBuffer);
+                    } else {
+                      fullText += delta;
+                      req.onStream!(delta);
                     }
-                    thinkBuffer = '';
-                    const after = parts[1] || '';
-                    if (after) { fullText += after; req.onStream!(after); }
-                  } else if (inThinkBlock) {
-                    thinkBuffer += delta;
-                    req.onThought?.(thinkBuffer);
-                  } else {
-                    fullText += delta;
-                    req.onStream!(delta);
                   }
-                }
-              } catch { continue; }
+                } catch { continue; }
+              }
             }
           }
+          processing = false;
         };
 
-        xhr.onprogress = () => {
+        const onData = () => {
           const currentLen = xhr.responseText.length;
-          const newData = xhr.responseText.slice(lastProcessed);
+          pendingBuffer += xhr.responseText.slice(lastProcessed);
           lastProcessed = currentLen;
-          processLines(newData);
+          drain();
         };
+
+        xhr.onprogress = onData;
 
         xhr.onload = () => {
-          const remaining = xhr.responseText.slice(lastProcessed);
-          if (remaining.trim()) processLines(remaining);
-          if (!fullText.trim()) reject(new Error(`${label} returned empty response`));
-          else resolve({ text: fullText, provider: activeProvider, model: config.model });
+          onData();
+          if (!fullText.trim() && !req.signal?.aborted) {
+            reject(new Error(`⚠️ ${label} returned empty response. The model may be overloaded. Try again or switch providers.`));
+          } else {
+            resolve({ text: fullText, provider: activeProvider, model: config.model });
+          }
         };
 
         xhr.onerror = () => reject(new Error(`${label} network error`));
@@ -399,45 +425,55 @@ class GiaBrain {
         const xhr = new XMLHttpRequest();
         let fullText = '';
         let lastProcessed = 0;
+        let processing = false;
+        let pendingBuffer = '';
 
         xhr.open('POST', 'https://api.anthropic.com/v1/messages');
         Object.entries(anthropicHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
         xhr.responseType = 'text';
 
-        const processAnthropicEvents = (text: string) => {
-          const events = text.split('\n\n');
-          for (const event of events) {
-            const t = event.trim();
-            if (!t.startsWith('data:')) continue;
-            try {
-              const parsed = JSON.parse(t.slice(5).trim());
-              if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'thinking') {
-                if (parsed.content_block.thinking) {
-                  req.onThought?.(parsed.content_block.thinking);
+        const drain = () => {
+          if (processing) return;
+          processing = true;
+          while (pendingBuffer) {
+            const chunk = pendingBuffer;
+            pendingBuffer = '';
+            const events = chunk.split('\n\n');
+            for (const event of events) {
+              const t = event.trim();
+              if (!t.startsWith('data:')) continue;
+              try {
+                const parsed = JSON.parse(t.slice(5).trim());
+                if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'thinking') {
+                  if (parsed.content_block.thinking) {
+                    req.onThought?.(parsed.content_block.thinking);
+                  }
                 }
-              }
-              if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
-                const delta = parsed.delta.text ?? '';
-                fullText += delta;
-                req.onStream!(delta);
-              }
-              if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'thinking_delta') {
-                req.onThought?.(parsed.delta.thinking ?? '');
-              }
-            } catch { }
+                if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+                  const delta = parsed.delta.text ?? '';
+                  fullText += delta;
+                  req.onStream!(delta);
+                }
+                if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'thinking_delta') {
+                  req.onThought?.(parsed.delta.thinking ?? '');
+                }
+              } catch { }
+            }
           }
+          processing = false;
         };
 
-        xhr.onprogress = () => {
+        const onData = () => {
           const currentLen = xhr.responseText.length;
-          const newData = xhr.responseText.slice(lastProcessed);
+          pendingBuffer += xhr.responseText.slice(lastProcessed);
           lastProcessed = currentLen;
-          processAnthropicEvents(newData);
+          drain();
         };
+
+        xhr.onprogress = onData;
 
         xhr.onload = () => {
-          const remaining = xhr.responseText.slice(lastProcessed);
-          if (remaining.trim()) processAnthropicEvents(remaining);
+          onData();
           if (!fullText.trim()) reject(new Error('Anthropic returned empty response'));
           else resolve({ text: fullText, provider: 'anthropic', model: config.model });
         };
@@ -515,63 +551,73 @@ class GiaBrain {
         let lastProcessed = 0;
         let inThinkBlock = false;
         let thinkBuffer = '';
+        let processing = false;
+        let pendingBuffer = '';
 
         xhr.open('POST', url);
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
         xhr.responseType = 'text';
 
-        const processGeminiEvents = (text: string) => {
-          const events = text.split('\n\n');
-          for (const event of events) {
-            const t = event.trim();
-            if (!t.startsWith('data: ')) continue;
-            const jsonStr = t.slice(6).trim();
-            if (!jsonStr || jsonStr === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const part = parsed.candidates?.[0]?.content?.parts?.[0];
-              if (part?.text) {
-                const delta = part.text;
-                if (delta.includes('<think>')) {
-                  const parts = delta.split('<think>');
-                  const before = parts[0];
-                  if (before) { fullText += before; req.onStream!(before); }
-                  inThinkBlock = true;
-                  thinkBuffer = parts[1] || '';
-                  req.onThought?.(thinkBuffer);
-                } else if (delta.includes('</think>')) {
-                  inThinkBlock = false;
-                  const parts = delta.split('</think>');
-                  const closing = parts[0];
-                  if (closing) {
-                    thinkBuffer += closing;
+        const drain = () => {
+          if (processing) return;
+          processing = true;
+          while (pendingBuffer) {
+            const chunk = pendingBuffer;
+            pendingBuffer = '';
+            const events = chunk.split('\n\n');
+            for (const event of events) {
+              const t = event.trim();
+              if (!t.startsWith('data: ')) continue;
+              const jsonStr = t.slice(6).trim();
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const part = parsed.candidates?.[0]?.content?.parts?.[0];
+                if (part?.text) {
+                  const delta = part.text;
+                  if (delta.includes('<think>')) {
+                    const parts = delta.split('<think>');
+                    const before = parts[0];
+                    if (before) { fullText += before; req.onStream!(before); }
+                    inThinkBlock = true;
+                    thinkBuffer = parts[1] || '';
                     req.onThought?.(thinkBuffer);
+                  } else if (delta.includes('</think>')) {
+                    inThinkBlock = false;
+                    const parts = delta.split('</think>');
+                    const closing = parts[0];
+                    if (closing) {
+                      thinkBuffer += closing;
+                      req.onThought?.(thinkBuffer);
+                    }
+                    thinkBuffer = '';
+                    const after = delta.split('</think>')[1] || '';
+                    if (after) { fullText += after; req.onStream!(after); }
+                  } else if (inThinkBlock) {
+                    thinkBuffer += delta;
+                    req.onThought?.(thinkBuffer);
+                  } else {
+                    fullText += delta;
+                    req.onStream!(delta);
                   }
-                  thinkBuffer = '';
-                  const after = delta.split('</think>')[1] || '';
-                  if (after) { fullText += after; req.onStream!(after); }
-                } else if (inThinkBlock) {
-                  thinkBuffer += delta;
-                  req.onThought?.(thinkBuffer);
-                } else {
-                  fullText += delta;
-                  req.onStream!(delta);
                 }
-              }
-            } catch { }
+              } catch { }
+            }
           }
+          processing = false;
         };
 
-        xhr.onprogress = () => {
+        const onData = () => {
           const currentLen = xhr.responseText.length;
-          const newData = xhr.responseText.slice(lastProcessed);
+          pendingBuffer += xhr.responseText.slice(lastProcessed);
           lastProcessed = currentLen;
-          processGeminiEvents(newData);
+          drain();
         };
+
+        xhr.onprogress = onData;
 
         xhr.onload = () => {
-          const remaining = xhr.responseText.slice(lastProcessed);
-          if (remaining.trim()) processGeminiEvents(remaining);
+          onData();
           if (!fullText.trim()) reject(new Error('Gemini returned empty response'));
           else resolve({ text: fullText, provider: 'gemini', model: config.model });
         };
@@ -650,7 +696,8 @@ class GiaBrain {
         try {
           const toolCall = JSON.parse(toolMatch[1]);
 
-          // sub_agent_call is handled inline, never goes through tool registry
+          // sub_agent_call — MUST be checked BEFORE GiaTools.getTool() since the
+          // tool registry also contains a stub 'sub_agent_call' that would intercept
           if (toolCall.id === 'sub_agent_call') {
             const { provider, prompt: subPrompt } = toolCall.args;
             req.onThought?.(`Delegating to sub-agent (${provider})...`);
@@ -764,13 +811,15 @@ class GiaBrain {
   }
 
   private async extractMemories(userMessage: string, assistantResponse: string) {
-    const { activeProvider, providers } = useProviderStore.getState();
-    const config = providers[activeProvider];
-    if (!config?.apiKey) return;
-
+    if (this.extractingMemories || !userMessage || !assistantResponse) return;
+    this.extractingMemories = true;
     try {
-      const res = await this.generate({
-        prompt: `Analyze this conversation exchange and extract any facts worth remembering about the user.
+      const { activeProvider, providers } = useProviderStore.getState();
+      const config = providers[activeProvider];
+      if (!config?.apiKey || activeProvider === 'anthropic') return;
+
+      const { baseUrl } = PROVIDER_DEFAULTS[activeProvider];
+      const extractionPrompt = `Analyze this conversation exchange and extract any facts worth remembering about the user.
 
 User said: "${userMessage.slice(0, 500)}"
 Assistant said: "${assistantResponse.slice(0, 500)}"
@@ -783,13 +832,30 @@ If nothing worth remembering, return: []
 Return JSON array only, no other text:
 [{"key": "user_name", "value": "Sam", "category": "profile", "confidence": 0.95}]
 
-Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "preference" | "session_summary"`,
-        systemPrompt: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.',
-        maxTokens: 300,
-        temperature: 0.1,
-      });
+Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "preference" | "session_summary"`;
 
-      const cleaned = res.text.replace(/```json|```/g, '').trim();
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+          ...(activeProvider === 'openrouter' ? { 'HTTP-Referer': 'https://gia.app', 'X-Title': 'GIA' } : {}),
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.' },
+            { role: 'user', content: extractionPrompt },
+          ],
+          max_tokens: 300,
+          temperature: 0.1,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      const cleaned = text.replace(/```json|```/g, '').trim();
       const entries = JSON.parse(cleaned);
       if (Array.isArray(entries) && entries.length > 0) {
         const { addMemories } = await import('../store/useMemoryStore').then(m => m.useMemoryStore.getState());
@@ -797,6 +863,8 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
       }
     } catch {
       // Silent — memory extraction failure should never break the main flow
+    } finally {
+      this.extractingMemories = false;
     }
   }
 }
