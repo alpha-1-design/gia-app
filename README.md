@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: Private](https://img.shields.io/badge/License-Private-red.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.3.1.0-emerald.svg)](package.json)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web-blue.svg)](capacitor.config.ts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -105,4 +105,4 @@ No telemetry, no analytics, no data collection. API keys stored on-device (Index
 
 ## ⚖️ License
 
-Private · Alpha-1 Studio, Ghana
+Apache 2.0 · © 2026 Samuel Mensah · Alpha-1 Studio, Ghana

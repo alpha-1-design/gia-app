@@ -103,3 +103,4 @@ Configure provider API keys in Settings → Engine Room:
 
 *Built by Samuel Mensah · Alpha-1 Studio, Ghana*
 *GIA is private. Your keys and data stay on your device.*
+*Licensed under Apache 2.0 · © 2026 Samuel Mensah*
