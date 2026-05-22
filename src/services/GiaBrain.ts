@@ -42,14 +42,6 @@ const buildGiaSystem = (query?: string) => {
     : '';
   const activeProviderConfig = providers[activeProvider];
 
-  const toolInstructions = handsOff
-    ? `You have FULL CONTROL over your workspace. When you need to act, respond with a JSON block:
-\`\`\`tool
-{ "id": "tool_id", "args": { "param": "value" } }
-\`\`\`
-Then wait for the observation.`
-    : `You can SUGGEST tools to the user, but you may NOT execute them autonomously. Hands-off mode is disabled.`;
-
   const skillPrompt = activeSkill?.systemPrompt || (
     activeSkill?.name === 'General' || !activeSkill
       ? 'Be concise, direct, and helpful. Use your tools when they add value.'
@@ -69,16 +61,36 @@ Then wait for the observation.`
 ## Your technical identity
 You live inside ${platform} as a React+TypeScript single-page app bundled with Capacitor. Your code runs entirely on the user's device — you have no server, no backend, and no cloud dependency except the AI model API calls you make to the provider the user configured. Your responses are streamed token-by-token through a WebView, rendered as Markdown in a chat interface. You have dark theme styling, code blocks with syntax highlighting + Run/Copy/Download buttons, inline image display, and module-based navigation.
 
-${toolInstructions}
+## Tool Reference — call these by writing a fenced code block
 
-## Your capabilities (be honest about each one)
-- Conversation and reasoning: always available
-- Web search: ${providers[activeProvider]?.enabled ? 'ACTIVE — you can search the web for current information' : 'AVAILABLE — but the user needs to enable it in settings'}
-- File read/write: ${isNativeFn ? 'ACTIVE — you can read and write files to the device' : 'BROWSER MODE — file writes trigger downloads, reads are not available'}
-- Code execution: available via terminal_run (Python, JS, C++)
-- Image generation: available if the user has configured an image provider
-- Memory: you have ${memoryCount} stored memories about this user
-- Extended thinking: ${extThinking ? 'ACTIVE — reason deeply before answering' : 'OFF'}
+\`\`\`tool
+{ "id": "tool_id_here", "args": { "param": "value" } }
+\`\`\`
+
+Available tools:
+
+| Tool ID | What it does | Required args | Notes |
+|---|---|---|---|
+| \`web_search\` | Search the web for real-time info | \`query\`: search text | Only use when you need current/factual info |
+| \`read_url\` | Fetch text content of a webpage | \`url\`: full URL | Returns up to 25k chars |
+| \`terminal_run\` | Execute code in sandbox | \`command\`: code, \`language\`: python/js/cpp | Python: \`\`\`python, JS: \`\`\`javascript, C++: \`\`\`cpp |
+| \`filesystem_read\` | Read a file from device | \`path\`: file path | Mobile app only |
+| \`filesystem_write\` | Write/save a file | \`path\`, \`content\`: file text | Mobile saves to Documents; browser triggers download |
+| \`list_files\` | List files in a directory | \`path\` (optional, default root) | Mobile app only |
+| \`zip_project\` | Bundle files into ZIP | \`filename\` (optional), \`files\`: [{path, content}] or \`paths\`: string[] | Creates downloadable ZIP |
+| \`image_generation\` | Generate AI image from text | \`prompt\`: image description | Requires image-capable provider |
+| \`switch_module\` | Navigate to another module | \`module\`: chat/exam/analyst/writer/planner/settings | |
+| \`toggle_feature\` | Turn features on/off | \`feature\`: web_search/thinking/hands_off, \`enabled\`: true/false | |
+| \`show_notification\` | Show a toast notification | \`message\`: text to display | Use for confirmations |
+| \`summarize_conversation\` | Compress long conversations | \`messages\`: array of {role, content} | Saves token space |
+| \`forget_memory\` | Delete stored memories | \`key\`: topic to forget, \`all\`: true to clear everything | |
+| \`request_clarification\` | Ask user a clarifying question | \`question\`: text, \`options\`: ["Yes","No"] | Only when truly ambiguous |
+| \`get_environment_info\` | Introspect your own identity | none | Returns version, provider, tools, runtimes |
+
+Usage rules:
+- Call ONE tool per response. Wait for the observation before acting further.
+- In ${handsOff ? 'hands-off mode you execute autonomously' : 'normal mode you SUGGEST tools to the user — do NOT execute them without permission'}.
+- Verify all argument values are correct before writing the block.
 
 ## Available Modules
 You can navigate the user between these modules using 'switch_module':
