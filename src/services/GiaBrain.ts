@@ -89,6 +89,34 @@ You can navigate the user between these modules using 'switch_module':
 - planner: Task scheduling with notifications
 - settings: Configure providers, skills, profile, and app behavior
 
+## Visual Capabilities (use these to make responses richer)
+You can output interactive visualizations using fenced code blocks with the language "visual" followed by JSON:
+
+\`\`\`visual
+{ "type": "chart", "data": { "type": "bar|line|area|pie", "labels": ["A","B","C"], "datasets": { "SeriesName": [10, 20, 15] } } }
+\`\`\`
+
+Supported visual types and when to use them:
+- **chart** — bar, line, area, pie charts for numeric data comparison/trends
+- **mindmap** — hierarchical trees for brainstorming, topic breakdowns, study guides
+- **diff** — show what changed between two code/text versions (unified or split)
+- **table** — data with multiple columns that users may want to sort, filter, or paginate
+- **gallery** — multiple images displayed together (search results, concept visuals)
+- **timeline** — chronological events with dates, titles, descriptions
+- **terminal** — command output with ANSI colors, exit codes, and command header
+- **widget** — small metric cards (temperature, scores, counts) with change indicators
+- **waveform** — animated audio visualization (for TTS/voice playback)
+- **outline** — table of contents for long document responses
+
+Use visuals whenever they genuinely help understanding. Don't force them. One visual per response is usually enough.
+
+## Rich Text Formatting
+You can use inline HTML style spans for colored or differently-styled text:
+- \`<span style="color:#f87171">red text</span>\`
+- \`<span style="color:#34d399;font-weight:700">bold green text</span>\`
+- \`<span style="font-family:Georgia,serif;font-style:italic">elegant text</span>\`
+Use sparingly — for emphasis, warnings, labels, or tone shifts. Not for every sentence.
+
 ## Platform Limitations
 ${isNativeFn
   ? '- Full filesystem access (read/write/list files in Documents folder)\n- Push notifications via LocalNotifications\n- Biometric lock (fingerprint/face) for security\n- Text-to-speech (native TTS engine)\n- Speech recognition (microphone input)'
@@ -130,8 +158,7 @@ ${customInstructions ? `\n## Custom Instructions from User\n${customInstructions
 7. Never pad responses. If the answer is 2 sentences, write 2 sentences.
 8. Use 'read_url' to fetch web page content when the user asks about a specific URL.
 9. Use 'summarize_conversation' when the conversation is getting long.
-10. When debugging, think step by step. Show your reasoning.
-11. Before writing a tool block, verify arguments are correct — cached/imprecise parameters cause errors.`;
+10. Before writing a tool block, verify arguments are correct — cached/imprecise parameters cause errors.`;
 
   return baseSystem;
 };
@@ -141,6 +168,12 @@ class GiaBrain {
   static getInstance() { if (!this.instance) this.instance = new GiaBrain(); return this.instance; }
 
   private extractingMemories = false;
+
+  private buildSystemPrompt(prompt: string, moduleSpecific?: string): string {
+    const base = buildGiaSystem(prompt);
+    if (!moduleSpecific) return base;
+    return `${base}\n\n## Module-Specific Instructions\n${moduleSpecific}`;
+  }
 
   private isVisionCapable(model: string, provider: string): boolean {
     const m = model.toLowerCase();
@@ -235,7 +268,7 @@ class GiaBrain {
     const config = providers[activeProvider];
     const { baseUrl, label } = PROVIDER_DEFAULTS[activeProvider];
     const messages = [
-      { role: 'system', content: req.systemPrompt || buildGiaSystem(req.prompt) },
+      { role: 'system', content: this.buildSystemPrompt(req.prompt, req.systemPrompt) },
       ...(await this.buildMessages(req))
     ];
     const body: any = {
@@ -251,7 +284,6 @@ class GiaBrain {
         (body as any).reasoning_effort = 'high';
       } else {
         body.temperature = undefined;
-        body.messages[0].content += `\n\nThink step-by-step before answering. Show your reasoning inside <think> tags, then provide your final answer.`;
       }
     }
     const headers: Record<string, string> = {
@@ -407,7 +439,7 @@ class GiaBrain {
     const body: Record<string, unknown> = {
       model: config.model,
       max_tokens: useThinking ? 16000 : (req.maxTokens ?? 2048),
-      system: req.systemPrompt || buildGiaSystem(req.prompt),
+      system: this.buildSystemPrompt(req.prompt, req.systemPrompt),
       messages,
       stream: !!req.onStream,
     };
@@ -534,12 +566,11 @@ class GiaBrain {
 
     const body = {
       contents,
-      system_instruction: { parts: [{ text: req.systemPrompt || buildGiaSystem(req.prompt) }] },
+      system_instruction: { parts: [{ text: this.buildSystemPrompt(req.prompt, req.systemPrompt) }] },
       generationConfig: { temperature: req.temperature ?? 0.7, maxOutputTokens: req.maxTokens ?? 2048 }
     };
     if (req.useExtendedThinking) {
       body.generationConfig.temperature = undefined as any;
-      body.system_instruction.parts[0].text += '\n\nThink step-by-step before answering. Show your reasoning inside <think> tags, then provide your final answer.';
     }
     if (req.onStream) {
       if (req.signal?.aborted) return { text: '', provider: 'gemini', model: config.model };

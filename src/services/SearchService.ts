@@ -36,51 +36,70 @@ class SearchService {
     }
   }
 
+  private resolveUrl(raw: string): string {
+    if (!raw) return '';
+    if (raw.startsWith('//')) return 'https:' + raw;
+    // DuckDuckGo redirect URLs
+    const uddgMatch = raw.match(/uddg=([^&]+)/);
+    if (uddgMatch) return decodeURIComponent(uddgMatch[1]);
+    const ruMatch = raw.match(/ru=([^&]+)/);
+    if (ruMatch) return decodeURIComponent(ruMatch[1]);
+    return raw;
+  }
+
   private parseResults(html: string): SearchResult[] {
     const results: SearchResult[] = [];
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const seen = new Set<string>();
 
+    const extractUrl = (el: Element): string | null => {
+      const a = el.tagName === 'A' ? el : el.querySelector('a[href]');
+      if (!a) return null;
+      const raw = a.getAttribute('href') || '';
+      const resolved = this.resolveUrl(raw);
+      if (!resolved || resolved.startsWith('#') || resolved.startsWith('/') || resolved === 'https://example.com' || resolved.includes('duckduckgo.com')) return null;
+      return resolved;
+    };
+
     const addResult = (el: Element) => {
+      const url = extractUrl(el);
+      if (!url) return;
       const link = el.tagName === 'A' ? el : el.querySelector('a[href]');
-      if (!link) return;
-      let url = link.getAttribute('href') || '';
-      const title = link.textContent?.trim() || '';
-      if (!title || !url || seen.has(title)) return;
-      // Skip navigation/utility links
-      if (url.startsWith('#') || url.startsWith('/')) return;
-      if (url.startsWith('//')) url = 'https:' + url;
-      const snippet = el.querySelector('.snippet, .result__snippet, .result-snippet, .kHJ7Cb, .VwiC3b, .lEBKkf, span')?.textContent?.trim() || '';
+      const title = link?.textContent?.trim() || '';
+      if (!title || title.length < 5 || seen.has(title)) return;
+      const snippet = el.querySelector('.snippet, .result__snippet, .result-snippet, .kHJ7Cb, .VwiC3b, .lEBKkf, span')?.textContent?.trim()
+        || el.querySelector('.result-snippet')?.textContent?.trim()
+        || '';
       seen.add(title);
       results.push({ title, url, snippet });
     };
 
-    // Strategy 1: DuckDuckGo HTML results (classic)
+    // Strategy 1: DuckDuckGo HTML results (main content)
     const articles = doc.querySelectorAll('article[data-testid="result"]');
     if (articles.length > 0) {
       articles.forEach(addResult);
       return results.slice(0, 7);
     }
 
-    // Strategy 2: Modern DDG result links
-    const resultLinks = doc.querySelectorAll('a.result__a, .result-link, .results_links a');
-    resultLinks.forEach(addResult);
+    // Strategy 2: Result links with heading class
+    doc.querySelectorAll('a[data-testid="result-title-a"], .result__a, .result-link, .results_links a, h2 a').forEach(addResult);
 
     if (results.length === 0) {
-      // Strategy 3: Generic link + snippet patterns
-      doc.querySelectorAll('.result, .web-result, .results_links_deep, .nrn, .web-result-item').forEach(addResult);
+      // Strategy 3: Generic result containers
+      doc.querySelectorAll('.result, .web-result, .results_links_deep, .nrn, .web-result-item, .result-body').forEach(addResult);
     }
 
     if (results.length === 0) {
-      // Strategy 4: Fallback — any reasonable external link with text
+      // Strategy 4: All external links with meaningful text, filter aggressively
       doc.querySelectorAll('a[href^="http"]').forEach((link) => {
+        const url = this.resolveUrl(link.getAttribute('href') || '');
+        if (!url || url.includes('duckduckgo.com') || url === 'https://example.com' || url.startsWith('https://www.google')) return;
         const text = link.textContent?.trim();
-        if (text && text.length > 10 && !seen.has(text)) {
-          const parent = link.parentElement;
-          const snippet = parent?.textContent?.replace(text, '').trim()?.slice(0, 200) || '';
-          seen.add(text);
-          results.push({ title: text.slice(0, 100), url: link.getAttribute('href') || '', snippet });
-        }
+        if (!text || text.length < 15 || seen.has(text) || text.includes('Privacy') || text.includes('Settings')) return;
+        const parent = link.parentElement;
+        const snippet = parent?.textContent?.replace(text, '').trim()?.slice(0, 200) || '';
+        seen.add(text);
+        results.push({ title: text.slice(0, 100), url, snippet });
       });
     }
 
