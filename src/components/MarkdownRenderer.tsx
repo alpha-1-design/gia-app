@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
 import CodeBlock from './CodeBlock';
+import VisualRenderer from './VisualRenderer';
 
 interface Props { content: string; className?: string }
 
@@ -23,7 +24,45 @@ const InlineCode: React.FC<{ code: string }> = ({ code }) => {
   );
 };
 
+const parseStyleString = (s: string): Record<string, string> => {
+  const style: Record<string, string> = {};
+  s.split(';').filter(Boolean).forEach(decl => {
+    const [prop, ...valParts] = decl.split(':');
+    const propName = prop?.trim();
+    const val = valParts.join(':').trim();
+    if (propName && val) {
+      const camel = propName.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+      style[camel] = val;
+    }
+  });
+  return style;
+};
+
+const SPAN_RE = /<span\s+([^>]*)>([\s\S]*?)<\/span>/g;
+
 const inlineRender = (text: string, footnotes: Map<string, string>): React.ReactNode[] => {
+  if (text.includes('<span')) {
+    const nodes: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+    const re = new RegExp(SPAN_RE.source, 'g');
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        nodes.push(...inlineRender(text.slice(lastIdx, match.index), footnotes));
+      }
+      const attrs = match[1];
+      const innerText = match[2];
+      const styleMatch = attrs.match(/style\s*=\s*"([^"]*)"/);
+      const style = styleMatch ? parseStyleString(styleMatch[1]) : {};
+      nodes.push(<span key={match.index} style={style}>{inlineRender(innerText, footnotes)}</span>);
+      lastIdx = match.index + match[0].length;
+    }
+    if (lastIdx < text.length) {
+      nodes.push(...inlineRender(text.slice(lastIdx), footnotes));
+    }
+    return nodes;
+  }
+
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~|\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|!\[[^\]]*\]\([^)]+\)|\[\^[^\]]+\])/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
@@ -222,6 +261,8 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
         nodes.push(<MermaidDiagram key={`mm-${i}`} definition={codeLines.join('\n')} />);
       } else if (lang === 'svg' || lang === 'svg+xml') {
         nodes.push(<InlineSvg key={`svg-${i}`} svg={codeLines.join('\n')} />);
+      } else if (lang === 'visual') {
+        nodes.push(<VisualRenderer key={`vis-${i}`} code={codeLines.join('\n')} />);
       } else {
         nodes.push(<CodeBlock key={`cb-${i}`} lang={lang} code={codeLines.join('\n')} showRun={true} />);
       }
