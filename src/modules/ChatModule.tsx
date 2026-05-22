@@ -85,11 +85,14 @@ const ChatModule: React.FC = () => {
   const providerConnected = providers[activeProvider]?.enabled ?? false;
   const activeModel = providers[activeProvider]?.model ?? '';
 
-  const keepListeningRef = useRef(localStorage.getItem('gia-keep-listening') !== 'false');
+  const keepListening = useGiaStore(s => s.keepListening);
+  const keepListeningRef = useRef(keepListening);
+  keepListeningRef.current = keepListening;
 
   const handleWakeWord = useCallback((transcript: string) => {
     const ww = useGiaStore.getState().wakeWord;
-    const query = transcript.replace(new RegExp(ww, 'i'), '').trim();
+    if (!ww) return;
+    const query = transcript.replace(new RegExp(ww.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
     if (query) {
       setInput(query);
       addNotification('Wake word detected');
@@ -130,8 +133,8 @@ const ChatModule: React.FC = () => {
   const voiceControl = useVoiceControl({
     wakeWord,
     onWakeWord: handleWakeWord,
-    onTranscript: handleVoiceTranscript, // New callback for non-wake-word speech
-    keepListening: keepListeningRef.current,
+    onTranscript: handleVoiceTranscript,
+    keepListening,
     autoStopAfter: 120000,
   });
   
@@ -819,9 +822,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 pb-36 space-y-3 relative z-0">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4 relative z-0">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pb-32 animate-fade-in">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-16 pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
               <Bot size={26} style={{ color: '#a855f7' }} />
             </div>
@@ -853,7 +856,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
 
         {messages.map((msg, i) => (
-          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
               {msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <Bot size={13} style={{ color: 'var(--gia-muted)' }} />}
             </div>
@@ -957,7 +960,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 }}
               >
                 <div 
-                  className={`p-3.5 rounded-2xl relative select-none transition-shadow ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : 'bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/60'}`}
+                  className={`p-5 rounded-2xl relative select-none transition-shadow ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : 'bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/60'}`}
                   style={{
                     borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                     borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
@@ -1148,7 +1151,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
 
-        <div className="px-4 pb-5 pt-1 sticky bottom-0 z-10 bg-transparent backdrop-blur-xl">
+        <div className="px-4 pb-5 pt-3 sticky bottom-0 z-10 bg-[#0a0a0f]/60 backdrop-blur-2xl border-t border-white/[0.03] shadow-2xl">
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 

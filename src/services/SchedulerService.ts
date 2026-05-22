@@ -26,9 +26,7 @@ class SchedulerService {
     return this.instance;
   }
 
-  private constructor() {
-    this.start();
-  }
+  private constructor() {}
 
   private async runTask(task: any) {
     if (this.handledIds.has(task.id)) return;
@@ -36,6 +34,10 @@ class SchedulerService {
 
     const { updateTaskStatus, addNotification, activeSkillId, skills } = useGiaStore.getState();
     const { activeProvider, providers } = useProviderStore.getState();
+    if (!providers[activeProvider]?.enabled) {
+      updateTaskStatus(task.id, 'error', 'No provider');
+      return;
+    }
     updateTaskStatus(task.id, 'running');
 
     try {
@@ -74,25 +76,20 @@ class SchedulerService {
           }],
         });
       } catch {}
-    } catch (e) {
+    } catch {
       updateTaskStatus(task.id, 'error', 'Task failed.');
-      useGiaStore.getState().addNotification(`❌ ${task.title.slice(0, 30)}`);
     }
   }
 
   private async checkForDueTasks() {
-    const tasks = useGiaStore.getState().scheduledTasks;
+    const { scheduledTasks } = useGiaStore.getState();
+    if (scheduledTasks.length === 0) { this.stop(); return; }
     const now = Date.now();
-    for (const task of tasks) {
+    for (const task of scheduledTasks) {
       if (task.status === 'pending' && task.nextRun <= now) {
         await this.runTask(task);
       }
     }
-    // Clear handled IDs periodically to allow recurring tasks to run again
-    // Since recurring tasks are updated to 'pending' with a new nextRun,
-    // we only need to track handledIds within one check cycle or
-    // manage them based on timestamp.
-    // For simplicity in this agentic loop, we clear handledIds after a full sweep.
     this.handledIds.clear();
   }
 

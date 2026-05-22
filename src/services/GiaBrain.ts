@@ -263,6 +263,29 @@ class GiaBrain {
     return run(0);
   }
 
+  private friendlyError(label: string, e: unknown): string {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('network error') || msg.includes('fetch failed') || msg.includes('ENOTFOUND') || msg.includes('DNS')) {
+      return `${label} can't be reached — your network may be blocking it. Try OpenRouter (works everywhere) in Settings → Engine Room.`;
+    }
+    if (msg.includes('401') || msg.includes('Unauthorized') || msg.includes('API key')) {
+      return `${label} rejected your API key — check it in Settings → Engine Room.`;
+    }
+    if (msg.includes('402') || msg.includes('insufficient_quota') || msg.includes('quota')) {
+      return `${label} — your account has run out of credits or quota. Top up or switch providers.`;
+    }
+    if (msg.includes('429') || msg.includes('rate') || msg.includes('Rate limit')) {
+      return `${label} — too many requests. Wait a moment or switch providers.`;
+    }
+    if (msg.includes('503') || msg.includes('502') || msg.includes('500') || msg.includes('server error') || msg.includes('Service Unavailable')) {
+      return `${label} is temporarily down — try again later or switch to OpenRouter.`;
+    }
+    if (msg.includes('empty response') || msg.includes('returned empty')) {
+      return `${label} returned nothing — the model may have usage caps. Try a different model or provider.`;
+    }
+    return msg;
+  }
+
   private async callOpenAICompat(req: BrainRequest): Promise<BrainResponse> {
     const { activeProvider, providers } = useProviderStore.getState();
     const config = providers[activeProvider];
@@ -377,7 +400,7 @@ class GiaBrain {
           }
         };
 
-        xhr.onerror = () => reject(new Error(`${label} network error`));
+        xhr.onerror = () => reject(new Error(this.friendlyError(label, `${label} network error`)));
         xhr.onabort = () => {
           const e = new Error('Request aborted');
           e.name = 'AbortError';
@@ -395,14 +418,17 @@ class GiaBrain {
 
     const res = await this.retryFetch(`${baseUrl}/chat/completions`, {
       method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
+    }).catch((e: any) => {
+      if (e.name === 'AbortError') throw e;
+      throw new Error(this.friendlyError(label, e));
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({})) as any;
-      throw new Error(e?.error?.message || `${label} error ${res.status}`);
+      throw new Error(this.friendlyError(label, e?.error?.message || `${label} error ${res.status}`));
     }
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content?.trim()) throw new Error(`${label} returned empty response`);
+    if (!content?.trim()) throw new Error(this.friendlyError(label, `${label} returned empty response`));
     return { text: content, provider: activeProvider, model: config.model };
   }
 
@@ -532,14 +558,17 @@ class GiaBrain {
       method: 'POST',
       headers: anthropicHeaders,
       body: JSON.stringify(body), signal: req.signal,
+    }).catch((e: any) => {
+      if (e.name === 'AbortError') throw e;
+      throw new Error(this.friendlyError('Anthropic', e));
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(e?.error?.message || `Anthropic error ${res.status}`);
+      throw new Error(this.friendlyError('Anthropic', e?.error?.message || `Anthropic error ${res.status}`));
     }
     const data = await res.json() as any;
     const text = data.content?.find((b: any) => b.type === 'text')?.text ?? '';
-    if (!text.trim()) throw new Error('Anthropic returned empty response');
+    if (!text.trim()) throw new Error(this.friendlyError('Anthropic', 'Anthropic returned empty response'));
     return { text, provider: 'anthropic', model: config.model };
   }
 
@@ -676,14 +705,17 @@ class GiaBrain {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
       body: JSON.stringify(body),
       signal: req.signal,
+    }).catch((e: any) => {
+      if (e.name === 'AbortError') throw e;
+      throw new Error(this.friendlyError('Gemini', e));
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
-      throw new Error(e?.error?.message || `Gemini error ${res.status}`);
+      throw new Error(this.friendlyError('Gemini', e?.error?.message || `Gemini error ${res.status}`));
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    if (!text.trim()) throw new Error('Gemini returned empty response');
+    if (!text.trim()) throw new Error(this.friendlyError('Gemini', 'Gemini returned empty response'));
     return { text, provider: 'gemini', model: config.model };
   }
 
@@ -844,7 +876,7 @@ class GiaBrain {
   }
 
   private async extractMemories(userMessage: string, assistantResponse: string) {
-    if (this.extractingMemories || !userMessage || !assistantResponse) return;
+    if (this.extractingMemories || !userMessage || !assistantResponse || assistantResponse.length < 100) return;
     this.extractingMemories = true;
     try {
       const { activeProvider, providers } = useProviderStore.getState();

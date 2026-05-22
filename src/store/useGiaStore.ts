@@ -87,6 +87,7 @@ interface GiaState {
   handsOff: boolean;
   clarification: Clarification | null;
   wakeWord: string;
+  keepListening: boolean;
   customInstructions: string;
   pinnedMemories: string[];
 
@@ -98,6 +99,7 @@ interface GiaState {
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
   setWakeWord: (word: string) => void;
+  setKeepListening: (on: boolean) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -214,6 +216,7 @@ export const useGiaStore = create<GiaState>()(
       handsOff: false,
       clarification: null,
       wakeWord: localStorage.getItem('gia-wake-word') || 'hey gia',
+      keepListening: localStorage.getItem('gia-keep-listening') !== 'false',
       customInstructions: localStorage.getItem('gia-custom-instructions') || '',
       pinnedMemories: JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'),
 
@@ -227,6 +230,10 @@ export const useGiaStore = create<GiaState>()(
       setWakeWord: (word) => {
         localStorage.setItem('gia-wake-word', word);
         set({ wakeWord: word });
+      },
+      setKeepListening: (on) => {
+        localStorage.setItem('gia-keep-listening', String(on));
+        set({ keepListening: on });
       },
       setCustomInstructions: (text) => {
         localStorage.setItem('gia-custom-instructions', text);

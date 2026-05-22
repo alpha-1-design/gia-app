@@ -376,7 +376,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
 
     // Empty line
     if (!line.trim()) {
-      nodes.push(<div key={`sp-${i}`} style={{ height: '6px' }} />);
+      nodes.push(<div key={`sp-${i}`} style={{ height: '10px' }} />);
       i++; continue;
     }
 
@@ -387,7 +387,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
 
     // Paragraph
     nodes.push(
-      <p key={`p-${i}`} style={{ margin: '4px 0', lineHeight: '1.65', color: 'var(--gia-text)' }}>
+      <p key={`p-${i}`} style={{ margin: '8px 0', lineHeight: '1.7', color: 'var(--gia-text)' }}>
         {inlineRender(line, footnotes)}
       </p>
     );
