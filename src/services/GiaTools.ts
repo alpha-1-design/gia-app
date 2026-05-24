@@ -337,16 +337,40 @@ class GiaTools {
           const config = providers[activeProvider];
           if (!config?.apiKey) return { success: false, content: '', error: 'No provider configured.' };
           const textToSummarize = Array.isArray(msgs) ? msgs.map((m: any) => `${m.role}: ${typeof m.content === 'string' ? m.content.slice(0, 1000) : ''}`).join('\n').slice(0, 15000) : '';
-          const res = await fetch(`${PROVIDER_DEFAULTS.openai.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: config.model, messages: [{ role: 'system', content: 'Summarize this conversation concisely. Capture key facts, decisions, and user preferences.' }, { role: 'user', content: textToSummarize }], temperature: 0.3, max_tokens: 512 }),
-            signal: AbortSignal.timeout(15000),
-          });
+
+          if (activeProvider === 'anthropic') {
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: config.model, max_tokens: 512, temperature: 0.3, system: 'Summarize this conversation concisely. Capture key facts, decisions, and user preferences.', messages: [{ role: 'user', content: textToSummarize }] }),
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json() as any;
+            return { success: true, content: data.content?.find((b: any) => b.type === 'text')?.text || 'Summary unavailable.' };
+          }
+
+          if (activeProvider === 'gemini') {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textToSummarize }] }], system_instruction: { parts: [{ text: 'Summarize this conversation concisely. Capture key facts, decisions, and user preferences.' }] }, generationConfig: { temperature: 0.3, maxOutputTokens: 512 } }),
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json() as any;
+            return { success: true, content: data.candidates?.[0]?.content?.parts?.[0]?.text || 'Summary unavailable.' };
+          }
+
+          const sumDefaults = PROVIDER_DEFAULTS[activeProvider];
+          if (!sumDefaults) return { success: false, content: '', error: `Unknown provider: ${activeProvider}` };
+          const { baseUrl } = sumDefaults;
+          const headers: Record<string, string> = { 'Authorization': `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' };
+          if (activeProvider === 'openrouter') { headers['HTTP-Referer'] = 'https://gia.app'; headers['X-Title'] = 'GIA'; }
+          const res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify({ model: config.model, messages: [{ role: 'system', content: 'Summarize this conversation concisely. Capture key facts, decisions, and user preferences.' }, { role: 'user', content: textToSummarize }], temperature: 0.3, max_tokens: 512 }), signal: AbortSignal.timeout(15000) });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          const summary = data.choices?.[0]?.message?.content || data.content || 'Summary unavailable.';
-          return { success: true, content: summary };
+          return { success: true, content: data.choices?.[0]?.message?.content || 'Summary unavailable.' };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }

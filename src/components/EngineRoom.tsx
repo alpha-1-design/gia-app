@@ -14,7 +14,7 @@ type WizardStep =
 let lid = 0;
 const mk = (type: LineType, text: string): Line => ({ type, text, id: lid++ });
 
-const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode'];
+const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral'];
 const PROVIDER_ALIAS: Record<string, ProviderType> = {
   or: 'openrouter', openrouter: 'openrouter',
   ant: 'anthropic', anthropic: 'anthropic',
@@ -22,16 +22,19 @@ const PROVIDER_ALIAS: Record<string, ProviderType> = {
   gem: 'gemini', gemini: 'gemini',
   groq: 'groq',
   oc: 'opencode', opencode: 'opencode',
+  ds: 'deepseek', deepseek: 'deepseek',
+  cb: 'cerebras', cerebras: 'cerebras',
+  ms: 'mistral', mistral: 'mistral',
 };
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
   mk('info', '║        GIA ENGINE ROOM  v2.3.1           ║'),
-  mk('info', '║   6 Providers · Dynamic Model Fetch      ║'),
+  mk('info', '║   9 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
-  mk('res', 'Supported: OpenRouter · Anthropic · OpenAI'),
-  mk('res', '          Gemini · Groq · OpenCode'),
+  mk('res', 'Supported: OpenRouter · Anthropic · OpenAI · Gemini'),
+  mk('res', '          Groq · OpenCode · DeepSeek · Cerebras · Mistral'),
   mk('res', ''),
   mk('res', 'Type  help  for commands.'),
   mk('res', ''),

@@ -11,10 +11,13 @@ export interface ImageGenResult {
 const IMAGE_MODELS: Record<string, string> = {
   openai: 'dall-e-3',
   openrouter: 'openai/dall-e-3',
-  anthropic: '', // Not supported
-  gemini: '', // Not supported via OpenAI compat
-  groq: '', // Not supported
-  opencode: '', // Not supported
+  anthropic: '',
+  gemini: '',
+  groq: '',
+  opencode: '',
+  deepseek: '',
+  cerebras: '',
+  mistral: '',
 };
 
 const isNative = isNativePlatform();
@@ -35,7 +38,9 @@ class ImageService {
     }
 
     const config = providers[targetProvider];
-    const { baseUrl, model } = PROVIDER_DEFAULTS[targetProvider];
+    const targetDefaults = PROVIDER_DEFAULTS[targetProvider];
+    if (!targetDefaults) return { url: '', error: `${targetProvider} is not fully configured.` };
+    const { baseUrl } = targetDefaults
     const imageModel = IMAGE_MODELS[targetProvider];
 
     if (!imageModel) {

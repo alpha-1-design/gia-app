@@ -11,7 +11,7 @@ import CodeRunner from '../services/CodeRunner';
 import { useMemoryStore, MemoryCategory } from '../store/useMemoryStore';
 import QRCode from 'qrcode';
 
-const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode'];
+const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral'];
 
 const PROVIDER_COLORS: Record<ProviderType, string> = {
   openrouter: '#6366f1',
@@ -20,6 +20,9 @@ const PROVIDER_COLORS: Record<ProviderType, string> = {
   gemini:     '#4285f4',
   groq:       '#f97316',
   opencode:   '#8b5cf6',
+  deepseek:   '#4f46e5',
+  cerebras:   '#059669',
+  mistral:    '#0891b2',
 };
 
 const SettingsModule: React.FC = () => {

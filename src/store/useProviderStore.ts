@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 
-export type ProviderType = 'openrouter' | 'anthropic' | 'openai' | 'gemini' | 'groq' | 'opencode';
+export type ProviderType = 'openrouter' | 'anthropic' | 'openai' | 'gemini' | 'groq' | 'opencode' | 'deepseek' | 'cerebras' | 'mistral';
 
 export interface ModelOption {
   id: string;
@@ -25,6 +25,9 @@ export const PROVIDER_DEFAULTS: Record<ProviderType, { model: string; label: str
   gemini:     { model: 'gemini-2.0-flash',           label: 'Gemini',     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
   groq:       { model: 'llama-3.3-70b-versatile',    label: 'Groq',       baseUrl: 'https://api.groq.com/openai/v1' },
   opencode:   { model: 'deepseek-chat',              label: 'OpenCode',   baseUrl: 'https://opencode.ai/zen/v1' },
+  deepseek:   { model: 'deepseek-chat',              label: 'DeepSeek',   baseUrl: 'https://api.deepseek.com/v1' },
+  cerebras:   { model: 'llama-3.1-8b',               label: 'Cerebras',   baseUrl: 'https://api.cerebras.ai/v1' },
+  mistral:    { model: 'mistral-small-latest',        label: 'Mistral',    baseUrl: 'https://api.mistral.ai/v1' },
 };
 
 // Static fallback model lists (used when API fetch fails or key not yet set)
@@ -34,9 +37,19 @@ export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
     { id: 'meta-llama/llama-4-maverick:free',    label: 'Llama 4 Maverick (Free)',  free: true,  context: '128k' },
     { id: 'deepseek/deepseek-chat-v3-0324:free', label: 'DeepSeek V3 (Free)',       free: true,  context: '64k' },
     { id: 'google/gemini-2.0-flash-exp:free',    label: 'Gemini 2.0 Flash (Free)',  free: true,  context: '1M' },
+    { id: 'qwen/qwq-32b:free',                  label: 'QwQ 32B (Free)',           free: true,  context: '32k' },
+    { id: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free', label: 'Dolphin R1 24B (Free)', free: true, context: '32k' },
+    { id: 'microsoft/phi-4:free',               label: 'Phi-4 14B (Free)',         free: true,  context: '16k' },
+    { id: 'sophosympatheia/rogue-rose-103b-v0.2:free', label: 'Rogue Rose 103B (Free)', free: true, context: '32k' },
+    { id: 'nvidia/llama-3.1-nemotron-ultra:free',label: 'Nemotron Ultra (Free)',     free: true,  context: '256k' },
     { id: 'anthropic/claude-3.5-haiku',          label: 'Claude 3.5 Haiku',         free: false, context: '200k' },
     { id: 'openai/gpt-4o-mini',                  label: 'GPT-4o Mini',              free: false, context: '128k' },
     { id: 'google/gemini-2.5-pro',               label: 'Gemini 2.5 Pro',           free: false, context: '1M' },
+    { id: 'openai/o3-mini',                      label: 'o3 Mini',                  free: false, context: '200k' },
+    { id: 'mistralai/mistral-nemo',              label: 'Mistral Nemo',              free: false, context: '128k' },
+    { id: 'ai21/jamba-1.6',                      label: 'Jamba 1.6',                free: false, context: '256k' },
+    { id: 'x-ai/grok-2',                         label: 'Grok 2',                   free: false, context: '128k' },
+    { id: 'cohere/command-r-plus',               label: 'Command R+',               free: false, context: '128k' },
   ],
   anthropic: [
     { id: 'claude-3-5-haiku-20241022',  label: 'Claude 3.5 Haiku',  free: false, context: '200k' },
@@ -62,6 +75,20 @@ export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
   opencode: [
     { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k' },
     { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k' },
+  ],
+  deepseek: [
+    { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k' },
+    { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k' },
+  ],
+  cerebras: [
+    { id: 'llama-3.1-8b',                 label: 'Llama 3.1 8B',       free: true, context: '131k' },
+    { id: 'llama-3.1-70b',                label: 'Llama 3.1 70B',      free: true, context: '131k' },
+    { id: 'llama-3.3-70b',                label: 'Llama 3.3 70B',      free: true, context: '131k' },
+  ],
+  mistral: [
+    { id: 'mistral-small-latest',   label: 'Mistral Small',    free: true,  context: '32k' },
+    { id: 'mistral-large-latest',   label: 'Mistral Large',    free: false, context: '128k' },
+    { id: 'pixtral-large-latest',   label: 'Pixtral Large',    free: false, context: '128k' },
   ],
 };
 

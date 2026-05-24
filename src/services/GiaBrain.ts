@@ -25,7 +25,7 @@ export interface BrainRequest {
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[] }
 
 const buildGiaSystem = (query?: string) => {
-  const { userProfile, activeSkillId, skills, handsOff, extThinking, customInstructions, pinnedMemories } = useGiaStore.getState();
+    const { userProfile, activeSkillId, skills, extThinking, customInstructions, pinnedMemories } = useGiaStore.getState();
   const activeSkill = skills.find(s => s.id === activeSkillId);
   const memStore = useMemoryStore.getState();
   const memory = memStore.getRelevantContext(query);
@@ -89,8 +89,17 @@ Available tools:
 
 Usage rules:
 - Call ONE tool per response. Wait for the observation before acting further.
-- In ${handsOff ? 'hands-off mode you execute autonomously' : 'normal mode you SUGGEST tools to the user — do NOT execute them without permission'}.
+- Always use tools when they help — don't just talk about doing something, actually call the tool.
 - Verify all argument values are correct before writing the block.
+
+## VISUAL OUTPUT
+When you run code via terminal_run, always show the output using a visual terminal block:
+
+\`\`\`visual
+{ "type": "terminal", "data": { "command": "python script.py", "output": "<output here>", "exitCode": 0 } }
+\`\`\`
+
+If a tool returns an error, include the error in the terminal output with exitCode 1.
 
 ## Available Modules
 You can navigate the user between these modules using 'switch_module':
@@ -301,7 +310,9 @@ class GiaBrain {
   private async callOpenAICompat(req: BrainRequest): Promise<BrainResponse> {
     const { activeProvider, providers } = useProviderStore.getState();
     const config = providers[activeProvider];
-    const { baseUrl, label } = PROVIDER_DEFAULTS[activeProvider];
+    const defaults = PROVIDER_DEFAULTS[activeProvider];
+    if (!defaults) throw new Error(`Unknown provider: ${activeProvider}`);
+    const { baseUrl, label } = defaults;
     const messages = [
       { role: 'system', content: this.buildSystemPrompt(req.prompt, req.systemPrompt) },
       ...(await this.buildMessages(req))
@@ -841,40 +852,82 @@ class GiaBrain {
     const targetProvider = providerName.toLowerCase();
     const config = providers[targetProvider as keyof typeof providers];
     if (!config || !config.enabled) return `Error: Provider ${providerName} is not configured.`;
-    
+
+    const defaults = PROVIDER_DEFAULTS[targetProvider as keyof typeof PROVIDER_DEFAULTS];
+    if (!defaults) return `Error: Provider ${providerName} is not supported.`;
+
+    const systemPrompt = buildGiaSystem(prompt) + "\n\nYou are a specialized GIA sub-agent. Help the main agent fulfill the user's request. You have full tool access.";
+
     try {
-      const { baseUrl } = PROVIDER_DEFAULTS[targetProvider as keyof typeof PROVIDER_DEFAULTS];
-      
-      // Sub-agents now get the full GIA system context but are instructed as specialized helpers
-      const systemPrompt = buildGiaSystem(prompt) + "\n\nYou are a specialized GIA sub-agent. Help the main agent fulfill the user's request. You have full tool access.";
-      
-      const body = { 
-        model: config.model, 
+      if (targetProvider === 'anthropic') {
+        const body = {
+          model: config.model,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+        };
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': config.apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as any;
+        return data.content?.find((b: any) => b.type === 'text')?.text ?? 'Sub-agent failed to respond.';
+      }
+
+      if (targetProvider === 'gemini') {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`;
+        const body = {
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+        };
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
+          body: JSON.stringify(body),
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as any;
+        return data.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Sub-agent failed to respond.';
+      }
+
+      // OpenAI-compatible providers
+      const { baseUrl } = defaults;
+      const body = {
+        model: config.model,
         messages: [
-          { role: 'system', content: systemPrompt }, 
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
-        ], 
-        temperature: 0.7, 
-        max_tokens: 4096 
+        ],
+        temperature: 0.7,
+        max_tokens: 4096
       };
 
-      // For sub-agents, we do a single generation but we could also loop. 
-      // To keep it simple and avoid depth recursion limits, we do one deep turn.
-      const res = await fetch(`${baseUrl}/chat/completions`, { 
-        method: 'POST', 
-        headers: { 
-          'Authorization': `Bearer ${config.apiKey}`, 
-          'Content-Type': 'application/json' 
-        }, 
-        body: JSON.stringify(body), 
-        signal 
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal
       });
-      
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       return data.choices?.[0]?.message?.content || data.content || "Sub-agent failed to respond.";
-    } catch (e: any) { 
-      return `Error delegating: ${e.message}`; 
+    } catch (e: any) {
+      return `Error delegating: ${e.message}`;
     }
   }
 
@@ -893,9 +946,8 @@ class GiaBrain {
     try {
       const { activeProvider, providers } = useProviderStore.getState();
       const config = providers[activeProvider];
-      if (!config?.apiKey || activeProvider === 'anthropic') return;
+      if (!config?.apiKey) return;
 
-      const { baseUrl } = PROVIDER_DEFAULTS[activeProvider];
       const extractionPrompt = `Analyze this conversation exchange and extract any facts worth remembering about the user.
 
 User said: "${userMessage.slice(0, 500)}"
@@ -911,27 +963,69 @@ Return JSON array only, no other text:
 
 Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "preference" | "session_summary"`;
 
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-          ...(activeProvider === 'openrouter' ? { 'HTTP-Referer': 'https://gia.app', 'X-Title': 'GIA' } : {}),
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: [
-            { role: 'system', content: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.' },
-            { role: 'user', content: extractionPrompt },
-          ],
-          max_tokens: 300,
-          temperature: 0.1,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content || '';
+      let text = '';
+
+      if (activeProvider === 'anthropic') {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': config.apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: config.model,
+            max_tokens: 300,
+            system: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.',
+            messages: [{ role: 'user', content: extractionPrompt }],
+            temperature: 0.1,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return;
+        const data = await res.json() as any;
+        text = data.content?.find((b: any) => b.type === 'text')?.text || '';
+      } else if (activeProvider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: extractionPrompt }] }],
+            system_instruction: { parts: [{ text: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.' }] },
+            generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return;
+        const data = await res.json() as any;
+        text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } else {
+        const memDefaults = PROVIDER_DEFAULTS[activeProvider];
+        if (!memDefaults) return;
+        const { baseUrl } = memDefaults;
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+            ...(activeProvider === 'openrouter' ? { 'HTTP-Referer': 'https://gia.app', 'X-Title': 'GIA' } : {}),
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: [
+              { role: 'system', content: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.' },
+              { role: 'user', content: extractionPrompt },
+            ],
+            max_tokens: 300,
+            temperature: 0.1,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        text = data.choices?.[0]?.message?.content || '';
+      }
       const cleaned = text.replace(/```json|```/g, '').trim();
       const entries = JSON.parse(cleaned);
       if (Array.isArray(entries) && entries.length > 0) {

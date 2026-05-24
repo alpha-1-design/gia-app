@@ -57,11 +57,37 @@ class CodeRunner {
   setEndpoint(url: string) { this.userEndpoint = url; }
   getEndpoint() { return this.userEndpoint || PISTON_URL; }
 
+  private runLocalJS(code: string): CodeRunResult {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: any[]) => {
+      logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
+    };
+    try {
+      const fn = new Function(code);
+      const result = fn();
+      const output = logs.join('\n');
+      if (result !== undefined && !output.includes(String(result))) {
+        return { output: output + (output ? '\n' : '') + String(result), error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' };
+      }
+      return { output: output || 'undefined', error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' };
+    } catch (e: any) {
+      return { output: '', error: e.message || 'JavaScript execution failed', exitCode: 1, language: 'javascript', version: 'local (browser)' };
+    } finally {
+      console.log = originalLog;
+    }
+  }
+
   async run(req: CodeRunRequest, attempts = 0, signal?: AbortSignal): Promise<CodeRunResult> {
     const maxAttempts = 3;
     const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
 
     if (signal?.aborted) return { output: '', error: 'Request aborted', exitCode: 1, language: lang, version: '' };
+
+    // Run JavaScript locally in browser — instant, no network needed
+    if (lang === 'javascript') {
+      return this.runLocalJS(req.code);
+    }
 
     const files = [{ name: `main.${lang}`, content: req.code }];
 
