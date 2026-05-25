@@ -2,24 +2,13 @@ import GiaBrain from './GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
-
-const getIntervalMs = (interval: string) =>
-  interval === 'hourly' ? 3600000 : interval === 'daily' ? 86400000 : 604800000;
-
-const formatNextRun = (ts: number) => {
-  const diff = ts - Date.now();
-  if (diff <= 0) return 'now';
-  if (diff < 3600000) return `in ${Math.ceil(diff / 60000)}m`;
-  if (diff < 86400000) return `in ${Math.ceil(diff / 3600000)}h`;
-  return `in ${Math.ceil(diff / 86400000)}d`;
-};
-
-const notifId = () => (Date.now() % 100000) + Math.floor(Math.random() * 1000);
+import { getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
 
 class SchedulerService {
   private static instance: SchedulerService;
   private intervalId: NodeJS.Timeout | null = null;
-  private handledIds = new Set<string>();
+  private handledIds = new Map<string, number>();  // id → timestamp
+  private readonly TTL = 24 * 60 * 60 * 1000;       // 24h
 
   static getInstance() {
     if (!this.instance) this.instance = new SchedulerService();
@@ -28,9 +17,19 @@ class SchedulerService {
 
   private constructor() {}
 
+  private isHandled(id: string): boolean {
+    const ts = this.handledIds.get(id);
+    if (!ts) return false;
+    if (Date.now() - ts > this.TTL) {
+      this.handledIds.delete(id);
+      return false;
+    }
+    return true;
+  }
+
   private async runTask(task: any) {
-    if (this.handledIds.has(task.id)) return;
-    this.handledIds.add(task.id);
+    if (this.isHandled(task.id)) return;
+    this.handledIds.set(task.id, Date.now());
 
     const { updateTaskStatus, addNotification, activeSkillId, skills } = useGiaStore.getState();
     const { activeProvider, providers } = useProviderStore.getState();
@@ -90,7 +89,6 @@ class SchedulerService {
         await this.runTask(task);
       }
     }
-    this.handledIds.clear();
   }
 
   public start() {

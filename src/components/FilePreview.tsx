@@ -27,7 +27,7 @@ const getExt = (name: string) => name.split('.').pop()?.toLowerCase() || '';
 
 const isFile = (f: unknown): f is File => f instanceof File;
 
-const PreviewCard: React.FC<{ file: File | { name: string; type: string; data: string }; preview?: string }> = ({ file, preview }) => {
+const FilePreview: React.FC<{ file: File | { name: string; type: string; data: string }; preview?: string }> = ({ file, preview }) => {
   const [expanded, setExpanded] = useState(false);
   const [extracted, setExtracted] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,4 +85,4 @@ const PreviewCard: React.FC<{ file: File | { name: string; type: string; data: s
   );
 };
 
-export default PreviewCard;
+export default FilePreview;

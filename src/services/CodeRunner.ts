@@ -53,9 +53,15 @@ class CodeRunner {
   static getInstance() { if (!this.instance) this.instance = new CodeRunner(); return this.instance; }
 
   private userEndpoint: string = '';
+  private userApiKey: string = '';
 
   setEndpoint(url: string) { this.userEndpoint = url; }
   getEndpoint() { return this.userEndpoint || PISTON_URL; }
+  setApiKey(key: string) { this.userApiKey = key; }
+  getApiKey() { return this.userApiKey; }
+  private getAuthHeaders(): Record<string, string> {
+    return this.userApiKey ? { 'Authorization': `Bearer ${this.userApiKey}` } : {};
+  }
 
   private runLocalJS(code: string): CodeRunResult {
     const logs: string[] = [];
@@ -104,12 +110,14 @@ class CodeRunner {
         max_process_count: 64,
       };
 
+      const authHeaders = this.getAuthHeaders();
       if (isNative) {
         const res = await CapacitorHttp.post({
           url: this.getEndpoint(),
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           data: body,
         });
+        if (res.status === 401) throw new Error('Piston API requires authentication. Set an API key in Settings → Code Execution.');
         if (res.status < 200 || res.status >= 300) {
           throw new Error(`Piston error ${res.status}: ${JSON.stringify(res.data)}`);
         }
@@ -122,7 +130,7 @@ class CodeRunner {
 
         const res = await fetch(this.getEndpoint(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify(body),
           signal: controller.signal,
         });
@@ -130,6 +138,7 @@ class CodeRunner {
         signal?.removeEventListener('abort', onAbort);
         if (!res.ok) {
           const errText = await res.text().catch(() => 'Unknown error');
+          if (res.status === 401) throw new Error('Piston API requires authentication. Set an API key in Settings → Code Execution, or self-host Piston (github.com/engineer-man/piston).');
           throw new Error(`Piston error ${res.status}: ${errText}`);
         }
         data = await res.json();
@@ -168,7 +177,7 @@ class CodeRunner {
 
   async autoFix(code: string, language: string, error: string): Promise<string | null> {
     try {
-      const brain = (await import('./GiaBrain')).default;
+      const { default: brain } = await import('./GiaBrain');
       const res = await brain.generate({
         prompt: `Fix this ${language} code error:\n\n${code}\n\nError:\n${error}\n\nReturn ONLY the fixed code, no explanations.`,
         temperature: 0.2,
@@ -181,14 +190,22 @@ class CodeRunner {
     }
   }
 
+  private getRequestHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return { 'Content-Type': 'application/json', ...this.getAuthHeaders(), ...extra };
+  }
+
   private async fetchJSON(url: string, options?: RequestInit): Promise<any> {
+    const headers = this.getRequestHeaders(options?.headers as Record<string, string> || {});
+    const mergedOptions = { ...options, headers };
     if (isNative) {
       const method = (options?.method || 'GET').toLowerCase() as 'get' | 'post';
-      const res = await (CapacitorHttp as any)[method]({ url, connectTimeout: 10000, readTimeout: 10000, ...(options?.body ? { data: JSON.parse(options.body as string) } : {}), ...(options?.headers || {}) });
+      const res = await (CapacitorHttp as any)[method]({ url, connectTimeout: 10000, readTimeout: 10000, ...(options?.body ? { data: JSON.parse(options.body as string) } : {}), ...headers });
+      if (res.status === 401) throw new Error('Piston API requires authentication. Set an API key in Settings.');
       if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
       return res.data;
     }
-    const res = await fetch(url, options);
+    const res = await fetch(url, mergedOptions);
+    if (res.status === 401) throw new Error('Piston API requires authentication. Set an API key in Settings.');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   }

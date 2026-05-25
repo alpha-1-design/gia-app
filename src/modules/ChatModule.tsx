@@ -6,7 +6,7 @@ import {
   BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, FileCode,
   Terminal, Square
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import JSZip from 'jszip';
 import { ThinkingPanel } from '../components/ThinkingPanel';
 import GiaBrain from '../services/GiaBrain';
@@ -22,7 +22,21 @@ import SkillPicker from '../components/SkillPicker';
 import GiaConsole from '../components/GiaConsole';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 
-const genId = () => Math.random().toString(36).slice(2, 10);
+const genId = () => {
+  const arr = new Uint8Array(8);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
+};
+
+const stripToolBlocks = (text: string): string => {
+  let result = text.replace(/```tool[\s\S]*?```/g, '');
+  result = result.replace(/```tool[\s\S]*$/gm, '');
+  return result.trim();
+};
+
+const processStreamForDisplay = (accumulated: string): string => {
+  return stripToolBlocks(accumulated) || '…';
+};
 
 type Attachment = { name: string; type: string; content: string; preview?: string };
 
@@ -113,8 +127,7 @@ const ChatModule: React.FC = () => {
 
     addNotification('Polishing transcript...');
     try {
-      const brain = (await import('../services/GiaBrain')).default;
-      const res = await brain.generate({
+      const res = await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: `The following is a raw voice-to-text transcript. Please polish it for clarity, grammar, and punctuation while maintaining the original intent and tone. Return ONLY the polished text.\n\nRaw Transcript: "${transcript}"`,
         temperature: 0.3,
@@ -248,6 +261,7 @@ const ChatModule: React.FC = () => {
       let accumulated = '';
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
+      let inToolBlock = false;
       setIntentState('responding');
       const contRes = await GiaBrain.generate({
         signal: ctrl.signal,
@@ -268,12 +282,32 @@ const ChatModule: React.FC = () => {
                 thoughtsAccumulated += remaining;
                 remaining = '';
               }
+            } else if (inToolBlock) {
+              const endIdx = remaining.indexOf('\n```');
+              if (endIdx >= 0) {
+                remaining = remaining.slice(endIdx + 4);
+                inToolBlock = false;
+              } else {
+                remaining = '';
+              }
             } else {
-              const startIdx = remaining.indexOf('<think>');
-              if (startIdx >= 0) {
-                const before = remaining.slice(0, startIdx);
+              const thinkStart = remaining.indexOf('<think>');
+              const toolStart = remaining.indexOf('\n```tool');
+              if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
+                const before = remaining.slice(0, toolStart);
                 displayChunk += before;
-                remaining = remaining.slice(startIdx + 7);
+                const afterFence = remaining.slice(toolStart + 8);
+                const closeIdx = afterFence.indexOf('\n```');
+                if (closeIdx >= 0) {
+                  remaining = afterFence.slice(closeIdx + 4);
+                } else {
+                  inToolBlock = true;
+                  remaining = '';
+                }
+              } else if (thinkStart >= 0) {
+                const before = remaining.slice(0, thinkStart);
+                displayChunk += before;
+                remaining = remaining.slice(thinkStart + 7);
                 inThinkBlock = true;
               } else {
                 displayChunk += remaining;
@@ -282,8 +316,8 @@ const ChatModule: React.FC = () => {
             }
           }
           accumulated += displayChunk;
-          const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
-          updateMessage(activeSessionId!, asstId, displayText || '…', thoughtsAccumulated || undefined);
+          const displayText = processStreamForDisplay(accumulated);
+          updateMessage(activeSessionId!, asstId, displayText, thoughtsAccumulated || undefined);
           if (displayChunk.trim().length > 1) {
             TTSService.speak(displayChunk, true);
           }
@@ -291,7 +325,7 @@ const ChatModule: React.FC = () => {
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
-          updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
+          updateMessage(activeSessionId!, asstId, processStreamForDisplay(accumulated), thoughtsAccumulated);
         },
       });
       if (!ctrl.signal.aborted) {
@@ -300,7 +334,7 @@ const ChatModule: React.FC = () => {
           thoughtsAccumulated = '';
           inThinkBlock = false;
         }
-        updateMessage(activeSessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || accumulated, thoughtsAccumulated || undefined);
+        updateMessage(activeSessionId!, asstId, processStreamForDisplay(accumulated) || accumulated, thoughtsAccumulated || undefined);
         if (contRes.model) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
@@ -451,6 +485,7 @@ const ChatModule: React.FC = () => {
       let accumulated = '';
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
+      let inToolBlock = false;
       setIntentState('responding');
 
       const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
@@ -476,12 +511,32 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               thoughtsAccumulated += remaining;
               remaining = '';
             }
+          } else if (inToolBlock) {
+            const endIdx = remaining.indexOf('\n```');
+            if (endIdx >= 0) {
+              remaining = remaining.slice(endIdx + 4);
+              inToolBlock = false;
+            } else {
+              remaining = '';
+            }
           } else {
-            const startIdx = remaining.indexOf('<think>');
-            if (startIdx >= 0) {
-              const before = remaining.slice(0, startIdx);
+            const thinkStart = remaining.indexOf('<think>');
+            const toolStart = remaining.indexOf('\n```tool');
+            if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
+              const before = remaining.slice(0, toolStart);
               displayChunk += before;
-              remaining = remaining.slice(startIdx + 7);
+              const afterFence = remaining.slice(toolStart + 8);
+              const closeIdx = afterFence.indexOf('\n```');
+              if (closeIdx >= 0) {
+                remaining = afterFence.slice(closeIdx + 4);
+              } else {
+                inToolBlock = true;
+                remaining = '';
+              }
+            } else if (thinkStart >= 0) {
+              const before = remaining.slice(0, thinkStart);
+              displayChunk += before;
+              remaining = remaining.slice(thinkStart + 7);
               inThinkBlock = true;
             } else {
               displayChunk += remaining;
@@ -490,10 +545,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           }
         }
         accumulated += displayChunk;
-        const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
-        updateMessage(sessionId!, asstId, displayText || '…', thoughtsAccumulated || undefined);
-        
-        // Chunked TTS: speak if we have a significant new piece of text
+        const displayText = processStreamForDisplay(accumulated);
+        updateMessage(sessionId!, asstId, displayText, thoughtsAccumulated || undefined);
+
         if (displayChunk.trim().length > 1) {
           TTSService.speak(displayChunk, true);
         }
@@ -510,14 +564,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
-          updateMessage(sessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
+          updateMessage(sessionId!, asstId, processStreamForDisplay(accumulated), thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
         }
       });
 
       if (ctrl.signal.aborted) return;
 
-      // Safeguard: if <think> was never closed, treat it as literal text
       if (inThinkBlock && thoughtsAccumulated) {
         accumulated += '<think>' + thoughtsAccumulated;
         thoughtsAccumulated = '';
@@ -530,13 +583,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           useGiaStore.setState({
             clarification: { ...stored, sessionId: sessionId!, assistantMsgId: asstId },
           });
-          updateMessage(sessionId!, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim(), thoughtsAccumulated || undefined);
+          updateMessage(sessionId!, asstId, processStreamForDisplay(accumulated), thoughtsAccumulated || undefined);
         }
         setIntentState('idle');
         return;
       }
 
-      const rawContent = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
+      const rawContent = processStreamForDisplay(accumulated);
       const finalText = rawContent || (() => {
         const t = (res.text || '').replace(/```tool[\s\S]*?```/g, '').trim();
         const m = t.match(/<think>([\s\S]*?)<\/think>/);
@@ -609,6 +662,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let accumulated = '';
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
+      let inToolBlock = false;
       await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: '', history: allMsgs,
@@ -630,12 +684,32 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 thoughtsAccumulated += remaining;
                 remaining = '';
               }
+            } else if (inToolBlock) {
+              const endIdx = remaining.indexOf('\n```');
+              if (endIdx >= 0) {
+                remaining = remaining.slice(endIdx + 4);
+                inToolBlock = false;
+              } else {
+                remaining = '';
+              }
             } else {
-              const startIdx = remaining.indexOf('<think>');
-              if (startIdx >= 0) {
-                const before = remaining.slice(0, startIdx);
+              const thinkStart = remaining.indexOf('<think>');
+              const toolStart = remaining.indexOf('\n```tool');
+              if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
+                const before = remaining.slice(0, toolStart);
                 displayChunk += before;
-                remaining = remaining.slice(startIdx + 7);
+                const afterFence = remaining.slice(toolStart + 8);
+                const closeIdx = afterFence.indexOf('\n```');
+                if (closeIdx >= 0) {
+                  remaining = afterFence.slice(closeIdx + 4);
+                } else {
+                  inToolBlock = true;
+                  remaining = '';
+                }
+              } else if (thinkStart >= 0) {
+                const before = remaining.slice(0, thinkStart);
+                displayChunk += before;
+                remaining = remaining.slice(thinkStart + 7);
                 inThinkBlock = true;
               } else {
                 displayChunk += remaining;
@@ -644,8 +718,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             }
           }
           accumulated += displayChunk;
-          const displayText = accumulated.replace(/```tool[\s\S]*?```/g, '').trim();
-          updateMessage(sessionId, asstId, displayText || '…', thoughtsAccumulated || undefined);
+          const displayText = processStreamForDisplay(accumulated);
+          updateMessage(sessionId, asstId, displayText, thoughtsAccumulated || undefined);
           if (displayChunk.trim().length > 1) {
             TTSService.speak(displayChunk, true);
           }
@@ -653,7 +727,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           thoughtsAccumulated += (thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: thoughtsAccumulated }));
-          updateMessage(sessionId, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…', thoughtsAccumulated);
+          updateMessage(sessionId, asstId, processStreamForDisplay(accumulated), thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           setShowConsole(true);
         }
@@ -664,7 +738,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           thoughtsAccumulated = '';
           inThinkBlock = false;
         }
-        updateMessage(sessionId, asstId, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || accumulated, thoughtsAccumulated || undefined);
+        updateMessage(sessionId, asstId, processStreamForDisplay(accumulated) || accumulated, thoughtsAccumulated || undefined);
         TTSService.speak(accumulated);
       }
     } catch (err: unknown) {
@@ -744,7 +818,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
   if (showHistory) {
     return (
-      <div className="flex flex-col h-full" style={{ background: 'var(--gia-bg)' }}>
+    <div className="flex flex-col h-full relative" style={{ background: 'var(--gia-bg)' }}>
         <div className="flex items-center justify-between px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
           <button onClick={() => setShowHistory(false)} className="text-sm flex items-center gap-1" style={{ color: 'var(--gia-muted)' }}>
             ← Back
@@ -798,7 +872,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--gia-bg)' }}>
+    <div className="flex flex-col h-full relative" style={{ background: 'var(--gia-bg)' }}>
       <div className="flex items-center justify-between px-4 py-2.5 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowHistory(true)} className="p-1.5 rounded-lg transition-colors tap-feedback" style={{ color: 'var(--gia-muted)' }}>
@@ -926,11 +1000,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                       onStream: (chunk) => {
                         if (ctrl.signal.aborted) return;
                         accumulated += chunk;
-                        updateMessage(activeSessionId!, id, accumulated.replace(/```tool[\s\S]*?```/g, '').trim() || '…');
+                        updateMessage(activeSessionId!, id, processStreamForDisplay(accumulated));
                       },
                     });
                     if (!ctrl.signal.aborted) {
-                      updateMessage(activeSessionId!, id, accumulated);
+                      updateMessage(activeSessionId!, id, stripToolBlocks(accumulated));
                       if (genRes.model) {
                         useGiaStore.setState({
                           sessions: useGiaStore.getState().sessions.map(s =>
@@ -1151,7 +1225,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
 
-        <div className="px-4 pb-5 pt-3 sticky bottom-0 z-10 bg-[#0a0a0f]/60 backdrop-blur-2xl border-t border-white/[0.03] shadow-2xl">
+        <div className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 

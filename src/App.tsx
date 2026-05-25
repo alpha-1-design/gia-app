@@ -1,5 +1,5 @@
 import React, { useEffect, lazy, Suspense } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -11,6 +11,7 @@ import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
 import SchedulerService from './services/SchedulerService';
+import BiometricService from './services/BiometricService';
 import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
@@ -69,8 +70,6 @@ const ModuleView: React.FC = () => {
   );
 };
 
-import BiometricService from './services/BiometricService';
-
 const App: React.FC = () => {
   const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole } = useGiaStore();
   const [isLocked, setIsLocked] = React.useState(BiometricService.isLockEnabled());
@@ -81,6 +80,7 @@ const App: React.FC = () => {
     if (isLocked) {
       handleBiometric();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBiometric = async () => {

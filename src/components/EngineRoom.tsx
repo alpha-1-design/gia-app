@@ -254,10 +254,10 @@ const EngineRoom: React.FC = () => {
       return;
     }
 
-    if (cmd === 'clear') { 
-      setHistory([BOOT[0], BOOT[1], BOOT[2], BOOT[3]]);
-      lid = 0;
-      return; 
+    if (cmd === 'clear') {
+      const freshBoot = BOOT.slice(0, 4).map(l => ({ ...l, id: lid++ }));
+      setHistory(freshBoot);
+      return;
     }
 
     push(mk('err', `Unknown: "${trimmed}".`));

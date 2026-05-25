@@ -1029,8 +1029,7 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
       const cleaned = text.replace(/```json|```/g, '').trim();
       const entries = JSON.parse(cleaned);
       if (Array.isArray(entries) && entries.length > 0) {
-        const { addMemories } = await import('../store/useMemoryStore').then(m => m.useMemoryStore.getState());
-        addMemories(entries);
+        useMemoryStore.getState().addMemories(entries);
       }
     } catch {
       // Silent — memory extraction failure should never break the main flow

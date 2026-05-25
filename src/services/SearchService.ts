@@ -8,32 +8,45 @@ export interface SearchResult {
 
 class SearchService {
   private static instance: SearchService;
+  private proxyList = [
+    (q: string) => `https://corsproxy.io/?${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
+    (q: string) => `https://api.corsfix.com/proxy?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
+    (q: string) => `https://cors-anywhere.herokuapp.com/https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`,
+  ];
   static getInstance() { if (!this.instance) this.instance = new SearchService(); return this.instance; }
 
   async search(query: string): Promise<SearchResult[]> {
     if (!query.trim()) return [];
 
-    try {
-      const res = await CapacitorHttp.get({
-        url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-        connectTimeout: 10000,
-        readTimeout: 10000,
-      });
-
-      if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
-      const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-      return this.parseResults(html);
-    } catch {
+    // Strategy A: direct via Capacitor (native)
+    if (typeof CapacitorHttp !== 'undefined') {
       try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`)}`;
-        const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(10000) : undefined;
-        const res = await fetch(proxyUrl, { signal: timeoutSignal });
-        const html = await res.text();
-        return this.parseResults(html);
-      } catch {
-        return [];
-      }
+        const res = await CapacitorHttp.get({
+          url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+          connectTimeout: 10000,
+          readTimeout: 10000,
+        });
+        if (res.status >= 200 && res.status < 300) {
+          const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+          return this.parseResults(html);
+        }
+      } catch { /* fall through */ }
     }
+
+    // Strategy B: try CORS proxies in order
+    for (const buildUrl of this.proxyList) {
+      try {
+        const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(10000) : undefined;
+        const res = await fetch(buildUrl(query), { signal: timeoutSignal });
+        if (!res.ok) continue;
+        const html = await res.text();
+        if (html.length < 200) continue; // empty/error page
+        const parsed = this.parseResults(html);
+        if (parsed.length > 0) return parsed;
+      } catch { /* try next proxy */ }
+    }
+
+    return [];
   }
 
   private resolveUrl(raw: string): string {

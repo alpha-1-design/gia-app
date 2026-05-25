@@ -2,8 +2,18 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 const pdfVersion = pdfjsLib.version;
 try {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
-} catch { /* offline — will use fake worker */ }
+  // Try Vite-bundled worker first, fall back to CDN
+  const viteWorkerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+  fetch(viteWorkerUrl, { method: 'HEAD' }).then(res => {
+    if (res.ok) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = viteWorkerUrl;
+    } else {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+    }
+  }).catch(() => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+  });
+} catch { /* will use CDN fallback in the promise chain above */ }
 
 const extractPageText = (textContent: any): string => {
   const items: { str: string; x: number; y: number; width: number }[] = textContent.items.map((item: any) => ({

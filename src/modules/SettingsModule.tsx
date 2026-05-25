@@ -10,6 +10,8 @@ import { useProviderStore, PROVIDER_DEFAULTS, ProviderType } from '../store/useP
 import CodeRunner from '../services/CodeRunner';
 import { useMemoryStore, MemoryCategory } from '../store/useMemoryStore';
 import QRCode from 'qrcode';
+import TTSService from '../services/TTSService';
+import BiometricService from '../services/BiometricService';
 
 const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral'];
 
@@ -357,6 +359,14 @@ const MemorySection: React.FC = () => {
 };
 
 const CodeExecutionSection: React.FC<{ codeEndpoint: string; setCodeEndpoint: (v: string) => void }> = ({ codeEndpoint, setCodeEndpoint }) => {
+  const [pistonApiKey, setPistonApiKey] = useState(() => localStorage.getItem('gia-piston-api-key') || '');
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gia-piston-api-key');
+    if (savedKey) CodeRunner.setApiKey(savedKey);
+    const savedEndpoint = localStorage.getItem('gia-piston-endpoint');
+    if (savedEndpoint) CodeRunner.setEndpoint(savedEndpoint);
+  }, []);
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
   const [testMsg, setTestMsg] = useState('');
   const [showLangs, setShowLangs] = useState(false);
@@ -423,6 +433,36 @@ const CodeExecutionSection: React.FC<{ codeEndpoint: string; setCodeEndpoint: (v
         </button>
       </div>
       <div className="flex gap-2">
+        <input
+          className="gia-input"
+          style={{ fontSize: '11px', flex: 1 }}
+          value={pistonApiKey}
+          onChange={e => setPistonApiKey(e.target.value)}
+          placeholder="Piston API key (required since Feb 2026)"
+          type="password"
+        />
+        <button
+          onClick={() => {
+            if (pistonApiKey.trim()) {
+              localStorage.setItem('gia-piston-api-key', pistonApiKey.trim());
+              CodeRunner.setApiKey(pistonApiKey.trim());
+              useGiaStore.getState().addNotification('Piston API key saved');
+            } else {
+              localStorage.removeItem('gia-piston-api-key');
+              CodeRunner.setApiKey('');
+              useGiaStore.getState().addNotification('Piston API key cleared');
+            }
+          }}
+          className="gia-btn text-xs px-3 py-2"
+          style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}
+        >
+          <Save size={11} /> Save
+        </button>
+      </div>
+      <p className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+        The public Piston API requires an API key since Feb 15, 2026. Obtain one from EngineerMan on Discord, or self-host your own instance.
+      </p>
+      <div className="flex gap-2">
         <button onClick={handleTest} className="gia-btn text-[10px] px-2.5 py-1.5" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#3b82f6', flex: 1 }}>
           {testState === 'testing' ? 'Testing...' : 'Test Connection'}
         </button>
@@ -451,9 +491,6 @@ const CodeExecutionSection: React.FC<{ codeEndpoint: string; setCodeEndpoint: (v
     </div>
   );
 };
-
-import TTSService from '../services/TTSService';
-import BiometricService from '../services/BiometricService';
 
 const VoiceSection: React.FC = () => {
   const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');

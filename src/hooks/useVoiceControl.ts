@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 
 export interface VoiceControlConfig {
   wakeWord?: string;
@@ -21,7 +21,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const [isListening, setIsListening] = useState(false);
   const [isHearing, setIsHearing] = useState(false);
   const activeRef = useRef(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastResultRef = useRef(0);
   const srRef = useRef<any>(null);
   const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
@@ -44,7 +44,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const stopListening = useCallback(async () => {
     activeRef.current = false;
     listeningLoopRef.current = false;
-    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = undefined; }
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     try {
       if (isCapacitor) {
         await SpeechRecognition.stop();
@@ -67,7 +67,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   onTranscriptRef.current = onTranscript;
 
   const processTranscript = useCallback((text: string) => {
-    if (!text) return;
+    if (!text || !activeRef.current) return;
     const cleaned = text.replace(/[^\w\s']/g, '').trim();
     if (cleaned.length < 2) return;
     lastResultRef.current = Date.now();
@@ -85,6 +85,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     try {
       if (isCapacitor) {
         const { available } = await SpeechRecognition.available();
+        if (!activeRef.current) { listeningLoopRef.current = false; return; }
         if (!available) {
           setIsListening(false);
           listeningLoopRef.current = false;
@@ -97,15 +98,19 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           popup: false,
         });
 
+        if (!activeRef.current) { listeningLoopRef.current = false; return; }
+
         const hadResult = result?.matches?.length && result.matches[0]?.length > 0;
         if (hadResult) {
           processTranscript(result.matches![0]);
         }
 
+        if (!activeRef.current) { listeningLoopRef.current = false; return; }
+
         const backoff = hadResult ? 1500 : 3000;
         listeningLoopRef.current = false;
 
-        if (activeRef.current && keepListeningRef.current) {
+        if (keepListeningRef.current) {
           timeoutRef.current = setTimeout(listenOnce, backoff);
         } else {
           stopListening();

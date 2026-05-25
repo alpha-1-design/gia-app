@@ -34,7 +34,11 @@ interface Subject {
   topics: string[];
 }
 
-const genId = () => Math.random().toString(36).slice(2, 10);
+const genId = () => {
+  const arr = new Uint8Array(8);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
+};
 
 const EXAM_SYSTEMS: ExamSystem[] = ['WASSCE', 'BECE', 'JAMB', 'CUSTOM'];
 

@@ -16,7 +16,11 @@ export interface MemoryEntry {
 
 const MAX_MEMORIES = 200;
 
-const genId = () => Math.random().toString(36).slice(2, 10);
+const genId = () => {
+  const arr = new Uint8Array(8);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
+};
 
 interface MemoryState {
   memories: MemoryEntry[];
@@ -55,10 +59,31 @@ export const useMemoryStore = create<MemoryState>()(
         return { memories: sorted.slice(0, MAX_MEMORIES) };
       }),
 
-      addMemories: (entries) => {
-        const state = get();
-        entries.forEach((entry) => state.addMemory(entry));
-      },
+      addMemories: (entries) => set((s) => {
+        const updated = [...s.memories];
+        for (const entry of entries) {
+          const existingIdx = updated.findIndex((m) => m.key === entry.key);
+          if (existingIdx >= 0) {
+            updated[existingIdx] = {
+              ...updated[existingIdx],
+              value: entry.value,
+              confidence: Math.max(updated[existingIdx].confidence, entry.confidence),
+              category: entry.category,
+              timestamp: Date.now(),
+              lastAccessed: Date.now(),
+            };
+          } else {
+            updated.push({
+              ...entry,
+              id: genId(),
+              timestamp: Date.now(),
+              lastAccessed: Date.now(),
+            });
+          }
+        }
+        updated.sort((a, b) => b.confidence - a.confidence);
+        return { memories: updated.slice(0, MAX_MEMORIES) };
+      }),
 
       getMemories: (category) => {
         const { memories } = get();

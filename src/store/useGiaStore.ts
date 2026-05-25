@@ -143,7 +143,11 @@ export interface ExamResult {
   timeSpent: number;
 }
 
-const genId = () => Math.random().toString(36).slice(2, 10);
+const genId = () => {
+  const arr = new Uint8Array(8);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
+};
 
 export const useGiaStore = create<GiaState>()(
   persist(

@@ -13,7 +13,11 @@ const PRIORITY_COLORS = {
   low: 'text-emerald-500 bg-emerald-50 border-emerald-100',
 };
 
-const genId = () => Math.random().toString(36).slice(2, 10);
+const genId = () => {
+  const arr = new Uint8Array(8);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
+};
 
 const PlannerModule: React.FC = () => {
   const [prompt, setPrompt] = useState('');
