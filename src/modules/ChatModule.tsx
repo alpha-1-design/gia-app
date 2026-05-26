@@ -77,9 +77,14 @@ const ChatModule: React.FC = () => {
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Abort in-flight requests on unmount
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
+  const [inputContainerHeight, setInputContainerHeight] = useState(140);
 
   const {
     sessions, activeSessionId, createSession, setActiveSession,
@@ -150,7 +155,8 @@ const ChatModule: React.FC = () => {
     keepListening,
     autoStopAfter: 120000,
   });
-  
+  const voiceRef = useRef(voiceControl);
+  voiceRef.current = voiceControl;
 
   const [showTools, setShowTools] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -160,14 +166,12 @@ const ChatModule: React.FC = () => {
 
   useEffect(() => {
     if (voiceEnabled) {
-      voiceControl.startListening();
+      voiceRef.current.startListening();
     }
     return () => {
-      if (voiceEnabled) {
-        voiceControl.stopListening();
-      }
+      voiceRef.current.stopListening();
     };
-  }, [voiceEnabled, voiceControl]);
+  }, [voiceEnabled]);
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen') => {
     setIsSyncing(true);
@@ -177,18 +181,30 @@ const ChatModule: React.FC = () => {
     if (feature === 'listen') {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
-      if (newState) voiceControl.startListening();
-      else voiceControl.stopListening();
+      if (newState) voiceRef.current.startListening();
+      else voiceRef.current.stopListening();
     }
     
     // Simulate tiny delay to show sync indicator then clear it
     setTimeout(() => setIsSyncing(false), 300);
-  }, [setWebSearch, setExtThinking, setHandsOff, webSearch, extThinking, handsOff, voiceEnabled, voiceControl]);
+  }, [setWebSearch, setExtThinking, setHandsOff, webSearch, extThinking, handsOff, voiceEnabled]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, []);
 
   useEffect(() => {
     return () => { if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current); };
+  }, []);
+
+  useEffect(() => {
+    const el = inputContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setInputContainerHeight(entry.contentRect.height + 28);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const handleScroll = () => {
@@ -287,19 +303,25 @@ const ChatModule: React.FC = () => {
               if (endIdx >= 0) {
                 remaining = remaining.slice(endIdx + 4);
                 inToolBlock = false;
+              } else if (remaining.startsWith('```')) {
+                remaining = remaining.slice(3);
+                inToolBlock = false;
               } else {
                 remaining = '';
               }
             } else {
               const thinkStart = remaining.indexOf('<think>');
-              const toolStart = remaining.indexOf('\n```tool');
+              let toolStart = remaining.indexOf('```tool');
+              if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
               if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
                 const before = remaining.slice(0, toolStart);
                 displayChunk += before;
-                const afterFence = remaining.slice(toolStart + 8);
+                const afterFence = remaining.slice(toolStart + 7);
                 const closeIdx = afterFence.indexOf('\n```');
                 if (closeIdx >= 0) {
                   remaining = afterFence.slice(closeIdx + 4);
+                } else if (afterFence.startsWith('```')) {
+                  remaining = afterFence.slice(3);
                 } else {
                   inToolBlock = true;
                   remaining = '';
@@ -516,19 +538,25 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             if (endIdx >= 0) {
               remaining = remaining.slice(endIdx + 4);
               inToolBlock = false;
+            } else if (remaining.startsWith('```')) {
+              remaining = remaining.slice(3);
+              inToolBlock = false;
             } else {
               remaining = '';
             }
           } else {
             const thinkStart = remaining.indexOf('<think>');
-            const toolStart = remaining.indexOf('\n```tool');
+            let toolStart = remaining.indexOf('```tool');
+            if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
             if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
               const before = remaining.slice(0, toolStart);
               displayChunk += before;
-              const afterFence = remaining.slice(toolStart + 8);
+              const afterFence = remaining.slice(toolStart + 7);
               const closeIdx = afterFence.indexOf('\n```');
               if (closeIdx >= 0) {
                 remaining = afterFence.slice(closeIdx + 4);
+              } else if (afterFence.startsWith('```')) {
+                remaining = afterFence.slice(3);
               } else {
                 inToolBlock = true;
                 remaining = '';
@@ -689,19 +717,25 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               if (endIdx >= 0) {
                 remaining = remaining.slice(endIdx + 4);
                 inToolBlock = false;
+              } else if (remaining.startsWith('```')) {
+                remaining = remaining.slice(3);
+                inToolBlock = false;
               } else {
                 remaining = '';
               }
             } else {
               const thinkStart = remaining.indexOf('<think>');
-              const toolStart = remaining.indexOf('\n```tool');
+              let toolStart = remaining.indexOf('```tool');
+              if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
               if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
                 const before = remaining.slice(0, toolStart);
                 displayChunk += before;
-                const afterFence = remaining.slice(toolStart + 8);
+                const afterFence = remaining.slice(toolStart + 7);
                 const closeIdx = afterFence.indexOf('\n```');
                 if (closeIdx >= 0) {
                   remaining = afterFence.slice(closeIdx + 4);
+                } else if (afterFence.startsWith('```')) {
+                  remaining = afterFence.slice(3);
                 } else {
                   inToolBlock = true;
                   remaining = '';
@@ -896,7 +930,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4 relative z-0">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 space-y-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-16 pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
@@ -1225,7 +1259,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
 
-        <div className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
+        <div ref={inputContainerRef} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 

@@ -10,6 +10,7 @@ import SettingsModule from './modules/SettingsModule';
 import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
+import ProtocolPanel from './components/ProtocolPanel';
 import SchedulerService from './services/SchedulerService';
 import BiometricService from './services/BiometricService';
 import './styles/globals.css';
@@ -71,7 +72,7 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole } = useGiaStore();
+  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols } = useGiaStore();
   const [isLocked, setIsLocked] = React.useState(BiometricService.isLockEnabled());
 
   useEffect(() => {
@@ -184,15 +185,29 @@ const App: React.FC = () => {
           </p>
         </div>
 
-        {/* Avatar */}
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
-          style={{
-            background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
-            boxShadow: '0 0 12px rgba(168,85,247,0.4)',
-          }}
-        >
-          {userProfile.name ? userProfile.name[0].toUpperCase() : 'G'}
+        {/* Avatar + Protocol Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowProtocols(!showProtocols)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-all text-[10px] font-bold"
+            style={{
+              background: showProtocols ? 'rgba(168,85,247,0.15)' : 'var(--gia-surface-2)',
+              border: `1px solid ${showProtocols ? 'rgba(168,85,247,0.3)' : 'var(--gia-border)'}`,
+              color: showProtocols ? '#a855f7' : 'var(--gia-muted)',
+            }}
+            title="Protocols"
+          >
+            ⚡
+          </button>
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
+            style={{
+              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              boxShadow: '0 0 12px rgba(168,85,247,0.4)',
+            }}
+          >
+            {userProfile.name ? userProfile.name[0].toUpperCase() : 'G'}
+          </div>
         </div>
       </header>
 
@@ -292,6 +307,15 @@ const App: React.FC = () => {
             logs={consoleLogs}
             isVisible={showConsole}
             onClose={() => setShowConsole(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showProtocols && (
+          <ProtocolPanel
+            isVisible={showProtocols}
+            onClose={() => setShowProtocols(false)}
           />
         )}
       </AnimatePresence>

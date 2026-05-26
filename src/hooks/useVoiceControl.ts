@@ -32,7 +32,6 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     try {
       const status = await SpeechRecognition.checkPermissions();
       if (status.speechRecognition === 'granted') return true;
-
       const newStatus = await SpeechRecognition.requestPermissions();
       return newStatus.speechRecognition === 'granted';
     } catch (e) {
@@ -50,6 +49,9 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         await SpeechRecognition.stop();
       } else if (srRef.current) {
         srRef.current.stop();
+        srRef.current.onresult = null;
+        srRef.current.onerror = null;
+        srRef.current.onend = null;
         srRef.current = undefined;
       }
     } catch {}
@@ -78,6 +80,38 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       if (!keepListeningRef.current) stopListening();
     }
   }, [stopListening]);
+
+  const restartBrowserRecognition = useCallback(() => {
+    if (!activeRef.current || isCapacitor || listeningLoopRef.current) return;
+    try {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SR) return;
+      const sr = new SR();
+      sr.continuous = true;
+      sr.interimResults = true;
+      sr.lang = 'en-US';
+      sr.onresult = (event: any) => {
+        if (!activeRef.current) return;
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const text = event.results[i][0].transcript;
+          setIsHearing(true);
+          if (event.results[i].isFinal) {
+            setIsHearing(false);
+            processTranscript(text);
+          }
+        }
+      };
+      sr.onerror = () => { if (activeRef.current) stopListening(); };
+      sr.onend = () => {
+        setIsHearing(false);
+        if (activeRef.current && keepListeningRef.current) {
+          timeoutRef.current = setTimeout(restartBrowserRecognition, 500);
+        }
+      };
+      sr.start();
+      srRef.current = sr;
+    } catch { if (activeRef.current) stopListening(); }
+  }, [isCapacitor, processTranscript, stopListening]);
 
   const listenOnce = useCallback(async () => {
     if (!activeRef.current || listeningLoopRef.current) return;
@@ -142,38 +176,17 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     if (isCapacitor) {
       listenOnce();
     } else {
-      try {
-        const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SR) return;
-        const sr = new SR();
-        sr.continuous = true;
-        sr.interimResults = true;
-        sr.lang = 'en-US';
-        sr.onresult = (event: any) => {
-          if (!activeRef.current) return;
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const text = event.results[i][0].transcript;
-            setIsHearing(true);
-            if (event.results[i].isFinal) {
-              setIsHearing(false);
-              processTranscript(text);
-            }
-          }
-        };
-        sr.onerror = () => { if (activeRef.current) stopListening(); };
-        sr.start();
-        srRef.current = sr;
-      } catch { stopListening(); }
+      restartBrowserRecognition();
     }
 
     if (autoStopAfter > 0 && !keepListeningRef.current) {
       timeoutRef.current = setTimeout(() => stopListening(), autoStopAfter);
     }
-  }, [isCapacitor, listenOnce, processTranscript, autoStopAfter, stopListening, requestPermissions]);
+  }, [isCapacitor, listenOnce, restartBrowserRecognition, autoStopAfter, stopListening, requestPermissions]);
 
   useEffect(() => {
     return () => { activeRef.current = false; stopListening(); };
   }, [stopListening]);
 
-  return { isListening, isHearing, startListening, stopListening, requestPermissions };
+  return { isListening, isHearing, startListening, stopListening, requestPermissions } as const;
 }

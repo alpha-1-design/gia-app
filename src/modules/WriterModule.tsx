@@ -65,7 +65,7 @@ const WriterModule: React.FC = () => {
       });
       setIntentState('responding');
       setTimeout(() => setIntentState('idle'), 2000);
-      useMemoryStore.getState().addMemory({ key: 'writing_format', value: format, category: 'preference', confidence: 0.4 });
+      useMemoryStore.getState().addMemory({ key: 'writing_format', value: format, category: 'preference', tier: 'episodic', confidence: 0.4 });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setIntentState('idle');

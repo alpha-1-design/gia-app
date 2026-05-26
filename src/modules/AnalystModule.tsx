@@ -56,6 +56,7 @@ const AnalystModule: React.FC = () => {
         systemPrompt: `You are a data analyst and insight engine. Respond with valid JSON only:
 {"summary":"One punchy insight sentence","narrative":"2-3 sentences of deeper analysis","data":[{"label":"Name","value":42}],"columns":["Label","Value"]}
 Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user wants a table, provide rich rows and columns.`,
+        systemPromptMode: 'replace',
         temperature: 0.25,
         maxTokens: 1500,
       });
@@ -64,7 +65,7 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       setSummary(parsed.summary ?? '');
       setNarrative(parsed.narrative ?? '');
       if (parsed.summary) {
-        useMemoryStore.getState().addMemory({ key: 'analysis_' + Date.now().toString(36), value: parsed.summary.slice(0, 200), category: 'fact', confidence: 0.5 });
+        useMemoryStore.getState().addMemory({ key: 'analysis_' + Date.now().toString(36), value: parsed.summary.slice(0, 200), category: 'fact', tier: 'semantic', confidence: 0.5 });
       }
       setIntentState('responding');
       setTimeout(() => setIntentState('idle'), 2000);

@@ -4,23 +4,65 @@ import { idbStorage } from './idb-storage';
 
 export type MemoryCategory = 'profile' | 'subject' | 'score' | 'weak_area' | 'fact' | 'preference' | 'session_summary' | 'project' | 'correction' | 'emotion' | 'goal';
 
+export type MemoryTier = 'working' | 'semantic' | 'episodic';
+
 export interface MemoryEntry {
   id: string;
   key: string;
   value: string;
   category: MemoryCategory;
+  tier: MemoryTier;
   confidence: number;
   timestamp: number;
   lastAccessed: number;
 }
 
-const MAX_MEMORIES = 200;
+const MAX_MEMORIES = 300;
+const WORKING_MEMORY_MAX = 20;
+const CONFIDENCE_DECAY = 0.97;
+const DECAY_THRESHOLD = 0.2;
+const QUERY_MAX_WORDS = 8;
 
 const genId = () => {
   const arr = new Uint8Array(8);
   crypto.getRandomValues(arr);
   return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
 };
+
+function ngramTokens(text: string, n: number): Set<string> {
+  const words = text.toLowerCase().split(/\s+/).filter(w => w.length >= n);
+  const grams = new Set<string>();
+  for (let i = 0; i <= words.length - n; i++) {
+    grams.add(words.slice(i, i + n).join(' '));
+  }
+  return grams;
+}
+
+function relevanceScore(memory: MemoryEntry, query?: string): number {
+  let score = memory.confidence;
+  if (!query) return score;
+
+  const text = `${memory.key} ${memory.value}`.toLowerCase();
+  const q = query.toLowerCase();
+
+  if (text.includes(q)) { score += 1.0; }
+  else {
+    const queryWords = q.split(/\s+/).filter(w => w.length > 2).slice(0, QUERY_MAX_WORDS);
+    const matchCount = queryWords.filter(w => text.includes(w)).length;
+    score += (matchCount / Math.max(queryWords.length, 1)) * 0.8;
+
+    for (const n of [2, 3]) {
+      const memGrams = ngramTokens(text, n);
+      const queryGrams = ngramTokens(q, n);
+      if (queryGrams.size > 0 && memGrams.size > 0) {
+        const intersection = new Set([...memGrams].filter(g => queryGrams.has(g)));
+        score += (intersection.size / queryGrams.size) * 0.4;
+      }
+    }
+  }
+
+  return score;
+}
 
 interface MemoryState {
   memories: MemoryEntry[];
@@ -31,6 +73,7 @@ interface MemoryState {
   deleteMemory: (id: string) => void;
   clearMemories: () => void;
   getRelevantContext: (query?: string) => string;
+  compactMemories: () => void;
 }
 
 export const useMemoryStore = create<MemoryState>()(
@@ -44,13 +87,14 @@ export const useMemoryStore = create<MemoryState>()(
           return {
             memories: s.memories.map((m) =>
               m.key === entry.key
-                ? { ...m, value: entry.value, confidence: Math.max(m.confidence, entry.confidence), category: entry.category, timestamp: Date.now(), lastAccessed: Date.now() }
+                ? { ...m, value: entry.value, confidence: Math.max(m.confidence, entry.confidence), category: entry.category, tier: entry.tier, timestamp: Date.now(), lastAccessed: Date.now() }
                 : m
             ),
           };
         }
         const newMem: MemoryEntry = {
           ...entry,
+          tier: entry.tier || 'semantic',
           id: genId(),
           timestamp: Date.now(),
           lastAccessed: Date.now(),
@@ -69,12 +113,14 @@ export const useMemoryStore = create<MemoryState>()(
               value: entry.value,
               confidence: Math.max(updated[existingIdx].confidence, entry.confidence),
               category: entry.category,
+              tier: entry.tier || updated[existingIdx].tier,
               timestamp: Date.now(),
               lastAccessed: Date.now(),
             };
           } else {
             updated.push({
               ...entry,
+              tier: entry.tier || 'semantic',
               id: genId(),
               timestamp: Date.now(),
               lastAccessed: Date.now(),
@@ -107,30 +153,96 @@ export const useMemoryStore = create<MemoryState>()(
         const { memories } = get();
         if (memories.length === 0) return '';
 
-        let scored = memories.map(m => ({ ...m, relevanceScore: m.confidence }));
+        const now = Date.now();
+        const DAY_MS = 86400000;
 
-        // Boost memories matching keywords in current query
-        if (query) {
-          const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-          scored = scored.map(m => {
-            const text = `${m.key} ${m.value}`.toLowerCase();
-            const matches = words.filter(w => text.includes(w)).length;
-            return { ...m, relevanceScore: m.confidence + (matches * 0.2) };
-          });
-        }
+        const scored = memories.map(m => {
+          let score = relevanceScore(m, query);
+
+          const ageDays = (now - m.lastAccessed) / DAY_MS;
+          if (ageDays > 30) score *= Math.pow(CONFIDENCE_DECAY, ageDays / 7);
+
+          if (m.tier === 'working') score *= 1.3;
+          if (m.tier === 'episodic') score *= 0.8;
+
+          return { ...m, relevanceScore: score };
+        });
 
         const top = scored
           .sort((a, b) => b.relevanceScore - a.relevanceScore)
           .slice(0, 15);
 
+        set((s) => ({
+          memories: s.memories.map(m => {
+            const matched = top.find(t => t.id === m.id);
+            if (matched) return { ...m, lastAccessed: Date.now() };
+            return m;
+          }),
+        }));
+
         if (top.length === 0) return '';
 
-        const lines = top.map(m => `- ${m.key}: ${m.value}`);
-        return `\n\n## What GIA remembers about you:\n${lines.join('\n')}`;
+        const workingMems = top.filter(m => m.tier === 'working');
+        const semanticMems = top.filter(m => m.tier === 'semantic' && m.relevanceScore > DECAY_THRESHOLD);
+        const episodicMems = top.filter(m => m.tier === 'episodic' && m.relevanceScore > DECAY_THRESHOLD);
+
+        const lines: string[] = [];
+        if (workingMems.length > 0) {
+          lines.push('## Active Context:');
+          workingMems.forEach(m => lines.push(`- ${m.key}: ${m.value}`));
+        }
+        if (semanticMems.length > 0) {
+          lines.push('## Facts:');
+          semanticMems.forEach(m => lines.push(`- ${m.key}: ${m.value}`));
+        }
+        if (episodicMems.length > 0) {
+          lines.push('## History:');
+          episodicMems.forEach(m => lines.push(`- ${m.value.slice(0, 200)}`));
+        }
+
+        return `\n\n## What GIA remembers:\n${lines.join('\n')}`;
       },
+
+      compactMemories: () => set((s) => {
+        const now = Date.now();
+        const DAY_MS = 86400000;
+
+        let pruned = s.memories
+          .filter(m => m.tier !== 'working' || (now - m.lastAccessed) < DAY_MS);
+
+        if (pruned.length > MAX_MEMORIES) {
+          pruned = pruned
+            .sort((a, b) => b.confidence - a.confidence)
+            .slice(0, MAX_MEMORIES);
+        }
+
+        const merged: MemoryEntry[] = [];
+        for (const mem of pruned) {
+          const existing = merged.find(m =>
+            m.key === mem.key || (
+              m.category === mem.category &&
+              (m.value.includes(mem.value) || mem.value.includes(m.value))
+            )
+          );
+          if (existing) {
+            if (mem.value.length > existing.value.length) {
+              existing.value = mem.value;
+            }
+            existing.confidence = Math.max(existing.confidence, mem.confidence);
+            existing.lastAccessed = Math.max(existing.lastAccessed, mem.lastAccessed);
+          } else {
+            merged.push({ ...mem });
+          }
+        }
+
+        merged.sort((a, b) => b.confidence - a.confidence);
+        const working = merged.filter(m => m.tier === 'working').slice(0, WORKING_MEMORY_MAX);
+        const others = merged.filter(m => m.tier !== 'working').slice(0, MAX_MEMORIES - working.length);
+        return { memories: [...working, ...others] };
+      }),
     }),
     {
-      name: 'gia-memory-store-v1',
+      name: 'gia-memory-store-v2',
       storage: createJSONStorage(() => idbStorage),
       partialize: (s) => ({ memories: s.memories }),
     }

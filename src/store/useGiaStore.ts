@@ -81,6 +81,7 @@ interface GiaState {
   examHistory: ExamResult[];
   consoleLogs: { id: string; timestamp: number; type: 'thought' | 'tool' | 'result' | 'error'; content: string }[];
   showConsole: boolean;
+  showProtocols: boolean;
   
   webSearch: boolean;
   extThinking: boolean;
@@ -128,6 +129,7 @@ interface GiaState {
   addConsoleLog: (log: { type: 'thought' | 'tool' | 'result' | 'error'; content: string }) => void;
   setShowConsole: (show: boolean) => void;
   clearConsole: () => void;
+  setShowProtocols: (show: boolean) => void;
 }
 
 export interface ExamResult {
@@ -215,6 +217,7 @@ export const useGiaStore = create<GiaState>()(
       examHistory: [],
       consoleLogs: [],
       showConsole: false,
+      showProtocols: false,
       webSearch: false,
       extThinking: false,
       handsOff: true,
@@ -352,6 +355,7 @@ export const useGiaStore = create<GiaState>()(
       })),
       setShowConsole: (show) => set({ showConsole: show }),
       clearConsole: () => set({ consoleLogs: [] }),
+      setShowProtocols: (show) => set({ showProtocols: show }),
     }),
     {
       name: 'gia-store-v3',

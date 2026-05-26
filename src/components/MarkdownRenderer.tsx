@@ -103,16 +103,15 @@ const MathBlock: React.FC<{ formula: string; inline: boolean }> = ({ formula, in
 
   useEffect(() => {
     if (typeof (window as any).katex !== 'undefined') { setLoaded(true); return; }
+    if (document.querySelector('script[src*="katex.min.js"]')) { setLoaded(true); return; }
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
-    s.onload = () => {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
-      document.head.appendChild(link);
-      setLoaded(true);
-    };
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+    s.onload = () => { document.head.appendChild(link); setLoaded(true); };
     document.head.appendChild(s);
+    return () => { s.remove(); link.remove(); };
   }, []);
 
   useEffect(() => {
@@ -140,11 +139,13 @@ const MermaidDiagram: React.FC<{ definition: string }> = ({ definition }) => {
 
   useEffect(() => {
     if (typeof (window as any).mermaid !== 'undefined') { setLoaded(true); return; }
+    if (document.querySelector('script[src*="mermaid.min.js"]')) { setLoaded(true); return; }
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
     s.onload = () => { (window as any).mermaid?.initialize({ startOnLoad: false, theme: 'dark' }); setLoaded(true); };
     s.onerror = () => setError('Could not load Mermaid renderer');
     document.head.appendChild(s);
+    return () => s.remove();
   }, []);
 
   useEffect(() => {

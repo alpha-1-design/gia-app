@@ -3,15 +3,19 @@ import {
   Terminal, Shield, User, X, Save, ChevronRight,
   Wifi, WifiOff, Cpu, Trash2, Brain, Search, Play, Check,
   Code2, Headphones, Smartphone, ExternalLink, Mail, Globe, Lock,
-  Plus, Zap, Sparkles
+  Plus, Zap, Sparkles, ArrowLeft, Download, Upload, MapPin, Heart,
+  MessageCircle, BookOpen, Sun, Moon
 } from 'lucide-react';
 import { useGiaStore, Skill } from '../store/useGiaStore';
+import { useGiaIdentity, PersonalityStyle } from '../store/useGiaIdentity';
 import { useProviderStore, PROVIDER_DEFAULTS, ProviderType } from '../store/useProviderStore';
 import CodeRunner from '../services/CodeRunner';
 import { useMemoryStore, MemoryCategory } from '../store/useMemoryStore';
 import QRCode from 'qrcode';
 import TTSService from '../services/TTSService';
 import BiometricService from '../services/BiometricService';
+import { isNativePlatform } from '../utils/helpers';
+import { exportBrainToFile, importBrainFromFile, loadCloudConfig, saveCloudConfig, CloudConfig } from '../services/BrainExport';
 
 const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral'];
 
@@ -32,8 +36,13 @@ const SettingsModule: React.FC = () => {
     setShowTerminal, userProfile, setUserProfile, notifications, 
     clearNotification, skills, addSkill, removeSkill, addNotification 
   } = useGiaStore();
+  const identity = useGiaIdentity(s => s.identity);
+  const { setName: setGiaName, setPersonality: setGiaPersonality, setCustomPrompt: setGiaCustomPrompt,
+    setAvatar: setGiaAvatar, setFocusAreas: setGiaFocusAreas, setProactiveness: setGiaProactiveness,
+    setAllowsMemory: setGiaAllowsMemory, setTone: setGiaTone } = useGiaIdentity();
   const { providers, activeProvider } = useProviderStore();
 
+  const [settingsPage, setSettingsPage] = useState<'main' | 'skills' | 'identity' | 'brain-export'>('main');
   const [editProfile, setEditProfile] = useState(false);
   const [name, setName] = useState(userProfile.name);
   const [bio, setBio] = useState(userProfile.bio);
@@ -46,6 +55,16 @@ const SettingsModule: React.FC = () => {
   };
 
   const connectedCount = ALL_PROVIDERS.filter(p => providers[p]?.enabled).length;
+
+  if (settingsPage === 'skills') {
+    return <SkillsSubPage onBack={() => setSettingsPage('main')} />;
+  }
+  if (settingsPage === 'identity') {
+    return <IdentitySubPage onBack={() => setSettingsPage('main')} />;
+  }
+  if (settingsPage === 'brain-export') {
+    return <BrainExportSubPage onBack={() => setSettingsPage('main')} />;
+  }
 
   return (
     <div
@@ -144,79 +163,51 @@ const SettingsModule: React.FC = () => {
         </div>
       </button>
 
-      {/* Skills Management */}
-      <div className="gia-card p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap size={14} style={{ color: '#f59e0b' }} />
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
-              Neural Skills
-            </span>
-          </div>
-          <button 
-            onClick={() => {
-              addSkill({
-                id: Math.random().toString(36).slice(2, 10),
-                name: 'New Specialist',
-                description: 'Custom AI Persona',
-                systemPrompt: 'You are an expert in...',
-                tools: ['web_search'],
-                category: 'user'
-              });
-              addNotification('Skill added');
-            }}
-            className="p-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-100"
-          >
-            <Plus size={14} />
-          </button>
+      {/* Navigation to sub-pages */}
+      <button onClick={() => setSettingsPage('skills')}
+        className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#0d0d14', border: '1px solid rgba(245,158,11,0.2)' }}>
+          <Zap size={18} style={{ color: '#f59e0b' }} />
         </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Neural Skills</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+            {skills.length} active · {skills.filter(s => s.category === 'user').length} custom
+          </p>
+        </div>
+        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
+      </button>
 
-        <div className="space-y-3">
-          {skills.map(skill => (
-            <div key={skill.id} className="p-3 rounded-xl border border-zinc-800 bg-zinc-900/30">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <input
-                    value={skill.name}
-                    onChange={(e) => {
-                      const newSkills = skills.map(s => s.id === skill.id ? { ...s, name: e.target.value } : s);
-                      useGiaStore.setState({ skills: newSkills });
-                    }}
-                    className="text-xs font-bold bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-violet-500 outline-none transition-colors flex-1 min-w-0"
-                    style={{ color: 'var(--gia-text)' }}
-                  />
-                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 uppercase tracking-tighter shrink-0">{skill.category}</span>
-                </div>
-                <button onClick={() => removeSkill(skill.id)} className="text-zinc-600 hover:text-rose-500 shrink-0 ml-2"><Trash2 size={12} /></button>
-              </div>
-              <textarea 
-                value={skill.systemPrompt}
-                onChange={(e) => {
-                  const newSkills = skills.map(s => s.id === skill.id ? { ...s, systemPrompt: e.target.value } : s);
-                  useGiaStore.setState({ skills: newSkills });
-                }}
-                className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg p-2 text-[10px] text-zinc-400 focus:ring-0 min-h-[60px] font-mono"
-              />
-              <div className="flex flex-wrap gap-1 mt-2">
-                {['web_search', 'terminal_run', 'filesystem_read', 'filesystem_write', 'image_generation'].map(t => (
-                  <button 
-                    key={t}
-                    onClick={() => {
-                      const has = skill.tools.includes(t);
-                      const tools = has ? skill.tools.filter(x => x !== t) : [...skill.tools, t];
-                      const newSkills = skills.map(s => s.id === skill.id ? { ...s, tools } : s);
-                      useGiaStore.setState({ skills: newSkills });
-                    }}
-                    className={`text-[8px] px-2 py-0.5 rounded-full border transition-all ${skill.tools.includes(t) ? 'border-violet-500/50 text-violet-400 bg-violet-500/5' : 'border-zinc-800 text-zinc-600'}`}
-                  >
-                    {t.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+      <button onClick={() => setSettingsPage('identity')}
+        className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#0d0d14', border: '1px solid rgba(168,85,247,0.2)' }}>
+          <Sparkles size={18} style={{ color: '#a855f7' }} />
         </div>
-      </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>GIA Identity</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+            {identity.name} · {identity.personalityStyle} · {identity.tone} tone
+          </p>
+        </div>
+        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
+      </button>
+
+      <button onClick={() => setSettingsPage('brain-export')}
+        className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#0d0d14', border: '1px solid rgba(16,185,129,0.2)' }}>
+          <Download size={18} style={{ color: '#34d399' }} />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Brain Export</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+            Backup or restore GIA memories and identity
+          </p>
+        </div>
+        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
+      </button>
 
       <MemorySection />
 
@@ -262,10 +253,343 @@ const SettingsModule: React.FC = () => {
         </button>
       </div>
 
+      {/* Platform */}
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-center gap-2 text-[10px]" style={{ color: 'var(--gia-muted)' }}>
+          <Smartphone size={11} />
+          <span>{isNativePlatform() ? 'Android/iOS' : 'Web Browser'}</span>
+          <span className="mx-1">·</span>
+          <Globe size={11} />
+          <span>Capacitor 8</span>
+        </div>
+        <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+          {[
+            { label: 'Files', available: isNativePlatform() },
+            { label: 'Voice', available: isNativePlatform() },
+            { label: 'Biometrics', available: isNativePlatform() },
+            { label: 'TTS', available: true },
+            { label: 'Code Run', available: true },
+            { label: 'Notifications', available: isNativePlatform() },
+          ].map(f => (
+            <span key={f.label} className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{
+              background: f.available ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
+              color: f.available ? '#34d399' : '#f59e0b',
+              border: `1px solid ${f.available ? 'rgba(52,211,153,0.2)' : 'rgba(251,191,36,0.2)'}`,
+            }}>
+              {f.label} {f.available ? '✓' : '~'}
+            </span>
+          ))}
+        </div>
+      </div>
+
       {/* Version */}
-      <p className="text-center text-[10px] py-2" style={{ color: 'var(--gia-muted-2)' }}>
+      <p className="text-center text-[10px] pb-4" style={{ color: 'var(--gia-muted-2)' }}>
         GIA v2.3.1 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
+    </div>
+  );
+};
+
+const SubPageHeader: React.FC<{ title: string; onBack: () => void }> = ({ title, onBack }) => (
+  <div className="flex items-center gap-3 mb-4">
+    <button onClick={onBack} className="p-2 rounded-xl hover:bg-white/5" style={{ color: 'var(--gia-muted)' }}>
+      <ArrowLeft size={18} />
+    </button>
+    <span className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>{title}</span>
+  </div>
+);
+
+const SkillsSubPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { skills, addSkill, removeSkill, addNotification } = useGiaStore();
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
+      <SubPageHeader title="Neural Skills" onBack={onBack} />
+
+      <button
+        onClick={() => {
+          addSkill({
+            id: Math.random().toString(36).slice(2, 10),
+            name: 'New Specialist', description: 'Custom AI Persona',
+            systemPrompt: 'You are an expert in...', tools: ['web_search'], category: 'user'
+          });
+          addNotification('Skill added');
+        }}
+        className="gia-btn flex items-center gap-2 w-full justify-center mb-2"
+        style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)', color: '#a855f7' }}
+      >
+        <Plus size={13} /> Add Skill
+      </button>
+
+      <div className="space-y-3">
+        {skills.map(skill => (
+          <div key={skill.id} className="gia-card p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <input value={skill.name}
+                  onChange={(e) => {
+                    const newSkills = skills.map(s => s.id === skill.id ? { ...s, name: e.target.value } : s);
+                    useGiaStore.setState({ skills: newSkills });
+                  }}
+                  className="text-xs font-bold bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-violet-500 outline-none transition-colors flex-1 min-w-0"
+                  style={{ color: 'var(--gia-text)' }} />
+                <span className="text-[8px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 uppercase tracking-tighter shrink-0">{skill.category}</span>
+              </div>
+              <button onClick={() => removeSkill(skill.id)} className="text-zinc-600 hover:text-rose-500 shrink-0 ml-2"><Trash2 size={12} /></button>
+            </div>
+            <textarea value={skill.systemPrompt}
+              onChange={(e) => {
+                const newSkills = skills.map(s => s.id === skill.id ? { ...s, systemPrompt: e.target.value } : s);
+                useGiaStore.setState({ skills: newSkills });
+              }}
+              className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg p-2 text-[10px] text-zinc-400 focus:ring-0 min-h-[60px] font-mono" />
+            <div className="flex flex-wrap gap-1">
+              {['web_search', 'terminal_run', 'filesystem_read', 'filesystem_write', 'image_generation', 'get_user_location', 'search_places', 'export_brain'].map(t => (
+                <button key={t}
+                  onClick={() => {
+                    const has = skill.tools.includes(t);
+                    const tools = has ? skill.tools.filter(x => x !== t) : [...skill.tools, t];
+                    useGiaStore.setState({ skills: skills.map(s => s.id === skill.id ? { ...s, tools } : s) });
+                  }}
+                  className={`text-[8px] px-2 py-0.5 rounded-full border transition-all ${skill.tools.includes(t) ? 'border-violet-500/50 text-violet-400 bg-violet-500/5' : 'border-zinc-800 text-zinc-600'}`}>
+                  {t.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const IdentitySubPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const identity = useGiaIdentity(s => s.identity);
+  const { setName, setPersonality, setCustomPrompt, setAvatar, setFocusAreas, setProactiveness, setAllowsMemory, setTone } = useGiaIdentity();
+  const [areaInput, setAreaInput] = useState('');
+
+  const personalities: { value: PersonalityStyle; label: string; desc: string }[] = [
+    { value: 'warm', label: 'Warm', desc: 'Friendly, empathetic, approachable — default GIA' },
+    { value: 'professional', label: 'Professional', desc: 'Formal, precise, business-appropriate' },
+    { value: 'witty', label: 'Witty', desc: 'Humorous, playful, light-hearted' },
+    { value: 'direct', label: 'Direct', desc: 'Blunt, efficient, no fluff' },
+    { value: 'custom', label: 'Custom', desc: 'Write your own persona prompt' },
+  ];
+
+  const tones = ['casual', 'formal', 'technical', 'poetic', 'academic', 'playful'];
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
+      <SubPageHeader title="GIA Identity" onBack={onBack} />
+
+      <div className="gia-card p-4 flex flex-col gap-4">
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>What should I be called?</label>
+          <input className="gia-input mt-1" value={identity.name}
+            onChange={e => setName(e.target.value)} placeholder="GIA" />
+        </div>
+
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Personality</label>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {personalities.map(p => (
+              <button key={p.value}
+                onClick={() => setPersonality(p.value)}
+                className={`p-3 rounded-xl text-left text-[11px] border transition-all ${
+                  identity.personalityStyle === p.value
+                    ? 'border-violet-500/50 bg-violet-500/5 text-violet-400'
+                    : 'border-zinc-800 text-zinc-400 hover:border-zinc-600'
+                }`}>
+                <span className="font-semibold block">{p.label}</span>
+                <span className="text-[9px] mt-1 block opacity-70">{p.desc}</span>
+              </button>
+            ))}
+          </div>
+          {identity.personalityStyle === 'custom' && (
+            <textarea className="gia-input mt-2 min-h-[60px] font-mono text-[11px]" value={identity.customPrompt}
+              onChange={e => setCustomPrompt(e.target.value)} placeholder="Describe how GIA should behave..." />
+          )}
+        </div>
+
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Tone</label>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {tones.map(t => (
+              <button key={t} onClick={() => setTone(t)}
+                className={`text-[10px] px-3 py-1.5 rounded-full border transition-all ${
+                  identity.tone === t
+                    ? 'border-violet-500/50 text-violet-400 bg-violet-500/5'
+                    : 'border-zinc-800 text-zinc-500'
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Focus Areas (subjects GIA should prioritize)</label>
+          <div className="flex flex-wrap gap-1.5 mt-2 mb-2">
+            {identity.focusAreas.map(area => (
+              <span key={area} className="text-[10px] px-2 py-1 rounded-full flex items-center gap-1"
+                style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)' }}>
+                {area}
+                <button onClick={() => setFocusAreas(identity.focusAreas.filter(a => a !== area))} className="hover:text-white">
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input className="gia-input flex-1" value={areaInput}
+              onChange={e => setAreaInput(e.target.value)}
+              placeholder="e.g. coding, math, health" />
+            <button onClick={() => {
+              if (areaInput.trim() && !identity.focusAreas.includes(areaInput.trim())) {
+                setFocusAreas([...identity.focusAreas, areaInput.trim()]);
+                setAreaInput('');
+              }
+            }}
+              className="px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Proactiveness</label>
+            <span className="text-xs" style={{ color: 'var(--gia-text)' }}>
+              {identity.proactiveness < 0.3 ? 'Reserved' : identity.proactiveness > 0.7 ? 'Proactive' : 'Balanced'}
+            </span>
+          </div>
+          <input type="range" min="0" max="1" step="0.1" value={identity.proactiveness}
+            onChange={e => setProactiveness(parseFloat(e.target.value))}
+            className="w-full mt-2 accent-violet-500" />
+          <div className="flex justify-between text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+            <span>Wait for instructions</span>
+            <span>Proactive suggestions</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Allow Memory</label>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Let GIA remember you across conversations</p>
+          </div>
+          <button onClick={() => setAllowsMemory(!identity.allowsMemory)}
+            className={`w-10 h-5 rounded-full transition-all relative ${identity.allowsMemory ? 'bg-violet-500' : 'bg-zinc-700'}`}>
+            <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${identity.allowsMemory ? 'left-5' : 'left-0.5'}`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BrainExportSubPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [cloudConfig, setCloudConfig] = useState<CloudConfig>(loadCloudConfig);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    try {
+      exportBrainToFile();
+      useGiaStore.getState().addNotification('Brain exported');
+    } catch (e: any) {
+      setImportResult({ success: false, message: e.message });
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportResult(null);
+    const result = await importBrainFromFile(file);
+    setImportResult(result);
+    useGiaStore.getState().addNotification(result.message);
+    e.target.value = '';
+  };
+
+  const saveCloud = () => {
+    saveCloudConfig(cloudConfig);
+    useGiaStore.getState().addNotification('Cloud config saved');
+  };
+
+  const handleCloudUpload = async () => {
+    if (!cloudConfig.url) return;
+    setUploadStatus('Uploading...');
+    try {
+      const { exportBrainToCloud } = await import('../services/BrainExport');
+      const msg = await exportBrainToCloud(cloudConfig);
+      setUploadStatus(msg);
+      useGiaStore.getState().addNotification('Brain uploaded to cloud');
+    } catch (e: any) {
+      setUploadStatus(`Failed: ${e.message}`);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
+      <SubPageHeader title="Brain Export" onBack={onBack} />
+
+      <div className="gia-card p-4 flex flex-col gap-4">
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Download Backup</label>
+          <p className="text-[10px] mt-1 mb-3" style={{ color: 'var(--gia-muted-2)' }}>
+            Export all memories, GIA identity, skills, and profile as a JSON file.
+          </p>
+          <button onClick={handleExport} className="gia-btn flex items-center gap-2" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>
+            <Download size={13} /> Export Brain
+          </button>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--gia-border)' }} />
+
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Restore Backup</label>
+          <p className="text-[10px] mt-1 mb-3" style={{ color: 'var(--gia-muted-2)' }}>
+            Upload a previously exported .gia-brain.json file to restore.
+          </p>
+          <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+          <button onClick={() => fileInputRef.current?.click()} className="gia-btn flex items-center gap-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b' }}>
+            <Upload size={13} /> Import Brain
+          </button>
+          {importResult && (
+            <p className={`text-[11px] mt-2 ${importResult.success ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {importResult.message}
+            </p>
+          )}
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--gia-border)' }} />
+
+        <div>
+          <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>Cloud Backup</label>
+          <p className="text-[10px] mt-1 mb-3" style={{ color: 'var(--gia-muted-2)' }}>
+            Sync your brain to any WebDAV or S3-compatible endpoint (self-hosted, Google Drive via third-party, etc.)
+          </p>
+          <div className="flex flex-col gap-3">
+            <input className="gia-input" value={cloudConfig.url} onChange={e => setCloudConfig({ ...cloudConfig, url: e.target.value })} placeholder="WebDAV/S3 endpoint URL" />
+            <input className="gia-input" value={cloudConfig.username} onChange={e => setCloudConfig({ ...cloudConfig, username: e.target.value })} placeholder="Username (optional)" />
+            <input className="gia-input" type="password" value={cloudConfig.password} onChange={e => setCloudConfig({ ...cloudConfig, password: e.target.value })} placeholder="Password (optional)" />
+            <div className="flex gap-2">
+              <button onClick={saveCloud} className="gia-btn flex-1 text-[11px]" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>
+                Save Config
+              </button>
+              <button onClick={handleCloudUpload} className="gia-btn flex-1 text-[11px]" style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa' }}>
+                Upload Now
+              </button>
+            </div>
+            {uploadStatus && (
+              <p className="text-[11px]" style={{ color: uploadStatus.startsWith('Failed') ? '#f87171' : '#34d399' }}>
+                {uploadStatus}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -93,6 +93,7 @@ const ExamModule: React.FC = () => {
         systemPrompt: `You are an expert in West African education. Respond with valid JSON only:
 {"subjects":[{"name":"Subject Name","topics":["Topic 1","Topic 2","Topic 3","Topic 4","Topic 5"]}]}
 Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
+        systemPromptMode: 'replace',
         temperature: 0.3,
         maxTokens: 2000,
       });
@@ -136,6 +137,7 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
         systemPrompt: `You are a ${examSystem} exam expert. Generate accurate, exam-standard questions. Respond with valid JSON:
 {"questions":[{"id":"1","question":"Question text?","options":["A. Option","B. Option","C. Option","D. Option"],"correctAnswer":0,"explanation":"Why this is correct","topic":"Topic name"}]}
 correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accuracy required. Pure JSON, no markdown.`,
+        systemPromptMode: 'replace',
         temperature: 0.4,
         maxTokens: 3000,
       });

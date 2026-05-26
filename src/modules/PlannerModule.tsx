@@ -65,9 +65,10 @@ const PlannerModule: React.FC = () => {
     try {
       const res = await GiaBrain.generate({
         prompt: text,
-        systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond ONLY with valid JSON:
+        systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
 {"title":"Concise plan title","steps":[{"id":"1","title":"Step title","description":"Specific actionable description","priority":"high|medium|low","eta":"e.g. Day 1, Week 2"}]}
 Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only JSON.`,
+        systemPromptMode: 'replace',
         temperature: 0.45,
         maxTokens: 1500,
       });

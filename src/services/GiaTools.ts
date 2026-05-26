@@ -3,10 +3,9 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import CodeRunner from './CodeRunner';
 import { useGiaStore } from '../store/useGiaStore';
 import { PROVIDER_DEFAULTS } from '../store/useProviderStore';
+import { isNativePlatform } from '../utils/helpers';
 
-const isNative = () => typeof (window as any).Capacitor?.getPlatform === 'function'
-  ? (window as any).Capacitor.getPlatform() === 'android'
-  : false;
+const isNative = isNativePlatform;
 
 const blobUrls = new Set<string>();
 
@@ -48,6 +47,7 @@ export interface ToolResult {
   success: boolean;
   content: string;
   error?: string;
+  sources?: { title: string; url: string }[];
 }
 
 export interface Tool {
@@ -72,8 +72,9 @@ class GiaTools {
       execute: async ({ query }) => {
         try {
           const SearchService = (await import('./SearchService')).default;
-          const content = await SearchService.searchAndFormat(query);
-          return { success: true, content: content || 'No results found.' };
+          const result = await SearchService.searchWithSources(query);
+          if (!result.content) return { success: true, content: 'No results found.', sources: [] };
+          return { success: true, content: result.content, sources: result.sources };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }
@@ -388,6 +389,81 @@ class GiaTools {
           assistantMsgId: '',
         });
         return { success: true, content: '__CLARIFICATION__' };
+      }
+    });
+
+    this.tools.set('get_user_location', {
+      id: 'get_user_location', name: 'get_user_location',
+      description: 'Get the user\'s current GPS location (latitude, longitude, accuracy).',
+      execute: async () => {
+        try {
+          const MapService = (await import('./MapService')).default;
+          const pos = await MapService.getCurrentPosition();
+          let address = '';
+          try {
+            const rev = await MapService.reverseGeocode(pos.lat, pos.lng);
+            address = ` (${rev.road ? rev.road + ', ' : ''}${rev.city ? rev.city + ', ' : ''}${rev.country || ''})`;
+          } catch {}
+          return {
+            success: true,
+            content: `Location: ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}${address}\nAccuracy: ${pos.accuracy ? `${Math.round(pos.accuracy)}m` : 'unknown'}`
+          };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
+    this.tools.set('search_places', {
+      id: 'search_places', name: 'search_places',
+      description: 'Search for places, addresses, or landmarks using OpenStreetMap.',
+      execute: async ({ query, limit = 5 }) => {
+        try {
+          const MapService = (await import('./MapService')).default;
+          const places = await MapService.searchPlaces(query, limit);
+          if (places.length === 0) return { success: true, content: 'No places found for that query.' };
+          const lines = places.map((p, i) =>
+            `${i + 1}. **${p.displayName.slice(0, 100)}** — ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`
+          );
+          return { success: true, content: `Found ${places.length} place(s):\n${lines.join('\n')}` };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
+    this.tools.set('show_map', {
+      id: 'show_map', name: 'show_map',
+      description: 'Render an interactive OpenStreetMap. Provide center coords, markers, and optional route.',
+      execute: async ({ center, markers, route, zoom = 13, title }) => {
+        const content = JSON.stringify({
+          type: 'map',
+          data: { center, markers: markers || [], route: route || null, zoom, title: title || '' }
+        });
+        return { success: true, content: `\`\`\`visual\n${content}\n\`\`\`` };
+      }
+    });
+
+    this.tools.set('export_brain', {
+      id: 'export_brain', name: 'export_brain',
+      description: 'Export all GIA memories, identity, and skills as a downloadable JSON file.',
+      execute: async () => {
+        try {
+          const { exportBrainToFile } = await import('./BrainExport');
+          exportBrainToFile();
+          useGiaStore.getState().addNotification('Brain export downloaded');
+          return { success: true, content: 'Brain data exported — check your downloads for gia-brain-*.json' };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
+    this.tools.set('import_brain', {
+      id: 'import_brain', name: 'import_brain',
+      description: 'Upload and restore GIA knowledge from a previously exported .gia-brain.json file.',
+      execute: async () => {
+        return { success: false, content: '', error: 'File upload must be done manually in Settings > Brain Export. Tell the user to go there.' };
       }
     });
   }

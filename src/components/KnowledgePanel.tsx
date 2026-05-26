@@ -71,7 +71,7 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
   const addFact = () => {
     if (!newKey.trim() || !newValue.trim()) return;
-    addMemory({ key: newKey.trim(), value: newValue.trim(), category: newCat, confidence: 1 });
+    addMemory({ key: newKey.trim(), value: newValue.trim(), category: newCat, tier: 'semantic', confidence: 1 });
     setNewKey(''); setNewValue(''); setShowAddForm(false);
   };
 

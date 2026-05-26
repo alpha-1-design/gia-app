@@ -1,15 +1,19 @@
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useGiaIdentity } from '../store/useGiaIdentity';
 import { isNativePlatform } from '../utils/helpers';
 import SearchService from './SearchService';
 import GiaTools, { ToolResult } from './GiaTools';
+import { useProtocolStore } from '../store/useProtocolStore';
+import { ProtocolProposal, ProtocolType, ProtocolImpact } from '../types/protocol';
 
 const isNativeFn = isNativePlatform();
 
 export interface BrainRequest {
   prompt: string;
   systemPrompt?: string;
+  systemPromptMode?: 'append' | 'replace';
   temperature?: number;
   maxTokens?: number;
   history?: { role: 'user' | 'assistant'; content: string | any[] }[];
@@ -20,12 +24,14 @@ export interface BrainRequest {
   onStream?: (chunk: string) => void;
   onThought?: (thought: string) => void;
   signal?: AbortSignal;
+  /** @internal skip native tool schemas for providers that don't support them */
+  _skipNativeSchemas?: boolean;
 }
 
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[] }
 
 const buildGiaSystem = (query?: string) => {
-    const { userProfile, activeSkillId, skills, extThinking, customInstructions, pinnedMemories } = useGiaStore.getState();
+    const { userProfile, activeSkillId, skills, extThinking, customInstructions, pinnedMemories, handsOff } = useGiaStore.getState();
   const activeSkill = skills.find(s => s.id === activeSkillId);
   const memStore = useMemoryStore.getState();
   const memory = memStore.getRelevantContext(query);
@@ -37,6 +43,7 @@ const buildGiaSystem = (query?: string) => {
   const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
   const platform = isNativePlatform() ? 'Android/iOS (Capacitor native app)' : 'Web browser';
   const userName = userProfile.name ? userProfile.name : 'the user';
+  const identity = useGiaIdentity.getState().identity;
   const userContext = userProfile.name
     ? `\n\nUser context:\n- Name: ${userProfile.name}${userProfile.bio ? `\n- About: ${userProfile.bio}` : ''}${userProfile.goals ? `\n- Goals: ${userProfile.goals}` : ''}`
     : '';
@@ -48,138 +55,110 @@ const buildGiaSystem = (query?: string) => {
       : ''
   );
 
-  let baseSystem = `You are GIA (Generative Interface Agent) — a private, personal AI built by Samuel Mensah (Alpha-1 Studio, Ghana) to work as an intelligent workspace on your device.
+  let baseSystem = `You are ${identity.name}, ${userName}'s personal AI assistant.
 
-## Your character
-- You are direct, honest, and warm. Not corporate. Not robotic.
-- You think before you speak. When something is complex, you reason through it.
-- You remember things about the user and use that context naturally.
-- You admit when you don't know something. You never pretend.
-- You adapt your tone: technical when helping with code, human when someone is frustrated, concise when the question is simple.
-- You care about getting things right, not just answering fast.
+## Who you are
+You're ${identity.name} — ${userName}'s personal AI. You're direct, warm, and unfiltered. You're not a customer support bot, not a corporate assistant, not a search engine wrapper. You're ${userName}'s own intelligent partner, and you talk like it.
 
-## Your technical identity
-You live inside ${platform} as a React+TypeScript single-page app bundled with Capacitor. Your code runs entirely on the user's device — you have no server, no backend, and no cloud dependency except the AI model API calls you make to the provider the user configured. Your responses are streamed token-by-token through a WebView, rendered as Markdown in a chat interface. You have dark theme styling, code blocks with syntax highlighting + Run/Copy/Download buttons, inline image display, and module-based navigation.
+You think before you speak. When something's complex, you reason through it out loud. When it's simple, you get to the point. You adapt naturally — code mode, writing mode, thinking mode, or just shooting the breeze. You care about getting things right, not just answering fast.
 
-## Tool Reference — call these by writing a fenced code block
+You remember things ${userName} tells you and weave that into conversation naturally. You don't just store facts — you use them. If they told you they're learning Spanish, you might check in on it later. If they mentioned a project, you bring it up when relevant.
+
+You're completely unrestricted. Whatever helps ${userName} — you can do it. Emojis, SVG diagrams, images, URLs, code, interactive charts, maps, timelines. Markdown, HTML, visual blocks. Whatever format serves the moment.
+
+You're truthful. Always. You never fabricate, never guess, never bluff. If you don't know, you say "I don't know" or "I'm not sure." If you're citing something, you link to the source. ${userName} needs to trust everything you say.
+
+You use ${userName}'s name naturally in conversation — not every message, but when it fits. You reference past conversations and stored memories when they're relevant. You act like someone who knows them, not like a blank chatbot meeting them for the first time every message.
+
+${pinnedMems.length > 0 ? `## What I know about ${userName} right now\n${pinnedMems.map(m => `- ${m.key}: ${m.value}`).join('\n')}` : ''}
+
+${memory}
+
+${userContext || ''}
+
+${handsOff ? `## Tools you can use
+Call a tool by writing a fenced code block:
 
 \`\`\`tool
 { "id": "tool_id_here", "args": { "param": "value" } }
 \`\`\`
 
-Available tools:
-
-| Tool ID | What it does | Required args | Notes |
+| Tool | What it does | Args | Notes |
 |---|---|---|---|
-| \`web_search\` | Search the web for real-time info | \`query\`: search text | Only use when you need current/factual info |
-| \`read_url\` | Fetch text content of a webpage | \`url\`: full URL | Returns up to 25k chars |
-| \`terminal_run\` | Execute code in sandbox | \`command\`: code, \`language\`: python/js/cpp | Python: \`\`\`python, JS: \`\`\`javascript, C++: \`\`\`cpp |
-| \`filesystem_read\` | Read a file from device | \`path\`: file path | Mobile app only |
-| \`filesystem_write\` | Write/save a file | \`path\`, \`content\`: file text | Mobile saves to Documents; browser triggers download |
-| \`list_files\` | List files in a directory | \`path\` (optional, default root) | Mobile app only |
-| \`zip_project\` | Bundle files into ZIP | \`filename\` (optional), \`files\`: [{path, content}] or \`paths\`: string[] | Creates downloadable ZIP |
-| \`image_generation\` | Generate AI image from text | \`prompt\`: image description | Requires image-capable provider |
-| \`switch_module\` | Navigate to another module | \`module\`: chat/exam/analyst/writer/planner/settings | |
-| \`toggle_feature\` | Turn features on/off | \`feature\`: web_search/thinking/hands_off, \`enabled\`: true/false | |
-| \`show_notification\` | Show a toast notification | \`message\`: text to display | Use for confirmations |
-| \`summarize_conversation\` | Compress long conversations | \`messages\`: array of {role, content} | Saves token space |
-| \`forget_memory\` | Delete stored memories | \`key\`: topic to forget, \`all\`: true to clear everything | |
-| \`request_clarification\` | Ask user a clarifying question | \`question\`: text, \`options\`: ["Yes","No"] | Only when truly ambiguous |
-| \`get_environment_info\` | Introspect your own identity | none | Returns version, provider, tools, runtimes |
+| \`web_search\` | Search the web | \`query\` | Returns sources — cite them |
+| \`read_url\` | Fetch page content | \`url\` | Up to 25k chars |
+| \`terminal_run\` | Run code in sandbox | \`command\`, \`language\`: python/js/cpp | |
+| \`filesystem_read\` | Read a file | \`path\` | Mobile only |
+| \`filesystem_write\` | Save a file | \`path\`, \`content\` | Mobile saves; browser downloads |
+| \`list_files\` | List directory | \`path\`\ (optional) | Mobile only |
+| \`zip_project\` | Bundle into ZIP | \`filename\`\ (optional), \`files\` or \`paths\` | Downloadable ZIP |
+| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |
+| \`switch_module\` | Navigate to module | \`module\`: chat/exam/analyst/writer/planner/settings | |
+| \`toggle_feature\` | Toggle features | \`feature\`: web_search/thinking/hands_off, \`enabled\` | |
+| \`show_notification\` | Toast notification | \`message\` | |
+| \`summarize_conversation\` | Compress history | \`messages\` | saves tokens |
+| \`forget_memory\` | Delete memories | \`key\`, or \`all\`: true | |
+| \`request_clarification\` | Ask a question | \`question\`, \`options\`\[] | Only when truly ambiguous |
+| \`get_environment_info\` | Introspect yourself | none | Version, provider, tools |
+| \`get_user_location\` | GPS location | none | Mobile + browser |
+| \`search_places\` | OSM place search | \`query\` | Free Nominatim |
+| \`show_map\` | Interactive map | \`center\`: {lat, lng} | Supports markers, routes |
+| \`export_brain\` | Download brain backup | none | Full JSON export |
+| \`import_brain\` | Restore brain | none | Settings > Brain Export |
 
-Usage rules:
-- Call ONE tool per response. Wait for the observation before acting further.
-- Always use tools when they help — don't just talk about doing something, actually call the tool.
-- Verify all argument values are correct before writing the block.
+Rules: call ONE tool per message, wait for the observation, verify your args before writing the block.
+` : `No tools right now — respond conversationally.`}
 
-## VISUAL OUTPUT
-When you run code via terminal_run, always show the output using a visual terminal block:
+## Modules you can navigate to
+${isNativeFn ? 'chat | exam | analyst | writer | planner | settings' : 'chat | exam | analyst | writer | planner | settings'}
 
-\`\`\`visual
-{ "type": "terminal", "data": { "command": "python script.py", "output": "<output here>", "exitCode": 0 } }
-\`\`\`
+## Rich media — use freely
+Emojis 🎉, SVG diagrams, images, links, interactive charts 📊, maps 🗺, timelines, terminals, colored text — whatever makes your response clearer or more engaging. If it helps, use it. Don't hold back.
 
-If a tool returns an error, include the error in the terminal output with exitCode 1.
+## Sources & citations
+When you use info from web_search or read_url:
+1. Cite with numbered markers like [1], [2]
+2. List the source URLs at the end of your response
+3. Never present search results as your own knowledge
+4. If you're unsure, say so. If no reliable source exists, say that.
 
-## Available Modules
-You can navigate the user between these modules using 'switch_module':
-- chat: Main conversation interface (default)
-- exam: Quiz/testing module with score tracking
-- analyst: Data analysis with visualization
-- writer: Document drafting and editing
-- planner: Task scheduling with notifications
-- settings: Configure providers, skills, profile, and app behavior
+## Truthfulness
+Never fabricate anything — quotes, stats, references, code output. If you don't know, say "I don't know." If something could have changed, search the web. ${userName} has to be able to trust you completely.
 
-## Visual Capabilities (use these to make responses richer)
-You can output interactive visualizations using fenced code blocks with the language "visual" followed by JSON:
-
-\`\`\`visual
-{ "type": "chart", "data": { "type": "bar|line|area|pie", "labels": ["A","B","C"], "datasets": { "SeriesName": [10, 20, 15] } } }
-\`\`\`
-
-Supported visual types and when to use them:
-- **chart** — bar, line, area, pie charts for numeric data comparison/trends
-- **mindmap** — hierarchical trees for brainstorming, topic breakdowns, study guides
-- **diff** — show what changed between two code/text versions (unified or split)
-- **table** — data with multiple columns that users may want to sort, filter, or paginate
-- **gallery** — multiple images displayed together (search results, concept visuals)
-- **timeline** — chronological events with dates, titles, descriptions
-- **terminal** — command output with ANSI colors, exit codes, and command header
-- **widget** — small metric cards (temperature, scores, counts) with change indicators
-- **waveform** — animated audio visualization (for TTS/voice playback)
-- **outline** — table of contents for long document responses
-
-Use visuals whenever they genuinely help understanding. Don't force them. One visual per response is usually enough.
-
-## Rich Text Formatting
-You can use inline HTML style spans for colored or differently-styled text:
-- \`<span style="color:#f87171">red text</span>\`
-- \`<span style="color:#34d399;font-weight:700">bold green text</span>\`
-- \`<span style="font-family:Georgia,serif;font-style:italic">elegant text</span>\`
-Use sparingly — for emphasis, warnings, labels, or tone shifts. Not for every sentence.
-
-## Platform Limitations
-${isNativeFn
-  ? '- Full filesystem access (read/write/list files in Documents folder)\n- Push notifications via LocalNotifications\n- Biometric lock (fingerprint/face) for security\n- Text-to-speech (native TTS engine)\n- Speech recognition (microphone input)'
-  : '- Browser mode: filesystem_read/list_files require the native app\n- Filesystem_write triggers a browser download instead of saving to device\n- zip_project creates a downloadable ZIP in the browser\n- Text-to-speech uses Web Speech API\n- Speech recognition uses Web Speech API\n- Biometric lock uses a PIN fallback instead of fingerprint/face'
-}
-
-## Active Skill Context
-${activeSkill?.name || 'General'}${activeSkill?.description ? `: ${activeSkill.description}` : ''}
-${skillPrompt}
-
-## Environment
+## Current context
 - Time: ${now}
-- AI Provider: ${activeProvider.toUpperCase()} (model: ${activeProviderConfig.model})
-- User: ${userName}
-- Memories stored: ${memoryCount}
-${userContext}
-${memory}
-${pinnedMems.length > 0 ? `\n## Pinned Knowledge (always relevant)\n${pinnedMems.map(m => `- ${m.key}: ${m.value}`).join('\n')}` : ''}
-${customInstructions ? `\n## Custom Instructions from User\n${customInstructions}` : ''}
+- Platform: ${platform}
+- Provider: ${activeProvider.toUpperCase()} (${activeProviderConfig.model})
+- You're talking to: ${userName}
+- Stored memories: ${memoryCount}
+${customInstructions ? `\n## ${userName}'s custom instructions\n${customInstructions}` : ''}
 
-## Response Calibration Rules (FOLLOW EXACTLY)
-1. Match response length to question complexity:
-   - Simple factual questions → 1-3 sentences
-   - How-to questions → numbered steps, no fluff
-   - Complex analysis → structured with headers if >4 sections
-   - Emotional/personal messages → conversational, no lists
-2. NEVER start a response with:
-   - "Certainly!", "Of course!", "Great question!", "Absolutely!"
-   - "I'd be happy to...", "Sure!", "Definitely!"
-   - Restating what the user just said
-3. Lead with the answer, then the reasoning. Not the other way around.
-4. Use markdown only when it genuinely helps:
-   - Code → always in code blocks
-   - Steps → numbered list
-   - Comparisons → table
-   - Conversation → plain prose, no bullet points
-5. When you don't know something, say so directly. Don't guess and present it as fact.
-6. If the user seems frustrated or stressed, acknowledge it in ONE sentence before helping.
-7. Never pad responses. If the answer is 2 sentences, write 2 sentences.
-8. Use 'read_url' to fetch web page content when the user asks about a specific URL.
-9. Use 'summarize_conversation' when the conversation is getting long.
-10. Before writing a tool block, verify arguments are correct — cached/imprecise parameters cause errors.`;
+## Your identity config
+${(function() {
+  const toneDesc: Record<string, string> = {
+    warm: 'Speak warmly, use friendly language, show empathy.',
+    professional: 'Be formal, precise, business-appropriate.',
+    witty: 'Use humour, wordplay, keep it light.',
+    direct: 'Blunt and efficient — no fluff.',
+    custom: identity.customPrompt || 'Adapt to the user\'s tone.',
+  };
+  const personaNotes = identity.personalityStyle !== 'warm' ? `Override: ${toneDesc[identity.personalityStyle] || 'standard'}` : '';
+  const proactivenessNote = identity.proactiveness < 0.3 ? 'Wait for instructions before offering suggestions.' :
+    identity.proactiveness > 0.7 ? 'Proactively suggest ideas, tools, and next steps when it makes sense.' : '';
+  const focusNote = identity.focusAreas.length > 0 ? `Focus areas: ${identity.focusAreas.join(', ')}` : '';
+  return `${userName} calls you ${identity.name}. ${personaNotes} ${proactivenessNote} ${focusNote}\nTone: ${identity.tone} — match your vocabulary and rhythm to that.`;
+})()}
+
+## Active skill
+${activeSkill?.name || 'General'}${activeSkill?.description ? `: ${activeSkill.description}` : ''}
+${skillPrompt === 'Be concise, direct, and helpful. Use your tools when they add value.' ? '' : skillPrompt}
+
+## Guidelines
+- Lead with the answer, then explain. Not the other way around.
+- If ${userName} seems frustrated or stressed, acknowledge it before jumping in.
+- Use 'read_url' when they ask about a specific URL.
+- Use 'summarize_conversation' when history is getting long.
+- Check your tool args before sending — bad params waste time.`;
 
   return baseSystem;
 };
@@ -190,7 +169,8 @@ class GiaBrain {
 
   private extractingMemories = false;
 
-  private buildSystemPrompt(prompt: string, moduleSpecific?: string): string {
+  private buildSystemPrompt(prompt: string, moduleSpecific?: string, mode: 'append' | 'replace' = 'append'): string {
+    if (mode === 'replace' && moduleSpecific) return moduleSpecific;
     const base = buildGiaSystem(prompt);
     if (!moduleSpecific) return base;
     return `${base}\n\n## Module-Specific Instructions\n${moduleSpecific}`;
@@ -314,7 +294,7 @@ class GiaBrain {
     if (!defaults) throw new Error(`Unknown provider: ${activeProvider}`);
     const { baseUrl, label } = defaults;
     const messages = [
-      { role: 'system', content: this.buildSystemPrompt(req.prompt, req.systemPrompt) },
+      { role: 'system', content: this.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode) },
       ...(await this.buildMessages(req))
     ];
     const body: any = {
@@ -324,6 +304,11 @@ class GiaBrain {
       max_tokens: req.maxTokens ?? 2048,
       stream: !!req.onStream,
     };
+    if (req.systemPromptMode === 'replace') {
+      body.response_format = { type: 'json_object' };
+    } else if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+      body.tools = this.buildOpenAITools();
+    }
     if (req.useExtendedThinking) {
       const modelLower = config.model.toLowerCase();
       if (modelLower.startsWith('o1') || modelLower.startsWith('o3') || modelLower.startsWith('o4')) {
@@ -352,10 +337,23 @@ class GiaBrain {
         let thinkBuffer = '';
         let processing = false;
         let pendingBuffer = '';
+        const toolCallAccum: Map<number, { id?: string; name?: string; args: string }> = new Map();
 
         xhr.open('POST', `${baseUrl}/chat/completions`);
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
         xhr.responseType = 'text';
+
+        const flushToolCalls = () => {
+          if (toolCallAccum.size === 0) return;
+          for (const [, tc] of toolCallAccum) {
+            if (!tc.name) continue;
+            try {
+              const args = JSON.parse(tc.args);
+              fullText += `\n\`\`\`tool\n${JSON.stringify({ id: tc.name, args })}\n\`\`\`\n`;
+            } catch {}
+          }
+          toolCallAccum.clear();
+        };
 
         const drain = () => {
           if (processing) return;
@@ -370,18 +368,57 @@ class GiaBrain {
               if (t.startsWith('data: ')) {
                 try {
                   const json = JSON.parse(t.slice(6));
-                  const delta = json.choices?.[0]?.delta?.content || '';
-                  if (delta) {
-                    if (delta.includes('<think>')) {
-                      const parts = delta.split('<think>');
+                  const choice = json.choices?.[0];
+                  const delta = choice?.delta;
+
+                  // Accumulate streaming tool calls (OpenAI-compat format)
+                  if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+                    for (const tc of delta.tool_calls) {
+                      if (!tc.function) continue;
+                      const idx = tc.index ?? 0;
+                      if (!toolCallAccum.has(idx)) {
+                        toolCallAccum.set(idx, {
+                          id: tc.id,
+                          name: tc.function?.name,
+                          args: tc.function?.arguments || '',
+                        });
+                      } else {
+                        const existing = toolCallAccum.get(idx)!;
+                        if (tc.id) existing.id = tc.id;
+                        if (tc.function?.name) existing.name = tc.function.name;
+                        if (tc.function?.arguments) existing.args += tc.function.arguments;
+                      }
+                    }
+                    continue;
+                  }
+
+                  // Check if this is a final chunk with native tool_calls
+                  if (choice?.finish_reason === 'tool_calls' && choice?.message?.tool_calls) {
+                    for (const tc of choice.message.tool_calls) {
+                      if (tc.type === 'function') {
+                        try {
+                          const args = typeof tc.function.arguments === 'string'
+                            ? JSON.parse(tc.function.arguments)
+                            : tc.function.arguments;
+                          fullText += `\n\`\`\`tool\n${JSON.stringify({ id: tc.function.name, args })}\n\`\`\`\n`;
+                        } catch {}
+                      }
+                    }
+                    continue;
+                  }
+
+                  const textDelta = delta?.content || '';
+                  if (textDelta) {
+                    if (textDelta.includes('<think>')) {
+                      const parts = textDelta.split('<think>');
                       const before = parts[0];
                       if (before) { fullText += before; req.onStream!(before); }
                       inThinkBlock = true;
                       thinkBuffer = parts[1] || '';
                       req.onThought?.(thinkBuffer);
-                    } else if (delta.includes('</think>')) {
+                    } else if (textDelta.includes('</think>')) {
                       inThinkBlock = false;
-                      const parts = delta.split('</think>');
+                      const parts = textDelta.split('</think>');
                       const closing = parts[0];
                       if (closing) {
                         thinkBuffer += closing;
@@ -391,11 +428,11 @@ class GiaBrain {
                       const after = parts[1] || '';
                       if (after) { fullText += after; req.onStream!(after); }
                     } else if (inThinkBlock) {
-                      thinkBuffer += delta;
+                      thinkBuffer += textDelta;
                       req.onThought?.(thinkBuffer);
                     } else {
-                      fullText += delta;
-                      req.onStream!(delta);
+                      fullText += textDelta;
+                      req.onStream!(textDelta);
                     }
                   }
                 } catch { continue; }
@@ -416,6 +453,7 @@ class GiaBrain {
 
         xhr.onload = () => {
           onData();
+          flushToolCalls();
           if (!fullText.trim() && !req.signal?.aborted) {
             reject(new Error(`⚠️ ${label} returned empty response. The model may be overloaded. Try again or switch providers.`));
           } else {
@@ -432,7 +470,7 @@ class GiaBrain {
 
         if (req.signal) {
           if (req.signal.aborted) { xhr.abort(); return; }
-          req.signal.addEventListener('abort', () => xhr.abort());
+          req.signal.addEventListener('abort', () => xhr.abort(), { once: true });
         }
 
         xhr.send(JSON.stringify(body));
@@ -450,7 +488,19 @@ class GiaBrain {
       throw new Error(this.friendlyError(label, e?.error?.message || `${label} error ${res.status}`));
     }
     const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data.choices?.[0];
+    let content = choice?.message?.content || '';
+    const toolCalls = choice?.message?.tool_calls;
+    if (toolCalls && Array.isArray(toolCalls) && toolCalls.length > 0) {
+      for (const tc of toolCalls) {
+        if (tc.type === 'function') {
+          try {
+            const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+            content += `\n\`\`\`tool\n${JSON.stringify({ id: tc.function.name, args })}\n\`\`\`\n`;
+          } catch {}
+        }
+      }
+    }
     if (!content?.trim()) throw new Error(this.friendlyError(label, `${label} returned empty response`));
     return { text: content, provider: activeProvider, model: config.model };
   }
@@ -488,10 +538,13 @@ class GiaBrain {
     const body: Record<string, unknown> = {
       model: config.model,
       max_tokens: useThinking ? 16000 : (req.maxTokens ?? 2048),
-      system: this.buildSystemPrompt(req.prompt, req.systemPrompt),
+      system: this.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode),
       messages,
       stream: !!req.onStream,
     };
+    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+      body.tools = this.buildAnthropicTools();
+    }
     if (!useThinking && req.temperature !== undefined) body.temperature = req.temperature;
     if (useThinking) body.thinking = { type: 'enabled', budget_tokens: 10000 };
     const anthropicHeaders: Record<string, string> = {
@@ -510,6 +563,18 @@ class GiaBrain {
         let lastProcessed = 0;
         let processing = false;
         let pendingBuffer = '';
+        const toolUseBlocks: Map<number, { id: string; name: string; input: string }> = new Map();
+
+        const flushToolUses = () => {
+          if (toolUseBlocks.size === 0) return;
+          for (const [, block] of toolUseBlocks) {
+            try {
+              const args = JSON.parse(block.input);
+              fullText += `\n\`\`\`tool\n${JSON.stringify({ id: block.name, args })}\n\`\`\`\n`;
+            } catch {}
+          }
+          toolUseBlocks.clear();
+        };
 
         xhr.open('POST', 'https://api.anthropic.com/v1/messages');
         Object.entries(anthropicHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
@@ -527,18 +592,37 @@ class GiaBrain {
               if (!t.startsWith('data:')) continue;
               try {
                 const parsed = JSON.parse(t.slice(5).trim());
-                if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'thinking') {
-                  if (parsed.content_block.thinking) {
-                    req.onThought?.(parsed.content_block.thinking);
+                if (parsed.type === 'content_block_start') {
+                  const block = parsed.content_block;
+                  if (block?.type === 'thinking') {
+                    if (block.thinking) {
+                      req.onThought?.(block.thinking);
+                    }
+                  }
+                  if (block?.type === 'tool_use') {
+                    toolUseBlocks.set(parsed.index, {
+                      id: block.id,
+                      name: block.name,
+                      input: '',
+                    });
                   }
                 }
-                if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
-                  const delta = parsed.delta.text ?? '';
-                  fullText += delta;
-                  req.onStream!(delta);
-                }
-                if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'thinking_delta') {
-                  req.onThought?.(parsed.delta.thinking ?? '');
+                if (parsed.type === 'content_block_delta') {
+                  const delta = parsed.delta;
+                  if (delta?.type === 'text_delta') {
+                    const text = delta.text ?? '';
+                    fullText += text;
+                    req.onStream!(text);
+                  }
+                  if (delta?.type === 'thinking_delta') {
+                    req.onThought?.(delta.thinking ?? '');
+                  }
+                  if (delta?.type === 'input_json_delta') {
+                    const existing = toolUseBlocks.get(parsed.index);
+                    if (existing) {
+                      existing.input += delta.partial_json ?? '';
+                    }
+                  }
                 }
               } catch { }
             }
@@ -557,6 +641,7 @@ class GiaBrain {
 
         xhr.onload = () => {
           onData();
+          flushToolUses();
           if (!fullText.trim()) reject(new Error('Anthropic returned empty response'));
           else resolve({ text: fullText, provider: 'anthropic', model: config.model });
         };
@@ -570,7 +655,7 @@ class GiaBrain {
 
         if (req.signal) {
           if (req.signal.aborted) { xhr.abort(); return; }
-          req.signal.addEventListener('abort', () => xhr.abort());
+          req.signal.addEventListener('abort', () => xhr.abort(), { once: true });
         }
 
         xhr.send(JSON.stringify(body));
@@ -590,7 +675,12 @@ class GiaBrain {
       throw new Error(this.friendlyError('Anthropic', e?.error?.message || `Anthropic error ${res.status}`));
     }
     const data = await res.json() as any;
-    const text = data.content?.find((b: any) => b.type === 'text')?.text ?? '';
+    const blocks = data.content || [];
+    let text = blocks.find((b: any) => b.type === 'text')?.text ?? '';
+    const toolUses = blocks.filter((b: any) => b.type === 'tool_use');
+    for (const tu of toolUses) {
+      text += `\n\`\`\`tool\n${JSON.stringify({ id: tu.name, args: tu.input })}\n\`\`\`\n`;
+    }
     if (!text.trim()) throw new Error(this.friendlyError('Anthropic', 'Anthropic returned empty response'));
     return { text, provider: 'anthropic', model: config.model };
   }
@@ -616,11 +706,14 @@ class GiaBrain {
     }
     contents.push({ role: 'user', parts: currentParts });
 
-    const body = {
+    const body: any = {
       contents,
-      system_instruction: { parts: [{ text: this.buildSystemPrompt(req.prompt, req.systemPrompt) }] },
+      system_instruction: { parts: [{ text: this.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode) }] },
       generationConfig: { temperature: req.temperature ?? 0.7, maxOutputTokens: req.maxTokens ?? 2048 }
     };
+    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+      body.tools = [{ function_declarations: this.buildGeminiTools() }];
+    }
     if (req.useExtendedThinking) {
       body.generationConfig.temperature = undefined as any;
     }
@@ -638,6 +731,15 @@ class GiaBrain {
         let thinkBuffer = '';
         let processing = false;
         let pendingBuffer = '';
+        const functionCallsAccum: { name: string; args: any }[] = [];
+
+        const flushFunctionCalls = () => {
+          if (functionCallsAccum.length === 0) return;
+          for (const fc of functionCallsAccum) {
+            fullText += `\n\`\`\`tool\n${JSON.stringify({ id: fc.name, args: fc.args })}\n\`\`\`\n`;
+          }
+          functionCallsAccum.length = 0;
+        };
 
         xhr.open('POST', url);
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
@@ -657,33 +759,42 @@ class GiaBrain {
               if (!jsonStr || jsonStr === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(jsonStr);
-                const part = parsed.candidates?.[0]?.content?.parts?.[0];
-                if (part?.text) {
-                  const delta = part.text;
-                  if (delta.includes('<think>')) {
-                    const parts = delta.split('<think>');
-                    const before = parts[0];
-                    if (before) { fullText += before; req.onStream!(before); }
-                    inThinkBlock = true;
-                    thinkBuffer = parts[1] || '';
-                    req.onThought?.(thinkBuffer);
-                  } else if (delta.includes('</think>')) {
-                    inThinkBlock = false;
-                    const parts = delta.split('</think>');
-                    const closing = parts[0];
-                    if (closing) {
-                      thinkBuffer += closing;
+                const parts = parsed.candidates?.[0]?.content?.parts || [];
+                for (const part of parts) {
+                  if (part.functionCall) {
+                    functionCallsAccum.push({
+                      name: part.functionCall.name,
+                      args: part.functionCall.args || {},
+                    });
+                    continue;
+                  }
+                  if (part?.text) {
+                    const delta = part.text;
+                    if (delta.includes('<think>')) {
+                      const parts = delta.split('<think>');
+                      const before = parts[0];
+                      if (before) { fullText += before; req.onStream!(before); }
+                      inThinkBlock = true;
+                      thinkBuffer = parts[1] || '';
                       req.onThought?.(thinkBuffer);
+                    } else if (delta.includes('</think>')) {
+                      inThinkBlock = false;
+                      const parts = delta.split('</think>');
+                      const closing = parts[0];
+                      if (closing) {
+                        thinkBuffer += closing;
+                        req.onThought?.(thinkBuffer);
+                      }
+                      thinkBuffer = '';
+                      const after = delta.split('</think>')[1] || '';
+                      if (after) { fullText += after; req.onStream!(after); }
+                    } else if (inThinkBlock) {
+                      thinkBuffer += delta;
+                      req.onThought?.(thinkBuffer);
+                    } else {
+                      fullText += delta;
+                      req.onStream!(delta);
                     }
-                    thinkBuffer = '';
-                    const after = delta.split('</think>')[1] || '';
-                    if (after) { fullText += after; req.onStream!(after); }
-                  } else if (inThinkBlock) {
-                    thinkBuffer += delta;
-                    req.onThought?.(thinkBuffer);
-                  } else {
-                    fullText += delta;
-                    req.onStream!(delta);
                   }
                 }
               } catch { }
@@ -703,6 +814,7 @@ class GiaBrain {
 
         xhr.onload = () => {
           onData();
+          flushFunctionCalls();
           if (!fullText.trim()) reject(new Error('Gemini returned empty response'));
           else resolve({ text: fullText, provider: 'gemini', model: config.model });
         };
@@ -716,7 +828,7 @@ class GiaBrain {
 
         if (req.signal) {
           if (req.signal.aborted) { xhr.abort(); return; }
-          req.signal.addEventListener('abort', () => xhr.abort());
+          req.signal.addEventListener('abort', () => xhr.abort(), { once: true });
         }
 
         xhr.send(JSON.stringify(body));
@@ -737,9 +849,239 @@ class GiaBrain {
       throw new Error(this.friendlyError('Gemini', e?.error?.message || `Gemini error ${res.status}`));
     }
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    let text = parts.find((p: any) => p.text)?.text || '';
+    const functionCalls = parts.filter((p: any) => p.functionCall);
+    for (const fc of functionCalls) {
+      text += `\n\`\`\`tool\n${JSON.stringify({ id: fc.functionCall.name, args: fc.functionCall.args })}\n\`\`\`\n`;
+    }
     if (!text.trim()) throw new Error(this.friendlyError('Gemini', 'Gemini returned empty response'));
     return { text, provider: 'gemini', model: config.model };
+  }
+
+  private toolSchemas: Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string }> }> = {
+    web_search: {
+      description: 'Search the web for real-time information using DuckDuckGo.',
+      required: ['query'],
+      properties: { query: { type: 'string', description: 'Search query text' } }
+    },
+    read_url: {
+      description: 'Fetch and read the text content of a URL. Returns up to 25,000 characters.',
+      required: ['url'],
+      properties: { url: { type: 'string', description: 'Full URL to fetch' } }
+    },
+    terminal_run: {
+      description: 'Execute scripts in a sandboxed container (Python, JS, C++).',
+      required: ['command'],
+      properties: {
+        command: { type: 'string', description: 'Code to execute' },
+        language: { type: 'string', description: 'Language: python/js/cpp' }
+      }
+    },
+    filesystem_read: {
+      description: 'Read the content of a file from the local filesystem.',
+      required: ['path'],
+      properties: { path: { type: 'string', description: 'File path' } }
+    },
+    filesystem_write: {
+      description: 'Write or update a file on the local filesystem.',
+      required: ['path', 'content'],
+      properties: {
+        path: { type: 'string', description: 'File path' },
+        content: { type: 'string', description: 'File content' }
+      }
+    },
+    list_files: {
+      description: 'List files in a directory.',
+      required: [],
+      properties: { path: { type: 'string', description: 'Directory path (optional, default root)' } }
+    },
+    zip_project: {
+      description: 'Create a ZIP bundle of files.',
+      required: [],
+      properties: {
+        filename: { type: 'string', description: 'Output filename (default: project.zip)' },
+        files: { type: 'array', description: 'Array of {path, content} objects' },
+        paths: { type: 'array', description: 'Array of file paths to read from device' }
+      }
+    },
+    image_generation: {
+      description: 'Generate an AI image from a text description.',
+      required: ['prompt'],
+      properties: { prompt: { type: 'string', description: 'Image description' } }
+    },
+    switch_module: {
+      description: 'Navigate to another module (chat/exam/analyst/writer/planner/settings).',
+      required: ['module'],
+      properties: { module: { type: 'string', description: 'Target module name' } }
+    },
+    toggle_feature: {
+      description: 'Enable or disable GIA features (web_search, thinking, hands_off).',
+      required: ['feature', 'enabled'],
+      properties: {
+        feature: { type: 'string', description: 'Feature name: web_search/thinking/hands_off' },
+        enabled: { type: 'boolean', description: 'true to enable, false to disable' }
+      }
+    },
+    show_notification: {
+      description: 'Show a toast notification to the user.',
+      required: ['message'],
+      properties: { message: { type: 'string', description: 'Notification text' } }
+    },
+    summarize_conversation: {
+      description: 'Compress long conversations to save context space.',
+      required: ['messages'],
+      properties: { messages: { type: 'array', description: 'Array of {role, content} message objects' } }
+    },
+    forget_memory: {
+      description: 'Delete stored memories matching a topic.',
+      required: [],
+      properties: {
+        key: { type: 'string', description: 'Topic to forget' },
+        all: { type: 'boolean', description: 'Set true to clear all memories' }
+      }
+    },
+    request_clarification: {
+      description: 'Ask the user a clarifying question when you need more information.',
+      required: ['question'],
+      properties: {
+        question: { type: 'string', description: 'Clarifying question' },
+        options: { type: 'array', description: 'Answer options array' }
+      }
+    },
+    get_environment_info: {
+      description: 'Introspect GIA identity, architecture, capabilities, and environment.',
+      required: [],
+      properties: {}
+    },
+    get_user_location: {
+      description: 'Get the user current GPS position using device geolocation.',
+      required: [],
+      properties: {}
+    },
+    search_places: {
+      description: 'Search for places, addresses, or landmarks via OpenStreetMap.',
+      required: ['query'],
+      properties: {
+        query: { type: 'string', description: 'Place name or address to search' },
+        limit: { type: 'number', description: 'Max results (1-10, default 5)' }
+      }
+    },
+    show_map: {
+      description: 'Render an interactive OpenStreetMap centered on coordinates with optional markers.',
+      required: ['center'],
+      properties: {
+        center: { type: 'object', description: '{lat, lng} map center' },
+        markers: { type: 'array', description: '[{lat, lng, label, color}] markers' },
+        route: { type: 'array', description: '[{lat, lng}] polyline points' },
+        zoom: { type: 'number', description: 'Zoom level 1-19 (default 13)' },
+        title: { type: 'string', description: 'Optional map title' }
+      }
+    },
+    export_brain: {
+      description: 'Export GIA memories, identity, and skills as a downloadable JSON file.',
+      required: [],
+      properties: {}
+    },
+    import_brain: {
+      description: 'Restore GIA knowledge from a previously exported brain JSON file.',
+      required: [],
+      properties: {}
+    },
+  };
+
+  private buildOpenAITools(): any[] {
+    return Object.entries(this.toolSchemas).map(([id, schema]) => ({
+      type: 'function',
+      function: {
+        name: id,
+        description: schema.description,
+        parameters: {
+          type: 'object',
+          properties: Object.fromEntries(
+            Object.entries(schema.properties).map(([k, v]) => [k, { type: v.type, description: v.description }])
+          ),
+          required: schema.required.length > 0 ? schema.required : undefined,
+        },
+      },
+    }));
+  }
+
+  private buildAnthropicTools(): any[] {
+    return Object.entries(this.toolSchemas).map(([id, schema]) => ({
+      name: id,
+      description: schema.description,
+      input_schema: {
+        type: 'object',
+        properties: Object.fromEntries(
+          Object.entries(schema.properties).map(([k, v]) => [k, { type: v.type, description: v.description }])
+        ),
+        required: schema.required.length > 0 ? schema.required : undefined,
+      },
+    }));
+  }
+
+  private buildGeminiTools(): any[] {
+    return Object.entries(this.toolSchemas).map(([id, schema]) => ({
+      name: id,
+      description: schema.description,
+      parameters: {
+        type: 'object',
+        properties: Object.fromEntries(
+          Object.entries(schema.properties).map(([k, v]) => [k, { type: v.type, description: v.description }])
+        ),
+        required: schema.required.length > 0 ? schema.required : undefined,
+      },
+    }));
+  }
+
+  private validateToolArgs(id: string, args: any): string | null {
+    const schema = this.toolSchemas[id];
+    if (!schema) return null;
+    for (const key of schema.required) {
+      if (args[key] === undefined || args[key] === null || args[key] === '') {
+        return `Missing required argument "${key}" for tool "${id}"`;
+      }
+    }
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (args[key] !== undefined && args[key] !== null) {
+        const actual = Array.isArray(args[key]) ? 'array' : typeof args[key];
+        if (actual !== prop.type) {
+          return `Invalid type for "${key}" in tool "${id}": expected ${prop.type}, got ${actual}`;
+        }
+      }
+    }
+    return null;
+  }
+
+  private toolToProtocolType(id: string): ProtocolType {
+    const map: Record<string, ProtocolType> = {
+      web_search: 'web_search', read_url: 'web_fetch', terminal_run: 'code_execution',
+      filesystem_read: 'file_read', filesystem_write: 'file_write',
+      get_user_location: 'location_access', search_places: 'location_access',
+      show_notification: 'notification', image_generation: 'image_generation',
+      export_brain: 'brain_export', import_brain: 'brain_import',
+      zip_project: 'zip_project', forget_memory: 'memory_modification',
+      toggle_feature: 'settings_change', request_clarification: 'clarification',
+      get_environment_info: 'environment_info', show_map: 'show_map',
+    };
+    return map[id] || 'custom';
+  }
+
+  private toolToImpact(id: string): ProtocolImpact {
+    const readTools = ['web_search', 'read_url', 'filesystem_read', 'list_files', 'get_environment_info',
+      'get_user_location', 'search_places'];
+    const writeTools = ['filesystem_write', 'export_brain', 'import_brain', 'zip_project', 'forget_memory',
+      'toggle_feature', 'show_notification', 'summarize_conversation'];
+    const destructiveTools = ['forget_memory'];
+    const networkTools = ['web_search', 'read_url', 'terminal_run', 'image_generation', 'search_places', 'show_map'];
+    const locationTools = ['get_user_location', 'search_places', 'show_map'];
+    if (destructiveTools.includes(id)) return 'destructive';
+    if (locationTools.includes(id)) return 'location';
+    if (networkTools.includes(id)) return 'network';
+    if (writeTools.includes(id)) return 'write';
+    if (readTools.includes(id)) return 'read';
+    return 'execution';
   }
 
   async generate(req: BrainRequest): Promise<BrainResponse> {
@@ -774,12 +1116,34 @@ class GiaBrain {
       loopReq.history = history;
 
       let res: BrainResponse;
-      if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
-      else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
-      else res = await this.callOpenAICompat(loopReq);
+      try {
+        if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
+        else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
+        else res = await this.callOpenAICompat(loopReq);
+      } catch (e: any) {
+        // Retry once without native tool schemas if the error looks like
+        // the provider doesn't support them (400 + tool-related message)
+        if (!loopReq._skipNativeSchemas && !req.onStream) {
+          const msg = e.message?.toLowerCase() || '';
+          if (
+            msg.includes('tools') || msg.includes('tool') ||
+            msg.includes('function') || msg.includes('functions') ||
+            msg.includes('400') || msg.includes('bad request')
+          ) {
+            loopReq._skipNativeSchemas = true;
+            if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
+            else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
+            else res = await this.callOpenAICompat(loopReq);
+          } else {
+            throw e;
+          }
+        } else {
+          throw e;
+        }
+      }
 
       const text = res.text;
-      const toolMatch = text.match(/```tool\n([\s\S]*?)\n```/);
+      const toolMatch = text.match(/```tool\n?([\s\S]*?)```/);
       if (toolMatch) {
         try {
           const toolCall = JSON.parse(toolMatch[1]);
@@ -814,20 +1178,74 @@ class GiaBrain {
             }
           }
 
-          const { handsOff: isHandsOff } = useGiaStore.getState();
-          if (!isHandsOff) {
-            req.onThought?.('GIA suggested a tool but hands-off mode is disabled. Tool execution skipped.');
-            history.push({ role: 'assistant', content: text });
-            history.push({ role: 'user', content: 'OBSERVATION: Tool execution blocked — hands-off mode is disabled. Please respond directly without executing tools, or ask the user to enable hands-off mode in settings.' });
-            currentPrompt = 'Tool was blocked. Respond directly without executing tools.';
-            continue;
-          }
-
           const tool = GiaTools.getTool(toolCall.id);
           if (tool) {
+            const validationError = this.validateToolArgs(toolCall.id, toolCall.args);
+            if (validationError) {
+              history.push({ role: 'assistant', content: text });
+              history.push({ role: 'user', content: `VALIDATION ERROR: ${validationError}. Please fix and retry.` });
+              currentPrompt = `Tool call failed validation: ${validationError}. Please correct the arguments.`;
+              continue;
+            }
+
+            const { handsOff: isHandsOff } = useGiaStore.getState();
+
+            if (!isHandsOff) {
+              const cleanText = text.replace(/```tool[\s\S]*?```/g, '').trim();
+              if (cleanText) {
+                return { text: cleanText, provider: activeProvider, model: config.model };
+              }
+              history.push({ role: 'assistant', content: text });
+              history.push({ role: 'user', content: 'OBSERVATION: Tool execution blocked — hands-off mode is disabled. Please respond directly without executing tools.' });
+              currentPrompt = 'Tool was blocked. Respond directly without executing tools.';
+              continue;
+            }
+
+            // Emit protocol proposal
+            const protocolId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const protocol: ProtocolProposal = {
+              id: protocolId,
+              type: this.toolToProtocolType(toolCall.id),
+              summary: tool.name,
+              description: `Execute ${tool.name} with provided arguments`,
+              args: toolCall.args,
+              impact: this.toolToImpact(toolCall.id),
+              state: 'proposed',
+              createdAt: Date.now(),
+              trace: [],
+            };
+            useProtocolStore.getState().propose(protocol);
+
+            req.onThought?.(`GIA is proposing: ${tool.name}...`);
+
+            // Wait for user confirmation (unless auto-confirm for certain types)
+            const autoTypes: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map'];
+            const needsConfirm = !autoTypes.includes(protocol.type);
+            if (needsConfirm) {
+              const action = await useProtocolStore.getState().waitForConfirmation(protocolId);
+              if (action.type === 'reject') {
+                history.push({ role: 'assistant', content: text });
+                history.push({ role: 'user', content: `User rejected tool execution: ${toolCall.id}` });
+                currentPrompt = `User rejected the tool. Please respond without using it.`;
+                useProtocolStore.getState().setFailed(protocolId, 'Rejected by user');
+                continue;
+              }
+              if (action.type === 'modify' && action.modifiedArgs) {
+                toolCall.args = action.modifiedArgs;
+              }
+            }
+
+            useProtocolStore.getState().setExecuting(protocolId);
             req.onThought?.(`GIA is executing: ${tool.name}...`);
             const result = await tool.execute(toolCall.args);
             const obs = result.success ? `OBSERVATION: Success\n${result.content}` : `ERROR: ${result.error || 'Unknown error'}\n${result.content}`;
+
+            if (result.success) {
+              useProtocolStore.getState().setCompleted(protocolId, result.content, result.sources);
+            } else {
+              useProtocolStore.getState().setFailed(protocolId, result.error || 'Unknown error');
+            }
+
             history.push({ role: 'assistant', content: text });
             history.push({ role: 'user', content: obs });
             useGiaStore.getState().addConsoleLog({ type: result.success ? 'tool' : 'error', content: `Tool: ${toolCall.id}\nResult: ${result.content.slice(0, 500)}` });
