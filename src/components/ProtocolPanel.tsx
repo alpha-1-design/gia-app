@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Activity, X, Trash2 } from 'lucide-react';
 import { useProtocolStore } from '../store/useProtocolStore';
 import ProtocolCard from './ProtocolCard';

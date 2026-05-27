@@ -22,6 +22,7 @@
     "@capacitor/local-notifications": "^8.0.2",
     "@capgo/capacitor-native-biometric": "^8.4.5",
     "@capgo/capacitor-speech-recognition": "^8.1.2",
+    "@rolldown/binding-linux-arm64-gnu": "^1.0.2",
     "@types/leaflet": "^1.9.21",
     "clsx": "^2.1.1",
     "esbuild": "^0.28.0",

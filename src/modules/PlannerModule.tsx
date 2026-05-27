@@ -32,10 +32,12 @@ const PlannerModule: React.FC = () => {
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const { setIntentState, scheduledTasks, addScheduledTask, updateTaskStatus, deleteTask, addNotification } = useGiaStore();
   const mountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (mountTimeoutRef.current) clearTimeout(mountTimeoutRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
@@ -80,7 +82,7 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
       setPlanTitle(parsed.title ?? '');
       setSteps(parsed.steps.map((s: Omit<PlanStep,'done'>) => ({ ...s, done: false })));
       setIntentState('responding');
-      setTimeout(() => setIntentState('idle'), 2000);
+      timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not build plan. Be more specific.');
       setIntentState('idle');
@@ -132,7 +134,7 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
     const b = new Blob([txt],{type:'text/plain'}); const a = document.createElement('a');
     a.href=URL.createObjectURL(b); a.download=`${planTitle.replace(/\s+/g,'-').toLowerCase()}.md`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    timerRef.current = setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   };
 
   const StatusDot = ({ status }: { status: string }) => (

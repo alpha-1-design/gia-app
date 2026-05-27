@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Terminal, X, Brain, CheckCircle2, AlertCircle, Zap, ChevronRight } from 'lucide-react';
 
 interface ConsoleLog {

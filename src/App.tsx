@@ -1,5 +1,5 @@
 import React, { useEffect, lazy, Suspense } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { useMemoryStore } from './store/useMemoryStore';
@@ -93,11 +93,12 @@ const App: React.FC = () => {
   useEffect(() => {
     LocalNotifications.requestPermissions();
     SchedulerService.start();
-    setTimeout(() => useMemoryStore.getState().compactMemories(), 1000);
-    setTimeout(() => useGiaStore.getState().hibernateSessions(), 2000);
+    const t1 = setTimeout(() => useMemoryStore.getState().compactMemories(), 1000);
+    const t2 = setTimeout(() => useGiaStore.getState().hibernateSessions(), 2000);
     if (isLocked) {
       handleBiometric();
     }
+    return () => { clearTimeout(t1); clearTimeout(t2); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

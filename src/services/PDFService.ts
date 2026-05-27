@@ -15,8 +15,11 @@ try {
   });
 } catch { /* will use CDN fallback in the promise chain above */ }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const extractPageText = (textContent: any): string => {
-  const items: { str: string; x: number; y: number; width: number }[] = textContent.items.map((item: any) => ({
+  const items: { str: string; x: number; y: number; width: number }[] = textContent.items
+    .filter((item: any): item is { str: string; transform?: number[]; width?: number } => typeof item.str === 'string')
+    .map((item: any) => ({
     str: item.str,
     x: item.transform?.[4] ?? 0,
     y: item.transform?.[5] ?? 0,

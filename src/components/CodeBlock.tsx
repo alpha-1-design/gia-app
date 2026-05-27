@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, Play, RotateCcw, Download, Loader2, AlertCircle } from 'lucide-react';
 import CodeRunner, { CodeRunResult } from '../services/CodeRunner';
 
@@ -16,11 +16,13 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
   const [currentCode, setCurrentCode] = useState(code);
   const [showDiff, setShowDiff] = useState(false);
   const fixedCodesRef = useRef(new Set<string>());
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
 
   const copy = () => {
     navigator.clipboard.writeText(currentCode).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const download = () => {
@@ -36,7 +38,7 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    copyTimerRef.current = setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const handleRun = async () => {

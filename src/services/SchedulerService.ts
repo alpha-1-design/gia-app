@@ -1,5 +1,5 @@
 import GiaBrain from './GiaBrain';
-import { useGiaStore } from '../store/useGiaStore';
+import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
@@ -27,7 +27,7 @@ class SchedulerService {
     return true;
   }
 
-  private async runTask(task: any) {
+  private async runTask(task: ScheduledTask) {
     if (this.isHandled(task.id)) return;
     this.handledIds.set(task.id, Date.now());
 

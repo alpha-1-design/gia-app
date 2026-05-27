@@ -7,10 +7,12 @@ interface Props { content: string; className?: string }
 
 const InlineCode: React.FC<{ code: string }> = ({ code }) => {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copy = useCallback(() => {
     navigator.clipboard.writeText(code).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [code]);
   return (
     <code
@@ -163,11 +165,13 @@ const InlineSvg: React.FC<{ svg: string }> = ({ svg }) => (
 
 const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copyTable = useCallback(() => {
     const csv = [headers, ...rows].map(r => r.join('\t')).join('\n');
     navigator.clipboard.writeText(csv).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   }, [headers, rows]);
 
   return (

@@ -3,10 +3,9 @@ import {
   Bot, User, AlertCircle, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
-  BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, FileCode,
-  Terminal, Square
+  BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, Square
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
 import { ThinkingPanel } from '../components/ThinkingPanel';
 import GiaBrain from '../services/GiaBrain';
@@ -111,9 +110,12 @@ const ChatModule: React.FC = () => {
   const [showKnowledge, setShowKnowledge] = useState(false);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Abort in-flight requests on unmount
-  useEffect(() => () => { abortRef.current?.abort(); }, []);
+  useEffect(() => () => { abortRef.current?.abort(); if (abortTimeoutRef.current) clearTimeout(abortTimeoutRef.current); }, []);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLInputElement>(null);
@@ -165,6 +167,7 @@ const ChatModule: React.FC = () => {
 
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 5000);
+    abortTimeoutRef.current = timeout;
 
     addNotification('Polishing transcript...');
     try {
@@ -222,13 +225,17 @@ const ChatModule: React.FC = () => {
     }
     
     // Simulate tiny delay to show sync indicator then clear it
-    setTimeout(() => setIsSyncing(false), 300);
+    syncTimeoutRef.current = setTimeout(() => setIsSyncing(false), 300);
   }, [setWebSearch, setExtThinking, setHandsOff, webSearch, extThinking, handsOff, voiceEnabled]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, []);
 
   useEffect(() => {
-    return () => { if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current); };
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -876,7 +883,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
   const copyMessage = async (id: string, content: string) => {
     await navigator.clipboard.writeText(content).catch(() => {});
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000);
   };
 
   const exportChat = () => {

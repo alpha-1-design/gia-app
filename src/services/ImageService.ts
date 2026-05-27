@@ -25,7 +25,15 @@ const isNative = isNativePlatform();
 
 class ImageService {
   private static instance: ImageService;
+  private lastBlobUrl: string | null = null;
   static getInstance() { if (!this.instance) this.instance = new ImageService(); return this.instance; }
+
+  private revokeLastBlob() {
+    if (this.lastBlobUrl) {
+      URL.revokeObjectURL(this.lastBlobUrl);
+      this.lastBlobUrl = null;
+    }
+  }
 
   async generate(prompt: string): Promise<ImageGenResult> {
     const { activeProvider, providers } = useProviderStore.getState();
@@ -65,7 +73,9 @@ class ImageService {
           throw new Error(err.error || `Image API error ${res.status}`);
         }
         const blob = await res.blob();
+        this.revokeLastBlob();
         const url = URL.createObjectURL(blob);
+        this.lastBlobUrl = url;
         return { url };
       } catch (e: any) {
         return { url: '', error: e.message };

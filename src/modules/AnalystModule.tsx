@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { BarChart2 as BarChartIcon, Loader2, Paperclip, X, TrendingUp as LineChartIcon, Grid, Download, RefreshCw, PieChart as PieChartIcon } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
@@ -28,6 +28,8 @@ const AnalystModule: React.FC = () => {
   const [fileName, setFileName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const { setIntentState, addNotification } = useGiaStore();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
 
   const getVal = (v: any) => typeof v === 'number' ? v : parseFloat(v) || 0;
 
@@ -72,7 +74,7 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
         useMemoryStore.getState().addMemory({ key: 'analysis_' + Date.now().toString(36), value: parsed.summary.slice(0, 200), category: 'fact', tier: 'semantic', confidence: 0.5 });
       }
       setIntentState('responding');
-      setTimeout(() => setIntentState('idle'), 2000);
+      timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not analyze. Try a more specific query.');
       setIntentState('idle');
@@ -103,7 +105,7 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
     const a = document.createElement('a');
     a.href = url; a.download = fileName;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    timerRef.current = setTimeout(() => URL.revokeObjectURL(url), 10000);
     addNotification(`📊 Analysis exported: ${fileName}`);
   };
 

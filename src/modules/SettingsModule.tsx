@@ -50,6 +50,8 @@ const SettingsModule: React.FC = () => {
   const [bio, setBio] = useState(userProfile.bio);
   const [goals, setGoals] = useState(userProfile.goals);
   const [codeEndpoint, setCodeEndpoint] = useState(() => localStorage.getItem('gia-piston-endpoint') || '');
+  const dangerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current); }; }, []);
 
   const saveProfile = () => {
     setUserProfile({ name: name.trim(), bio: bio.trim(), goals: goals.trim() });
@@ -275,7 +277,7 @@ const SettingsModule: React.FC = () => {
           onClick={() => {
             if (confirm('Clear all chat history? This cannot be undone.')) {
               useGiaStore.setState({ sessions: [], activeSessionId: null });
-              setTimeout(() => useGiaStore.getState().createSession(), 0);
+              dangerTimerRef.current = setTimeout(() => useGiaStore.getState().createSession(), 0);
             }
           }}
           className="gia-btn flex items-center gap-2 w-full"
@@ -1038,6 +1040,8 @@ const InstallSection: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrError, setQrError] = useState(false);
   const [saved, setSaved] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }; }, []);
 
   const releaseUrl = repo ? `https://github.com/${repo}/releases/latest` : '';
 
@@ -1052,7 +1056,7 @@ const InstallSection: React.FC = () => {
   const handleSave = () => {
     localStorage.setItem('gia-github-repo', repo);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    saveTimerRef.current = setTimeout(() => setSaved(false), 2000);
   };
 
   return (

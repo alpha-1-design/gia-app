@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Skill } from '../store/useGiaStore';
 import { Zap, Shield, Code, Palette, X } from 'lucide-react';
 
@@ -24,7 +24,7 @@ const SkillPicker: React.FC<SkillPickerProps> = ({ skills, activeSkillId, onSele
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
         className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-zinc-800"
         style={{ background: 'rgba(13, 13, 18, 0.98)', backdropFilter: 'blur(30px)' }}
       >

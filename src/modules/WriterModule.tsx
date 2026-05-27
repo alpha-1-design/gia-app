@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
@@ -20,6 +20,8 @@ const WriterModule: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState(true);
   const { setIntentState, addNotification } = useGiaStore();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
 
   const DRAFT_KEY = 'gia-writer-draft';
 
@@ -64,7 +66,7 @@ const WriterModule: React.FC = () => {
         onStream: (chunk) => { accumulated += chunk; setDraft(accumulated); },
       });
       setIntentState('responding');
-      setTimeout(() => setIntentState('idle'), 2000);
+      timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
       useMemoryStore.getState().addMemory({ key: 'writing_format', value: format, category: 'preference', tier: 'episodic', confidence: 0.4 });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -77,7 +79,7 @@ const WriterModule: React.FC = () => {
   const copyDraft = async () => {
     await navigator.clipboard.writeText(draft).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const exportDraft = async () => {
@@ -99,7 +101,7 @@ const WriterModule: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      timerRef.current = setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     }
   };
 

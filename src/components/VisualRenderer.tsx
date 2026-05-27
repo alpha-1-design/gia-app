@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Copy, Check, Maximize2, Minimize2, ChevronRight, ChevronDown, Sun, Moon, Wind, Droplets, TrendingUp, ExternalLink, ZoomIn, ZoomOut, RotateCcw, Play, Square } from 'lucide-react';
+import { Copy, Check, Maximize2, Minimize2, ChevronRight, ChevronDown, Sun, Wind, Droplets, TrendingUp, ZoomIn, ZoomOut, RotateCcw, Play, Square } from 'lucide-react';
 
 const CHART_COLORS = ['#a855f7', '#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#f97316', '#8b5cf6'];
 const COPY_FEEDBACK_DURATION = 1500;
@@ -22,10 +22,12 @@ const parseVisualBlock = (code: string): VisualBlock | { error: string } => {
 
 const useCopy = (): [boolean, (text: string) => void] => {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copy = useCallback((text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION);
+    copyTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION);
   }, []);
   return [copied, copy];
 };

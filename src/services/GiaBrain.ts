@@ -1,4 +1,4 @@
-import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
+import { useProviderStore, PROVIDER_DEFAULTS, ProviderType, ModelOption } from '../store/useProviderStore';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useGiaIdentity } from '../store/useGiaIdentity';
@@ -365,7 +365,7 @@ class GiaBrain {
             try {
               const args = JSON.parse(tc.args);
               fullText += `\n\`\`\`tool\n${JSON.stringify({ id: tc.name, args })}\n\`\`\`\n`;
-            } catch {}
+            } catch (e) { console.error('GIA: failed to parse tool args', e); }
           }
           toolCallAccum.clear();
         };
@@ -416,7 +416,7 @@ class GiaBrain {
                             ? JSON.parse(tc.function.arguments)
                             : tc.function.arguments;
                           fullText += `\n\`\`\`tool\n${JSON.stringify({ id: tc.function.name, args })}\n\`\`\`\n`;
-                        } catch {}
+                        } catch (e) { console.error('GIA: failed to parse native tool call', e); }
                       }
                     }
                     continue;
@@ -485,7 +485,23 @@ class GiaBrain {
 
         if (req.signal) {
           if (req.signal.aborted) { xhr.abort(); return; }
-          req.signal.addEventListener('abort', () => xhr.abort(), { once: true });
+          const onAbort = () => xhr.abort();
+          req.signal.addEventListener('abort', onAbort);
+          const origLoad = xhr.onload;
+          const origError = xhr.onerror;
+          const origAbort = xhr.onabort;
+          xhr.onload = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origLoad) (origLoad as Function).call(this, e);
+          };
+          xhr.onerror = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origError) (origError as Function).call(this, e);
+          };
+          xhr.onabort = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origAbort) (origAbort as Function).call(this, e);
+          };
         }
 
         xhr.send(JSON.stringify(body));
@@ -512,7 +528,7 @@ class GiaBrain {
           try {
             const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
             content += `\n\`\`\`tool\n${JSON.stringify({ id: tc.function.name, args })}\n\`\`\`\n`;
-          } catch {}
+          } catch (e) { console.error('GIA: failed to parse function args', e); }
         }
       }
     }
@@ -586,7 +602,7 @@ class GiaBrain {
             try {
               const args = JSON.parse(block.input);
               fullText += `\n\`\`\`tool\n${JSON.stringify({ id: block.name, args })}\n\`\`\`\n`;
-            } catch {}
+            } catch (e) { console.error('GIA: failed to parse tool use input', e); }
           }
           toolUseBlocks.clear();
         };
@@ -670,7 +686,23 @@ class GiaBrain {
 
         if (req.signal) {
           if (req.signal.aborted) { xhr.abort(); return; }
-          req.signal.addEventListener('abort', () => xhr.abort(), { once: true });
+          const onAbort = () => xhr.abort();
+          req.signal.addEventListener('abort', onAbort);
+          const origLoad = xhr.onload;
+          const origError = xhr.onerror;
+          const origAbort = xhr.onabort;
+          xhr.onload = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origLoad) (origLoad as Function).call(this, e);
+          };
+          xhr.onerror = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origError) (origError as Function).call(this, e);
+          };
+          xhr.onabort = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origAbort) (origAbort as Function).call(this, e);
+          };
         }
 
         xhr.send(JSON.stringify(body));
@@ -843,7 +875,23 @@ class GiaBrain {
 
         if (req.signal) {
           if (req.signal.aborted) { xhr.abort(); return; }
-          req.signal.addEventListener('abort', () => xhr.abort(), { once: true });
+          const onAbort = () => xhr.abort();
+          req.signal.addEventListener('abort', onAbort);
+          const origLoad = xhr.onload;
+          const origError = xhr.onerror;
+          const origAbort = xhr.onabort;
+          xhr.onload = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origLoad) (origLoad as Function).call(this, e);
+          };
+          xhr.onerror = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origError) (origError as Function).call(this, e);
+          };
+          xhr.onabort = function (this: XMLHttpRequest, e: Event) {
+            req.signal?.removeEventListener('abort', onAbort);
+            if (origAbort) (origAbort as Function).call(this, e);
+          };
         }
 
         xhr.send(JSON.stringify(body));
@@ -1105,10 +1153,10 @@ class GiaBrain {
     const models = availableModels[provider] || [];
 
     // GIA always needs tool calling — filter out models without it
-    const toolCapable = models.filter(m => m.tools !== false);
+    const toolCapable: ModelOption[] = models.filter((m: ModelOption) => m.tools !== false);
     if (!toolCapable.length) return { model: userModel, switched: false };
 
-    const userCfg = toolCapable.find(m => m.id === userModel);
+    const userCfg = toolCapable.find((m: ModelOption) => m.id === userModel);
 
     // If user's model has tools + vision (if needed), use it
     if (userCfg) {
@@ -1118,12 +1166,12 @@ class GiaBrain {
     }
 
     // Best free model with vision (if needed) + tools
-    const best = toolCapable
-      .filter(m => m.free && (!needsVision || m.vision))
-      .sort((a, b) => ((b.context?.length || 0) - (a.context?.length || 0)))[0]
+    const best: ModelOption | undefined = toolCapable
+      .filter((m: ModelOption) => m.free && (!needsVision || m.vision))
+      .sort((a: ModelOption, b: ModelOption) => ((b.context?.length || 0) - (a.context?.length || 0)))[0]
       || toolCapable
-        .filter(m => !needsVision || m.vision)
-        .sort((a, b) => (b.free ? 1 : 0) - (a.free ? 1 : 0))[0];
+        .filter((m: ModelOption) => !needsVision || m.vision)
+        .sort((a: ModelOption, b: ModelOption) => (b.free ? 1 : 0) - (a.free ? 1 : 0))[0];
 
     if (best && best.id !== userModel) {
       return {
@@ -1179,7 +1227,7 @@ class GiaBrain {
       loopReq.prompt = currentPrompt;
       loopReq.history = history;
 
-      let res: BrainResponse;
+      let res: BrainResponse | undefined;
       try {
         if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
         else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
@@ -1233,7 +1281,7 @@ class GiaBrain {
         }
       }
 
-      const text = res.text;
+      const text = res!.text;
       const toolMatch = text.match(/```tool\n?([\s\S]*?)```/);
       if (toolMatch) {
         try {
@@ -1351,8 +1399,8 @@ class GiaBrain {
         }
       }
       // Extract memories from final response (not tool results or clarifications)
-      this.extractMemories(req.prompt, res.text);
-      return { ...res, ...switchInfo };
+      this.extractMemories(req.prompt, res!.text);
+      return { ...res!, ...switchInfo };
     }    throw new Error('Max agentic iterations reached.');
   }
 

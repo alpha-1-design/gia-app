@@ -1,5 +1,33 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
+
+interface BrowserSpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResult[];
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+}
+
+interface CapacitorGlobal {
+  Capacitor?: { isPluginAvailable?: (name: string) => boolean };
+}
+
+const SpeechRecognitionAPI = (globalThis as unknown as CapacitorGlobal & { SpeechRecognition?: new () => BrowserSpeechRecognition; webkitSpeechRecognition?: new () => BrowserSpeechRecognition });
 
 export interface VoiceControlConfig {
   wakeWord?: string;
@@ -23,8 +51,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const activeRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastResultRef = useRef(0);
-  const srRef = useRef<any>(null);
-  const isCapacitor = typeof (window as any).Capacitor !== 'undefined';
+  const srRef = useRef<BrowserSpeechRecognition | null>(null);
+  const isCapacitor = !!SpeechRecognitionAPI.Capacitor;
   const listeningLoopRef = useRef(false);
 
   const requestPermissions = useCallback(async () => {
@@ -52,7 +80,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         srRef.current.onresult = null;
         srRef.current.onerror = null;
         srRef.current.onend = null;
-        srRef.current = undefined;
+        srRef.current = null;
       }
     } catch {}
     setIsListening(false);
@@ -84,13 +112,13 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const restartBrowserRecognition = useCallback(() => {
     if (!activeRef.current || isCapacitor || listeningLoopRef.current) return;
     try {
-      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const SR = SpeechRecognitionAPI.SpeechRecognition || SpeechRecognitionAPI.webkitSpeechRecognition;
       if (!SR) return;
       const sr = new SR();
       sr.continuous = true;
       sr.interimResults = true;
       sr.lang = 'en-US';
-      sr.onresult = (event: any) => {
+      sr.onresult = (event: SpeechRecognitionEvent) => {
         if (!activeRef.current) return;
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const text = event.results[i][0].transcript;
