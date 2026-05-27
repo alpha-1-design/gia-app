@@ -52,6 +52,7 @@ const AnalystModule: React.FC = () => {
     try {
       const prompt = fileData ? `Analyze this data:\n\n${fileData.slice(0,8000)}\n\nUser: ${text}` : text;
       const res = await GiaBrain.generate({
+        signal: AbortSignal.timeout(30_000),
         prompt,
         systemPrompt: `You are a data analyst and insight engine. Respond with valid JSON only:
 {"summary":"One punchy insight sentence","narrative":"2-3 sentences of deeper analysis","data":[{"label":"Name","value":42}],"columns":["Label","Value"]}
@@ -61,7 +62,10 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
         maxTokens: 1500,
       });
       const parsed = extractJSON(res.text);
-      setData((parsed.data ?? []).map((d: any, i: number) => ({ ...d, color: COLORS[i%COLORS.length] })));
+      if (!parsed.data || !Array.isArray(parsed.data) || parsed.data.length === 0) {
+        throw new Error('AI returned an invalid response format. Please try again.');
+      }
+      setData(parsed.data.map((d: any, i: number) => ({ ...d, color: COLORS[i%COLORS.length] })));
       setSummary(parsed.summary ?? '');
       setNarrative(parsed.narrative ?? '');
       if (parsed.summary) {

@@ -133,6 +133,7 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
     try {
       const topicContext = topic ? ` focusing on ${topic}` : '';
       const res = await GiaBrain.generate({
+        signal: AbortSignal.timeout(30_000),
         prompt: `Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.`,
         systemPrompt: `You are a ${examSystem} exam expert. Generate accurate, exam-standard questions. Respond with valid JSON:
 {"questions":[{"id":"1","question":"Question text?","options":["A. Option","B. Option","C. Option","D. Option"],"correctAnswer":0,"explanation":"Why this is correct","topic":"Topic name"}]}
@@ -142,7 +143,10 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
         maxTokens: 3000,
       });
       const parsed = extractJSON(res.text);
-      const qs = (parsed.questions ?? []).map((q: any) => ({ ...q, id: genId() }));
+      if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+        throw new Error('AI returned an invalid response format. Please try again.');
+      }
+      const qs = parsed.questions.map((q: any) => ({ ...q, id: genId() }));
       setQuestions(qs);
 
       if (examMode === 'timed') {

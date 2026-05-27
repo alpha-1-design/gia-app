@@ -18,6 +18,7 @@ const IMAGE_MODELS: Record<string, string> = {
   deepseek: '',
   cerebras: '',
   mistral: '',
+  huggingface: 'black-forest-labs/FLUX.1-dev',
 };
 
 const isNative = isNativePlatform();
@@ -45,6 +46,30 @@ class ImageService {
 
     if (!imageModel) {
       return { url: '', error: `${PROVIDER_DEFAULTS[targetProvider]?.label || targetProvider} does not support image generation. Please switch to OpenAI or OpenRouter.` };
+    }
+
+    // HuggingFace: model-specific Inference API endpoint
+    if (targetProvider === 'huggingface') {
+      try {
+        const hfUrl = `https://api-inference.huggingface.co/models/${imageModel}`;
+        const res = await fetch(hfUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ inputs: prompt }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Image API error ${res.status}`);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        return { url };
+      } catch (e: any) {
+        return { url: '', error: e.message };
+      }
     }
 
     // Try OpenAI-compatible /images/generations endpoint

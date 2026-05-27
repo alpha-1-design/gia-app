@@ -2,13 +2,15 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 
-export type ProviderType = 'openrouter' | 'anthropic' | 'openai' | 'gemini' | 'groq' | 'opencode' | 'deepseek' | 'cerebras' | 'mistral';
+export type ProviderType = 'openrouter' | 'anthropic' | 'openai' | 'gemini' | 'groq' | 'opencode' | 'deepseek' | 'cerebras' | 'mistral' | 'huggingface';
 
 export interface ModelOption {
   id: string;
   label: string;
   free: boolean;
   context?: string;
+  tools?: boolean;
+  vision?: boolean;
 }
 
 interface ProviderConfig {
@@ -28,67 +30,78 @@ export const PROVIDER_DEFAULTS: Record<ProviderType, { model: string; label: str
   deepseek:   { model: 'deepseek-chat',              label: 'DeepSeek',   baseUrl: 'https://api.deepseek.com/v1' },
   cerebras:   { model: 'llama-3.1-8b',               label: 'Cerebras',   baseUrl: 'https://api.cerebras.ai/v1' },
   mistral:    { model: 'mistral-small-latest',        label: 'Mistral',    baseUrl: 'https://api.mistral.ai/v1' },
+  huggingface: { model: 'microsoft/Phi-4-mini-instruct', label: 'HuggingFace', baseUrl: 'https://api-inference.huggingface.co/v1' },
 };
 
 // Static fallback model lists (used when API fetch fails or key not yet set)
 export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
   openrouter: [
-    { id: 'google/gemma-3-27b-it:free',         label: 'Gemma 3 27B (Free)',       free: true,  context: '96k' },
-    { id: 'meta-llama/llama-4-maverick:free',    label: 'Llama 4 Maverick (Free)',  free: true,  context: '128k' },
-    { id: 'deepseek/deepseek-chat-v3-0324:free', label: 'DeepSeek V3 (Free)',       free: true,  context: '64k' },
-    { id: 'google/gemini-2.0-flash-exp:free',    label: 'Gemini 2.0 Flash (Free)',  free: true,  context: '1M' },
-    { id: 'qwen/qwq-32b:free',                  label: 'QwQ 32B (Free)',           free: true,  context: '32k' },
-    { id: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free', label: 'Dolphin R1 24B (Free)', free: true, context: '32k' },
-    { id: 'microsoft/phi-4:free',               label: 'Phi-4 14B (Free)',         free: true,  context: '16k' },
-    { id: 'sophosympatheia/rogue-rose-103b-v0.2:free', label: 'Rogue Rose 103B (Free)', free: true, context: '32k' },
-    { id: 'nvidia/llama-3.1-nemotron-ultra:free',label: 'Nemotron Ultra (Free)',     free: true,  context: '256k' },
-    { id: 'anthropic/claude-3.5-haiku',          label: 'Claude 3.5 Haiku',         free: false, context: '200k' },
-    { id: 'openai/gpt-4o-mini',                  label: 'GPT-4o Mini',              free: false, context: '128k' },
-    { id: 'google/gemini-2.5-pro',               label: 'Gemini 2.5 Pro',           free: false, context: '1M' },
-    { id: 'openai/o3-mini',                      label: 'o3 Mini',                  free: false, context: '200k' },
-    { id: 'mistralai/mistral-nemo',              label: 'Mistral Nemo',              free: false, context: '128k' },
-    { id: 'ai21/jamba-1.6',                      label: 'Jamba 1.6',                free: false, context: '256k' },
-    { id: 'x-ai/grok-2',                         label: 'Grok 2',                   free: false, context: '128k' },
-    { id: 'cohere/command-r-plus',               label: 'Command R+',               free: false, context: '128k' },
+    { id: 'google/gemma-3-27b-it:free',         label: 'Gemma 3 27B',       free: true,  context: '96k',  tools: true,  vision: true  },
+    { id: 'meta-llama/llama-4-maverick:free',    label: 'Llama 4 Maverick',  free: true,  context: '128k', tools: true,  vision: true  },
+    { id: 'deepseek/deepseek-chat-v3-0324:free', label: 'DeepSeek V3',       free: true,  context: '64k',  tools: true,  vision: true  },
+    { id: 'google/gemini-2.0-flash-exp:free',    label: 'Gemini 2.0 Flash',  free: true,  context: '1M',   tools: true,  vision: true  },
+    { id: 'qwen/qwq-32b:free',                  label: 'QwQ 32B',           free: true,  context: '32k',  tools: true,  vision: false },
+    { id: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free', label: 'Dolphin R1 24B', free: true, context: '32k', tools: true, vision: false },
+    { id: 'microsoft/phi-4:free',               label: 'Phi-4 14B',         free: true,  context: '16k',  tools: true,  vision: false },
+    { id: 'sophosympatheia/rogue-rose-103b-v0.2:free', label: 'Rogue Rose 103B', free: true, context: '32k', tools: true, vision: false },
+    { id: 'nvidia/llama-3.1-nemotron-ultra:free',label: 'Nemotron Ultra',     free: true,  context: '256k', tools: true, vision: false },
+    { id: 'anthropic/claude-3.5-haiku',          label: 'Claude 3.5 Haiku',   free: false, context: '200k', tools: true, vision: true  },
+    { id: 'openai/gpt-4o-mini',                  label: 'GPT-4o Mini',        free: false, context: '128k', tools: true, vision: true  },
+    { id: 'google/gemini-2.5-pro',               label: 'Gemini 2.5 Pro',     free: false, context: '1M',   tools: true, vision: true  },
+    { id: 'openai/o3-mini',                      label: 'o3 Mini',            free: false, context: '200k', tools: true, vision: false },
+    { id: 'mistralai/mistral-nemo',              label: 'Mistral Nemo',       free: false, context: '128k', tools: true, vision: true  },
+    { id: 'ai21/jamba-1.6',                      label: 'Jamba 1.6',          free: false, context: '256k', tools: true, vision: false },
+    { id: 'x-ai/grok-2',                         label: 'Grok 2',             free: false, context: '128k', tools: true, vision: true  },
+    { id: 'cohere/command-r-plus',               label: 'Command R+',         free: false, context: '128k', tools: true, vision: false },
   ],
   anthropic: [
-    { id: 'claude-3-5-haiku-20241022',  label: 'Claude 3.5 Haiku',  free: false, context: '200k' },
-    { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', free: false, context: '200k' },
-    { id: 'claude-opus-4-5',            label: 'Claude Opus 4.5',   free: false, context: '200k' },
+    { id: 'claude-3-5-haiku-20241022',  label: 'Claude 3.5 Haiku',  free: false, context: '200k', tools: true, vision: true },
+    { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', free: false, context: '200k', tools: true, vision: true },
+    { id: 'claude-opus-4-5',            label: 'Claude Opus 4.5',   free: false, context: '200k', tools: true, vision: true },
   ],
   openai: [
-    { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',  free: false, context: '128k' },
-    { id: 'gpt-4o',       label: 'GPT-4o',        free: false, context: '128k' },
-    { id: 'o4-mini',      label: 'o4-mini',       free: false, context: '128k' },
+    { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',  free: false, context: '128k', tools: true, vision: true  },
+    { id: 'gpt-4o',       label: 'GPT-4o',        free: false, context: '128k', tools: true, vision: true  },
+    { id: 'o4-mini',      label: 'o4-mini',       free: false, context: '128k', tools: true, vision: false },
   ],
   gemini: [
-    { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash',      free: false, context: '1M' },
-    { id: 'gemini-2.5-pro-latest', label: 'Gemini 2.5 Pro',        free: false, context: '1M' },
-    { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      free: false, context: '1M' },
+    { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash',      free: false, context: '1M', tools: true, vision: true },
+    { id: 'gemini-2.5-pro-latest', label: 'Gemini 2.5 Pro',        free: false, context: '1M', tools: true, vision: true },
+    { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      free: false, context: '1M', tools: true, vision: true },
   ],
   groq: [
-    { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B',    free: false, context: '128k' },
-    { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 8B Fast', free: false, context: '128k' },
-    { id: 'mixtral-8x7b-32768',      label: 'Mixtral 8x7B',     free: false, context: '32k' },
-    { id: 'gemma2-9b-it',            label: 'Gemma 2 9B',       free: false, context: '8k' },
+    { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B',    free: false, context: '128k', tools: true, vision: false },
+    { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 8B Fast', free: false, context: '128k', tools: true, vision: false },
+    { id: 'mixtral-8x7b-32768',      label: 'Mixtral 8x7B',     free: false, context: '32k',  tools: true, vision: false },
+    { id: 'gemma2-9b-it',            label: 'Gemma 2 9B',       free: false, context: '8k',   tools: true, vision: false },
   ],
   opencode: [
-    { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k' },
-    { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k' },
+    { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k', tools: true, vision: true  },
+    { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k', tools: true, vision: false },
   ],
   deepseek: [
-    { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k' },
-    { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k' },
+    { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k', tools: true, vision: true  },
+    { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k', tools: true, vision: false },
   ],
   cerebras: [
-    { id: 'llama-3.1-8b',                 label: 'Llama 3.1 8B',       free: true, context: '131k' },
-    { id: 'llama-3.1-70b',                label: 'Llama 3.1 70B',      free: true, context: '131k' },
-    { id: 'llama-3.3-70b',                label: 'Llama 3.3 70B',      free: true, context: '131k' },
+    { id: 'llama-3.1-8b',                 label: 'Llama 3.1 8B',       free: true, context: '131k', tools: true, vision: false },
+    { id: 'llama-3.1-70b',                label: 'Llama 3.1 70B',      free: true, context: '131k', tools: true, vision: false },
+    { id: 'llama-3.3-70b',                label: 'Llama 3.3 70B',      free: true, context: '131k', tools: true, vision: false },
   ],
   mistral: [
-    { id: 'mistral-small-latest',   label: 'Mistral Small',    free: true,  context: '32k' },
-    { id: 'mistral-large-latest',   label: 'Mistral Large',    free: false, context: '128k' },
-    { id: 'pixtral-large-latest',   label: 'Pixtral Large',    free: false, context: '128k' },
+    { id: 'mistral-small-latest',   label: 'Mistral Small',    free: true,  context: '32k',  tools: true, vision: false },
+    { id: 'mistral-large-latest',   label: 'Mistral Large',    free: false, context: '128k', tools: true, vision: false },
+    { id: 'pixtral-large-latest',   label: 'Pixtral Large',    free: false, context: '128k', tools: true, vision: true  },
+  ],
+  huggingface: [
+    { id: 'microsoft/Phi-4-mini-instruct',              label: 'Phi-4 Mini',            free: true,  context: '16k',  tools: true,  vision: false },
+    { id: 'microsoft/Phi-4',                            label: 'Phi-4 14B',             free: true,  context: '16k',  tools: true,  vision: false },
+    { id: 'HuggingFaceH4/zephyr-7b-beta',               label: 'Zephyr 7B',             free: true,  context: '8k',   tools: false, vision: false },
+    { id: 'meta-llama/Llama-3.2-11B-Vision-Instruct',   label: 'Llama 3.2 11B Vision',  free: false, context: '128k', tools: true,  vision: true  },
+    { id: 'meta-llama/Llama-3.2-90B-Vision-Instruct',   label: 'Llama 3.2 90B Vision',  free: false, context: '128k', tools: true,  vision: true  },
+    { id: 'mistralai/Pixtral-12B-2409',                 label: 'Pixtral 12B',           free: false, context: '128k', tools: true,  vision: true  },
+    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct',            label: 'Qwen 2.5 Coder 32B',    free: false, context: '32k',  tools: true,  vision: false },
+    { id: 'google/gemma-2-27b-it',                      label: 'Gemma 2 27B',           free: false, context: '8k',   tools: true,  vision: false },
   ],
 };
 
@@ -191,8 +204,13 @@ export const useProviderStore = create<GiaProviderState>()(
           const formatted: ModelOption[] = data
             .filter((m) => m.id)
             .map((m) => {
-              // OpenRouter/OpenCode specific pricing check
-              let isFree = false;
+              // Inherit capabilities from static model definitions if available
+              const staticModel = STATIC_MODELS[p]?.find(sm => sm.id === m.id);
+              let isFree = staticModel?.free ?? false;
+              let tools = staticModel?.tools;
+              let vision = staticModel?.vision;
+
+              // Provider-specific pricing detection
               if (p === 'openrouter' || p === 'opencode') {
                 const price = m.pricing || m.price;
                 if (price) {
@@ -202,7 +220,21 @@ export const useProviderStore = create<GiaProviderState>()(
                   isFree = true;
                 }
               } else if (p === 'groq') {
-                isFree = false; // Groq is currently paid/tier based
+                // Groq has free tier for some models
+                isFree = m.id.includes('8b') || m.id.includes('gemma') || m.id.includes('mixtral');
+              } else if (p === 'mistral') {
+                isFree = m.id.includes('small') || m.id.includes('tiny');
+              } else if (p === 'deepseek') {
+                isFree = m.id.includes('chat') && !m.id.includes('pro');
+              } else if (p === 'huggingface') {
+                // HuggingFace Inference API free tier: most smaller models
+                isFree = staticModel?.free ?? (!m.id.includes('90B') && !m.id.includes('70B'));
+              }
+
+              // Infer tools/vision from name patterns when not in static list
+              if (tools === undefined) {
+                tools = !m.id.toLowerCase().includes('zephyr');
+                vision = /vision|pixtral|llava|vl/i.test(m.id);
               }
 
               return {
@@ -210,15 +242,19 @@ export const useProviderStore = create<GiaProviderState>()(
                 label: m.name || m.id,
                 free: isFree,
                 context: m.context_length ? `${Math.round(m.context_length / 1000)}k` : m.id.includes('llama-3') ? '128k' : '?',
+                tools,
+                vision,
               };
             });
 
           const result = formatted.length > 0 ? formatted : STATIC_MODELS[p];
-          
-          // Sort free models to the top for OpenRouter
-          if (p === 'openrouter') {
-            result.sort((a, b) => (a.free === b.free ? 0 : a.free ? -1 : 1));
-          }
+
+          // Sort free models to the top
+          result.sort((a, b) => {
+            if (a.free !== b.free) return a.free ? -1 : 1;
+            if ((a.vision || false) !== (b.vision || false)) return a.vision ? -1 : 1;
+            return 0;
+          });
 
           set((s) => ({ availableModels: { ...s.availableModels, [p]: result } }));
           return result;

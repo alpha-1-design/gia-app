@@ -2,6 +2,7 @@ import React, { useEffect, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
+import { useMemoryStore } from './store/useMemoryStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
@@ -72,12 +73,28 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols } = useGiaStore();
+  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, setTheme } = useGiaStore();
   const [isLocked, setIsLocked] = React.useState(BiometricService.isLockEnabled());
+
+  // Theme switching
+  useEffect(() => {
+    const applyTheme = (mode: string) => {
+      const effective = mode === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : mode;
+      document.documentElement.setAttribute('data-theme', effective);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'light' ? '#f2f2f7' : '#0a0a0f');
+    };
+    applyTheme(theme);
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const handler = () => { if (theme === 'system') applyTheme('system'); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [theme]);
 
   useEffect(() => {
     LocalNotifications.requestPermissions();
     SchedulerService.start();
+    setTimeout(() => useMemoryStore.getState().compactMemories(), 1000);
+    setTimeout(() => useGiaStore.getState().hibernateSessions(), 2000);
     if (isLocked) {
       handleBiometric();
     }

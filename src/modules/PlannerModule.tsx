@@ -64,6 +64,7 @@ const PlannerModule: React.FC = () => {
     setLoading(true); setError(''); setIntentState('thinking');
     try {
       const res = await GiaBrain.generate({
+        signal: AbortSignal.timeout(30_000),
         prompt: text,
         systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
 {"title":"Concise plan title","steps":[{"id":"1","title":"Step title","description":"Specific actionable description","priority":"high|medium|low","eta":"e.g. Day 1, Week 2"}]}
@@ -73,8 +74,11 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
         maxTokens: 1500,
       });
       const parsed = extractJSON(res.text);
+      if (!parsed.steps || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+        throw new Error('AI returned an invalid response format. Please try again.');
+      }
       setPlanTitle(parsed.title ?? '');
-      setSteps((parsed.steps ?? []).map((s: Omit<PlanStep,'done'>) => ({ ...s, done: false })));
+      setSteps(parsed.steps.map((s: Omit<PlanStep,'done'>) => ({ ...s, done: false })));
       setIntentState('responding');
       setTimeout(() => setIntentState('idle'), 2000);
     } catch (err: unknown) {

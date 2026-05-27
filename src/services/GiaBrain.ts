@@ -28,7 +28,7 @@ export interface BrainRequest {
   _skipNativeSchemas?: boolean;
 }
 
-export interface BrainResponse { text: string; provider: string; model: string; sources?: string[] }
+export interface BrainResponse { text: string; provider: string; model: string; sources?: string[]; modelSwitched?: boolean; previousModel?: string; switchReason?: string }
 
 const buildGiaSystem = (query?: string) => {
     const { userProfile, activeSkillId, skills, extThinking, customInstructions, pinnedMemories, handsOff } = useGiaStore.getState();
@@ -76,7 +76,18 @@ ${memory}
 
 ${userContext || ''}
 
-${handsOff ? `## Tools you can use
+${handsOff ? (() => {
+  // Check current model's capabilities before listing tools
+  const { activeProvider, providers, availableModels } = useProviderStore.getState();
+  const activeCfg = providers[activeProvider];
+  const activeModelCfg = availableModels[activeProvider]?.find(m => m.id === activeCfg?.model);
+  const supportsTools = activeModelCfg?.tools !== false;
+  const supportsImageGen = activeModelCfg?.vision || providers.huggingface?.enabled || providers.openai?.enabled || providers.openrouter?.enabled;
+
+  if (!supportsTools) return `## No tool support
+Your current model (${activeCfg?.model || 'unknown'}) doesn't support tool calling. You can still answer questions conversationally, but you cannot browse the web, run code, access files, or use other tools. If you need these capabilities, ask the user to switch to a tool-capable model.`;
+
+  return `## Tools you can use
 Call a tool by writing a fenced code block:
 
 \`\`\`tool
@@ -92,8 +103,7 @@ Call a tool by writing a fenced code block:
 | \`filesystem_write\` | Save a file | \`path\`, \`content\` | Mobile saves; browser downloads |
 | \`list_files\` | List directory | \`path\`\ (optional) | Mobile only |
 | \`zip_project\` | Bundle into ZIP | \`filename\`\ (optional), \`files\` or \`paths\` | Downloadable ZIP |
-| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |
-| \`switch_module\` | Navigate to module | \`module\`: chat/exam/analyst/writer/planner/settings | |
+${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |\n` : ''}| \`switch_module\` | Navigate to module | \`module\`: chat/exam/analyst/writer/planner/settings | |
 | \`toggle_feature\` | Toggle features | \`feature\`: web_search/thinking/hands_off, \`enabled\` | |
 | \`show_notification\` | Toast notification | \`message\` | |
 | \`summarize_conversation\` | Compress history | \`messages\` | saves tokens |
@@ -106,8 +116,8 @@ Call a tool by writing a fenced code block:
 | \`export_brain\` | Download brain backup | none | Full JSON export |
 | \`import_brain\` | Restore brain | none | Settings > Brain Export |
 
-Rules: call ONE tool per message, wait for the observation, verify your args before writing the block.
-` : `No tools right now — respond conversationally.`}
+Rules: call ONE tool per message, wait for the observation, verify your args before writing the block.`;
+})() : `No tools right now — respond conversationally.`}
 
 ## Modules you can navigate to
 ${isNativeFn ? 'chat | exam | analyst | writer | planner | settings' : 'chat | exam | analyst | writer | planner | settings'}
@@ -176,7 +186,7 @@ class GiaBrain {
     return `${base}\n\n## Module-Specific Instructions\n${moduleSpecific}`;
   }
 
-  private isVisionCapable(model: string, provider: string): boolean {
+  isVisionCapable(model: string, provider: string): boolean {
     const m = model.toLowerCase();
     const p = provider.toLowerCase();
 
@@ -199,6 +209,11 @@ class GiaBrain {
     // Groq: limited vision models
     if (p === 'groq') {
       return m.includes('llama-3.2-11b') || m.includes('llama-3.2-90b') || m.includes('vision');
+    }
+
+    // HuggingFace: check by model name for vision-capable models
+    if (p === 'huggingface') {
+      return m.includes('vision') || m.includes('pixtral') || m.includes('llava') || m.includes('vl');
     }
 
     // OpenRouter & others: check by model name patterns
@@ -1064,6 +1079,7 @@ class GiaBrain {
       zip_project: 'zip_project', forget_memory: 'memory_modification',
       toggle_feature: 'settings_change', request_clarification: 'clarification',
       get_environment_info: 'environment_info', show_map: 'show_map',
+      list_files: 'file_read', summarize_conversation: 'environment_info',
     };
     return map[id] || 'custom';
   }
@@ -1084,12 +1100,60 @@ class GiaBrain {
     return 'execution';
   }
 
+  private selectBestModel(provider: ProviderType, userModel: string, needsVision: boolean): { model: string; switched: boolean; previousModel?: string; reason?: string } {
+    const { availableModels } = useProviderStore.getState();
+    const models = availableModels[provider] || [];
+
+    // GIA always needs tool calling — filter out models without it
+    const toolCapable = models.filter(m => m.tools !== false);
+    if (!toolCapable.length) return { model: userModel, switched: false };
+
+    const userCfg = toolCapable.find(m => m.id === userModel);
+
+    // If user's model has tools + vision (if needed), use it
+    if (userCfg) {
+      const missing: string[] = [];
+      if (needsVision && !userCfg.vision) missing.push('vision');
+      if (!missing.length) return { model: userModel, switched: false };
+    }
+
+    // Best free model with vision (if needed) + tools
+    const best = toolCapable
+      .filter(m => m.free && (!needsVision || m.vision))
+      .sort((a, b) => ((b.context?.length || 0) - (a.context?.length || 0)))[0]
+      || toolCapable
+        .filter(m => !needsVision || m.vision)
+        .sort((a, b) => (b.free ? 1 : 0) - (a.free ? 1 : 0))[0];
+
+    if (best && best.id !== userModel) {
+      return {
+        model: best.id,
+        switched: true,
+        previousModel: userCfg?.id || userModel,
+        reason: userCfg ? `${userCfg.label} can't ${needsVision ? 'see images' : 'use tools'} — using ${best.label}` : `${userModel} unavailable`,
+      };
+    }
+
+    return { model: userCfg?.id || userModel, switched: false };
+  }
+
   async generate(req: BrainRequest): Promise<BrainResponse> {
     const { activeProvider, providers } = useProviderStore.getState();
     const config = providers[activeProvider];
     if (!config.enabled || !config.apiKey) {
       throw new Error('No provider connected. Go to Settings → Engine Room and type: connect');
     }
+
+    // Auto-select best model for this request's feature needs
+    const needsVision = !!(req.images && req.images.length > 0);
+    const selection = this.selectBestModel(activeProvider, config.model, needsVision);
+    const effectiveModel = selection.model;
+    const wasSwitched = selection.switched;
+    if (wasSwitched) {
+      useProviderStore.getState().setProviderModel(activeProvider, effectiveModel);
+    }
+
+    const switchInfo = { modelSwitched: wasSwitched, previousModel: selection.previousModel, switchReason: selection.reason };
 
     let currentPrompt = req.prompt;
     let history = req.history ? [...req.history] : [];
@@ -1121,24 +1185,51 @@ class GiaBrain {
         else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
         else res = await this.callOpenAICompat(loopReq);
       } catch (e: any) {
-        // Retry once without native tool schemas if the error looks like
-        // the provider doesn't support them (400 + tool-related message)
-        if (!loopReq._skipNativeSchemas && !req.onStream) {
-          const msg = e.message?.toLowerCase() || '';
-          if (
-            msg.includes('tools') || msg.includes('tool') ||
-            msg.includes('function') || msg.includes('functions') ||
-            msg.includes('400') || msg.includes('bad request')
-          ) {
-            loopReq._skipNativeSchemas = true;
+        const origError = e;
+        const msg = e.message?.toLowerCase() || '';
+
+        // Retry once without native tool schemas (tool/function call issue)
+        if (!loopReq._skipNativeSchemas && !req.onStream && (
+          msg.includes('tools') || msg.includes('tool') ||
+          msg.includes('function') || msg.includes('functions') ||
+          msg.includes('400') || msg.includes('bad request')
+        )) {
+          loopReq._skipNativeSchemas = true;
+          try {
             if (activeProvider === 'anthropic') res = await this.callAnthropic(loopReq);
             else if (activeProvider === 'gemini') res = await this.callGeminiNative(loopReq);
             else res = await this.callOpenAICompat(loopReq);
-          } else {
-            throw e;
+          } catch {
+            // Fall through to provider switch
+          }
+          if (res) continue; // retry succeeded
+        }
+
+        // Provider-level fallback: try other connected providers
+        const { providers } = useProviderStore.getState();
+        const fallbackProvider = (Object.entries(providers) as [ProviderType, { enabled: boolean; apiKey: string; model: string }][])
+          .find(([p, cfg]) => p !== activeProvider && cfg.enabled && cfg.apiKey);
+
+        if (fallbackProvider) {
+          const [newProvider, newCfg] = fallbackProvider;
+          useProviderStore.getState().setActiveProvider(newProvider);
+          // Auto-select a tool-capable model for the new provider
+          const sel = this.selectBestModel(newProvider, newCfg.model, false);
+          if (sel.switched) useProviderStore.getState().setProviderModel(newProvider, sel.model);
+          // Retry the agent loop with the new provider
+          loopReq._skipNativeSchemas = false;
+          try {
+            const nxt = useProviderStore.getState().providers[newProvider];
+            if (nxt?.enabled) {
+              if (newProvider === 'anthropic') res = await this.callAnthropic(loopReq);
+              else if (newProvider === 'gemini') res = await this.callGeminiNative(loopReq);
+              else res = await this.callOpenAICompat(loopReq);
+            }
+          } catch {
+            throw origError; // fallback also failed — throw original
           }
         } else {
-          throw e;
+          throw origError; // no fallback — throw original
         }
       }
 
@@ -1219,10 +1310,10 @@ class GiaBrain {
             req.onThought?.(`GIA is proposing: ${tool.name}...`);
 
             // Wait for user confirmation (unless auto-confirm for certain types)
-            const autoTypes: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map'];
+            const autoTypes: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map', 'file_read', 'clarification'];
             const needsConfirm = !autoTypes.includes(protocol.type);
             if (needsConfirm) {
-              const action = await useProtocolStore.getState().waitForConfirmation(protocolId);
+              const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 30_000);
               if (action.type === 'reject') {
                 history.push({ role: 'assistant', content: text });
                 history.push({ role: 'user', content: `User rejected tool execution: ${toolCall.id}` });
@@ -1261,7 +1352,7 @@ class GiaBrain {
       }
       // Extract memories from final response (not tool results or clarifications)
       this.extractMemories(req.prompt, res.text);
-      return res;
+      return { ...res, ...switchInfo };
     }    throw new Error('Max agentic iterations reached.');
   }
 
@@ -1448,6 +1539,7 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
       const entries = JSON.parse(cleaned);
       if (Array.isArray(entries) && entries.length > 0) {
         useMemoryStore.getState().addMemories(entries);
+        useMemoryStore.getState().compactMemories();
       }
     } catch {
       // Silent — memory extraction failure should never break the main flow

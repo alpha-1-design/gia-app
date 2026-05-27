@@ -6,7 +6,7 @@
    Dark, refined, next-gen personal AI workspace
    ============================================================ */
 
-:root {
+:root, [data-theme="dark"] {
   /* Core palette */
   --gia-bg:          #0a0a0f;
   --gia-surface:     #111118;
@@ -43,6 +43,34 @@
   --radius-md:  14px;
   --radius-lg:  20px;
   --radius-xl:  28px;
+}
+
+[data-theme="light"] {
+  --gia-bg:          #f2f2f7;
+  --gia-surface:     #ffffff;
+  --gia-surface-2:   #e8e8ee;
+  --gia-surface-3:   #dcdce4;
+  --gia-border:      rgba(0,0,0,0.08);
+  --gia-border-2:    rgba(0,0,0,0.14);
+  --gia-text:        #1c1c2e;
+  --gia-muted:       #6b6b82;
+  --gia-muted-2:     #9a9aae;
+
+  /* Accent */
+  --gia-accent:      #a855f7;
+  --gia-accent-rgb:  168, 85, 247;
+  --gia-accent-dim:  rgba(168, 85, 247, 0.10);
+  --gia-accent-glow: rgba(168, 85, 247, 0.2);
+
+  /* Module — same but dimmed for light bg */
+  --mod-chat:     147, 51, 234;
+  --mod-analyst:  37, 99, 235;
+  --mod-writer:   190, 24, 93;
+  --mod-planner:  4, 120, 87;
+  --mod-settings: 100, 116, 139;
+  --mod-exam:     217, 119, 6;
+
+  --glow-opacity: 0.12;
 }
 
 /* ============================================================
@@ -429,8 +457,37 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .animate-slide-up { animation: slide-up 0.25s ease forwards; }
 .animate-fade-in  { animation: fade-in 0.2s ease forwards; }
+.animate-message-in { animation: message-in 0.3s ease-out both; }
+
+/* ============================================================
+   CITATION BADGES
+   ============================================================ */
+.citation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
+  vertical-align: super;
+  line-height: 1;
+}
+.citation-badge:hover {
+  background: rgba(59, 130, 246, 0.25);
+}
 
 /* ============================================================
    TERMINAL FONT

@@ -21,6 +21,9 @@ import { useVoiceControl } from '../hooks/useVoiceControl';
 import SkillPicker from '../components/SkillPicker';
 import GiaConsole from '../components/GiaConsole';
 import { KnowledgePanel } from '../components/KnowledgePanel';
+import { useShallow } from 'zustand/react/shallow';
+import { useProtocolStore } from '../store/useProtocolStore';
+import { ProtocolProposal, PROTOCOL_META } from '../types/protocol';
 
 const genId = () => {
   const arr = new Uint8Array(8);
@@ -31,6 +34,9 @@ const genId = () => {
 const stripToolBlocks = (text: string): string => {
   let result = text.replace(/```tool[\s\S]*?```/g, '');
   result = result.replace(/```tool[\s\S]*$/gm, '');
+  result = result.replace(/```[\s\S]*?"(?:tool|function|name)"[\s\S]*?```/g, '');
+  result = result.replace(/^\s*\{(?:[^{}]|"(?:[^"\\]|\\.)*")*"(?:tool|function|name)"\s*:[\s\S]*?\}\s*$/gm, '');
+  result = result.replace(/(?:^|\n)\s*```[\s\S]*?(?:$|\n```)/g, '');
   return result.trim();
 };
 
@@ -57,6 +63,35 @@ const QUICK_STARTS = [
 ];
 
 const LONG_MSG_CHARS = 3000;
+
+const ProtocolBanner: React.FC<{ protocol: ProtocolProposal }> = ({ protocol }) => {
+  const { confirm, reject } = useProtocolStore();
+  const meta = PROTOCOL_META[protocol.type] || PROTOCOL_META.custom;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-3 px-4 py-3 rounded-2xl border mx-1"
+      style={{ borderColor: `${meta.color}33`, background: `${meta.color}08` }}
+    >
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] shrink-0" style={{ background: `${meta.color}18`, color: meta.color }}>
+        {meta.icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{meta.label}</p>
+        <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted)' }}>{protocol.summary}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={() => confirm(protocol.id)} className="text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105" style={{ background: '#22c55e', color: 'white' }}>
+          Execute
+        </button>
+        <button onClick={() => reject(protocol.id)} className="text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+          Reject
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
 const ChatModule: React.FC = () => {
   const [input, setInput] = useState('');
@@ -100,6 +135,7 @@ const ChatModule: React.FC = () => {
   } = useGiaStore();
 
   const { providers, activeProvider } = useProviderStore();
+  const pendingProtocols = useProtocolStore(useShallow(s => s.protocols.filter(p => p.state === 'proposed')));
   const providerLabel = PROVIDER_DEFAULTS[activeProvider]?.label ?? activeProvider;
   const providerConnected = providers[activeProvider]?.enabled ?? false;
   const activeModel = providers[activeProvider]?.model ?? '';
@@ -637,6 +673,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           ),
         });
       }
+      if (res.modelSwitched && res.switchReason) {
+        addNotification(res.switchReason);
+      }
       TTSService.speak(finalText);
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -797,6 +836,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
+    if (isImage && !GiaBrain.isVisionCapable(activeModel, activeProvider)) {
+      addNotification(`This provider (${providerLabel}) may not support image analysis.`);
+    }
     const newAtts: Attachment[] = [];
     for (const file of files) {
       await new Promise<void>((resolve) => {
@@ -915,13 +957,16 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           <span className="text-xs font-medium truncate max-w-[130px]" style={{ color: 'var(--gia-muted)' }}>{activeSession?.title ?? 'New Chat'}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="gia-pill" style={{
+          <div className="gia-pill flex items-center gap-1.5" style={{
             background: providerConnected ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
             color: providerConnected ? '#34d399' : '#f87171',
             border: `1px solid ${providerConnected ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
           }}>
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: providerConnected ? '#34d399' : '#f87171' }} />
-            {providerLabel}
+            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: providerConnected ? '#34d399' : '#f87171' }} />
+            <span className="truncate max-w-[60px]">{providerLabel}</span>
+            {activeModel && providerConnected && (
+              <span className="text-[7px] opacity-50 truncate max-w-[60px]">{activeModel.split('/').pop()}</span>
+            )}
           </div>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Download size={13} /></button>
@@ -930,9 +975,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 space-y-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 space-y-2 sm:space-y-3 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-16 pb-40 animate-fade-in">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
               <Bot size={26} style={{ color: '#a855f7' }} />
             </div>
@@ -963,8 +1008,15 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           </div>
         )}
 
+        {pendingProtocols.length > 0 && (
+          <div className="space-y-2 px-1">
+            <p className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'var(--gia-muted)' }}>Pending Action</p>
+            {pendingProtocols.map(p => <ProtocolBanner key={p.id} protocol={p} />)}
+          </div>
+        )}
+
         {messages.map((msg, i) => (
-          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
               {msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <Bot size={13} style={{ color: 'var(--gia-muted)' }} />}
             </div>
@@ -1048,6 +1100,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                           ),
                         });
                       }
+                      if (genRes.modelSwitched && genRes.switchReason) {
+                        addNotification(`Model switched: ${genRes.switchReason}`);
+                      }
                       TTSService.speak(accumulated);
                     }
                   } catch (e: any) {
@@ -1068,7 +1123,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 }}
               >
                 <div 
-                  className={`p-5 rounded-2xl relative select-none transition-shadow ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : 'bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/60'}`}
+                  className={`p-3 sm:p-4 md:p-5 rounded-2xl relative select-none transition-shadow ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : 'bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/60'}`}
                   style={{
                     borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                     borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
@@ -1163,16 +1218,20 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                         />
                       )}
                       {msg.sources && msg.sources.length > 0 && (
-                        <div className="mt-2.5 flex flex-wrap gap-1.5">
-                          {msg.sources.map((src, si) => {
-                            const url = typeof src === 'string' ? src : (src as any).url || src;
-                            const title = typeof src === 'string' ? url : (src as any).title || `Source ${si + 1}`;
-                            return (
-                              <a key={si} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] transition-colors hover:opacity-80" style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.15)' }}>
-                                <Globe size={9} /> {title.slice(0, 40)}
-                              </a>
-                            );
-                          })}
+                        <div className="mt-3 space-y-1.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Sources</p>
+                          <div className="flex flex-wrap gap-2">
+                            {msg.sources.map((src, si) => {
+                              const url = typeof src === 'string' ? src : (src as any).url || src;
+                              const title = typeof src === 'string' ? url : (src as any).title || `Source ${si + 1}`;
+                              return (
+                                <a key={si} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] transition-colors hover:opacity-80" style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.15)' }}>
+                                  <span className="citation-badge relative" style={{ width: 16, height: 16, fontSize: 9 }}>{si + 1}</span>
+                                  <span className="max-w-[160px] truncate">{title}</span>
+                                </a>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                       {msg.attachments?.filter(a => !a.preview).map(att => (

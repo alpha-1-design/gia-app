@@ -91,6 +91,7 @@ interface GiaState {
   keepListening: boolean;
   customInstructions: string;
   pinnedMemories: string[];
+  theme: 'dark' | 'light' | 'system';
 
   setModule: (module: Module) => void;
   setClarification: (c: Clarification | null) => void;
@@ -130,6 +131,7 @@ interface GiaState {
   setShowConsole: (show: boolean) => void;
   clearConsole: () => void;
   setShowProtocols: (show: boolean) => void;
+  setTheme: (theme: 'dark' | 'light' | 'system') => void;
 }
 
 export interface ExamResult {
@@ -226,6 +228,7 @@ export const useGiaStore = create<GiaState>()(
       keepListening: localStorage.getItem('gia-keep-listening') !== 'false',
       customInstructions: localStorage.getItem('gia-custom-instructions') || '',
       pinnedMemories: JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'),
+      theme: 'dark',
 
       setModule: (module) => set({ currentModule: module }),
       setClarification: (c) => set({ clarification: c }),
@@ -356,6 +359,7 @@ export const useGiaStore = create<GiaState>()(
       setShowConsole: (show) => set({ showConsole: show }),
       clearConsole: () => set({ consoleLogs: [] }),
       setShowProtocols: (show) => set({ showProtocols: show }),
+      setTheme: (theme) => set({ theme }),
     }),
     {
       name: 'gia-store-v3',
@@ -371,6 +375,7 @@ export const useGiaStore = create<GiaState>()(
         webSearch: s.webSearch,
         extThinking: s.extThinking,
         handsOff: s.handsOff,
+        theme: s.theme,
       }),
     }
   )

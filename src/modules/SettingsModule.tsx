@@ -17,7 +17,7 @@ import BiometricService from '../services/BiometricService';
 import { isNativePlatform } from '../utils/helpers';
 import { exportBrainToFile, importBrainFromFile, loadCloudConfig, saveCloudConfig, CloudConfig } from '../services/BrainExport';
 
-const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral'];
+const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral', 'huggingface'];
 
 const PROVIDER_COLORS: Record<ProviderType, string> = {
   openrouter: '#6366f1',
@@ -29,12 +29,14 @@ const PROVIDER_COLORS: Record<ProviderType, string> = {
   deepseek:   '#4f46e5',
   cerebras:   '#059669',
   mistral:    '#0891b2',
+  huggingface: '#fbbf24',
 };
 
 const SettingsModule: React.FC = () => {
   const { 
     setShowTerminal, userProfile, setUserProfile, notifications, 
-    clearNotification, skills, addSkill, removeSkill, addNotification 
+    clearNotification, skills, addSkill, removeSkill, addNotification,
+    theme, setTheme,
   } = useGiaStore();
   const identity = useGiaIdentity(s => s.identity);
   const { setName: setGiaName, setPersonality: setGiaPersonality, setCustomPrompt: setGiaCustomPrompt,
@@ -162,6 +164,36 @@ const SettingsModule: React.FC = () => {
           <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
         </div>
       </button>
+
+      {/* Theme */}
+      <div className="gia-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
+              {theme === 'light' ? <Sun size={18} style={{ color: '#a855f7' }} /> : <Moon size={18} style={{ color: '#a855f7' }} />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Theme</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+                {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System default'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {(['dark', 'light', 'system'] as const).map(t => (
+              <button key={t} onClick={() => setTheme(t)}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all capitalize"
+                style={{
+                  background: theme === t ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.04)',
+                  color: theme === t ? '#a855f7' : 'var(--gia-muted)',
+                  border: `1px solid ${theme === t ? 'rgba(168,85,247,0.25)' : 'transparent'}`,
+                }}
+              >{t}</button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Navigation to sub-pages */}
       <button onClick={() => setSettingsPage('skills')}

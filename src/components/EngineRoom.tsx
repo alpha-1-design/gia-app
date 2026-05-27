@@ -14,7 +14,7 @@ type WizardStep =
 let lid = 0;
 const mk = (type: LineType, text: string): Line => ({ type, text, id: lid++ });
 
-const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral'];
+const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral', 'huggingface'];
 const PROVIDER_ALIAS: Record<string, ProviderType> = {
   or: 'openrouter', openrouter: 'openrouter',
   ant: 'anthropic', anthropic: 'anthropic',
@@ -25,16 +25,17 @@ const PROVIDER_ALIAS: Record<string, ProviderType> = {
   ds: 'deepseek', deepseek: 'deepseek',
   cb: 'cerebras', cerebras: 'cerebras',
   ms: 'mistral', mistral: 'mistral',
+  hf: 'huggingface', huggingface: 'huggingface',
 };
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
   mk('info', '║        GIA ENGINE ROOM  v2.3.1           ║'),
-  mk('info', '║   9 Providers · Dynamic Model Fetch      ║'),
+  mk('info', '║  10 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
   mk('res', 'Supported: OpenRouter · Anthropic · OpenAI · Gemini'),
-  mk('res', '          Groq · OpenCode · DeepSeek · Cerebras · Mistral'),
+  mk('res', '          Groq · OpenCode · DeepSeek · Cerebras · Mistral · HuggingFace'),
   mk('res', ''),
   mk('res', 'Type  help  for commands.'),
   mk('res', ''),
@@ -74,7 +75,7 @@ const EngineRoom: React.FC = () => {
   const lc = (t: LineType) => ({ cmd: 'text-emerald-400', err: 'text-rose-400', info: 'text-indigo-300', prompt: 'text-amber-300', success: 'text-emerald-300', res: 'text-zinc-300' }[t]);
 
   const showModels = (models: ModelOption[]) =>
-    models.map((m, i) => mk('res', `  ${String(i + 1).padStart(2)}. ${m.label.slice(0, 36).padEnd(36)} ${m.context ?? '?  '} ${m.free ? '[ FREE ]' : '[ PAID ]'}`));
+    models.map((m, i) => mk('res', `  ${String(i + 1).padStart(2)}. ${m.label.slice(0, 36).padEnd(36)} ${m.context ?? '?  '} ${m.free ? ' FREE' : 'PAID'} ${m.vision ? '👁' : '  '} ${m.tools === false ? '   ' : ' 🛠'}`));
 
   const handleCommand = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
