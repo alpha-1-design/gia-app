@@ -62,7 +62,7 @@ export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
   openai: [
     { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',  free: false, context: '128k', tools: true, vision: true  },
     { id: 'gpt-4o',       label: 'GPT-4o',        free: false, context: '128k', tools: true, vision: true  },
-    { id: 'o4-mini',      label: 'o4-mini',       free: false, context: '128k', tools: true, vision: false },
+    { id: 'o4-mini',      label: 'o4-mini',       free: false, context: '128k', tools: true, vision: true  },
   ],
   gemini: [
     { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash',      free: false, context: '1M', tools: true, vision: true },
@@ -76,8 +76,16 @@ export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
     { id: 'gemma2-9b-it',            label: 'Gemma 2 9B',       free: false, context: '8k',   tools: true, vision: false },
   ],
   opencode: [
-    { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k', tools: true, vision: true  },
-    { id: 'deepseek-reasoner',      label: 'DeepSeek R1',      free: false, context: '64k', tools: true, vision: false },
+    { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',     free: false, context: '200k', tools: true, vision: true  },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',   free: false, context: '200k', tools: true, vision: true  },
+    { id: 'claude-haiku-4-5',          label: 'Claude Haiku 4.5',    free: false, context: '200k', tools: true, vision: true  },
+    { id: 'gemini-2.5-flash',          label: 'Gemini 2.5 Flash',    free: false, context: '1M',   tools: true, vision: true  },
+    { id: 'gpt-4o-mini',               label: 'GPT-4o Mini',         free: false, context: '128k', tools: true, vision: true  },
+    { id: 'deepseek-v4-flash-free',    label: 'DeepSeek V4 Flash',   free: true,  context: '64k',  tools: true, vision: true  },
+    { id: 'qwen3.6-plus-free',         label: 'Qwen 3.6 Plus',       free: true,  context: '128k', tools: true, vision: true  },
+    { id: 'minimax-m2.5-free',         label: 'MiniMax M2.5',        free: true,  context: '128k', tools: true, vision: true  },
+    { id: 'nemotron-3-super-free',     label: 'Nemotron 3 Super',    free: true,  context: '256k', tools: true, vision: false },
+    { id: 'mimo-v2.5-free',            label: 'Mimo 2.5',            free: true,  context: '128k', tools: true, vision: true  },
   ],
   deepseek: [
     { id: 'deepseek-chat',          label: 'DeepSeek Chat V3', free: false, context: '64k', tools: true, vision: true  },
@@ -102,6 +110,10 @@ export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
     { id: 'mistralai/Pixtral-12B-2409',                 label: 'Pixtral 12B',           free: false, context: '128k', tools: true,  vision: true  },
     { id: 'Qwen/Qwen2.5-Coder-32B-Instruct',            label: 'Qwen 2.5 Coder 32B',    free: false, context: '32k',  tools: true,  vision: false },
     { id: 'google/gemma-2-27b-it',                      label: 'Gemma 2 27B',           free: false, context: '8k',   tools: true,  vision: false },
+    { id: 'microsoft/Phi-4-multimodal-instruct',        label: 'Phi-4 Multimodal',      free: true,  context: '16k',  tools: true,  vision: true  },
+    { id: 'Qwen/Qwen2.5-72B-Instruct',                  label: 'Qwen 2.5 72B',          free: false, context: '128k', tools: true,  vision: false },
+    { id: 'microsoft/Phi-3.5-mini-instruct',            label: 'Phi-3.5 Mini',          free: true,  context: '128k', tools: true,  vision: false },
+    { id: 'NousResearch/Hermes-3-Llama-3.1-8B',         label: 'Hermes 3 8B',           free: true,  context: '128k', tools: true,  vision: false },
   ],
 };
 
@@ -174,6 +186,12 @@ export const useProviderStore = create<GiaProviderState>()(
             return STATIC_MODELS[p];
           }
 
+          // HuggingFace Inference API also lacks a public model listing endpoint
+          if (p === 'huggingface') {
+            set((s) => ({ availableModels: { ...s.availableModels, [p]: STATIC_MODELS[p] } }));
+            return STATIC_MODELS[p];
+          }
+
           // Gemini specific listing
           if (p === 'gemini') {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${config.apiKey}`);
@@ -226,9 +244,6 @@ export const useProviderStore = create<GiaProviderState>()(
                 isFree = m.id.includes('small') || m.id.includes('tiny');
               } else if (p === 'deepseek') {
                 isFree = m.id.includes('chat') && !m.id.includes('pro');
-              } else if (p === 'huggingface') {
-                // HuggingFace Inference API free tier: most smaller models
-                isFree = staticModel?.free ?? (!m.id.includes('90B') && !m.id.includes('70B'));
               }
 
               // Infer tools/vision from name patterns when not in static list

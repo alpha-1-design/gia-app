@@ -83,6 +83,21 @@ const MessageContextMenu: React.FC<Props> = ({
     const menuHeight = isUser ? 120 : onContinue ? 200 : 160;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const triggerRect = triggerRef.current?.getBoundingClientRect();
+    if (triggerRect) {
+      const spaceBelow = vh - triggerRect.bottom - 16;
+      const spaceAbove = triggerRect.top - 16;
+      let y: number;
+      if (spaceBelow >= menuHeight) {
+        y = triggerRect.bottom;
+      } else if (spaceAbove >= menuHeight) {
+        y = triggerRect.top - menuHeight;
+      } else {
+        y = spaceBelow > spaceAbove ? triggerRect.bottom : Math.max(16, triggerRect.top - menuHeight);
+      }
+      const x = Math.min(triggerRect.left, vw - menuWidth - 16);
+      return { x: Math.max(16, x), y };
+    }
     return {
       x: Math.min(pos.x, vw - menuWidth - 16),
       y: Math.min(pos.y, vh - menuHeight - 16),

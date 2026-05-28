@@ -59,7 +59,8 @@ const AnalystModule: React.FC = () => {
         systemPrompt: `You are a data analyst and insight engine. Respond with valid JSON only:
 {"summary":"One punchy insight sentence","narrative":"2-3 sentences of deeper analysis","data":[{"label":"Name","value":42}],"columns":["Label","Value"]}
 Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user wants a table, provide rich rows and columns.`,
-        systemPromptMode: 'replace',
+        systemPromptMode: 'append',
+        forceJson: true,
         temperature: 0.25,
         maxTokens: 1500,
       });

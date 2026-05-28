@@ -71,7 +71,8 @@ const PlannerModule: React.FC = () => {
         systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
 {"title":"Concise plan title","steps":[{"id":"1","title":"Step title","description":"Specific actionable description","priority":"high|medium|low","eta":"e.g. Day 1, Week 2"}]}
 Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only JSON.`,
-        systemPromptMode: 'replace',
+        systemPromptMode: 'append',
+        forceJson: true,
         temperature: 0.45,
         maxTokens: 1500,
       });

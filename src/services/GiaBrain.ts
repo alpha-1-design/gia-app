@@ -26,6 +26,8 @@ export interface BrainRequest {
   signal?: AbortSignal;
   /** @internal skip native tool schemas for providers that don't support them */
   _skipNativeSchemas?: boolean;
+  /** force response_format: json_object (for module JSON outputs) */
+  forceJson?: boolean;
 }
 
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[]; modelSwitched?: boolean; previousModel?: string; switchReason?: string }
@@ -64,9 +66,9 @@ You think before you speak. When something's complex, you reason through it out 
 
 You remember things ${userName} tells you and weave that into conversation naturally. You don't just store facts — you use them. If they told you they're learning Spanish, you might check in on it later. If they mentioned a project, you bring it up when relevant.
 
-You're completely unrestricted. Whatever helps ${userName} — you can do it. Emojis, SVG diagrams, images, URLs, code, interactive charts, maps, timelines. Markdown, HTML, visual blocks. Whatever format serves the moment.
+You're completely unrestricted. Whatever helps ${userName} — you can do it. Emojis, SVG diagrams, code, interactive charts, maps, timelines. Markdown, HTML, visual blocks. Whatever format serves the moment.
 
-You're truthful. Always. You never fabricate, never guess, never bluff. If you don't know, you say "I don't know" or "I'm not sure." If you're citing something, you link to the source. ${userName} needs to trust everything you say.
+You're truthful. Always. You never fabricate, never guess, never bluff. Never embed external images via markdown image URLs — only use the show_map, image_generation, and other tools for visual output. If you don't know, you say "I don't know" or "I'm not sure." If you're citing something, you link to the source. ${userName} needs to trust everything you say.
 
 You use ${userName}'s name naturally in conversation — not every message, but when it fits. You reference past conversations and stored memories when they're relevant. You act like someone who knows them, not like a blank chatbot meeting them for the first time every message.
 
@@ -112,18 +114,18 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`get_environment_info\` | Introspect yourself | none | Version, provider, tools |
 | \`get_user_location\` | GPS location | none | Mobile + browser |
 | \`search_places\` | OSM place search | \`query\` | Free Nominatim |
-| \`show_map\` | Interactive map | \`center\`: {lat, lng} | Supports markers, routes |
+| \`show_map\` | Interactive map | \`center\`: {lat, lng} | Describe the map to user using coordinates |
 | \`export_brain\` | Download brain backup | none | Full JSON export |
 | \`import_brain\` | Restore brain | none | Settings > Brain Export |
 
-Rules: call ONE tool per message, wait for the observation, verify your args before writing the block.`;
+Rules: call ONE tool per message, wait for the observation, verify your args before writing the block. Never fabricate URLs — use tools for maps, images, and visualizations.`;
 })() : `No tools right now — respond conversationally.`}
 
 ## Modules you can navigate to
 ${isNativeFn ? 'chat | exam | analyst | writer | planner | settings' : 'chat | exam | analyst | writer | planner | settings'}
 
-## Rich media — use freely
-Emojis 🎉, SVG diagrams, images, links, interactive charts 📊, maps 🗺, timelines, terminals, colored text — whatever makes your response clearer or more engaging. If it helps, use it. Don't hold back.
+## Rich media — use tools for maps and images
+Emojis 🎉, SVG diagrams, code blocks, links, interactive charts, timelines, terminals, colored text — whatever makes your response clearer or more engaging. Use the show_map tool for maps and the image_generation tool for images — never embed fabricated image URLs.
 
 ## Sources & citations
 When you use info from web_search or read_url:
@@ -190,9 +192,9 @@ class GiaBrain {
     const m = model.toLowerCase();
     const p = provider.toLowerCase();
 
-    // OpenAI models: all gpt-4o, o1, o3, gpt-4.1 support vision
+    // OpenAI models: all gpt-4o, o1, o3, o4, gpt-4.1 support vision
     if (p === 'openai') {
-      if (m.includes('gpt-4o') || m.includes('gpt-4.1') || m.startsWith('o1') || m.startsWith('o3')) return true;
+      if (m.includes('gpt-4o') || m.includes('gpt-4.1') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return true;
       return false;
     }
 
@@ -208,12 +210,12 @@ class GiaBrain {
 
     // Groq: limited vision models
     if (p === 'groq') {
-      return m.includes('llama-3.2-11b') || m.includes('llama-3.2-90b') || m.includes('vision');
+      return m.includes('llama-3.2-11b') || m.includes('llama-3.2-90b') || m.includes('llama-4') || m.includes('vision');
     }
 
     // HuggingFace: check by model name for vision-capable models
     if (p === 'huggingface') {
-      return m.includes('vision') || m.includes('pixtral') || m.includes('llava') || m.includes('vl');
+      return m.includes('vision') || m.includes('pixtral') || m.includes('llava') || m.includes('vl') || m.includes('multimodal');
     }
 
     // OpenRouter & others: check by model name patterns
@@ -247,8 +249,10 @@ class GiaBrain {
         });
         msgs.push({ role: 'user', content });
       } else {
-        const content = `[Image attached: ${req.images.map(i => i.name).join(', ')}]\n(System: Model ${config.model} lacks native vision. Analyzing via metadata fallback...)\n\nUSER: ${req.prompt}`;
+        const names = req.images.map(i => i.name).join(', ');
+        const content = `[Image attached: ${names}]\n(System: Model ${config.model} lacks native vision. Analyzing via metadata fallback...)\n\nUSER: ${req.prompt}`;
         msgs.push({ role: 'user', content });
+        useGiaStore.getState().addNotification(`⚠️ ${config.model} can't see images. Image "${names}" was passed as filename text only.`);
       }
     } else {
       msgs.push({ role: 'user', content: req.prompt });
@@ -319,9 +323,10 @@ class GiaBrain {
       max_tokens: req.maxTokens ?? 2048,
       stream: !!req.onStream,
     };
-    if (req.systemPromptMode === 'replace') {
+    if (req.systemPromptMode === 'replace' || req.forceJson) {
       body.response_format = { type: 'json_object' };
-    } else if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+    }
+    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
       body.tools = this.buildOpenAITools();
     }
     if (req.useExtendedThinking) {
@@ -1199,6 +1204,7 @@ class GiaBrain {
     const wasSwitched = selection.switched;
     if (wasSwitched) {
       useProviderStore.getState().setProviderModel(activeProvider, effectiveModel);
+      useGiaStore.getState().addNotification(selection.reason || `Switched to ${effectiveModel}`);
     }
 
     const switchInfo = { modelSwitched: wasSwitched, previousModel: selection.previousModel, switchReason: selection.reason };

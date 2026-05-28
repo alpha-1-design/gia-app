@@ -436,11 +436,13 @@ class GiaTools {
       id: 'show_map', name: 'show_map',
       description: 'Render an interactive OpenStreetMap. Provide center coords, markers, and optional route.',
       execute: async ({ center, markers, route, zoom = 13, title }) => {
-        const content = JSON.stringify({
-          type: 'map',
-          data: { center, markers: markers || [], route: route || null, zoom, title: title || '' }
-        });
-        return { success: true, content: `\`\`\`visual\n${content}\n\`\`\`` };
+        const mapData = { center, markers: markers || [], route: route || null, zoom, title: title || '' };
+        const visualBlock = JSON.stringify({ type: 'map', data: mapData });
+        const names = [title, center.label, center.name].filter(Boolean);
+        const placeDesc = names.length > 0 ? names.join(' — ') : `${center.lat?.toFixed(4)}, ${center.lng?.toFixed(4)}`;
+        const markerCount = (markers?.length || 0);
+        const desc = `A map titled "${title || 'Map'}" was rendered centered on ${placeDesc} at zoom ${zoom}${markerCount > 0 ? ` with ${markerCount} marker(s)` : ''}.`;
+        return { success: true, content: `${desc}\n\`\`\`visual\n${visualBlock}\n\`\`\`` };
       }
     });
 
