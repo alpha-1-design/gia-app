@@ -63,25 +63,45 @@ class CodeRunner {
     return this.userApiKey ? { 'Authorization': `Bearer ${this.userApiKey}` } : {};
   }
 
-  private runLocalJS(code: string): CodeRunResult {
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (...args: any[]) => {
-      logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
-    };
-    try {
-      const fn = new Function(code);
-      const result = fn();
-      const output = logs.join('\n');
-      if (result !== undefined && !output.includes(String(result))) {
-        return { output: output + (output ? '\n' : '') + String(result), error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' };
+  private runLocalJS(code: string): Promise<CodeRunResult> {
+    return new Promise((resolve) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.sandbox.add('allow-scripts');
+      document.body.appendChild(iframe);
+      const timeout = setTimeout(() => {
+        document.body.removeChild(iframe);
+        resolve({ output: '', error: 'Execution timed out after 10s', exitCode: 1, language: 'javascript', version: 'local (browser)' });
+      }, 10000);
+      const win = iframe.contentWindow;
+      if (!win) {
+        clearTimeout(timeout);
+        document.body.removeChild(iframe);
+        resolve({ output: '', error: 'Failed to create sandbox', exitCode: 1, language: 'javascript', version: 'local (browser)' });
+        return;
       }
-      return { output: output || 'undefined', error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' };
-    } catch (e: any) {
-      return { output: '', error: e.message || 'JavaScript execution failed', exitCode: 1, language: 'javascript', version: 'local (browser)' };
-    } finally {
-      console.log = originalLog;
-    }
+      const logs: string[] = [];
+      (win as any).console = {
+        log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+        error: (...args: any[]) => logs.push('[ERROR] ' + args.map(a => String(a)).join(' ')),
+        warn: (...args: any[]) => logs.push('[WARN] ' + args.map(a => String(a)).join(' ')),
+      };
+      try {
+        const result = (win as any).Function(code)();
+        clearTimeout(timeout);
+        document.body.removeChild(iframe);
+        const output = logs.join('\n');
+        if (result !== undefined && !output.includes(String(result))) {
+          resolve({ output: output + (output ? '\n' : '') + String(result), error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' });
+        } else {
+          resolve({ output: output || 'undefined', error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' });
+        }
+      } catch (e: any) {
+        clearTimeout(timeout);
+        document.body.removeChild(iframe);
+        resolve({ output: logs.join('\n'), error: e.message || 'JavaScript execution failed', exitCode: 1, language: 'javascript', version: 'local (browser)' });
+      }
+    });
   }
 
   async run(req: CodeRunRequest, attempts = 0, signal?: AbortSignal): Promise<CodeRunResult> {

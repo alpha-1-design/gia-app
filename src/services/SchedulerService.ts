@@ -40,9 +40,12 @@ class SchedulerService {
     updateTaskStatus(task.id, 'running');
 
     try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 30000);
       const skillName = skills.find(s => s.id === activeSkillId)?.name || 'General';
       const contextPrompt = `[Context: Skill=${skillName}, Provider=${activeProvider}, Model=${providers[activeProvider]?.model || 'unknown'}]\n\n${task.prompt}`;
-      const res = await GiaBrain.generate({ prompt: contextPrompt, maxTokens: 800 });
+      const res = await GiaBrain.generate({ prompt: contextPrompt, maxTokens: 800, signal: ctrl.signal });
+      clearTimeout(timeout);
       const isRecurring = task.interval && ['hourly', 'daily', 'weekly'].includes(task.interval);
 
       if (isRecurring) {

@@ -8,15 +8,22 @@ export interface SearchResult {
 
 class SearchService {
   private static instance: SearchService;
+  private cache = new Map<string, { results: SearchResult[]; ts: number }>();
+  private cacheTTL = 120_000;
   private proxyList = [
     (q: string) => `https://corsproxy.io/?${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
+    (q: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
     (q: string) => `https://api.corsfix.com/proxy?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
     (q: string) => `https://cors-anywhere.herokuapp.com/https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`,
+    (q: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.google.com/search?q=${encodeURIComponent(q)}&sourceid=chrome&ie=UTF-8`)}`,
   ];
   static getInstance() { if (!this.instance) this.instance = new SearchService(); return this.instance; }
 
   async search(query: string): Promise<SearchResult[]> {
     if (!query.trim()) return [];
+
+    const cached = this.cache.get(query);
+    if (cached && Date.now() - cached.ts < this.cacheTTL) return cached.results;
 
     // Strategy A: direct via Capacitor (native)
     if (typeof CapacitorHttp !== 'undefined') {
@@ -42,7 +49,10 @@ class SearchService {
         const html = await res.text();
         if (html.length < 200) continue; // empty/error page
         const parsed = this.parseResults(html);
-        if (parsed.length > 0) return parsed;
+        if (parsed.length > 0) {
+          this.cache.set(query, { results: parsed, ts: Date.now() });
+          return parsed;
+        }
       } catch { /* try next proxy */ }
     }
 

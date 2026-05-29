@@ -5,7 +5,7 @@ import {
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, Square
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import JSZip from 'jszip';
 import { ThinkingPanel } from '../components/ThinkingPanel';
 import GiaBrain from '../services/GiaBrain';
@@ -243,7 +243,7 @@ const ChatModule: React.FC = () => {
     if (!el) return;
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
-        setInputContainerHeight(entry.contentRect.height + 28);
+        setInputContainerHeight(entry.contentRect.height + 48);
       }
     });
     ro.observe(el);
@@ -321,6 +321,7 @@ const ChatModule: React.FC = () => {
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
       let inToolBlock = false;
+      let contPendingBacktickCount = 0;
       setIntentState('responding');
       const contRes = await GiaBrain.generate({
         signal: ctrl.signal,
@@ -328,6 +329,13 @@ const ChatModule: React.FC = () => {
         history: [...history, { role: 'assistant', content: lastContent }],
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
+          if (contPendingBacktickCount > 0) {
+            const needed = 3 - contPendingBacktickCount;
+            if (chunk.startsWith('tool') && needed <= 3) {
+              chunk = '`'.repeat(contPendingBacktickCount) + chunk;
+            }
+            contPendingBacktickCount = 0;
+          }
           let remaining = chunk;
           let displayChunk = '';
           while (remaining.length > 0) {
@@ -379,6 +387,11 @@ const ChatModule: React.FC = () => {
                 remaining = '';
               }
             }
+          }
+          const trailing = displayChunk.match(/`{1,3}$/);
+          if (trailing) {
+            contPendingBacktickCount = trailing[0].length;
+            displayChunk = displayChunk.slice(0, -contPendingBacktickCount);
           }
           accumulated += displayChunk;
           const displayText = processStreamForDisplay(accumulated);
@@ -551,6 +564,7 @@ const ChatModule: React.FC = () => {
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
       let inToolBlock = false;
+      let pendingBacktickCount = 0;
       setIntentState('responding');
 
       const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
@@ -563,6 +577,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
       const processStreamChunk = (chunk: string) => {
         if (ctrl.signal.aborted) return;
+        if (pendingBacktickCount > 0) {
+          const needed = 3 - pendingBacktickCount;
+          if (chunk.startsWith('tool') && needed <= 3) {
+            chunk = '`'.repeat(pendingBacktickCount) + chunk;
+          }
+          pendingBacktickCount = 0;
+        }
         let remaining = chunk;
         let displayChunk = '';
         while (remaining.length > 0) {
@@ -614,6 +635,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               remaining = '';
             }
           }
+        }
+        const trailingBackticks = displayChunk.match(/`{1,3}$/);
+        if (trailingBackticks) {
+          pendingBacktickCount = trailingBackticks[0].length;
+          displayChunk = displayChunk.slice(0, -pendingBacktickCount);
         }
         accumulated += displayChunk;
         const displayText = processStreamForDisplay(accumulated);
@@ -737,6 +763,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let thoughtsAccumulated = '';
       let inThinkBlock = false;
       let inToolBlock = false;
+      let clarPendingBacktickCount = 0;
       await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: '', history: allMsgs,
@@ -745,6 +772,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         temperature: extThinking ? undefined : 0.7,
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
+          if (clarPendingBacktickCount > 0) {
+            const needed = 3 - clarPendingBacktickCount;
+            if (chunk.startsWith('tool') && needed <= 3) {
+              chunk = '`'.repeat(clarPendingBacktickCount) + chunk;
+            }
+            clarPendingBacktickCount = 0;
+          }
           let remaining = chunk;
           let displayChunk = '';
           while (remaining.length > 0) {
@@ -796,6 +830,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 remaining = '';
               }
             }
+          }
+          const trailing = displayChunk.match(/`{1,3}$/);
+          if (trailing) {
+            clarPendingBacktickCount = trailing[0].length;
+            displayChunk = displayChunk.slice(0, -clarPendingBacktickCount);
           }
           accumulated += displayChunk;
           const displayText = processStreamForDisplay(accumulated);
@@ -982,7 +1021,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 pt-4 space-y-2 sm:space-y-3 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto pt-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
@@ -1008,6 +1047,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           </div>
         )}
 
+        <div className="max-w-3xl mx-auto w-full px-4 space-y-2 sm:space-y-3">
         {!providerConnected && !loading && (
           <div onClick={() => useGiaStore.getState().setModule('settings')} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
@@ -1130,11 +1170,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 }}
               >
                 <div 
-                  className={`p-3 sm:p-4 md:p-5 rounded-2xl relative select-none transition-shadow ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : 'bg-zinc-900/40 border border-zinc-800/60 hover:border-zinc-700/60'}`}
+                  className={`p-3 sm:p-4 md:p-5 rounded-2xl relative select-none ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : ''}`}
                   style={{
                     borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                     borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
-                    boxShadow: msg.role === 'assistant' && !msg.error && !msg.thinking ? '0 1px 8px rgba(0,0,0,0.15)' : 'none',
                   }}
                 >
                   {msg.thinking ? (
@@ -1280,6 +1319,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             </motion.div>
           );
         })()}
+        </div>
       </div>
 
       <AnimatePresence>

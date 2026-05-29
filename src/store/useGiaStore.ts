@@ -222,7 +222,7 @@ export const useGiaStore = create<GiaState>()(
       showProtocols: false,
       webSearch: false,
       extThinking: false,
-      handsOff: true,
+      handsOff: false,
       clarification: null,
       wakeWord: localStorage.getItem('gia-wake-word') || 'hey gia',
       keepListening: localStorage.getItem('gia-keep-listening') !== 'false',

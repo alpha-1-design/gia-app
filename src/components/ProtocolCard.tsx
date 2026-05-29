@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Terminal, CheckCircle2, XCircle, Clock, Loader2, AlertCircle, Play, X, Edit3 } from 'lucide-react';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { ProtocolProposal, PROTOCOL_META } from '../types/protocol';

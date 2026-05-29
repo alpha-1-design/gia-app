@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Copy, Check } from 'lucide-react';
 import CodeBlock from './CodeBlock';
 import VisualRenderer from './VisualRenderer';
@@ -65,10 +65,12 @@ const inlineRender = (text: string, footnotes: Map<string, string>): React.React
     return nodes;
   }
 
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~|\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|!\[[^\]]*\]\([^)]+\)|\[\^[^\]]+\])/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~|==[^=]+==|\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|!\[[^\]]*\]\([^)]+\)|\[\^[^\]]+\]|https?:\/\/[^\s<]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
       return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('==') && part.endsWith('==') && part.length > 4)
+      return <mark key={i} style={{ background: 'rgba(168,85,247,0.25)', color: 'inherit', padding: '0 3px', borderRadius: '3px' }}>{part.slice(2, -2)}</mark>;
     if (part.startsWith('~~') && part.endsWith('~~') && part.length > 4)
       return <del key={i} style={{ color: 'var(--gia-muted)' }}>{part.slice(2, -2)}</del>;
     if (part.startsWith('*') && part.endsWith('*') && part.length >= 3)
@@ -92,6 +94,10 @@ const inlineRender = (text: string, footnotes: Map<string, string>): React.React
     const fnRef = part.match(/^\[\^([^\]]+)\]$/);
     if (fnRef && footnotes.has(fnRef[1]))
       return <sup key={i}><a href={`#fn-${fnRef[1]}`} id={`fnref-${fnRef[1]}`} style={{ color: '#a855f7', fontSize: '10px', cursor: 'pointer', textDecoration: 'none' }}>{fnRef[1]}</a></sup>;
+
+    const autoUrl = part.match(/^https?:\/\/[^\s<]+$/);
+    if (autoUrl)
+      return <a key={i} href={part} style={{ color: '#60a5fa', textDecoration: 'underline', textUnderlineOffset: '2px' }} target="_blank" rel="noopener noreferrer">{part}</a>;
 
     return part;
   });
@@ -215,7 +221,21 @@ const parseTaskList = (line: string): React.ReactNode => {
   );
 };
 
+const tryParseVisualBlock = (text: string): React.ReactNode | null => {
+  const trimmed = text.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object' && parsed.type && parsed.data) {
+      return <VisualRenderer code={trimmed} />;
+    }
+  } catch {}
+  return null;
+};
+
 const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
+  const visualFallback = useMemo(() => tryParseVisualBlock(content), [content]);
+  if (visualFallback) return <div className={`gia-markdown ${className}`}>{visualFallback}</div>;
+
   const lines = content.split('\n');
   const nodes: React.ReactNode[] = [];
   const footnotes = new Map<string, string>();
@@ -268,6 +288,21 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
         nodes.push(<InlineSvg key={`svg-${i}`} svg={codeLines.join('\n')} />);
       } else if (lang === 'visual') {
         nodes.push(<VisualRenderer key={`vis-${i}`} code={codeLines.join('\n')} />);
+      } else if (lang === 'suggestions') {
+        const items = codeLines.join('\n').split('\n').filter(s => s.trim());
+        nodes.push(
+          <div key={`su-${i}`} className="flex flex-wrap gap-2 mt-3">
+            {items.map((item, si) => (
+              <button key={si} onClick={() => {
+                const input = document.querySelector<HTMLTextAreaElement>('textarea');
+                if (input) { input.value = item.trim(); input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); }
+              }} className="text-[11px] px-3 py-1.5 rounded-full transition-colors hover:opacity-80"
+                style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)' }}>
+                {item.trim()}
+              </button>
+            ))}
+          </div>
+        );
       } else {
         nodes.push(<CodeBlock key={`cb-${i}`} lang={lang} code={codeLines.join('\n')} showRun={true} />);
       }

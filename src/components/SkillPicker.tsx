@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Skill } from '../store/useGiaStore';
 import { Zap, Shield, Code, Palette, X } from 'lucide-react';
 

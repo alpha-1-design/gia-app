@@ -1,4 +1,3 @@
-import { CapacitorHttp } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import CodeRunner from './CodeRunner';
 import { useGiaStore } from '../store/useGiaStore';
@@ -8,6 +7,16 @@ import { isNativePlatform } from '../utils/helpers';
 const isNative = isNativePlatform;
 
 const blobUrls = new Set<string>();
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_DIRECTORIES = ['Documents', 'Download'];
+
+const isPathSafe = (path: string): string | null => {
+  const normalized = path.replace(/\\/g, '/');
+  if (normalized.includes('..')) return 'Path traversal is not allowed';
+  if (normalized.startsWith('/')) return 'Absolute paths are not allowed';
+  return null;
+};
 
 const revokeAllBlobUrls = () => {
   blobUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
@@ -87,9 +96,13 @@ class GiaTools {
       description: 'Read the content of a file from the local filesystem.',
       execute: async ({ path }) => {
         if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
+        const pathErr = isPathSafe(path);
+        if (pathErr) return { success: false, content: '', error: pathErr };
         try {
           const result = await Filesystem.readFile({ path, directory: Directory.Documents, encoding: Encoding.UTF8 });
-          return { success: true, content: result.data as string };
+          const content = result.data as string;
+          if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+          return { success: true, content };
         } catch (e: any) {
           return { success: false, content: '', error: e.message };
         }
@@ -101,6 +114,9 @@ class GiaTools {
       name: 'filesystem_write',
       description: 'Write or update a file on the local filesystem.',
       execute: async ({ path, content }) => {
+        const pathErr = isPathSafe(path);
+        if (pathErr) return { success: false, content: '', error: pathErr };
+        if (content && content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
         if (isNative()) {
           try {
             await Filesystem.writeFile({ path, data: content, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
@@ -184,6 +200,10 @@ class GiaTools {
       description: 'List files in a directory.',
       execute: async ({ path = '' }) => {
         if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
+        if (path) {
+          const pathErr = isPathSafe(path);
+          if (pathErr) return { success: false, content: '', error: pathErr };
+        }
         try {
           const result = await Filesystem.readdir({ path, directory: Directory.Documents });
           return { success: true, content: result.files.map(f => f.name).join('\n') };
@@ -265,6 +285,8 @@ class GiaTools {
           if (paths && Array.isArray(paths)) {
             if (!isNative()) return { success: false, content: '', error: 'Reading files from device paths requires the GIA mobile app.' };
             for (const p of paths) {
+              const pathErr = isPathSafe(p);
+              if (pathErr) continue;
               try {
                 const res = await Filesystem.readFile({ path: p, directory: Directory.Documents, encoding: Encoding.UTF8 });
                 zip.file(p, res.data as string);

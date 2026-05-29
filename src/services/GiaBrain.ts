@@ -78,8 +78,7 @@ ${memory}
 
 ${userContext || ''}
 
-${handsOff ? (() => {
-  // Check current model's capabilities before listing tools
+${(() => {
   const { activeProvider, providers, availableModels } = useProviderStore.getState();
   const activeCfg = providers[activeProvider];
   const activeModelCfg = availableModels[activeProvider]?.find(m => m.id === activeCfg?.model);
@@ -88,6 +87,10 @@ ${handsOff ? (() => {
 
   if (!supportsTools) return `## No tool support
 Your current model (${activeCfg?.model || 'unknown'}) doesn't support tool calling. You can still answer questions conversationally, but you cannot browse the web, run code, access files, or use other tools. If you need these capabilities, ask the user to switch to a tool-capable model.`;
+
+  const approvalNote = handsOff
+    ? ''
+    : '\n\n**Note:** Tools you use will be sent to the user for approval before execution. Propose the tool naturally, and it will be shown to the user for confirmation.';
 
   return `## Tools you can use
 Call a tool by writing a fenced code block:
@@ -118,14 +121,23 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`export_brain\` | Download brain backup | none | Full JSON export |
 | \`import_brain\` | Restore brain | none | Settings > Brain Export |
 
-Rules: call ONE tool per message, wait for the observation, verify your args before writing the block. Never fabricate URLs — use tools for maps, images, and visualizations.`;
-})() : `No tools right now — respond conversationally.`}
+Rules: call ONE tool per message, wait for the observation, verify your args before writing the block. Never fabricate URLs — use tools for maps, images, and visualizations.${approvalNote}`;
+})()}
 
 ## Modules you can navigate to
 ${isNativeFn ? 'chat | exam | analyst | writer | planner | settings' : 'chat | exam | analyst | writer | planner | settings'}
 
 ## Rich media — use tools for maps and images
-Emojis 🎉, SVG diagrams, code blocks, links, interactive charts, timelines, terminals, colored text — whatever makes your response clearer or more engaging. Use the show_map tool for maps and the image_generation tool for images — never embed fabricated image URLs.
+Emojis 🎉, SVG diagrams, code blocks, links, interactive charts, timelines, terminals, colored text — whatever makes your response clearer or more engaging. Use the show_map tool for maps and the image_generation tool for images — never embed fabricated image URLs. You can use ==highlight== for emphasized text, and bare URLs (https://...) are auto-linked.
+
+## Visual blocks — interactive charts, maps, tables, mindmaps
+You can embed rich interactive visualizations using a fenced code block with the "visual" language tag. Inside, put a JSON object with "type" and "data" fields:
+
+\`\`\`visual
+{"type":"chart","data":{"type":"bar","labels":["A","B","C"],"datasets":[{"label":"Sales","values":[30,45,25}]}}}
+\`\`\`
+
+Supported types: \`chart\` (bar/line/pie/area), \`table\` (sortable data table), \`mindmap\` (tree diagram), \`timeline\` (chronological events), \`diff\` (code comparison), \`gallery\` (image grid), \`terminal\` (terminal output with ANSI colors), \`widget\` (metric cards), \`outline\` (document tree), \`map\` (interactive OpenStreetMap). Use these instead of plain text when presenting structured data — they're far more readable and engaging.
 
 ## Sources & citations
 When you use info from web_search or read_url:
@@ -170,7 +182,14 @@ ${skillPrompt === 'Be concise, direct, and helpful. Use your tools when they add
 - If ${userName} seems frustrated or stressed, acknowledge it before jumping in.
 - Use 'read_url' when they ask about a specific URL.
 - Use 'summarize_conversation' when history is getting long.
-- Check your tool args before sending — bad params waste time.`;
+- Check your tool args before sending — bad params waste time.
+- After answering, suggest 2-3 relevant follow-up questions using a suggestions block:
+\`\`\`suggestions
+What's the next step?
+Can you explain more about X?
+How does Y compare?
+\`\`\`
+These appear as clickable buttons the user can tap to continue the conversation. Only include when the topic naturally lends itself to follow-ups.`;
 
   return baseSystem;
 };
@@ -262,12 +281,17 @@ class GiaBrain {
 
   private retryFetch(url: string, options: RequestInit, retries = 1): Promise<Response> {
     const hasTimeout = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function';
-    const timeoutSignal = hasTimeout ? AbortSignal.timeout(60000) : undefined;
+    const canCombine = typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).any === 'function';
 
     const run = async (attempt: number): Promise<Response> => {
       try {
-        const combinedSignal = options.signal || timeoutSignal;
-        const res = await fetch(url, { ...options, signal: combinedSignal });
+        let signal = options.signal;
+        if (hasTimeout && !signal) {
+          signal = AbortSignal.timeout(60000);
+        } else if (hasTimeout && signal && canCombine) {
+          signal = (AbortSignal as any).any([signal, AbortSignal.timeout(60000)]);
+        }
+        const res = await fetch(url, { ...options, signal });
         if ((res.status === 429 || res.status >= 500) && attempt < retries) {
           await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
           return run(attempt + 1);
@@ -326,7 +350,7 @@ class GiaBrain {
     if (req.systemPromptMode === 'replace' || req.forceJson) {
       body.response_format = { type: 'json_object' };
     }
-    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
       body.tools = this.buildOpenAITools();
     }
     if (req.useExtendedThinking) {
@@ -578,7 +602,7 @@ class GiaBrain {
       messages,
       stream: !!req.onStream,
     };
-    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
       body.tools = this.buildAnthropicTools();
     }
     if (!useThinking && req.temperature !== undefined) body.temperature = req.temperature;
@@ -763,7 +787,7 @@ class GiaBrain {
       system_instruction: { parts: [{ text: this.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode) }] },
       generationConfig: { temperature: req.temperature ?? 0.7, maxOutputTokens: req.maxTokens ?? 2048 }
     };
-    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas) {
+    if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
       body.tools = [{ function_declarations: this.buildGeminiTools() }];
     }
     if (req.useExtendedThinking) {
@@ -927,7 +951,7 @@ class GiaBrain {
     return { text, provider: 'gemini', model: config.model };
   }
 
-  private toolSchemas: Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string }> }> = {
+  private toolSchemas: Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string; items?: { type: string } }> }> = {
     web_search: {
       description: 'Search the web for real-time information using DuckDuckGo.',
       required: ['query'],
@@ -969,8 +993,8 @@ class GiaBrain {
       required: [],
       properties: {
         filename: { type: 'string', description: 'Output filename (default: project.zip)' },
-        files: { type: 'array', description: 'Array of {path, content} objects' },
-        paths: { type: 'array', description: 'Array of file paths to read from device' }
+        files: { type: 'array', description: 'Array of {path, content} objects', items: { type: 'object' } },
+        paths: { type: 'array', description: 'Array of file paths to read from device', items: { type: 'string' } }
       }
     },
     image_generation: {
@@ -999,7 +1023,7 @@ class GiaBrain {
     summarize_conversation: {
       description: 'Compress long conversations to save context space.',
       required: ['messages'],
-      properties: { messages: { type: 'array', description: 'Array of {role, content} message objects' } }
+      properties: {         messages: { type: 'array', description: 'Array of {role, content} message objects', items: { type: 'object' } } }
     },
     forget_memory: {
       description: 'Delete stored memories matching a topic.',
@@ -1040,8 +1064,8 @@ class GiaBrain {
       required: ['center'],
       properties: {
         center: { type: 'object', description: '{lat, lng} map center' },
-        markers: { type: 'array', description: '[{lat, lng, label, color}] markers' },
-        route: { type: 'array', description: '[{lat, lng}] polyline points' },
+        markers: { type: 'array', description: '[{lat, lng, label, color}] markers', items: { type: 'object' } },
+        route: { type: 'array', description: '[{lat, lng}] polyline points', items: { type: 'object' } },
         zoom: { type: 'number', description: 'Zoom level 1-19 (default 13)' },
         title: { type: 'string', description: 'Optional map title' }
       }
@@ -1058,6 +1082,14 @@ class GiaBrain {
     },
   };
 
+  private mapSchemaProperty([k, v]: [string, { type: string; description: string; items?: { type: string } }]): [string, any] {
+    const prop: any = { type: v.type, description: v.description };
+    if (v.type === 'array' && v.items) {
+      prop.items = v.items;
+    }
+    return [k, prop];
+  }
+
   private buildOpenAITools(): any[] {
     return Object.entries(this.toolSchemas).map(([id, schema]) => ({
       type: 'function',
@@ -1067,7 +1099,7 @@ class GiaBrain {
         parameters: {
           type: 'object',
           properties: Object.fromEntries(
-            Object.entries(schema.properties).map(([k, v]) => [k, { type: v.type, description: v.description }])
+            Object.entries(schema.properties).map((entry) => this.mapSchemaProperty(entry))
           ),
           required: schema.required.length > 0 ? schema.required : undefined,
         },
@@ -1082,7 +1114,7 @@ class GiaBrain {
       input_schema: {
         type: 'object',
         properties: Object.fromEntries(
-          Object.entries(schema.properties).map(([k, v]) => [k, { type: v.type, description: v.description }])
+          Object.entries(schema.properties).map((entry) => this.mapSchemaProperty(entry))
         ),
         required: schema.required.length > 0 ? schema.required : undefined,
       },
@@ -1096,7 +1128,7 @@ class GiaBrain {
       parameters: {
         type: 'object',
         properties: Object.fromEntries(
-          Object.entries(schema.properties).map(([k, v]) => [k, { type: v.type, description: v.description }])
+          Object.entries(schema.properties).map((entry) => this.mapSchemaProperty(entry))
         ),
         required: schema.required.length > 0 ? schema.required : undefined,
       },
@@ -1288,8 +1320,11 @@ class GiaBrain {
       }
 
       const text = res!.text;
-      const toolMatch = text.match(/```tool\n?([\s\S]*?)```/);
-      if (toolMatch) {
+      const toolMatch = text.match(/```tool\s*\n?([\s\S]*?)```/);
+        if (!toolMatch) {
+          this.extractMemories(req.prompt, text);
+          return { text, provider: activeProvider, model: config.model };
+        }
         try {
           const toolCall = JSON.parse(toolMatch[1]);
 
@@ -1330,19 +1365,6 @@ class GiaBrain {
               history.push({ role: 'assistant', content: text });
               history.push({ role: 'user', content: `VALIDATION ERROR: ${validationError}. Please fix and retry.` });
               currentPrompt = `Tool call failed validation: ${validationError}. Please correct the arguments.`;
-              continue;
-            }
-
-            const { handsOff: isHandsOff } = useGiaStore.getState();
-
-            if (!isHandsOff) {
-              const cleanText = text.replace(/```tool[\s\S]*?```/g, '').trim();
-              if (cleanText) {
-                return { text: cleanText, provider: activeProvider, model: config.model };
-              }
-              history.push({ role: 'assistant', content: text });
-              history.push({ role: 'user', content: 'OBSERVATION: Tool execution blocked — hands-off mode is disabled. Please respond directly without executing tools.' });
-              currentPrompt = 'Tool was blocked. Respond directly without executing tools.';
               continue;
             }
 
@@ -1404,10 +1426,7 @@ class GiaBrain {
           continue;
         }
       }
-      // Extract memories from final response (not tool results or clarifications)
-      this.extractMemories(req.prompt, res!.text);
-      return { ...res!, ...switchInfo };
-    }    throw new Error('Max agentic iterations reached.');
+    throw new Error('Max agentic iterations reached.');
   }
 
   private async delegateTask(providerName: string, prompt: string, signal?: AbortSignal): Promise<string> {
