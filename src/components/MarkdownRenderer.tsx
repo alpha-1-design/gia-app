@@ -10,7 +10,7 @@ const InlineCode: React.FC<{ code: string }> = ({ code }) => {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copy = useCallback(() => {
-    navigator.clipboard.writeText(code).catch(() => {});
+    navigator.clipboard.writeText(code).catch(() => console.warn('Clipboard write failed'));
     setCopied(true);
     copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [code]);

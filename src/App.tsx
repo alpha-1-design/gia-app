@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from 'react';
+import React, { useEffect, lazy, Suspense, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
@@ -12,8 +12,13 @@ import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
 import ProtocolPanel from './components/ProtocolPanel';
+import CommandPalette from './components/CommandPalette';
 import SchedulerService from './services/SchedulerService';
 import BiometricService from './services/BiometricService';
+import MCPManager from './services/MCPManager';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import SystemService from './services/SystemService';
+import { setSystemContext } from './services/GiaBrain';
 import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
@@ -73,8 +78,17 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, setTheme } = useGiaStore();
-  const [isLocked, setIsLocked] = React.useState(BiometricService.isLockEnabled());
+  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, setTheme, createSession, addNotification } = useGiaStore();
+  const [locked, setLocked] = useState(BiometricService.isLockEnabled());
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useKeyboardShortcuts([
+    { key: 'k', meta: true, handler: () => setPaletteOpen(o => !o) },
+    { key: 'n', meta: true, handler: () => { createSession(); addNotification('New session created'); } },
+    { key: 's', meta: true, shift: true, handler: () => { setModule('settings'); } },
+    { key: 'o', meta: true, shift: true, handler: () => { setShowProtocols(!showProtocols); } },
+    { key: 'escape', handler: () => { if (paletteOpen) setPaletteOpen(false); } },
+  ]);
 
   // Theme switching
   useEffect(() => {
@@ -93,18 +107,28 @@ const App: React.FC = () => {
   useEffect(() => {
     LocalNotifications.requestPermissions();
     SchedulerService.start();
+    MCPManager.init();
+
+    // Deep system embedding — monitor battery, network, and feed into GIA context
+    SystemService.getInfo().then(info => {
+      setSystemContext(SystemService.formattedContext);
+    });
+    SystemService.startMonitoring().then(() => {
+      setSystemContext(SystemService.formattedContext);
+    });
+
     const t1 = setTimeout(() => useMemoryStore.getState().compactMemories(), 1000);
     const t2 = setTimeout(() => useGiaStore.getState().hibernateSessions(), 2000);
-    if (isLocked) {
+    if (locked) {
       handleBiometric();
     }
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    return () => { clearTimeout(t1); clearTimeout(t2); MCPManager.shutdown(); SystemService.stopMonitoring(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBiometric = async () => {
     const ok = await BiometricService.verify();
-    if (ok) setIsLocked(false);
+    if (ok) setLocked(false);
   };
 
   useEffect(() => {
@@ -116,7 +140,7 @@ const App: React.FC = () => {
 
   const activeColor = MODULE_GLOW[currentModule];
 
-  if (isLocked) {
+  if (locked) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 bg-zinc-950 px-8 text-center">
         <div className="w-20 h-20 rounded-3xl bg-violet-600/20 border border-violet-500/20 flex items-center justify-center">
@@ -337,6 +361,23 @@ const App: React.FC = () => {
           />
         )}
       </AnimatePresence>
+
+      <CommandPalette 
+        isOpen={paletteOpen} 
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={(action) => {
+          if (action === 'task-board') {
+            // Task board is accessible via file browser or we can create a dedicated view
+            setPaletteOpen(false);
+            // For now, just notify - could add a dedicated task board view later
+            useGiaStore.getState().addNotification('Task board: Use the folder icon in chat to access files, or create tasks via GIA');
+          } else if (action === 'notes-panel') {
+            setPaletteOpen(false);
+            // For now, just notify - could add a dedicated notes view later
+            useGiaStore.getState().addNotification('Notes: Use GIA to create, read, and manage notes via conversation');
+          }
+        }} 
+      />
     </div>
   );
 };

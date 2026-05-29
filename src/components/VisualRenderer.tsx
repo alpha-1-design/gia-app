@@ -25,7 +25,7 @@ const useCopy = (): [boolean, (text: string) => void] => {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copy = useCallback((text: string) => {
-    navigator.clipboard.writeText(text).catch(() => {});
+    navigator.clipboard.writeText(text).catch(() => console.warn('Clipboard write failed'));
     setCopied(true);
     copyTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION);
   }, []);

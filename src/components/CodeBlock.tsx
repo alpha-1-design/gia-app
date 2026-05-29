@@ -20,7 +20,7 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
   useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
 
   const copy = () => {
-    navigator.clipboard.writeText(currentCode).catch(() => {});
+    navigator.clipboard.writeText(currentCode).catch(() => console.warn('Clipboard write failed'));
     setCopied(true);
     copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };

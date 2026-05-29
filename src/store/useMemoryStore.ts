@@ -225,11 +225,13 @@ export const useMemoryStore = create<MemoryState>()(
             )
           );
           if (existing) {
-            if (mem.value.length > existing.value.length) {
-              existing.value = mem.value;
-            }
-            existing.confidence = Math.max(existing.confidence, mem.confidence);
-            existing.lastAccessed = Math.max(existing.lastAccessed, mem.lastAccessed);
+            const idx = merged.indexOf(existing);
+            merged[idx] = {
+              ...existing,
+              value: mem.value.length > existing.value.length ? mem.value : existing.value,
+              confidence: Math.max(existing.confidence, mem.confidence),
+              lastAccessed: Math.max(existing.lastAccessed, mem.lastAccessed),
+            };
           } else {
             merged.push({ ...mem });
           }

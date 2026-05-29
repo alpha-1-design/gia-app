@@ -3,14 +3,15 @@ import {
   Bot, User, AlertCircle, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
-  BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, Square
+  BookOpen, Zap, Undo2, Search, RotateCcw, Headphones, Square, Folder
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import JSZip from 'jszip';
 import { ThinkingPanel } from '../components/ThinkingPanel';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
-import { useGiaStore, Message, Skill } from '../store/useGiaStore';
+import { useGiaStore, Message, Skill, ThinkingPhase } from '../store/useGiaStore';
+import { ThinkingStatus, ThinkingOverlay } from '../components/ThinkingStatus';
 import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import MessageContextMenu from '../components/MessageContextMenu';
@@ -20,6 +21,7 @@ import { useVoiceControl } from '../hooks/useVoiceControl';
 import SkillPicker from '../components/SkillPicker';
 import GiaConsole from '../components/GiaConsole';
 import { KnowledgePanel } from '../components/KnowledgePanel';
+import FileBrowser from '../components/FileBrowser';
 import { useShallow } from 'zustand/react/shallow';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { ProtocolProposal, PROTOCOL_META } from '../types/protocol';
@@ -81,10 +83,10 @@ const ProtocolBanner: React.FC<{ protocol: ProtocolProposal }> = ({ protocol }) 
         <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted)' }}>{protocol.summary}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <button onClick={() => confirm(protocol.id)} className="text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105" style={{ background: '#22c55e', color: 'white' }}>
+        <button type="button" onClick={() => confirm(protocol.id)} className="text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105" style={{ background: '#22c55e', color: 'white' }}>
           Execute
         </button>
-        <button onClick={() => reject(protocol.id)} className="text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+        <button type="button" onClick={() => reject(protocol.id)} className="text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
           Reject
         </button>
       </div>
@@ -108,11 +110,41 @@ const ChatModule: React.FC = () => {
   const [showThoughts, setShowThoughts] = useState<Set<string>>(new Set());
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
   const [showKnowledge, setShowKnowledge] = useState(false);
+  const [clarAnswer, setClarAnswer] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Response time tracking
+  const responseStartRef = useRef(0);
+  const responseTimesRef = useRef<Record<string, number>>({});
+
+  // Track last user message for desktop notifications
+  const lastUserMsgRef = useRef('');
+
+  // Desktop notification + response time tracking
+  useEffect(() => {
+    if (!loading) {
+      // Record response time for the completed message
+      if (responseStartRef.current > 0 && streamingMsgId) {
+        const elapsed = Date.now() - responseStartRef.current;
+        responseTimesRef.current[streamingMsgId] = elapsed;
+        responseStartRef.current = 0;
+      }
+
+      // Desktop notification when tab is hidden
+      if (lastUserMsgRef.current && typeof document !== 'undefined' && document.hidden) {
+        const msg = lastUserMsgRef.current;
+        lastUserMsgRef.current = '';
+        import('../services/DesktopNotifications').then(m =>
+          m.default.notifyOnComplete('GIA Response Ready', msg.length > 80 ? msg.slice(0, 80) + '…' : msg)
+        );
+      }
+    }
+  }, [loading, streamingMsgId]);
 
   // Abort in-flight requests on unmount
   useEffect(() => () => { abortRef.current?.abort(); if (abortTimeoutRef.current) clearTimeout(abortTimeoutRef.current); }, []);
@@ -133,7 +165,7 @@ const ChatModule: React.FC = () => {
     extThinking, setExtThinking,
     handsOff, setHandsOff,
     skills, activeSkillId, setSkill,
-    wakeWord
+    wakeWord, thinkingPhase, setThinkingPhase
   } = useGiaStore();
 
   const { providers, activeProvider } = useProviderStore();
@@ -141,6 +173,8 @@ const ChatModule: React.FC = () => {
   const providerLabel = PROVIDER_DEFAULTS[activeProvider]?.label ?? activeProvider;
   const providerConnected = providers[activeProvider]?.enabled ?? false;
   const activeModel = providers[activeProvider]?.model ?? '';
+  const activeSession = getActiveSession();
+  const messages = activeSession?.messages ?? [];
 
   const keepListening = useGiaStore(s => s.keepListening);
   const keepListeningRef = useRef(keepListening);
@@ -197,23 +231,11 @@ const ChatModule: React.FC = () => {
   const voiceRef = useRef(voiceControl);
   voiceRef.current = voiceControl;
 
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+
   const [showTools, setShowTools] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const activeSession = getActiveSession();
-  const messages: Message[] = activeSession?.messages ?? [];
-
-  useEffect(() => {
-    if (voiceEnabled) {
-      voiceRef.current.startListening();
-    }
-    return () => {
-      voiceRef.current.stopListening();
-    };
-  }, [voiceEnabled]);
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen') => {
-    setIsSyncing(true);
     if (feature === 'webSearch') setWebSearch(!webSearch);
     if (feature === 'extThinking') setExtThinking(!extThinking);
     if (feature === 'handsOff') setHandsOff(!handsOff);
@@ -223,9 +245,6 @@ const ChatModule: React.FC = () => {
       if (newState) voiceRef.current.startListening();
       else voiceRef.current.stopListening();
     }
-    
-    // Simulate tiny delay to show sync indicator then clear it
-    syncTimeoutRef.current = setTimeout(() => setIsSyncing(false), 300);
   }, [setWebSearch, setExtThinking, setHandsOff, webSearch, extThinking, handsOff, voiceEnabled]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, []);
@@ -233,7 +252,6 @@ const ChatModule: React.FC = () => {
   useEffect(() => {
     return () => {
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     };
   }, []);
@@ -292,7 +310,21 @@ const ChatModule: React.FC = () => {
     setLoading(false);
     setStreamingMsgId(null);
     setIntentState('idle');
-  }, [setIntentState, streamingMsgId, activeSessionId, updateMessage]);
+    setThinkingPhase('idle');
+  }, [setIntentState, setThinkingPhase, streamingMsgId, activeSessionId, updateMessage]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && loading) handleStop();
+      // Push-to-talk: Cmd+Shift+L or Ctrl+Shift+L
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key.toLowerCase() === 'l' || e.code.toLowerCase() === 'keyl')) {
+        e.preventDefault();
+        toggleFeature('listen');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [loading, handleStop, toggleFeature]);
 
   const handleContinue = useCallback(async (msgId: string) => {
     if (!activeSessionId || loading) return;
@@ -309,8 +341,10 @@ const ChatModule: React.FC = () => {
     setStreamingMsgId(asstId);
     setLoading(true);
     setIntentState('thinking');
+    setThinkingPhase(webSearch ? 'searching' : 'reasoning');
 
     const ctrl = new AbortController();
+    abortRef.current?.abort();
     abortRef.current = ctrl;
 
     try {
@@ -323,6 +357,7 @@ const ChatModule: React.FC = () => {
       let inToolBlock = false;
       let contPendingBacktickCount = 0;
       setIntentState('responding');
+      setThinkingPhase('writing');
       const contRes = await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
@@ -412,7 +447,7 @@ const ChatModule: React.FC = () => {
           thoughtsAccumulated = '';
           inThinkBlock = false;
         }
-        updateMessage(activeSessionId!, asstId, processStreamForDisplay(accumulated) || accumulated, thoughtsAccumulated || undefined);
+          updateMessage(activeSessionId!, asstId, processStreamForDisplay(accumulated) || accumulated, thoughtsAccumulated || undefined);
         if (contRes.model) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
@@ -422,7 +457,6 @@ const ChatModule: React.FC = () => {
             ),
           });
         }
-        TTSService.speak(accumulated);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -440,8 +474,9 @@ const ChatModule: React.FC = () => {
       setLoading(false);
       setStreamingMsgId(null);
       setIntentState('idle');
+      setThinkingPhase('idle');
     }
-  }, [activeSessionId, loading, getActiveSession, addMessage, updateMessage, setIntentState]);
+  }, [activeSessionId, loading, getActiveSession, addMessage, updateMessage, setIntentState, setThinkingPhase]);
 
   const handleDeleteWithUndo = useCallback((msgId: string) => {
     if (!activeSessionId) return;
@@ -521,13 +556,11 @@ const ChatModule: React.FC = () => {
     const sentAttachments = [...attachments];
     setInput('');
     setAttachments([]);
+    lastUserMsgRef.current = text || fileNames;
+    responseStartRef.current = Date.now();
     setLoading(true);
     setIntentState('thinking');
-
-    if (messages.length === 0) {
-      const titleText = text || fileNames || 'Attached files';
-      updateSessionTitle(sessionId, titleText.slice(0, 45) + (titleText.length > 45 ? '…' : ''));
-    }
+    setThinkingPhase(webSearch ? 'searching' : 'reasoning');
 
     let prompt = text;
     if (sentAttachments.length > 0) {
@@ -549,10 +582,12 @@ const ChatModule: React.FC = () => {
     setStreamingMsgId(asstId);
 
     const ctrl = new AbortController();
+    abortRef.current?.abort();
     abortRef.current = ctrl;
 
     try {
-      const history = messages
+      const currentMsgs = getActiveSession()?.messages ?? [];
+      const history = currentMsgs
         .filter(m => !m.thinking && m.content)
         .map(m => ({ role: m.role, content: m.content }));
 
@@ -566,6 +601,7 @@ const ChatModule: React.FC = () => {
       let inToolBlock = false;
       let pendingBacktickCount = 0;
       setIntentState('responding');
+      setThinkingPhase('writing');
 
       const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
 To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the file contents in \`[FILE:path] content [FILE]\` format.]\n\n` : '';
@@ -709,7 +745,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       if (res.modelSwitched && res.switchReason) {
         addNotification(res.switchReason);
       }
-      TTSService.speak(finalText);
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
@@ -727,8 +762,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       setLoading(false);
       setStreamingMsgId(null);
       setIntentState('idle');
+      setThinkingPhase('idle');
     }
-  }, [input, attachments, loading, activeSessionId, messages, webSearch, extThinking, createSession, addMessage, updateMessage, updateSessionTitle, setIntentState, handsOff]);
+  }, [input, attachments, loading, activeSessionId, messages, webSearch, extThinking, createSession, addMessage, updateMessage, updateSessionTitle, setIntentState, setThinkingPhase, handsOff]);
 
   const handleClarificationAnswer = useCallback(async (answer: string) => {
     const clarification = useGiaStore.getState().clarification;
@@ -749,15 +785,16 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     setStreamingMsgId(asstId);
 
     const ctrl = new AbortController();
+    abortRef.current?.abort();
     abortRef.current = ctrl;
     setLoading(true);
     setIntentState('responding');
 
     try {
-      const allMsgs = messages
+      const currentMsgs = getActiveSession()?.messages ?? [];
+      const history = currentMsgs
         .filter(m => !m.thinking && m.content)
         .map(m => ({ role: m.role, content: m.content }));
-      allMsgs.push({ role: 'user', content: answer });
 
       let accumulated = '';
       let thoughtsAccumulated = '';
@@ -766,7 +803,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let clarPendingBacktickCount = 0;
       await GiaBrain.generate({
         signal: ctrl.signal,
-        prompt: '', history: allMsgs,
+        prompt: answer, history,
         useWebSearch: webSearch,
         useExtendedThinking: extThinking,
         temperature: extThinking ? undefined : 0.7,
@@ -857,8 +894,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           thoughtsAccumulated = '';
           inThinkBlock = false;
         }
-        updateMessage(sessionId, asstId, processStreamForDisplay(accumulated) || accumulated, thoughtsAccumulated || undefined);
-        TTSService.speak(accumulated);
+          updateMessage(sessionId, asstId, processStreamForDisplay(accumulated) || accumulated, thoughtsAccumulated || undefined);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -876,12 +912,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       setLoading(false);
       setStreamingMsgId(null);
       setIntentState('idle');
+      setThinkingPhase('idle');
     }
-  }, [activeSessionId, messages, webSearch, extThinking, addMessage, updateMessage, setIntentState]);
+  }, [activeSessionId, messages, webSearch, extThinking, addMessage, updateMessage, setIntentState, setThinkingPhase]);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
+  const addFiles = useCallback(async (files: File[], isImage = false) => {
     if (isImage && !GiaBrain.isVisionCapable(activeModel, activeProvider)) {
       addNotification(`This provider (${providerLabel}) may not support image analysis.`);
     }
@@ -914,13 +949,97 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       });
     }
     setAttachments(prev => [...prev, ...newAtts]);
+  }, [activeModel, activeProvider, providerLabel, addNotification]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    await addFiles(files, isImage);
     e.target.value = '';
   };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    let hasImage = false;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) { hasImage = true; break; }
+    }
+    if (!hasImage) return;
+    e.preventDefault();
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          imageFiles.push(new File([file], `pasted-image-${Date.now()}.png`, { type: file.type }));
+        }
+      }
+    }
+    if (imageFiles.length > 0) addFiles(imageFiles, true);
+  }, [addFiles]);
+
+  const handleEdit = useCallback((msgId: string) => {
+    if (!activeSessionId) return;
+    const msgs = getActiveSession()?.messages ?? [];
+    const msgIndex = msgs.findIndex(m => m.id === msgId);
+    if (msgIndex < 0) return;
+    const msg = msgs[msgIndex];
+    setInput(msg.content);
+    useGiaStore.setState({
+      sessions: useGiaStore.getState().sessions.map(s =>
+        s.id === activeSessionId
+          ? { ...s, messages: s.messages.slice(0, msgIndex), updatedAt: Date.now() }
+          : s
+      ),
+    });
+  }, [activeSessionId, getActiveSession]);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (dragCounter.current === 1) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    const imageFiles: File[] = [];
+    const docFiles: File[] = [];
+    for (const file of files) {
+      if (file.type.startsWith('image/')) imageFiles.push(file);
+      else docFiles.push(file);
+    }
+    if (imageFiles.length > 0) await addFiles(imageFiles, true);
+    if (docFiles.length > 0) await addFiles(docFiles, false);
+  }, [addFiles]);
 
   const removeAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
 
   const copyMessage = async (id: string, content: string) => {
-    await navigator.clipboard.writeText(content).catch(() => {});
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      addNotification('Clipboard access denied. Use HTTPS or a supported browser.');
+    }
     setCopiedId(id);
     copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000);
   };
@@ -1003,6 +1122,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           <span className="text-xs font-medium truncate max-w-[130px]" style={{ color: 'var(--gia-muted)' }}>{activeSession?.title ?? 'New Chat'}</span>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* Voice indicator - pulsing when listening */}
+          {voiceEnabled && (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg shrink-0" style={{ background: 'rgba(236,72,153,0.15)' }}>
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#ec4899' }} />
+              <span className="text-[8px] font-medium" style={{ color: '#ec4899' }}>LIVE</span>
+            </div>
+          )}
           <div className="gia-pill flex items-center gap-1.5" style={{
             background: providerConnected ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
             color: providerConnected ? '#34d399' : '#f87171',
@@ -1014,6 +1140,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               <span className="text-[7px] opacity-50 truncate max-w-[60px]">{activeModel.split('/').pop()}</span>
             )}
           </div>
+          <button onClick={() => setShowFileBrowser(true)} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }} title="Browse files"><Folder size={13} /></button>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Download size={13} /></button>
           <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback" style={{ color: 'var(--gia-muted)' }}><Trash2 size={13} /></button>
@@ -1021,7 +1148,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto pt-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
+      <div ref={scrollRef} onScroll={handleScroll} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop} className="flex-1 overflow-y-auto pt-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight}px` }}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
@@ -1079,8 +1206,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
                   {msg.role === 'user' ? 'You' : 'GIA'}
                 </span>
-                <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }}>
-                  {formatTimeAgo(msg.timestamp)}
+                <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               <MessageContextMenu
@@ -1089,6 +1216,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 isUser={msg.role === 'user'}
                 canFork={messages.length > 0}
                 onCopy={copyMessage}
+                onEdit={handleEdit}
                 onDelete={handleDeleteWithUndo}
                 onContinue={handleContinue}
                 onFork={(id) => {
@@ -1103,6 +1231,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                   if (!originalPrompt) return;
 
                   const ctrl = new AbortController();
+                  abortRef.current?.abort();
                   abortRef.current = ctrl;
 
                   updateMessage(activeSessionId, id, '');
@@ -1162,11 +1291,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                         ),
                       });
                     }
-                  } finally {
-                    setLoading(false);
-                    setStreamingMsgId(null);
-                    setIntentState('idle');
-                  }
+                   } finally {
+                     setLoading(false);
+                     setStreamingMsgId(null);
+                     setIntentState('idle');
+                     setThinkingPhase('idle');
+                   }
                 }}
               >
                 <div 
@@ -1178,11 +1308,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 >
                   {msg.thinking ? (
                     <div>
-                      <div className="flex gap-1.5 items-center py-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
-                        <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
-                      </div>
+                      <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} />
                       {liveThoughts[msg.id] || msg.thoughts ? (
                         <ThinkingPanel
                           thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
@@ -1216,6 +1342,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                           <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
                             {msg.model ? `via ${msg.model}` : 'GIA'}
                           </span>
+                          <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
+                            {formatTimeAgo(msg.timestamp)}
+                          </span>
                           {msg.thinking ? (
                             <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
                               Thinking…
@@ -1224,11 +1353,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                             <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
                               Generating…
                             </span>
-                          ) : (
-                            <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
-                              Done
+                          ) : responseTimesRef.current[msg.id] ? (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
+                              {(responseTimesRef.current[msg.id] / 1000).toFixed(1)}s
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       )}
                       {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
@@ -1241,7 +1370,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                       ) : (
                         <div className="token-reveal">
                           <MarkdownRenderer content={msg.content} />
-                          {streamingMsgId === msg.id && msg.content && (
+                          {streamingMsgId === msg.id && msg.content && loading && (
                             <span className="stream-cursor ml-0.5">▋</span>
                           )}
                           {expandedMsgs.has(msg.id) && (
@@ -1303,11 +1432,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
             >
               <p className="text-xs font-medium mb-2.5 text-center leading-relaxed" style={{ color: 'var(--gia-text)' }}>{c.question}</p>
-              <div className="flex flex-wrap gap-2 justify-center">
+              <div className="flex flex-wrap gap-2 justify-center mb-2.5">
                 {c.options.map((opt) => (
                   <button
                     key={opt}
-                    onClick={() => handleClarificationAnswer(opt)}
+                    type="button"
+                    onClick={() => { setClarAnswer(''); handleClarificationAnswer(opt); }}
                     disabled={loading}
                     className="px-4 py-2 rounded-xl text-xs font-medium transition-all tap-feedback disabled:opacity-40"
                     style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}
@@ -1316,10 +1446,44 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                   </button>
                 ))}
               </div>
+              <div className="flex w-full gap-2">
+                <input
+                  type="text"
+                  value={clarAnswer}
+                  onChange={(e) => setClarAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && clarAnswer.trim() && !loading) {
+                      handleClarificationAnswer(clarAnswer.trim());
+                      setClarAnswer('');
+                    }
+                  }}
+                  placeholder="Type your own answer..."
+                  disabled={loading}
+                  className="flex-1 px-3 py-2 rounded-xl text-xs outline-none transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--gia-surface-1)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { handleClarificationAnswer(clarAnswer.trim()); setClarAnswer(''); }}
+                  disabled={loading || !clarAnswer.trim()}
+                  className="px-3 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-40"
+                  style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}
+                >
+                  Send
+                </button>
+              </div>
             </motion.div>
           );
         })()}
         </div>
+        {isDragging && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(168,85,247,0.08)' }}>
+            <div className="flex flex-col items-center gap-2 px-6 py-4 rounded-2xl backdrop-blur-sm" style={{ background: 'rgba(26,26,36,0.9)', border: '2px dashed rgba(168,85,247,0.4)' }}>
+              <Paperclip size={20} style={{ color: '#a855f7' }} />
+              <p className="text-xs font-medium" style={{ color: '#a855f7' }}>Drop files here</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -1331,15 +1495,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       </AnimatePresence>
 
       {loading && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          onClick={handleStop}
-          className="absolute right-4 bottom-[84px] w-8 h-8 rounded-full flex items-center justify-center shadow-lg z-10 transition-colors"
-          style={{ background: '#7c3aed', border: '1px solid rgba(168,85,247,0.4)' }}
-        >
-          <Square size={12} className="text-white" />
-        </motion.button>
+        <ThinkingOverlay phase={thinkingPhase} onStop={handleStop} />
       )}
 
       {/* Undo toast */}
@@ -1365,7 +1521,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
 
-        <div ref={inputContainerRef} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
+        <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 
@@ -1390,7 +1546,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
 
         <div className="flex items-center gap-1.5 mb-2.5">
-          <button 
+          <button type="button"
             onClick={() => setShowTools(!showTools)}
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors tap-feedback"
             style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
@@ -1409,10 +1565,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                 exit={{ width: 0, opacity: 0 }}
                 className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1"
                 >
-                <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+                <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <Paperclip size={11} /> File
                 </button>
-                <button onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+                <button type="button" onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <ImageIcon size={11} /> Photo
                 </button>
                 <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
@@ -1422,7 +1578,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                   { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
                   { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
                 ].map((tool) => (
-                  <button key={tool.label} onClick={() => toggleFeature(tool.feature)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
+                  <button type="button" key={tool.label} onClick={() => toggleFeature(tool.feature)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
                     <tool.icon size={11} />
                     {tool.label}
                   </button>
@@ -1440,9 +1596,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                     {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
                     {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
                   </div>
-                  {isSyncing && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
                   <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                    {isSyncing ? 'Syncing...' : (!webSearch && !extThinking && !handsOff) ? 'No active tools' : 'Tools active'}
+                    {(!webSearch && !extThinking && !handsOff) ? 'No active tools' : 'Tools active'}
                   </span>
                 </motion.div>
               )}
@@ -1487,6 +1642,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         )}
       </AnimatePresence>
       {showKnowledge && <KnowledgePanel onClose={() => setShowKnowledge(false)} />}
+      {showFileBrowser && <FileBrowser onClose={() => setShowFileBrowser(false)} />}
       <GiaConsole
         logs={consoleLogs}
         isVisible={showConsole}

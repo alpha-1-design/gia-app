@@ -16,8 +16,9 @@ import TTSService from '../services/TTSService';
 import BiometricService from '../services/BiometricService';
 import { isNativePlatform } from '../utils/helpers';
 import { exportBrainToFile, importBrainFromFile, loadCloudConfig, saveCloudConfig, CloudConfig } from '../services/BrainExport';
+import MCPSettings from '../components/MCPSettings';
 
-const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral', 'huggingface'];
+const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral', 'huggingface', 'ollama'];
 
 const PROVIDER_COLORS: Record<ProviderType, string> = {
   openrouter: '#6366f1',
@@ -30,6 +31,7 @@ const PROVIDER_COLORS: Record<ProviderType, string> = {
   cerebras:   '#059669',
   mistral:    '#0891b2',
   huggingface: '#fbbf24',
+  ollama: '#8b5cf6',
 };
 
 const SettingsModule: React.FC = () => {
@@ -166,6 +168,11 @@ const SettingsModule: React.FC = () => {
           <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
         </div>
       </button>
+
+      {/* MCP Servers */}
+      <div className="gia-card p-4">
+        <MCPSettings />
+      </div>
 
       {/* Theme */}
       <div className="gia-card p-4">

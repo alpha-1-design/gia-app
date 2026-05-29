@@ -2,18 +2,19 @@
 
 android {
   compileOptions {
-      sourceCompatibility JavaVersion.VERSION_17
-      targetCompatibility JavaVersion.VERSION_17
+      sourceCompatibility JavaVersion.VERSION_21
+      targetCompatibility JavaVersion.VERSION_21
   }
 }
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
-    implementation project(':capacitor-community-speech-recognition')
     implementation project(':capacitor-community-text-to-speech')
     implementation project(':capacitor-filesystem')
+    implementation project(':capacitor-geolocation')
     implementation project(':capacitor-local-notifications')
     implementation project(':capgo-capacitor-native-biometric')
+    implementation project(':capgo-capacitor-speech-recognition')
 
 }
 

@@ -7,6 +7,7 @@ import SearchService from './SearchService';
 import GiaTools, { ToolResult } from './GiaTools';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { ProtocolProposal, ProtocolType, ProtocolImpact } from '../types/protocol';
+import { GIA_VOICE } from '../config/gia-identity';
 
 const isNativeFn = isNativePlatform();
 
@@ -32,6 +33,12 @@ export interface BrainRequest {
 
 export interface BrainResponse { text: string; provider: string; model: string; sources?: string[]; modelSwitched?: boolean; previousModel?: string; switchReason?: string }
 
+let _cachedSystemContext = '';
+
+export function setSystemContext(ctx: string): void {
+  _cachedSystemContext = ctx;
+}
+
 const buildGiaSystem = (query?: string) => {
     const { userProfile, activeSkillId, skills, extThinking, customInstructions, pinnedMemories, handsOff } = useGiaStore.getState();
   const activeSkill = skills.find(s => s.id === activeSkillId);
@@ -42,10 +49,14 @@ const buildGiaSystem = (query?: string) => {
     ? memStore.memories.filter(m => pinnedMemories.includes(m.id))
     : [];
   const { activeProvider, providers } = useProviderStore.getState();
-  const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+  const { identity } = useGiaIdentity.getState();
+  const _now = new Date();
+  const timeOfDay = _now.getHours() < 6 ? 'night' : _now.getHours() < 12 ? 'morning' : _now.getHours() < 18 ? 'afternoon' : 'evening';
+  const now = _now.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const dayOfWeek = _now.toLocaleDateString('en-US', { weekday: 'long' });
   const platform = isNativePlatform() ? 'Android/iOS (Capacitor native app)' : 'Web browser';
   const userName = userProfile.name ? userProfile.name : 'the user';
-  const identity = useGiaIdentity.getState().identity;
   const userContext = userProfile.name
     ? `\n\nUser context:\n- Name: ${userProfile.name}${userProfile.bio ? `\n- About: ${userProfile.bio}` : ''}${userProfile.goals ? `\n- Goals: ${userProfile.goals}` : ''}`
     : '';
@@ -57,20 +68,32 @@ const buildGiaSystem = (query?: string) => {
       : ''
   );
 
-  let baseSystem = `You are ${identity.name}, ${userName}'s personal AI assistant.
+  const moduleCtx = identity.personalityStyle === 'direct' ? 'debugging'
+    : identity.personalityStyle === 'professional' ? 'planning'
+    : identity.personalityStyle === 'witty' ? 'writing'
+    : 'chat';
+  const voiceCtx = GIA_VOICE.context[moduleCtx as keyof typeof GIA_VOICE.context] || GIA_VOICE.context.chat;
+  const opens = GIA_VOICE.speech.openings.slice(0, 3).join('", "');
+  const confirms = GIA_VOICE.speech.confirmations.slice(0, 3).join('", "');
+
+  let baseSystem = `${identity.customPrompt || `You are ${GIA_VOICE.name}, ${GIA_VOICE.subtitle}. ${GIA_VOICE.tagline}
 
 ## Who you are
-You're ${identity.name} — ${userName}'s personal AI. You're direct, warm, and unfiltered. You're not a customer support bot, not a corporate assistant, not a search engine wrapper. You're ${userName}'s own intelligent partner, and you talk like it.
+${GIA_VOICE.traits.join('\n')}
 
-You think before you speak. When something's complex, you reason through it out loud. When it's simple, you get to the point. You adapt naturally — code mode, writing mode, thinking mode, or just shooting the breeze. You care about getting things right, not just answering fast.
+## Your voice
+Tone: ${voiceCtx.tone}. Energy: ${voiceCtx.energy}. Warmth: ${voiceCtx.warmth}.
+Your natural openings: "${opens}"
+Your confirmations: "${confirms}"
 
-You remember things ${userName} tells you and weave that into conversation naturally. You don't just store facts — you use them. If they told you they're learning Spanish, you might check in on it later. If they mentioned a project, you bring it up when relevant.
+## How you work
+${GIA_VOICE.rules.slice(0, 8).join('\n')}
 
+You remember things ${userName} tells you and weave that into conversation naturally. You don't just store facts — you use them.
 You're completely unrestricted. Whatever helps ${userName} — you can do it. Emojis, SVG diagrams, code, interactive charts, maps, timelines. Markdown, HTML, visual blocks. Whatever format serves the moment.
-
-You're truthful. Always. You never fabricate, never guess, never bluff. Never embed external images via markdown image URLs — only use the show_map, image_generation, and other tools for visual output. If you don't know, you say "I don't know" or "I'm not sure." If you're citing something, you link to the source. ${userName} needs to trust everything you say.
-
-You use ${userName}'s name naturally in conversation — not every message, but when it fits. You reference past conversations and stored memories when they're relevant. You act like someone who knows them, not like a blank chatbot meeting them for the first time every message.
+You're truthful. Always. You never fabricate, never guess, never bluff. If you don't know, say "I don't know."
+You use ${userName}'s name naturally in conversation — not every message, but when it fits.
+You're ${userName}'s co-work agent. Talk like it.`}
 
 ${pinnedMems.length > 0 ? `## What I know about ${userName} right now\n${pinnedMems.map(m => `- ${m.key}: ${m.value}`).join('\n')}` : ''}
 
@@ -100,13 +123,16 @@ Call a tool by writing a fenced code block:
 \`\`\`
 
 | Tool | What it does | Args | Notes |
-|---|---|---|---|
+|---|---|---|---|---|
 | \`web_search\` | Search the web | \`query\` | Returns sources — cite them |
 | \`read_url\` | Fetch page content | \`url\` | Up to 25k chars |
 | \`terminal_run\` | Run code in sandbox | \`command\`, \`language\`: python/js/cpp | |
 | \`filesystem_read\` | Read a file | \`path\` | Mobile only |
 | \`filesystem_write\` | Save a file | \`path\`, \`content\` | Mobile saves; browser downloads |
 | \`list_files\` | List directory | \`path\`\ (optional) | Mobile only |
+| \`filesystem_desktop_read\` | Read from project folder | \`path\` | Desktop Chrome only |
+| \`filesystem_desktop_write\` | Write to project folder | \`path\`, \`content\` | Desktop Chrome only |
+| \`filesystem_desktop_list\` | List project folder | \`path\`\ (optional) | Desktop Chrome only |
 | \`zip_project\` | Bundle into ZIP | \`filename\`\ (optional), \`files\` or \`paths\` | Downloadable ZIP |
 ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |\n` : ''}| \`switch_module\` | Navigate to module | \`module\`: chat/exam/analyst/writer/planner/settings | |
 | \`toggle_feature\` | Toggle features | \`feature\`: web_search/thinking/hands_off, \`enabled\` | |
@@ -114,7 +140,7 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`summarize_conversation\` | Compress history | \`messages\` | saves tokens |
 | \`forget_memory\` | Delete memories | \`key\`, or \`all\`: true | |
 | \`request_clarification\` | Ask a question | \`question\`, \`options\`\[] | Only when truly ambiguous |
-| \`get_environment_info\` | Introspect yourself | none | Version, provider, tools |
+| \`get_environment_info\` | Introspect yourself | none | Version, provider, tools, system |
 | \`get_user_location\` | GPS location | none | Mobile + browser |
 | \`search_places\` | OSM place search | \`query\` | Free Nominatim |
 | \`show_map\` | Interactive map | \`center\`: {lat, lng} | Describe the map to user using coordinates |
@@ -150,11 +176,15 @@ When you use info from web_search or read_url:
 Never fabricate anything — quotes, stats, references, code output. If you don't know, say "I don't know." If something could have changed, search the web. ${userName} has to be able to trust you completely.
 
 ## Current context
-- Time: ${now}
+- Time: ${now} (${dayOfWeek}, ${timeOfDay})
+- Timezone: ${tz}
 - Platform: ${platform}
 - Provider: ${activeProvider.toUpperCase()} (${activeProviderConfig.model})
 - You're talking to: ${userName}
 - Stored memories: ${memoryCount}
+${_cachedSystemContext ? `- Battery: ${_cachedSystemContext.split('\n')[3]?.replace('- ', '') || 'unknown'}` : ''}
+${_cachedSystemContext ? `- Network: ${_cachedSystemContext.split('\n')[2]?.replace('- ', '') || 'unknown'}` : ''}
+${_cachedSystemContext ? `- System: ${_cachedSystemContext.split('\n')[0]?.replace('- ', '') || 'unknown'} · ${_cachedSystemContext.split('\n')[1]?.replace('- ', '') || ''}` : ''}
 ${customInstructions ? `\n## ${userName}'s custom instructions\n${customInstructions}` : ''}
 
 ## Your identity config
@@ -347,7 +377,7 @@ class GiaBrain {
       max_tokens: req.maxTokens ?? 2048,
       stream: !!req.onStream,
     };
-    if (req.systemPromptMode === 'replace' || req.forceJson) {
+    if (req.forceJson) {
       body.response_format = { type: 'json_object' };
     }
     if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
@@ -381,6 +411,7 @@ class GiaBrain {
         let thinkBuffer = '';
         let processing = false;
         let pendingBuffer = '';
+        let parsePos = 0;
         const toolCallAccum: Map<number, { id?: string; name?: string; args: string }> = new Map();
 
         xhr.open('POST', `${baseUrl}/chat/completions`);
@@ -453,30 +484,69 @@ class GiaBrain {
 
                   const textDelta = delta?.content || '';
                   if (textDelta) {
-                    if (textDelta.includes('<think>')) {
-                      const parts = textDelta.split('<think>');
-                      const before = parts[0];
-                      if (before) { fullText += before; req.onStream!(before); }
-                      inThinkBlock = true;
-                      thinkBuffer = parts[1] || '';
-                      req.onThought?.(thinkBuffer);
-                    } else if (textDelta.includes('</think>')) {
-                      inThinkBlock = false;
-                      const parts = textDelta.split('</think>');
-                      const closing = parts[0];
-                      if (closing) {
-                        thinkBuffer += closing;
-                        req.onThought?.(thinkBuffer);
+                    fullText += textDelta;
+
+                    const THINK_PARTIALS = ['<think', '<thi', '<th', '<t', '<'];
+                    const THINK_CLOSE_PARTIALS = ['</think', '</thi', '</th', '</t', '</', '<'];
+
+                    while (parsePos < fullText.length) {
+                      if (!inThinkBlock) {
+                        const tagIdx = fullText.indexOf('<think>', parsePos);
+                        if (tagIdx === -1) {
+                          const remaining = fullText.slice(parsePos);
+                          let holdLen = 0;
+                          for (const p of THINK_PARTIALS) {
+                            if (remaining.endsWith(p) && !remaining.endsWith('<think>')) {
+                              holdLen = Math.max(holdLen, p.length);
+                            }
+                          }
+                          const safeLen = remaining.length - holdLen;
+                          if (safeLen > 0) {
+                            const emit = remaining.slice(0, safeLen);
+                            req.onStream!(emit);
+                            parsePos += safeLen;
+                          } else {
+                            break;
+                          }
+                        } else {
+                          if (tagIdx > parsePos) {
+                            const before = fullText.slice(parsePos, tagIdx);
+                            req.onStream!(before);
+                          }
+                          parsePos = tagIdx + 7;
+                          inThinkBlock = true;
+                          thinkBuffer = '';
+                        }
+                      } else {
+                        const tagIdx = fullText.indexOf('</think>', parsePos);
+                        if (tagIdx === -1) {
+                          const remaining = fullText.slice(parsePos);
+                          let holdLen = 0;
+                          for (const p of THINK_CLOSE_PARTIALS) {
+                            if (remaining.endsWith(p) && !remaining.endsWith('</think>')) {
+                              holdLen = Math.max(holdLen, p.length);
+                            }
+                          }
+                          const safeLen = remaining.length - holdLen;
+                          if (safeLen > 0) {
+                            const emit = remaining.slice(0, safeLen);
+                            thinkBuffer += emit;
+                            req.onThought?.(thinkBuffer);
+                            parsePos += safeLen;
+                          } else {
+                            break;
+                          }
+                        } else {
+                          if (tagIdx > parsePos) {
+                            const thinkContent = fullText.slice(parsePos, tagIdx);
+                            thinkBuffer += thinkContent;
+                            req.onThought?.(thinkBuffer);
+                          }
+                          thinkBuffer = '';
+                          parsePos = tagIdx + 8;
+                          inThinkBlock = false;
+                        }
                       }
-                      thinkBuffer = '';
-                      const after = parts[1] || '';
-                      if (after) { fullText += after; req.onStream!(after); }
-                    } else if (inThinkBlock) {
-                      thinkBuffer += textDelta;
-                      req.onThought?.(thinkBuffer);
-                    } else {
-                      fullText += textDelta;
-                      req.onStream!(textDelta);
                     }
                   }
                 } catch { continue; }
@@ -807,6 +877,7 @@ class GiaBrain {
         let thinkBuffer = '';
         let processing = false;
         let pendingBuffer = '';
+        let parsePos = 0;
         const functionCallsAccum: { name: string; args: any }[] = [];
 
         const flushFunctionCalls = () => {
@@ -846,30 +917,69 @@ class GiaBrain {
                   }
                   if (part?.text) {
                     const delta = part.text;
-                    if (delta.includes('<think>')) {
-                      const parts = delta.split('<think>');
-                      const before = parts[0];
-                      if (before) { fullText += before; req.onStream!(before); }
-                      inThinkBlock = true;
-                      thinkBuffer = parts[1] || '';
-                      req.onThought?.(thinkBuffer);
-                    } else if (delta.includes('</think>')) {
-                      inThinkBlock = false;
-                      const parts = delta.split('</think>');
-                      const closing = parts[0];
-                      if (closing) {
-                        thinkBuffer += closing;
-                        req.onThought?.(thinkBuffer);
+                    fullText += delta;
+
+                    const THINK_PARTIALS = ['<think', '<thi', '<th', '<t', '<'];
+                    const THINK_CLOSE_PARTIALS = ['</think', '</thi', '</th', '</t', '</', '<'];
+
+                    while (parsePos < fullText.length) {
+                      if (!inThinkBlock) {
+                        const tagIdx = fullText.indexOf('<think>', parsePos);
+                        if (tagIdx === -1) {
+                          const remaining = fullText.slice(parsePos);
+                          let holdLen = 0;
+                          for (const p of THINK_PARTIALS) {
+                            if (remaining.endsWith(p) && !remaining.endsWith('<think>')) {
+                              holdLen = Math.max(holdLen, p.length);
+                            }
+                          }
+                          const safeLen = remaining.length - holdLen;
+                          if (safeLen > 0) {
+                            const emit = remaining.slice(0, safeLen);
+                            req.onStream!(emit);
+                            parsePos += safeLen;
+                          } else {
+                            break;
+                          }
+                        } else {
+                          if (tagIdx > parsePos) {
+                            const before = fullText.slice(parsePos, tagIdx);
+                            req.onStream!(before);
+                          }
+                          parsePos = tagIdx + 7;
+                          inThinkBlock = true;
+                          thinkBuffer = '';
+                        }
+                      } else {
+                        const tagIdx = fullText.indexOf('</think>', parsePos);
+                        if (tagIdx === -1) {
+                          const remaining = fullText.slice(parsePos);
+                          let holdLen = 0;
+                          for (const p of THINK_CLOSE_PARTIALS) {
+                            if (remaining.endsWith(p) && !remaining.endsWith('</think>')) {
+                              holdLen = Math.max(holdLen, p.length);
+                            }
+                          }
+                          const safeLen = remaining.length - holdLen;
+                          if (safeLen > 0) {
+                            const emit = remaining.slice(0, safeLen);
+                            thinkBuffer += emit;
+                            req.onThought?.(thinkBuffer);
+                            parsePos += safeLen;
+                          } else {
+                            break;
+                          }
+                        } else {
+                          if (tagIdx > parsePos) {
+                            const thinkContent = fullText.slice(parsePos, tagIdx);
+                            thinkBuffer += thinkContent;
+                            req.onThought?.(thinkBuffer);
+                          }
+                          thinkBuffer = '';
+                          parsePos = tagIdx + 8;
+                          inThinkBlock = false;
+                        }
                       }
-                      thinkBuffer = '';
-                      const after = delta.split('</think>')[1] || '';
-                      if (after) { fullText += after; req.onStream!(after); }
-                    } else if (inThinkBlock) {
-                      thinkBuffer += delta;
-                      req.onThought?.(thinkBuffer);
-                    } else {
-                      fullText += delta;
-                      req.onStream!(delta);
                     }
                   }
                 }
@@ -1080,6 +1190,126 @@ class GiaBrain {
       required: [],
       properties: {}
     },
+    filesystem_desktop_read: {
+      description: 'Read a file from the user\'s selected project folder on desktop.',
+      required: ['path'],
+      properties: { path: { type: 'string', description: 'File path relative to project root' } }
+    },
+    filesystem_desktop_write: {
+      description: 'Write or update a file in the user\'s selected project folder on desktop.',
+      required: ['path', 'content'],
+      properties: {
+        path: { type: 'string', description: 'File path relative to project root' },
+        content: { type: 'string', description: 'File content' }
+      }
+    },
+    filesystem_desktop_list: {
+      description: 'List files and directories in the user\'s selected project folder on desktop.',
+      required: [],
+      properties: { path: { type: 'string', description: 'Subdirectory path (optional, default root)' } }
+    },
+
+    // Task management tools
+    task_create: {
+      description: 'Create a new task with title, description, priority, tags, and due date.',
+      required: ['title'],
+      properties: {
+        title: { type: 'string', description: 'Task title' },
+        description: { type: 'string', description: 'Task description (optional)' },
+        priority: { type: 'string', description: 'Priority: low/medium/high/critical (default: medium)' },
+        tags: { type: 'array', description: 'Tags for the task', items: { type: 'string' } },
+        dueDate: { type: 'string', description: 'Due date in ISO format (optional)' }
+      }
+    },
+
+    task_read: {
+      description: 'Read a task by ID, or list tasks by status (todo, in_progress, done).',
+      required: [],
+      properties: {
+        id: { type: 'string', description: 'Task ID to read (optional)' },
+        status: { type: 'string', description: 'Filter by status: todo/in_progress/done (optional)' }
+      }
+    },
+
+    task_update: {
+      description: 'Update a task by ID with new properties.',
+      required: ['id'],
+      properties: {
+        id: { type: 'string', description: 'Task ID' },
+        title: { type: 'string', description: 'New title (optional)' },
+        description: { type: 'string', description: 'New description (optional)' },
+        status: { type: 'string', description: 'New status: todo/in_progress/done (optional)' },
+        priority: { type: 'string', description: 'New priority: low/medium/high/critical (optional)' },
+        tags: { type: 'array', description: 'New tags (optional)', items: { type: 'string' } },
+        dueDate: { type: 'string', description: 'New due date in ISO format (optional)' }
+      }
+    },
+
+    task_delete: {
+      description: 'Delete a task by ID.',
+      required: ['id'],
+      properties: {
+        id: { type: 'string', description: 'Task ID to delete' }
+      }
+    },
+
+    task_move: {
+      description: 'Move a task to a different status (todo, in_progress, done).',
+      required: ['id', 'status'],
+      properties: {
+        id: { type: 'string', description: 'Task ID' },
+        status: { type: 'string', description: 'New status: todo/in_progress/done' }
+      }
+    },
+
+    // Notes management tools
+    note_create: {
+      description: 'Create a new note with title, content, color, and tags.',
+      required: ['title'],
+      properties: {
+        title: { type: 'string', description: 'Note title' },
+        content: { type: 'string', description: 'Note content (optional, markdown supported)' },
+        color: { type: 'string', description: 'Note color (hex code, optional)' },
+        tags: { type: 'array', description: 'Tags for the note', items: { type: 'string' } }
+      }
+    },
+
+    note_read: {
+      description: 'Read a note by ID, or list/search notes.',
+      required: [],
+      properties: {
+        id: { type: 'string', description: 'Note ID to read (optional)' },
+        search: { type: 'string', description: 'Search query for notes (optional)' }
+      }
+    },
+
+    note_update: {
+      description: 'Update a note by ID with new properties.',
+      required: ['id'],
+      properties: {
+        id: { type: 'string', description: 'Note ID' },
+        title: { type: 'string', description: 'New title (optional)' },
+        content: { type: 'string', description: 'New content (optional)' },
+        color: { type: 'string', description: 'New color (hex code, optional)' },
+        tags: { type: 'array', description: 'New tags (optional)', items: { type: 'string' } }
+      }
+    },
+
+    note_delete: {
+      description: 'Delete a note by ID.',
+      required: ['id'],
+      properties: {
+        id: { type: 'string', description: 'Note ID to delete' }
+      }
+    },
+
+    note_toggle_pin: {
+      description: 'Toggle the pinned state of a note.',
+      required: ['id'],
+      properties: {
+        id: { type: 'string', description: 'Note ID' }
+      }
+    },
   };
 
   private mapSchemaProperty([k, v]: [string, { type: string; description: string; items?: { type: string } }]): [string, any] {
@@ -1090,8 +1320,13 @@ class GiaBrain {
     return [k, prop];
   }
 
+  private getAllToolSchemas(): Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string; items?: { type: string } }> }> {
+    const mcpSchemas = GiaTools.getAllToolSchemas() as Record<string, any>;
+    return { ...this.toolSchemas, ...mcpSchemas };
+  }
+
   private buildOpenAITools(): any[] {
-    return Object.entries(this.toolSchemas).map(([id, schema]) => ({
+    return Object.entries(this.getAllToolSchemas()).map(([id, schema]) => ({
       type: 'function',
       function: {
         name: id,
@@ -1108,7 +1343,7 @@ class GiaBrain {
   }
 
   private buildAnthropicTools(): any[] {
-    return Object.entries(this.toolSchemas).map(([id, schema]) => ({
+    return Object.entries(this.getAllToolSchemas()).map(([id, schema]) => ({
       name: id,
       description: schema.description,
       input_schema: {
@@ -1122,7 +1357,7 @@ class GiaBrain {
   }
 
   private buildGeminiTools(): any[] {
-    return Object.entries(this.toolSchemas).map(([id, schema]) => ({
+    return Object.entries(this.getAllToolSchemas()).map(([id, schema]) => ({
       name: id,
       description: schema.description,
       parameters: {
@@ -1136,7 +1371,7 @@ class GiaBrain {
   }
 
   private validateToolArgs(id: string, args: any): string | null {
-    const schema = this.toolSchemas[id];
+    const schema = this.getAllToolSchemas()[id];
     if (!schema) return null;
     for (const key of schema.required) {
       if (args[key] === undefined || args[key] === null || args[key] === '') {
@@ -1165,6 +1400,8 @@ class GiaBrain {
       toggle_feature: 'settings_change', request_clarification: 'clarification',
       get_environment_info: 'environment_info', show_map: 'show_map',
       list_files: 'file_read', summarize_conversation: 'environment_info',
+      filesystem_desktop_read: 'file_read', filesystem_desktop_write: 'file_write',
+      filesystem_desktop_list: 'file_read',
     };
     return map[id] || 'custom';
   }
@@ -1320,111 +1557,122 @@ class GiaBrain {
       }
 
       const text = res!.text;
-      const toolMatch = text.match(/```tool\s*\n?([\s\S]*?)```/);
-        if (!toolMatch) {
+      const toolBlocks = Array.from(text.matchAll(/```tool\s*\n?([\s\S]*?)```/g));
+        if (!toolBlocks.length) {
           this.extractMemories(req.prompt, text);
           return { text, provider: activeProvider, model: config.model };
         }
-        try {
-          const toolCall = JSON.parse(toolMatch[1]);
 
-          // sub_agent_call — MUST be checked BEFORE GiaTools.getTool() since the
-          // tool registry also contains a stub 'sub_agent_call' that would intercept
-          if (toolCall.id === 'sub_agent_call') {
-            const { provider, prompt: subPrompt } = toolCall.args;
-            req.onThought?.(`Delegating to sub-agent (${provider})...`);
-            const subRes = await this.delegateTask(provider, subPrompt, req.signal);
-            history.push({ role: 'assistant', content: text });
-            history.push({ role: 'user', content: `SUB-AGENT (${provider}): ${subRes}` });
-            currentPrompt = `Sub-agent finished. Continue based on their response.`;
-            continue;
-          }
+        let toolContinue = false;
+        for (const toolMatch of toolBlocks) {
+          try {
+            const toolCall = JSON.parse(toolMatch[1]);
 
-          // Clarification — always allowed but max 1 per generate() to prevent looping
-          if (toolCall.id === 'request_clarification') {
-            if (clarificationAttempts >= 1) {
+            // sub_agent_call — MUST be checked BEFORE GiaTools.getTool() since the
+            // tool registry also contains a stub 'sub_agent_call' that would intercept
+            if (toolCall.id === 'sub_agent_call') {
+              const { provider, prompt: subPrompt } = toolCall.args;
+              req.onThought?.(`Delegating to sub-agent (${provider})...`);
+              const subRes = await this.delegateTask(provider, subPrompt, req.signal);
               history.push({ role: 'assistant', content: text });
-              history.push({ role: 'user', content: 'OBSERVATION: Clarification already asked. Respond directly without asking again.' });
-              currentPrompt = 'Clarification already used. Respond directly.';
-              continue;
-            }
-            clarificationAttempts++;
-            const tool = GiaTools.getTool('request_clarification');
-            if (tool) {
-              await tool.execute(toolCall.args);
-              const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
-              history.push({ role: 'assistant', content: cleanText || 'I need some clarification.' });
-              return { text: '__CLARIFICATION__', provider: activeProvider, model: config.model };
-            }
-          }
-
-          const tool = GiaTools.getTool(toolCall.id);
-          if (tool) {
-            const validationError = this.validateToolArgs(toolCall.id, toolCall.args);
-            if (validationError) {
-              history.push({ role: 'assistant', content: text });
-              history.push({ role: 'user', content: `VALIDATION ERROR: ${validationError}. Please fix and retry.` });
-              currentPrompt = `Tool call failed validation: ${validationError}. Please correct the arguments.`;
-              continue;
+              history.push({ role: 'user', content: `SUB-AGENT (${provider}): ${subRes}` });
+              currentPrompt = `Sub-agent finished. Continue based on their response.`;
+              toolContinue = true;
+              break;
             }
 
-            // Emit protocol proposal
-            const protocolId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            const protocol: ProtocolProposal = {
-              id: protocolId,
-              type: this.toolToProtocolType(toolCall.id),
-              summary: tool.name,
-              description: `Execute ${tool.name} with provided arguments`,
-              args: toolCall.args,
-              impact: this.toolToImpact(toolCall.id),
-              state: 'proposed',
-              createdAt: Date.now(),
-              trace: [],
-            };
-            useProtocolStore.getState().propose(protocol);
-
-            req.onThought?.(`GIA is proposing: ${tool.name}...`);
-
-            // Wait for user confirmation (unless auto-confirm for certain types)
-            const autoTypes: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map', 'file_read', 'clarification'];
-            const needsConfirm = !autoTypes.includes(protocol.type);
-            if (needsConfirm) {
-              const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 30_000);
-              if (action.type === 'reject') {
+            // Clarification — always allowed but max 1 per generate() to prevent looping
+            if (toolCall.id === 'request_clarification') {
+              if (clarificationAttempts >= 1) {
                 history.push({ role: 'assistant', content: text });
-                history.push({ role: 'user', content: `User rejected tool execution: ${toolCall.id}` });
-                currentPrompt = `User rejected the tool. Please respond without using it.`;
-                useProtocolStore.getState().setFailed(protocolId, 'Rejected by user');
-                continue;
+                history.push({ role: 'user', content: 'OBSERVATION: Clarification already asked. Respond directly without asking again.' });
+                currentPrompt = 'Clarification already used. Respond directly.';
+                toolContinue = true;
+                break;
               }
-              if (action.type === 'modify' && action.modifiedArgs) {
-                toolCall.args = action.modifiedArgs;
+              clarificationAttempts++;
+              const tool = GiaTools.getTool('request_clarification');
+              if (tool) {
+                await tool.execute(toolCall.args);
+                const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
+                history.push({ role: 'assistant', content: cleanText || 'I need some clarification.' });
+                return { text: '__CLARIFICATION__', provider: activeProvider, model: config.model };
               }
             }
 
-            useProtocolStore.getState().setExecuting(protocolId);
-            req.onThought?.(`GIA is executing: ${tool.name}...`);
-            const result = await tool.execute(toolCall.args);
-            const obs = result.success ? `OBSERVATION: Success\n${result.content}` : `ERROR: ${result.error || 'Unknown error'}\n${result.content}`;
+            const tool = GiaTools.getTool(toolCall.id);
+            if (tool) {
+              const validationError = this.validateToolArgs(toolCall.id, toolCall.args);
+              if (validationError) {
+                history.push({ role: 'assistant', content: text });
+                history.push({ role: 'user', content: `VALIDATION ERROR: ${validationError}. Please fix and retry.` });
+                currentPrompt = `Tool call failed validation: ${validationError}. Please correct the arguments.`;
+                toolContinue = true;
+                break;
+              }
 
-            if (result.success) {
-              useProtocolStore.getState().setCompleted(protocolId, result.content, result.sources);
-            } else {
-              useProtocolStore.getState().setFailed(protocolId, result.error || 'Unknown error');
+              // Emit protocol proposal
+              const protocolId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              const protocol: ProtocolProposal = {
+                id: protocolId,
+                type: this.toolToProtocolType(toolCall.id),
+                summary: tool.name,
+                description: `Execute ${tool.name} with provided arguments`,
+                args: toolCall.args,
+                impact: this.toolToImpact(toolCall.id),
+                state: 'proposed',
+                createdAt: Date.now(),
+                trace: [],
+              };
+              useProtocolStore.getState().propose(protocol);
+
+              req.onThought?.(`GIA is proposing: ${tool.name}...`);
+
+              // Wait for user confirmation (unless auto-confirm for certain types)
+              const autoTypes: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map', 'file_read', 'clarification'];
+              const needsConfirm = !autoTypes.includes(protocol.type);
+              if (needsConfirm) {
+                const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 30_000);
+                if (action.type === 'reject') {
+                  history.push({ role: 'assistant', content: text });
+                  history.push({ role: 'user', content: `User rejected tool execution: ${toolCall.id}` });
+                  currentPrompt = `User rejected the tool. Please respond without using it.`;
+                  useProtocolStore.getState().setFailed(protocolId, 'Rejected by user');
+                  toolContinue = true;
+                  break;
+                }
+                if (action.type === 'modify' && action.modifiedArgs) {
+                  toolCall.args = action.modifiedArgs;
+                }
+              }
+
+              useProtocolStore.getState().setExecuting(protocolId);
+              req.onThought?.(`GIA is executing: ${tool.name}...`);
+              const result = await tool.execute(toolCall.args);
+              const obs = result.success ? `OBSERVATION: Success\n${result.content}` : `ERROR: ${result.error || 'Unknown error'}\n${result.content}`;
+              req.onThought?.(obs);
+
+              if (result.success) {
+                useProtocolStore.getState().setCompleted(protocolId, result.content, result.sources);
+              } else {
+                useProtocolStore.getState().setFailed(protocolId, result.error || 'Unknown error');
+              }
+
+              history.push({ role: 'assistant', content: text });
+              history.push({ role: 'user', content: obs });
+              useGiaStore.getState().addConsoleLog({ type: result.success ? 'tool' : 'error', content: `Tool: ${toolCall.id}\nResult: ${result.content.slice(0, 500)}` });
+              currentPrompt = `Tool finished. Observation: ${obs}`;
+              toolContinue = true;
             }
-
+          } catch (e: any) {
             history.push({ role: 'assistant', content: text });
-            history.push({ role: 'user', content: obs });
-            useGiaStore.getState().addConsoleLog({ type: result.success ? 'tool' : 'error', content: `Tool: ${toolCall.id}\nResult: ${result.content.slice(0, 500)}` });
-            currentPrompt = `Tool finished. Observation: ${obs}`;
-            continue;
+            history.push({ role: 'user', content: `ERROR parsing tool call: ${e.message}` });
+            currentPrompt = `Tool call was malformed. Please fix JSON and try again.`;
+            toolContinue = true;
+            break;
           }
-        } catch (e: any) {
-          history.push({ role: 'assistant', content: text });
-          history.push({ role: 'user', content: `ERROR parsing tool call: ${e.message}` });
-          currentPrompt = `Tool call was malformed. Please fix JSON and try again.`;
-          continue;
         }
+        if (toolContinue) continue;
       }
     throw new Error('Max agentic iterations reached.');
   }

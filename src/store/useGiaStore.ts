@@ -4,6 +4,7 @@ import { idbStorage } from './idb-storage';
 
 export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
+export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 
 export interface Message {
   id: string;
@@ -86,6 +87,7 @@ interface GiaState {
   webSearch: boolean;
   extThinking: boolean;
   handsOff: boolean;
+  thinkingPhase: ThinkingPhase;
   clarification: Clarification | null;
   wakeWord: string;
   keepListening: boolean;
@@ -100,6 +102,7 @@ interface GiaState {
   setWebSearch: (enabled: boolean) => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
+  setThinkingPhase: (phase: ThinkingPhase) => void;
   setWakeWord: (word: string) => void;
   setKeepListening: (on: boolean) => void;
   setSharedData: (data: Record<string, unknown>) => void;
@@ -223,6 +226,7 @@ export const useGiaStore = create<GiaState>()(
       webSearch: false,
       extThinking: false,
       handsOff: false,
+      thinkingPhase: 'idle',
       clarification: null,
       wakeWord: localStorage.getItem('gia-wake-word') || 'hey gia',
       keepListening: localStorage.getItem('gia-keep-listening') !== 'false',
@@ -237,6 +241,7 @@ export const useGiaStore = create<GiaState>()(
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
       setHandsOff: (enabled) => set({ handsOff: enabled }),
+      setThinkingPhase: (phase) => set({ thinkingPhase: phase }),
       setWakeWord: (word) => {
         localStorage.setItem('gia-wake-word', word);
         set({ wakeWord: word });

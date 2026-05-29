@@ -140,7 +140,7 @@ export function importBrainFromFile(file: File): Promise<{ success: boolean; mes
 
         const giaStore = useGiaStore.getState();
         if (data.pinnedMemories.length > 0) {
-          giaStore.pinnedMemories = data.pinnedMemories;
+          useGiaStore.setState({ pinnedMemories: data.pinnedMemories });
         }
         if (data.skills.length > 0) {
           data.skills.forEach((s) => {

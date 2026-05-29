@@ -77,7 +77,11 @@ const WriterModule: React.FC = () => {
   }, [prompt, format, wordTarget, loading, setIntentState]);
 
   const copyDraft = async () => {
-    await navigator.clipboard.writeText(draft).catch(() => {});
+    try {
+      await navigator.clipboard.writeText(draft);
+    } catch {
+      addNotification('Clipboard access denied. Use HTTPS or a supported browser.');
+    }
     setCopied(true);
     timerRef.current = setTimeout(() => setCopied(false), 2000);
   };

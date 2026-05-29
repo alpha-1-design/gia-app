@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 
-export type ProviderType = 'openrouter' | 'anthropic' | 'openai' | 'gemini' | 'groq' | 'opencode' | 'deepseek' | 'cerebras' | 'mistral' | 'huggingface';
+export type ProviderType = 'openrouter' | 'anthropic' | 'openai' | 'gemini' | 'groq' | 'opencode' | 'deepseek' | 'cerebras' | 'mistral' | 'huggingface' | 'ollama';
 
 export interface ModelOption {
   id: string;
@@ -31,6 +31,7 @@ export const PROVIDER_DEFAULTS: Record<ProviderType, { model: string; label: str
   cerebras:   { model: 'llama-3.1-8b',               label: 'Cerebras',   baseUrl: 'https://api.cerebras.ai/v1' },
   mistral:    { model: 'mistral-small-latest',        label: 'Mistral',    baseUrl: 'https://api.mistral.ai/v1' },
   huggingface: { model: 'microsoft/Phi-4-mini-instruct', label: 'HuggingFace', baseUrl: 'https://api-inference.huggingface.co/v1' },
+  ollama: { model: 'llama3.2', label: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1' },
 };
 
 // Static fallback model lists (used when API fetch fails or key not yet set)
@@ -115,6 +116,18 @@ export const STATIC_MODELS: Record<ProviderType, ModelOption[]> = {
     { id: 'microsoft/Phi-3.5-mini-instruct',            label: 'Phi-3.5 Mini',          free: true,  context: '128k', tools: true,  vision: false },
     { id: 'NousResearch/Hermes-3-Llama-3.1-8B',         label: 'Hermes 3 8B',           free: true,  context: '128k', tools: true,  vision: false },
   ],
+  ollama: [
+    { id: 'llama3.2',           label: 'Llama 3.2',           free: true, context: '128k', tools: true, vision: false },
+    { id: 'llama3.1',           label: 'Llama 3.1',           free: true, context: '128k', tools: true, vision: false },
+    { id: 'mistral',            label: 'Mistral',             free: true, context: '32k',  tools: true, vision: false },
+    { id: 'gemma3',             label: 'Gemma 3',             free: true, context: '128k', tools: true, vision: true  },
+    { id: 'qwen2.5',            label: 'Qwen 2.5',            free: true, context: '128k', tools: true, vision: false },
+    { id: 'phi4',               label: 'Phi-4',               free: true, context: '16k',  tools: true, vision: false },
+    { id: 'deepseek-r1',        label: 'DeepSeek R1',         free: true, context: '128k', tools: true, vision: false },
+    { id: 'codellama',          label: 'Code Llama',          free: true, context: '16k',  tools: true, vision: false },
+    { id: 'llama3.2-vision',    label: 'Llama 3.2 Vision',    free: true, context: '128k', tools: true, vision: true  },
+    { id: 'mistral-nemo',       label: 'Mistral Nemo',        free: true, context: '128k', tools: true, vision: false },
+  ],
 };
 
 interface GiaProviderState {
@@ -145,7 +158,9 @@ export const useProviderStore = create<GiaProviderState>()(
 
       setProviderKey: (p, key) =>
         set((s) => {
-          const enabled = key.trim().length > 0;
+          // Ollama doesn't need an API key (local server)
+          const needsKey = p !== 'ollama';
+          const enabled = needsKey ? key.trim().length > 0 : true;
           const providers = { ...s.providers, [p]: { ...s.providers[p], apiKey: key, enabled } };
           // Auto-switch to this provider if it's newly enabled and no other provider is active
           const activeProvider = enabled && !s.providers[p].enabled
@@ -175,7 +190,8 @@ export const useProviderStore = create<GiaProviderState>()(
       fetchModels: async (p): Promise<ModelOption[]> => {
         const { providers } = get();
         const config = providers[p];
-        if (!config.apiKey) return STATIC_MODELS[p];
+        // Ollama can work without an API key (local server)
+        if (!config.apiKey && p !== 'ollama') return STATIC_MODELS[p];
 
         try {
           const { baseUrl } = PROVIDER_DEFAULTS[p];
@@ -188,6 +204,30 @@ export const useProviderStore = create<GiaProviderState>()(
 
           // HuggingFace Inference API also lacks a public model listing endpoint
           if (p === 'huggingface') {
+            set((s) => ({ availableModels: { ...s.availableModels, [p]: STATIC_MODELS[p] } }));
+            return STATIC_MODELS[p];
+          }
+
+          // Ollama uses a different API endpoint for model listing
+          if (p === 'ollama') {
+            try {
+              const res = await fetch('http://localhost:11434/api/tags');
+              if (res.ok) {
+                const json = await res.json();
+                const data = (json.models || []).map((m: any) => ({
+                  id: m.name,
+                  label: m.name,
+                  free: true,
+                  context: m.details?.parameter_size || '?',
+                  tools: true,
+                  vision: m.name?.toLowerCase().includes('vision') || false,
+                }));
+                if (data.length > 0) {
+                  set((s) => ({ availableModels: { ...s.availableModels, [p]: data } }));
+                  return data;
+                }
+              }
+            } catch {}
             set((s) => ({ availableModels: { ...s.availableModels, [p]: STATIC_MODELS[p] } }));
             return STATIC_MODELS[p];
           }

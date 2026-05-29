@@ -55,7 +55,9 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   }, [value, multiline]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    const isCmdEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
+    const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey;
+    if (isPlainEnter || isCmdEnter) {
       e.preventDefault();
       if (!value.trim() || isLoading || disabled) return;
       onSubmit();

@@ -148,14 +148,18 @@ class CodeRunner {
         const onAbort = () => controller.abort();
         signal?.addEventListener('abort', onAbort);
 
-        const res = await fetch(this.getEndpoint(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        signal?.removeEventListener('abort', onAbort);
+        let res;
+        try {
+          res = await fetch(this.getEndpoint(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+          signal?.removeEventListener('abort', onAbort);
+        }
         if (!res.ok) {
           const errText = await res.text().catch(() => 'Unknown error');
           if (res.status === 401) throw new Error('Piston API requires authentication. Set an API key in Settings → Code Execution, or self-host Piston (github.com/engineer-man/piston).');

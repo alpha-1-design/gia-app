@@ -49,7 +49,7 @@ class ImageService {
     const config = providers[targetProvider];
     const targetDefaults = PROVIDER_DEFAULTS[targetProvider];
     if (!targetDefaults) return { url: '', error: `${targetProvider} is not fully configured.` };
-    const { baseUrl } = targetDefaults
+    const { baseUrl } = targetDefaults;
     const imageModel = IMAGE_MODELS[targetProvider];
 
     if (!imageModel) {

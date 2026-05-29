@@ -1,6 +1,8 @@
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import CodeRunner from './CodeRunner';
 import { useGiaStore } from '../store/useGiaStore';
+import { useTaskStore } from '../store/useTaskStore';
+import { useNotesStore, randomNoteColor } from '../store/useNotesStore';
 import { PROVIDER_DEFAULTS } from '../store/useProviderStore';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -63,6 +65,11 @@ export interface Tool {
   id: string;
   name: string;
   description: string;
+  schema?: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
   execute: (args: any) => Promise<ToolResult>;
 }
 
@@ -184,6 +191,7 @@ class GiaTools {
               inlineImages: true, streamingResponses: true, zipBundling: true,
               fileDownloads: !native,
               filesystemAccess: native,
+              desktopFilesystemAccess: typeof window !== 'undefined' && 'showDirectoryPicker' in window,
             },
             memory: (await import('../store/useMemoryStore')).useMemoryStore.getState().memories.length,
             skills: store.skills?.length || 0,
@@ -490,6 +498,307 @@ class GiaTools {
         return { success: false, content: '', error: 'File upload must be done manually in Settings > Brain Export. Tell the user to go there.' };
       }
     });
+
+    this.tools.set('filesystem_desktop_read', {
+      id: 'filesystem_desktop_read', name: 'filesystem_desktop_read',
+      description: 'Read a file from the user\'s selected project folder on desktop. Requires folder to be pre-selected via the UI button.',
+      execute: async ({ path }) => {
+        const DesktopFS = (await import('./DesktopFS')).default;
+        if (!DesktopFS.isAvailable) {
+          return { success: false, content: '', error: 'Desktop filesystem access requires a Chromium-based browser.' };
+        }
+        if (!DesktopFS.hasHandle) {
+          return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
+        }
+        const pathErr = isPathSafe(path);
+        if (pathErr) return { success: false, content: '', error: pathErr };
+        try {
+          const content = await DesktopFS.readFile(path);
+          if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+          return { success: true, content };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
+    this.tools.set('filesystem_desktop_write', {
+      id: 'filesystem_desktop_write', name: 'filesystem_desktop_write',
+      description: 'Write or update a file in the user\'s selected project folder on desktop.',
+      execute: async ({ path, content }) => {
+        const DesktopFS = (await import('./DesktopFS')).default;
+        if (!DesktopFS.isAvailable) {
+          return { success: false, content: '', error: 'Desktop filesystem access requires a Chromium-based browser.' };
+        }
+        if (!DesktopFS.hasHandle) {
+          return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
+        }
+        const pathErr = isPathSafe(path);
+        if (pathErr) return { success: false, content: '', error: pathErr };
+        if (content && content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+        try {
+          await DesktopFS.writeFile(path, content);
+          return { success: true, content: `File written to ${DesktopFS.rootName || 'project'}/${path}` };
+        } catch (e: any) {
+          return { success: false, content: '', error: e.message };
+        }
+      }
+    });
+
+     this.tools.set('filesystem_desktop_list', {
+       id: 'filesystem_desktop_list', name: 'filesystem_desktop_list',
+       description: 'List files and directories in the user\'s selected project folder on desktop.',
+       execute: async ({ path = '' }) => {
+         const DesktopFS = (await import('./DesktopFS')).default;
+         if (!DesktopFS.isAvailable) {
+           return { success: false, content: '', error: 'Desktop filesystem access requires a Chromium-based browser.' };
+         }
+         if (!DesktopFS.hasHandle) {
+           return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
+         }
+         try {
+           const entries = await DesktopFS.listFiles(path);
+           const lines = entries.map(e =>
+             `${e.kind === 'directory' ? '📁' : '📄'} ${e.name}`
+           );
+           const desc = path ? `Contents of "${path}":` : `Contents of "${DesktopFS.rootName || 'project'}":`;
+           return { success: true, content: `${desc}\n${lines.join('\n')}` };
+         } catch (e: any) {
+           return { success: false, content: '', error: e.message };
+         }
+       }
+     });
+
+     // Task management tools
+     this.tools.set('task_create', {
+       id: 'task_create', name: 'task_create',
+       description: 'Create a new task with title, description, priority, tags, and due date.',
+       execute: async ({ title, description = '', priority = 'medium', tags = [], dueDate = null }) => {
+         const store = useTaskStore.getState();
+         if (!title || !title.trim()) {
+           return { success: false, content: '', error: 'Task title is required' };
+         }
+         const id = store.addTask({
+           title: title.trim(),
+           description,
+           status: 'todo',
+           priority: priority as 'low' | 'medium' | 'high' | 'critical',
+           tags: Array.isArray(tags) ? tags : [],
+           dueDate: dueDate || null,
+         });
+         return { success: true, content: `Created task "${title}" with ID: ${id}` };
+       }
+     });
+
+     this.tools.set('task_read', {
+       id: 'task_read', name: 'task_read',
+       description: 'Read a task by ID, or list tasks by status (todo, in_progress, done).',
+       execute: async ({ id = null, status = null }) => {
+         const store = useTaskStore.getState();
+         if (id) {
+           const task = store.tasks.find(t => t.id === id);
+           if (!task) {
+             return { success: false, content: '', error: `Task with ID ${id} not found` };
+           }
+           return {
+             success: true,
+             content: JSON.stringify({
+               id: task.id,
+               title: task.title,
+               description: task.description,
+               status: task.status,
+               priority: task.priority,
+               tags: task.tags,
+               dueDate: task.dueDate,
+               createdAt: task.createdAt,
+               updatedAt: task.updatedAt
+             }, null, 2)
+           };
+         } else {
+           const tasks = status
+             ? store.getTasksByStatus(status as 'todo' | 'in_progress' | 'done')
+             : store.tasks;
+           return {
+             success: true,
+             content: JSON.stringify(tasks.map(t => ({
+               id: t.id,
+               title: t.title,
+               status: t.status,
+               priority: t.priority,
+               tags: t.tags
+             })), null, 2)
+           };
+         }
+       }
+     });
+
+     this.tools.set('task_update', {
+       id: 'task_update', name: 'task_update',
+       description: 'Update a task by ID with new properties.',
+       execute: async ({ id, title, description, status, priority, tags, dueDate }) => {
+         const store = useTaskStore.getState();
+         const task = store.tasks.find(t => t.id === id);
+         if (!task) {
+           return { success: false, content: '', error: `Task with ID ${id} not found` };
+         }
+         const updates: any = {};
+         if (title !== undefined) updates.title = title;
+         if (description !== undefined) updates.description = description;
+         if (status !== undefined) updates.status = status;
+         if (priority !== undefined) updates.priority = priority;
+         if (tags !== undefined) updates.tags = tags;
+         if (dueDate !== undefined) updates.dueDate = dueDate;
+         if (Object.keys(updates).length === 0) {
+           return { success: false, content: '', error: 'No updates provided' };
+         }
+         store.updateTask(id, updates);
+         return { success: true, content: `Updated task ${id}` };
+       }
+     });
+
+     this.tools.set('task_delete', {
+       id: 'task_delete', name: 'task_delete',
+       description: 'Delete a task by ID.',
+       execute: async ({ id }) => {
+         const store = useTaskStore.getState();
+         const task = store.tasks.find(t => t.id === id);
+         if (!task) {
+           return { success: false, content: '', error: `Task with ID ${id} not found` };
+         }
+         store.deleteTask(id);
+         return { success: true, content: `Deleted task "${task.title}"` };
+       }
+     });
+
+     this.tools.set('task_move', {
+       id: 'task_move', name: 'task_move',
+       description: 'Move a task to a different status (todo, in_progress, done).',
+       execute: async ({ id, status }) => {
+         const store = useTaskStore.getState();
+         const task = store.tasks.find(t => t.id === id);
+         if (!task) {
+           return { success: false, content: '', error: `Task with ID ${id} not found` };
+         }
+         if (!['todo', 'in_progress', 'done'].includes(status)) {
+           return { success: false, content: '', error: `Invalid status: ${status}` };
+         }
+         store.moveTask(id, status as 'todo' | 'in_progress' | 'done');
+         return { success: true, content: `Moved task "${task.title}" to ${status}` };
+       }
+     });
+
+     // Notes management tools
+     this.tools.set('note_create', {
+       id: 'note_create', name: 'note_create',
+       description: 'Create a new note with title, content, color, and tags.',
+       execute: async ({ title, content = '', color = '', tags = [] }) => {
+         const store = useNotesStore.getState();
+         if (!title || !title.trim()) {
+           return { success: false, content: '', error: 'Note title is required' };
+         }
+         const id = store.addNote({
+           title: title.trim(),
+           content,
+           color: color || randomNoteColor(),
+           pinned: false,
+           tags: Array.isArray(tags) ? tags : [],
+         });
+         return { success: true, content: `Created note "${title}" with ID: ${id}` };
+       }
+     });
+
+     this.tools.set('note_read', {
+       id: 'note_read', name: 'note_read',
+       description: 'Read a note by ID, or list/search notes.',
+       execute: async ({ id = null, search = null }) => {
+         const store = useNotesStore.getState();
+         if (id) {
+           const note = store.getNote(id);
+           if (!note) {
+             return { success: false, content: '', error: `Note with ID ${id} not found` };
+           }
+           return {
+             success: true,
+             content: JSON.stringify({
+               id: note.id,
+               title: note.title,
+               content: note.content,
+               color: note.color,
+               pinned: note.pinned,
+               tags: note.tags,
+               createdAt: note.createdAt,
+               updatedAt: note.updatedAt
+             }, null, 2)
+           };
+         } else {
+           let notes = store.notes;
+           if (search && typeof search === 'string') {
+             notes = store.searchNotes(search);
+           }
+           return {
+             success: true,
+             content: JSON.stringify(notes.map(n => ({
+               id: n.id,
+               title: n.title,
+               content: n.content.substring(0, 200) + (n.content.length > 200 ? '...' : ''),
+               color: n.color,
+               pinned: n.pinned,
+               tags: n.tags
+           })), null, 2)
+           };
+         }
+       }
+     });
+
+     this.tools.set('note_update', {
+       id: 'note_update', name: 'note_update',
+       description: 'Update a note by ID with new properties.',
+       execute: async ({ id, title, content, color, tags }) => {
+         const store = useNotesStore.getState();
+         const note = store.getNote(id);
+         if (!note) {
+           return { success: false, content: '', error: `Note with ID ${id} not found` };
+         }
+         const updates: any = {};
+         if (title !== undefined) updates.title = title;
+         if (content !== undefined) updates.content = content;
+         if (color !== undefined) updates.color = color;
+         if (tags !== undefined) updates.tags = tags;
+         if (Object.keys(updates).length === 0) {
+           return { success: false, content: '', error: 'No updates provided' };
+         }
+         store.updateNote(id, updates);
+         return { success: true, content: `Updated note ${id}` };
+       }
+     });
+
+     this.tools.set('note_delete', {
+       id: 'note_delete', name: 'note_delete',
+       description: 'Delete a note by ID.',
+       execute: async ({ id }) => {
+         const store = useNotesStore.getState();
+         const note = store.getNote(id);
+         if (!note) {
+           return { success: false, content: '', error: `Note with ID ${id} not found` };
+         }
+         store.deleteNote(id);
+         return { success: true, content: `Deleted note "${note.title}"` };
+       }
+     });
+
+     this.tools.set('note_toggle_pin', {
+       id: 'note_toggle_pin', name: 'note_toggle_pin',
+       description: 'Toggle the pinned state of a note.',
+       execute: async ({ id }) => {
+         const store = useNotesStore.getState();
+         const note = store.getNote(id);
+         if (!note) {
+           return { success: false, content: '', error: `Note with ID ${id} not found` };
+         }
+         store.togglePin(id);
+         return { success: true, content: `Toggled pin for note "${note.title}"` };
+       }
+     });
   }
 
   getTool(id: string): Tool | undefined {
@@ -498,6 +807,32 @@ class GiaTools {
 
   getAllTools() {
     return Array.from(this.tools.values());
+  }
+
+  registerTool(tool: Tool): void {
+    this.tools.set(tool.id, tool);
+  }
+
+  unregisterTool(id: string): void {
+    this.tools.delete(id);
+  }
+
+  getToolSchema(id: string): Tool['schema'] {
+    return this.tools.get(id)?.schema;
+  }
+
+  getAllToolSchemas(): Record<string, { description: string; properties: Record<string, unknown>; required?: string[] }> {
+    const result: Record<string, any> = {};
+    for (const [id, tool] of this.tools) {
+      if (tool.schema) {
+        result[id] = {
+          description: tool.description,
+          properties: tool.schema.properties,
+          required: tool.schema.required,
+        };
+      }
+    }
+    return result;
   }
 }
 
