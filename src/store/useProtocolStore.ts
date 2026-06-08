@@ -17,7 +17,7 @@ interface ProtocolStore {
   propose: (p: ProtocolProposal) => void;
   confirm: (protocolId: string) => void;
   reject: (protocolId: string) => void;
-  modify: (protocolId: string, args: Record<string, any>) => void;
+  modify: (protocolId: string, args: Record<string, unknown>) => void;
   setExecuting: (protocolId: string) => void;
   setCompleted: (protocolId: string, result: string, sources?: { title: string; url: string }[]) => void;
   setFailed: (protocolId: string, error: string) => void;

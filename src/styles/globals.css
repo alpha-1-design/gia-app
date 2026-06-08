@@ -31,6 +31,7 @@
   --mod-planner:  16, 185, 129;   /* emerald */
   --mod-settings: 148, 163, 184;  /* slate */
   --mod-exam:     245, 158, 11;   /* amber */
+  --mod-autonomy: 52, 211, 153;   /* emerald */
 
   /* Ambient glow system */
   --glow-color:   var(--mod-chat);
@@ -69,6 +70,7 @@
   --mod-planner:  4, 120, 87;
   --mod-settings: 100, 116, 139;
   --mod-exam:     217, 119, 6;
+  --mod-autonomy: 4, 120, 87;
 
   --glow-opacity: 0.12;
 }

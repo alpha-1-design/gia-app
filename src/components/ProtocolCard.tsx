@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Terminal, CheckCircle2, XCircle, Clock, Loader2, AlertCircle, Play, X, Edit3 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Loader2, AlertCircle, Play, X, Edit3 } from 'lucide-react';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { ProtocolProposal, PROTOCOL_META } from '../types/protocol';
 
@@ -26,7 +26,6 @@ const ProtocolCard: React.FC<ProtocolCardProps> = ({ protocol, onConfirm, onReje
   const meta = PROTOCOL_META[protocol.type] || PROTOCOL_META.custom;
   const stateCfg = STATE_CONFIG[protocol.state] || STATE_CONFIG.proposed;
   const isPending = protocol.state === 'proposed';
-  const isDone = protocol.state === 'completed' || protocol.state === 'failed' || protocol.state === 'rejected';
   const isActive = protocol.state === 'executing';
 
   const handleConfirm = () => {

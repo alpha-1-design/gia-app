@@ -1,0 +1,492 @@
+import { useState, useRef, useCallback } from 'react';
+import GiaBrain from '../services/GiaBrain';
+import TTSService from '../services/TTSService';
+import { useGiaStore } from '../store/useGiaStore';
+import { genId } from '../utils/id';
+import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
+import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock } from '../utils/streamParser';
+import type { Message } from '../store/useGiaStore';
+
+export function useChatGeneration() {
+  const [loading, setLoading] = useState(false);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
+  const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
+
+  const abortRef = useRef<AbortController | null>(null);
+  const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const responseStartRef = useRef(0);
+  const responseTimesRef = useRef<Record<string, number>>({});
+  const lastUserMsgRef = useRef('');
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
+    TTSService.stop();
+    const state = useGiaStore.getState();
+    if (streamingMsgId && state.activeSessionId) {
+      const session = state.sessions.find(s => s.id === state.activeSessionId);
+      const ghost = session?.messages.find(m => m.id === streamingMsgId);
+      if (ghost) {
+        if (!ghost.content && ghost.thinking) {
+          useGiaStore.setState({
+            sessions: state.sessions.map(s =>
+              s.id === state.activeSessionId
+                ? { ...s, messages: s.messages.filter(m => m.id !== streamingMsgId), updatedAt: Date.now() }
+                : s
+            ),
+          });
+        } else {
+          const finalContent = (ghost.content || '') + '\n\n*— Response stopped —*';
+          state.updateMessage(state.activeSessionId, streamingMsgId, finalContent, ghost.thoughts);
+        }
+      }
+    }
+    setLoading(false);
+    setStreamingMsgId(null);
+    state.setIntentState('idle');
+    state.setThinkingPhase('idle');
+  }, [streamingMsgId]);
+
+  const handleSend = useCallback(async (
+    input: string,
+    attachments: { name: string; type: string; content?: string; preview?: string }[],
+    setInput: (v: string) => void,
+    setAttachments: (v: unknown[]) => void,
+  ) => {
+    if (input.trim().startsWith('/')) return;
+    let text = input.trim();
+    if (text.length > 12000) {
+      const fileName = `long-input-${Date.now()}.txt`;
+      setAttachments([...attachments, { name: fileName, type: 'text/plain', content: text }]);
+      text = 'I have attached a long text file for you to analyze.';
+    }
+
+    if ((!text && attachments.length === 0) || loading) return;
+
+    const state = useGiaStore.getState();
+    const { webSearch, extThinking, handsOff } = state;
+    let sessionId = state.activeSessionId;
+    if (!sessionId) sessionId = state.createSession();
+
+    const fileNames = attachments.map(a => a.name).join(', ');
+    const userContent = text || (fileNames ? `[Files: ${fileNames}]` : '');
+
+    const userMsg: Message = {
+      id: genId(), role: 'user', content: userContent, timestamp: Date.now(),
+      attachments: attachments.length > 0 ? attachments : undefined,
+    };
+
+    state.addMessage(sessionId, userMsg);
+    TTSService.stop();
+    const sentAttachments = [...attachments];
+    setInput('');
+    setAttachments([]);
+    lastUserMsgRef.current = text || fileNames;
+    responseStartRef.current = Date.now();
+    setLoading(true);
+    state.setIntentState('thinking');
+    state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');
+
+    let prompt = text;
+    if (sentAttachments.length > 0) {
+      const fileContext = sentAttachments
+        .filter(a => !a.type.startsWith('image/'))
+        .map(a => `\n[BEGIN FILE: ${a.name}]\n${(a.content || '').slice(0, 30000)}\n[END FILE]`)
+        .join('\n\n');
+      const imgContext = sentAttachments
+        .filter(a => a.type.startsWith('image/'))
+        .map(a => `[Image: ${a.name}]`)
+        .join('\n');
+      prompt = `${fileContext}\n\n${imgContext}\n\nUSER: ${text}`;
+    }
+
+    const asstId = genId();
+    state.addMessage(sessionId, {
+      id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
+    });
+    setStreamingMsgId(asstId);
+
+    const ctrl = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = ctrl;
+
+    try {
+      const currentMsgs = state.getActiveSession()?.messages ?? [];
+      let history = currentMsgs
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role, content: m.content }));
+
+      // Auto-summarize if context window is large
+      if (sessionId && history.length > 15) {
+        const branchId = state.getActiveSession()?.currentBranchId;
+        if (branchId) {
+          const result = await autoSummarizeIfNeeded(history, sessionId, branchId, (thought) => {
+            useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+          });
+          if (result.wasSummarized) {
+            history = result.history;
+          }
+        }
+      }
+
+      const brainImages = sentAttachments
+        .filter(a => a.type.startsWith('image/') && a.preview)
+        .map(a => ({ name: a.name, type: a.type, data: a.preview! }));
+
+      state.setIntentState('responding');
+      state.setThinkingPhase('writing');
+
+      const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
+To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the file contents in \`[FILE:path] content [FILE]\` format.]\n\n` : '';
+
+      const stateContext = `[SYSTEM: Current Feature State:
+- Web Search: ${webSearch ? 'ON' : 'OFF'}
+- Extended Thinking: ${extThinking ? 'ON' : 'OFF'}
+- Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}]\n\n`;
+
+      const parserState = createStreamParser();
+      const res = await GiaBrain.generate({
+        signal: ctrl.signal,
+        prompt: stateContext + handsOffPrefix + prompt, history,
+        images: brainImages,
+        useWebSearch: webSearch,
+        useExtendedThinking: extThinking,
+        temperature: extThinking ? undefined : 0.7,
+        onStream: (chunk) => {
+          if (ctrl.signal.aborted) return;
+          sharedProcessStreamChunk(chunk, parserState);
+          const displayText = processStreamForDisplay(parserState.accumulated);
+          state.updateMessage(sessionId, asstId, displayText, parserState.thoughtsAccumulated || undefined);
+          const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
+          if (lastChunk.length > 1) {
+            TTSService.speak(lastChunk, true);
+          }
+        },
+        onThought: (thought) => {
+          parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
+          setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+          state.updateMessage(sessionId, asstId, processStreamForDisplay(parserState.accumulated), parserState.thoughtsAccumulated);
+          useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+        }
+      });
+
+      if (ctrl.signal.aborted) return;
+
+      flushThinkBlock(parserState);
+
+      if (res.text === '__CLARIFICATION__') {
+        const stored = useGiaStore.getState().clarification;
+        if (stored) {
+          useGiaStore.setState({
+            clarification: { ...stored, sessionId, assistantMsgId: asstId },
+          });
+          state.updateMessage(sessionId, asstId, processStreamForDisplay(parserState.accumulated), parserState.thoughtsAccumulated || undefined);
+        }
+        state.setIntentState('idle');
+        return;
+      }
+
+      const rawContent = processStreamForDisplay(parserState.accumulated);
+      const finalText = rawContent || (() => {
+        const t = (res.text || '').replace(/```tool[\s\S]*?```/g, '').trim();
+        const m = t.match(/<think>([\s\S]*?)<\/think>/);
+        if (m) {
+          parserState.thoughtsAccumulated = m[1].trim();
+          return t.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        }
+        return t;
+      })();
+      state.updateMessage(sessionId, asstId, finalText, parserState.thoughtsAccumulated || undefined);
+      if (res.model) {
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, model: res.model } : m) }
+              : s
+          ),
+        });
+      }
+      if (res.modelSwitched && res.switchReason) {
+        state.addNotification(res.switchReason);
+      }
+    } catch (err: unknown) {
+      if (!ctrl.signal.aborted) {
+        const msg = err instanceof Error ? err.message : 'Something went wrong.';
+        state.updateMessage(sessionId, asstId, msg);
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, error: true } : m) }
+              : s
+          ),
+        });
+      }
+    } finally {
+      setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
+      setLoading(false);
+      setStreamingMsgId(null);
+      useGiaStore.getState().setIntentState('idle');
+      useGiaStore.getState().setThinkingPhase('idle');
+    }
+  }, [loading]);
+
+  const handleContinue = useCallback(async (msgId: string) => {
+    const state = useGiaStore.getState();
+    const { webSearch } = state;
+    if (!state.activeSessionId || loading) return;
+    const msgs = state.getActiveSession()?.messages ?? [];
+    const msgIndex = msgs.findIndex(m => m.id === msgId);
+    if (msgIndex < 0) return;
+    const lastContent = msgs[msgIndex]?.content || '';
+    if (!lastContent) return;
+
+    const asstId = genId();
+    state.addMessage(state.activeSessionId, {
+      id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
+    });
+    setStreamingMsgId(asstId);
+    setLoading(true);
+    state.setIntentState('thinking');
+    state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');
+
+    const ctrl = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = ctrl;
+
+    try {
+      let history = msgs.slice(0, msgIndex + 1)
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role, content: m.content }));
+
+      if (state.activeSessionId && history.length > 15) {
+        const branchId = state.getActiveSession()?.currentBranchId;
+        if (branchId) {
+          const result = await autoSummarizeIfNeeded(history, state.activeSessionId, branchId, (thought) => {
+            useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+          });
+          if (result.wasSummarized) history = result.history;
+        }
+      }
+
+      const contParserState = createStreamParser();
+      state.setIntentState('responding');
+      state.setThinkingPhase('writing');
+      const contRes = await GiaBrain.generate({
+        signal: ctrl.signal,
+        prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
+        history: [...history, { role: 'assistant', content: lastContent }],
+        onStream: (chunk) => {
+          if (ctrl.signal.aborted) return;
+          sharedProcessStreamChunk(chunk, contParserState);
+          const displayText = processStreamForDisplay(contParserState.accumulated);
+          state.updateMessage(state.activeSessionId!, asstId, displayText, contParserState.thoughtsAccumulated || undefined);
+          const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
+          if (lastChunk.length > 1) {
+            TTSService.speak(lastChunk, true);
+          }
+        },
+        onThought: (thought) => {
+          contParserState.thoughtsAccumulated += (contParserState.thoughtsAccumulated ? '\n' : '') + thought;
+          setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
+          state.updateMessage(state.activeSessionId!, asstId, processStreamForDisplay(contParserState.accumulated), contParserState.thoughtsAccumulated);
+        },
+      });
+      if (!ctrl.signal.aborted) {
+        flushThinkBlock(contParserState);
+        state.updateMessage(state.activeSessionId!, asstId, processStreamForDisplay(contParserState.accumulated) || contParserState.accumulated, contParserState.thoughtsAccumulated || undefined);
+        if (contRes.model) {
+          useGiaStore.setState({
+            sessions: useGiaStore.getState().sessions.map(s =>
+              s.id === state.activeSessionId
+                ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, model: contRes.model } : m) }
+                : s
+            ),
+          });
+        }
+      }
+    } catch (err: unknown) {
+      if (!ctrl.signal.aborted) {
+        const msg = err instanceof Error ? err.message : 'Continue failed.';
+        state.updateMessage(state.activeSessionId!, asstId, '⚠️ ' + msg);
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, error: true } : m) }
+              : s
+          ),
+        });
+      }
+    } finally {
+      setLoading(false);
+      setStreamingMsgId(null);
+      useGiaStore.getState().setIntentState('idle');
+      useGiaStore.getState().setThinkingPhase('idle');
+    }
+  }, [loading]);
+
+  const handleClarificationAnswer = useCallback(async (answer: string) => {
+    const state = useGiaStore.getState();
+    const clarification = state.clarification;
+    if (!clarification) return;
+    state.setClarification(null);
+
+    const sessionId = clarification.sessionId || state.activeSessionId;
+    if (!sessionId) return;
+
+    state.addMessage(sessionId, {
+      id: genId(), role: 'user', content: answer, timestamp: Date.now(),
+    });
+
+    const asstId = genId();
+    state.addMessage(sessionId, {
+      id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
+    });
+    setStreamingMsgId(asstId);
+
+    const ctrl = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = ctrl;
+    setLoading(true);
+    state.setIntentState('responding');
+
+    try {
+      const currentMsgs = state.getActiveSession()?.messages ?? [];
+      const history = currentMsgs
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role, content: m.content }));
+
+      const clarParserState = createStreamParser();
+      await GiaBrain.generate({
+        signal: ctrl.signal,
+        prompt: answer, history,
+        useWebSearch: state.webSearch,
+        useExtendedThinking: state.extThinking,
+        temperature: state.extThinking ? undefined : 0.7,
+        onStream: (chunk) => {
+          if (ctrl.signal.aborted) return;
+          sharedProcessStreamChunk(chunk, clarParserState);
+          const displayText = processStreamForDisplay(clarParserState.accumulated);
+          state.updateMessage(sessionId, asstId, displayText, clarParserState.thoughtsAccumulated || undefined);
+          const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
+          if (lastChunk.length > 1) {
+            TTSService.speak(lastChunk, true);
+          }
+        },
+        onThought: (thought) => {
+          clarParserState.thoughtsAccumulated += (clarParserState.thoughtsAccumulated ? '\n' : '') + thought;
+          setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
+          state.updateMessage(sessionId, asstId, processStreamForDisplay(clarParserState.accumulated), clarParserState.thoughtsAccumulated);
+          useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+          useGiaStore.setState({ showConsole: true });
+        }
+      });
+      if (!ctrl.signal.aborted) {
+        flushThinkBlock(clarParserState);
+        state.updateMessage(sessionId, asstId, processStreamForDisplay(clarParserState.accumulated) || clarParserState.accumulated, clarParserState.thoughtsAccumulated || undefined);
+      }
+    } catch (err: unknown) {
+      if (!ctrl.signal.aborted) {
+        const msg = err instanceof Error ? err.message : 'Something went wrong.';
+        state.updateMessage(sessionId, asstId, msg);
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.id === asstId ? { ...m, error: true } : m) }
+              : s
+          ),
+        });
+      }
+    } finally {
+      setLoading(false);
+      setStreamingMsgId(null);
+      useGiaStore.getState().setIntentState('idle');
+      useGiaStore.getState().setThinkingPhase('idle');
+    }
+  }, []);
+
+  const handleRetry = useCallback(async (id: string) => {
+    const state = useGiaStore.getState();
+    const { webSearch, extThinking } = state;
+    const msgs = state.getActiveSession()?.messages ?? [];
+    const msgIndex = msgs.findIndex(m => m.id === id);
+    if (msgIndex <= 0 || !state.activeSessionId) return;
+    const originalPrompt = msgs[msgIndex - 1]?.content || '';
+    if (!originalPrompt) return;
+
+    const ctrl = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = ctrl;
+
+    state.updateMessage(state.activeSessionId, id, '');
+    useGiaStore.setState({
+      sessions: useGiaStore.getState().sessions.map(s =>
+        s.id === state.activeSessionId
+          ? { ...s, messages: s.messages.map(m => m.id === id ? { ...m, thinking: true, error: false } : m) }
+          : s
+      ),
+    });
+    setStreamingMsgId(id);
+    setLoading(true);
+    state.setIntentState('thinking');
+
+    try {
+      const history = msgs.slice(0, msgIndex - 1)
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role, content: m.content }));
+
+      const retryParserState = createStreamParser();
+      state.setIntentState('responding');
+      const genRes = await GiaBrain.generate({
+        signal: ctrl.signal,
+        prompt: originalPrompt, history,
+        useWebSearch: webSearch,
+        useExtendedThinking: extThinking,
+        onStream: (chunk) => {
+          if (ctrl.signal.aborted) return;
+          sharedProcessStreamChunk(chunk, retryParserState);
+          state.updateMessage(state.activeSessionId!, id, processStreamForDisplay(retryParserState.accumulated));
+        },
+      });
+      if (!ctrl.signal.aborted) {
+        state.updateMessage(state.activeSessionId!, id, processStreamForDisplay(retryParserState.accumulated) || retryParserState.accumulated);
+        if (genRes.model) {
+          useGiaStore.setState({
+            sessions: useGiaStore.getState().sessions.map(s =>
+              s.id === state.activeSessionId
+                ? { ...s, messages: s.messages.map(m => m.id === id ? { ...m, model: genRes.model } : m) }
+                : s
+            ),
+          });
+        }
+        if (genRes.modelSwitched && genRes.switchReason) {
+          state.addNotification(`Model switched: ${genRes.switchReason}`);
+        }
+        TTSService.speak(retryParserState.accumulated);
+      }
+    } catch (e: unknown) {
+      if (!ctrl.signal.aborted) {
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: s.messages.map(m => m.id === id ? { ...m, content: (e instanceof Error ? e.message : 'Retry failed'), error: true, thinking: false } : m) }
+              : s
+          ),
+        });
+      }
+    } finally {
+      setLoading(false);
+      setStreamingMsgId(null);
+      useGiaStore.getState().setIntentState('idle');
+      useGiaStore.getState().setThinkingPhase('idle');
+    }
+  }, []);
+
+  return {
+    loading, setLoading,
+    streamingMsgId, setStreamingMsgId,
+    liveThoughts, setLiveThoughts,
+    abortRef, abortTimeoutRef,
+    responseStartRef, responseTimesRef, lastUserMsgRef,
+    handleSend, handleContinue, handleClarificationAnswer,
+    handleRetry, handleStop,
+  };
+}

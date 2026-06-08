@@ -3,6 +3,8 @@
  * OS info, hardware, battery, network, display, locale, timezone.
  */
 
+import { logger } from '../utils/logger';
+
 export interface SystemInfo {
   platform: string;
   userAgent: string;
@@ -54,11 +56,12 @@ class SystemService {
   }
 
   async getInfo(): Promise<SystemInfo> {
-    const isCapacitor = typeof (window as any)?.Capacitor?.isNativePlatform === 'function' &&
-      (window as any).Capacitor.isNativePlatform();
+    const w = window as { Capacitor?: { isNativePlatform: () => boolean } };
+    const isCapacitor = typeof w?.Capacitor?.isNativePlatform === 'function' &&
+      (w as { Capacitor: { isNativePlatform: () => boolean } }).Capacitor.isNativePlatform();
 
     const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches ||
-      (window.navigator as any)?.standalone === true;
+      (window.navigator as { standalone?: boolean })?.standalone === true;
 
     const platform = this._getPlatform();
     const info: SystemInfo = {
@@ -75,7 +78,7 @@ class SystemService {
       },
       hardware: {
         cpuCores: navigator.hardwareConcurrency || null,
-        memoryGB: (navigator as any).deviceMemory || null,
+        memoryGB: (navigator as { deviceMemory?: number }).deviceMemory || null,
         touchScreen: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
       },
       battery: null,
@@ -92,19 +95,37 @@ class SystemService {
       container: isCapacitor ? 'capacitor' : isStandalone ? 'pwa' : 'browser',
     };
 
+    const nav = navigator as unknown as {
+      deviceMemory?: number;
+      connection?: {
+        effectiveType?: string;
+        downlink?: number;
+        rtt?: number;
+        addEventListener?: (...a: unknown[]) => void;
+        removeEventListener?: (...a: unknown[]) => void;
+      };
+      getBattery?: () => Promise<{
+        charging?: boolean;
+        level?: number;
+        dischargingTime?: number;
+        addEventListener?: (...a: unknown[]) => void;
+        removeEventListener?: (...a: unknown[]) => void;
+      }>;
+    };
+
     // Network info
     try {
-      const conn = (navigator as any).connection;
+      const conn = nav.connection;
       if (conn) {
         info.network.type = conn.effectiveType || null;
         info.network.downlink = conn.downlink || null;
         info.network.rtt = conn.rtt || null;
       }
-    } catch {}
+    } catch (e) { logger.error('[SystemService] Failed to get network info:', e); }
 
     // Battery info
     try {
-      const battery = await (navigator as any).getBattery?.();
+      const battery = await nav.getBattery?.();
       if (battery) {
         info.battery = {
           charging: battery.charging,
@@ -112,7 +133,7 @@ class SystemService {
           dischargingTime: battery.dischargingTime === Infinity ? null : battery.dischargingTime,
         };
       }
-    } catch {}
+    } catch (e) { logger.error('[SystemService] Failed to get battery info:', e); }
 
     this._lastInfo = info;
     this._formattedContext = this._buildContext(info);
@@ -135,13 +156,28 @@ class SystemService {
   }
 
   async startMonitoring(): Promise<void> {
+    const nav = navigator as unknown as {
+      connection?: {
+        effectiveType?: string;
+        downlink?: number;
+        addEventListener?: (...a: unknown[]) => void;
+        removeEventListener?: (...a: unknown[]) => void;
+      };
+      getBattery?: () => Promise<{
+        charging?: boolean;
+        level?: number;
+        dischargingTime?: number;
+        addEventListener?: (...a: unknown[]) => void;
+        removeEventListener?: (...a: unknown[]) => void;
+      }>;
+    };
     await this.getInfo();
 
     // Network changes
     const updateNetwork = () => {
       if (!this._lastInfo) return;
       this._lastInfo.network.online = navigator.onLine;
-      const conn = (navigator as any).connection;
+      const conn = nav.connection;
       if (conn) {
         this._lastInfo.network.type = conn.effectiveType || this._lastInfo.network.type;
         this._lastInfo.network.downlink = conn.downlink || this._lastInfo.network.downlink;
@@ -153,7 +189,7 @@ class SystemService {
     window.addEventListener('online', updateNetwork);
     window.addEventListener('offline', updateNetwork);
 
-    const conn = (navigator as any).connection;
+    const conn = nav.connection;
     if (conn) {
       conn.addEventListener('change', updateNetwork);
     }
@@ -166,7 +202,7 @@ class SystemService {
 
     // Battery changes
     try {
-      const battery = await (navigator as any).getBattery?.();
+      const battery = await nav.getBattery?.();
       if (battery) {
         const updateBattery = () => {
           if (!this._lastInfo || !this._lastInfo.battery) return;
@@ -181,7 +217,7 @@ class SystemService {
           battery.removeEventListener('levelchange', updateBattery);
         };
       }
-    } catch {}
+    } catch (e) { logger.error('[SystemService] Failed to start battery monitoring:', e); }
   }
 
   stopMonitoring(): void {

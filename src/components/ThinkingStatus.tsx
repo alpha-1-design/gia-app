@@ -1,6 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { IntentState } from '../store/useGiaStore';
-
 export type ThinkingPhase =
   | 'gathering'
   | 'analyzing'
@@ -32,12 +30,6 @@ const PHASE_MAP: Record<ThinkingPhase, PhaseDef> = {
   idle:       { label: 'Ready',                  icon: '',   color: '#6b7280', glowColor: 'rgba(107,114,128,0.3)', speed: 0 },
 };
 
-interface ThinkingStatusProps {
-  phase: ThinkingPhase;
-  intentState?: IntentState;
-  onComplete?: () => void;
-}
-
 function ThinkingDot({ delay, color }: { delay: number; color: string }) {
   return (
     <div
@@ -56,7 +48,6 @@ function ThinkingDot({ delay, color }: { delay: number; color: string }) {
 export function ThinkingStatus({ phase }: { phase?: ThinkingPhase }) {
   const [currentPhase, setCurrentPhase] = useState(0);
   const [visible, setVisible] = useState(false);
-  const [pulsePhase, setPulsePhase] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const phases: ThinkingPhase[] = [
@@ -67,13 +58,12 @@ export function ThinkingStatus({ phase }: { phase?: ThinkingPhase }) {
     setVisible(true);
     intervalRef.current = setInterval(() => {
       setCurrentPhase((prev) => (prev + 1) % phases.length);
-      setPulsePhase((prev) => (prev + 1) % 12);
     }, 1800);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, []);
+  }, [phases.length]);
 
   const activePhase = phase || phases[currentPhase];
   const def = PHASE_MAP[activePhase] || PHASE_MAP.processing;
@@ -143,7 +133,7 @@ export function ThinkingOverlay({
       setPhaseIdx((prev) => (prev + 1) % cycle.length);
     }, 1200);
     return () => clearInterval(timer);
-  }, []);
+  }, [cycle.length]);
 
   const activePhase = phase || cycle[phaseIdx];
   const def = PHASE_MAP[activePhase] || PHASE_MAP.processing;

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useMemoryStore, MemoryCategory, MemoryEntry } from '../store/useMemoryStore';
 import { useGiaStore } from '../store/useGiaStore';
-import { Search, Pin, PinOff, Plus, X, Download, Upload, Brain, BookOpen, Star, Target, AlertTriangle, Heart, Briefcase, FileText, RotateCcw, Edit3 } from 'lucide-react';
+import { Search, Pin, PinOff, Plus, X, Download, Upload, Brain, BookOpen, Star, Target, AlertTriangle, Heart, Briefcase, FileText, RotateCcw } from 'lucide-react';
 
 const CATEGORY_META: Record<MemoryCategory, { label: string; icon: React.ReactNode; color: string }> = {
   profile: { label: 'Profile', icon: <Star size={11} />, color: '#a855f7' },
@@ -42,7 +42,7 @@ const KnowledgeCard: React.FC<{ entry: MemoryEntry; pinned: boolean; onTogglePin
 };
 
 export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { memories, addMemory, deleteMemory, clearMemories } = useMemoryStore();
+  const { memories, addMemory, deleteMemory } = useMemoryStore();
   const { customInstructions, setCustomInstructions, pinnedMemories, togglePinnedMemory } = useGiaStore();
   const [tab, setTab] = useState<'knowledge' | 'instructions'>('knowledge');
   const [search, setSearch] = useState('');
@@ -87,13 +87,13 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
   const importAll = () => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = '.json';
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
+    input.onchange = async (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (data.memories) data.memories.forEach((m: any) => addMemory(m));
+        if (data.memories) data.memories.forEach((m: MemoryEntry) => addMemory(m));
         if (data.customInstructions) setCustomInstructions(data.customInstructions);
       } catch { alert('Invalid knowledge file'); }
     };

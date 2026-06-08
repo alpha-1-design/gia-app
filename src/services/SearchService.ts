@@ -1,9 +1,11 @@
+import { logger } from '../utils/logger';
 import { CapacitorHttp } from '@capacitor/core';
 
 export interface SearchResult {
   title: string;
   url: string;
   snippet: string;
+  image?: string;
 }
 
 class SearchService {
@@ -37,7 +39,7 @@ class SearchService {
           const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
           return this.parseResults(html);
         }
-      } catch { /* fall through */ }
+      } catch (e) { logger.error('[SearchService] Strategy A (axios) failed:', e); }
     }
 
     // Strategy B: try CORS proxies in order
@@ -53,7 +55,7 @@ class SearchService {
           this.cache.set(query, { results: parsed, ts: Date.now() });
           return parsed;
         }
-      } catch { /* try next proxy */ }
+      } catch (e) { logger.error('[SearchService] Proxy fetch failed, trying next:', e); }
     }
 
     return [];

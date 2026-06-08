@@ -17,25 +17,24 @@ function getLang(filename: string): string {
   return EXT_MAP[ext] || 'text';
 }
 
-function tokenize(text: string, lang: string): { text: string; type: string }[] {
-  const tokens: { text: string; type: string }[] = [];
-  const patterns: [RegExp, string][] = [
-    [/(\/\/.*|\/\*[\s\S]*?\*\/)/g, 'comment'],
-    [/(["'`])(?:(?!\1|\\).|\\.)*\1/g, 'string'],
-    [/\b(import|export|from|const|let|var|function|return|if|else|for|while|class|interface|type|extends|implements|async|await|new|throw|try|catch|finally|switch|case|default|break|continue|typeof|instanceof|in|of|this|super|yield|static|private|public|protected|readonly)\b/g, 'keyword'],
-    [/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, 'number'],
-    [/\b(true|false|null|undefined|NaN|Infinity)\b/g, 'literal'],
-  ];
+function tokenize(text: string): { text: string; type: string }[] {
+   const tokens: { text: string; type: string }[] = [];
+   const patterns: [RegExp, string][] = [
+     [/(\/\/.*|\/\*[\s\S]*?\*\/)/g, 'comment'],
+     [/(["'`])(?:(?!\1|\\).|\\.)*\1/g, 'string'],
+     [/\b(import|export|from|const|let|var|function|return|if|else|for|while|class|interface|type|extends|implements|async|await|new|throw|try|catch|finally|switch|case|default|break|continue|typeof|instanceof|in|of|this|super|yield|static|private|public|protected|readonly)\b/g, 'keyword'],
+     [/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, 'number'],
+     [/\b(true|false|null|undefined|NaN|Infinity)\b/g, 'literal'],
+   ];
 
-  let lastIndex = 0;
-  const allMatches: { index: number; text: string; type: string }[] = [];
+   const allMatches: { index: number; text: string; type: string }[] = [];
 
-  for (const [regex, type] of patterns) {
-    let m;
-    while ((m = regex.exec(text)) !== null) {
-      allMatches.push({ index: m.index, text: m[0], type });
-    }
-  }
+   for (const [regex, type] of patterns) {
+     let m;
+     while ((m = regex.exec(text)) !== null) {
+       allMatches.push({ index: m.index, text: m[0], type });
+     }
+   }
 
   allMatches.sort((a, b) => a.index - b.index);
 
@@ -104,8 +103,8 @@ export function FileEditor({ filename, content, onChange, readOnly = true, heigh
   }, [editContent, content, onChange]);
 
   const tokenizedLines = useMemo(
-    () => lines.map((line) => tokenize(line, lang)),
-    [lines, lang]
+    () => lines.map((line) => tokenize(line)),
+    [lines]
   );
 
   const lineNumWidth = `${String(lines.length).length}ch`;

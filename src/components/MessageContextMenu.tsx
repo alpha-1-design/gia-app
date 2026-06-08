@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Pencil, RotateCcw, Trash2, GitFork, Undo2, Play } from 'lucide-react';
+import { Copy, Pencil, RotateCcw, Trash2, GitFork, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MenuAction {

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { logger } from '../utils/logger';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 
 interface BrowserSpeechRecognition extends EventTarget {
@@ -6,21 +7,26 @@ interface BrowserSpeechRecognition extends EventTarget {
   interimResults: boolean;
   lang: string;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: any) => void) | null;
+  onerror: ((event: unknown) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
   abort: () => void;
 }
 
-interface SpeechRecognitionEvent {
-  resultIndex: number;
-  results: SpeechRecognitionResult[];
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
 }
 
 interface SpeechRecognitionResult {
   isFinal: boolean;
-  [index: number]: { transcript: string };
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResult[];
 }
 
 interface CapacitorGlobal {
@@ -29,12 +35,33 @@ interface CapacitorGlobal {
 
 const SpeechRecognitionAPI = (globalThis as unknown as CapacitorGlobal & { SpeechRecognition?: new () => BrowserSpeechRecognition; webkitSpeechRecognition?: new () => BrowserSpeechRecognition });
 
+const DIRECT_COMMANDS: [RegExp, string][] = [
+  [/^(scroll|go)\s*(up|down)/i, 'scroll_$2'],
+  [/^scroll\s*(to\s*)?(top|bottom)/i, 'scroll_$2'],
+  [/^(go\s*)?back/i, 'navigate_back'],
+  [/^open\s+(settings|chat|exam|analyst|writer|planner)/i, 'open_$1'],
+  [/^(show|hide)\s+(console|terminal|logs)/i, 'toggle_$1_console'],
+  [/^(clear|reset)\s+(chat|conversation)/i, 'clear_chat'],
+  [/^(stop|pause)\s*(speaking|talking|audio)/i, 'stop_tts'],
+  [/^(help|commands|what can you do)/i, 'show_help'],
+  [/^(save|remember)\s+(this|that)/i, 'save_memory'],
+  [/^what (did|do) (i|we) (say|talk about)/i, 'recall_recent'],
+  [/^switch\s+(to\s+)?(chat|exam|analyst|writer|planner|settings)/i, 'switch_$2'],
+];
+
 export interface VoiceControlConfig {
   wakeWord?: string;
   onWakeWord?: (transcript: string) => void;
   onTranscript?: (text: string) => void;
+  onDirectCommand?: (command: string, raw: string) => boolean;
   autoStopAfter?: number;
   keepListening?: boolean;
+  confidenceThreshold?: number;
+  language?: string;
+}
+
+function escapeRegex(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function useVoiceControl(config: VoiceControlConfig = {}) {
@@ -44,6 +71,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     onTranscript,
     autoStopAfter = 60000,
     keepListening = false,
+    confidenceThreshold = 0.3,
+    language = 'en-US',
   } = config;
 
   const [isListening, setIsListening] = useState(false);
@@ -54,6 +83,11 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const srRef = useRef<BrowserSpeechRecognition | null>(null);
   const isCapacitor = !!SpeechRecognitionAPI.Capacitor;
   const listeningLoopRef = useRef(false);
+  const wakeWordRegexRef = useRef(new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i'));
+
+  useEffect(() => {
+    wakeWordRegexRef.current = new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i');
+  }, [wakeWord]);
 
   const requestPermissions = useCallback(async () => {
     if (!isCapacitor) return true;
@@ -63,7 +97,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       const newStatus = await SpeechRecognition.requestPermissions();
       return newStatus.speechRecognition === 'granted';
     } catch (e) {
-      console.error('Permission request failed:', e);
+      logger.error('Permission request failed:', e);
       return false;
     }
   }, [isCapacitor]);
@@ -82,7 +116,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         srRef.current.onend = null;
         srRef.current = null;
       }
-    } catch {}
+    } catch (e) { logger.error('[useVoiceControl] Failed to stop speech recognition:', e); }
     setIsListening(false);
     setIsHearing(false);
   }, [isCapacitor]);
@@ -91,22 +125,44 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const keepListeningRef = useRef(keepListening);
   const onWakeWordRef = useRef(onWakeWord);
   const onTranscriptRef = useRef(onTranscript);
+  const thresholdRef = useRef(confidenceThreshold);
+  const langRef = useRef(language);
+  const onDirectCommandRef = useRef(config.onDirectCommand);
   wakeWordRef.current = wakeWord;
   keepListeningRef.current = keepListening;
   onWakeWordRef.current = onWakeWord;
   onTranscriptRef.current = onTranscript;
+  thresholdRef.current = confidenceThreshold;
+  langRef.current = language;
+  onDirectCommandRef.current = config.onDirectCommand;
 
-  const processTranscript = useCallback((text: string) => {
+  const processTranscript = useCallback((text: string, confidence?: number) => {
     if (!text || !activeRef.current) return;
+    if (confidence !== undefined && confidence < thresholdRef.current) return;
     const cleaned = text.replace(/[^\w\s']/g, '').trim();
     if (cleaned.length < 2) return;
     lastResultRef.current = Date.now();
-    onTranscriptRef.current?.(cleaned);
-    const hasWakeWord = text.toLowerCase().includes(wakeWordRef.current.toLowerCase());
+    const hasWakeWord = wakeWordRegexRef.current.test(text);
     if (hasWakeWord) {
       onWakeWordRef.current?.(text);
       if (!keepListeningRef.current) stopListening();
+      return;
     }
+
+    // Check direct commands before LLM dispatch
+    const onDirectCommand = onDirectCommandRef.current;
+    if (onDirectCommand) {
+      for (const [re, cmd] of DIRECT_COMMANDS) {
+        const match = cleaned.match(re);
+        if (match) {
+          const resolved = cmd.replace(/\$(\d+)/g, (_, i) => match[parseInt(i)] || '');
+          const handled = onDirectCommand(resolved, cleaned);
+          if (handled) return;
+        }
+      }
+    }
+
+    onTranscriptRef.current?.(cleaned);
   }, [stopListening]);
 
   const restartBrowserRecognition = useCallback(() => {
@@ -117,15 +173,17 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       const sr = new SR();
       sr.continuous = true;
       sr.interimResults = true;
-      sr.lang = 'en-US';
+      sr.lang = langRef.current;
       sr.onresult = (event: SpeechRecognitionEvent) => {
         if (!activeRef.current) return;
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const text = event.results[i][0].transcript;
+          const result = event.results[i];
+          const text = result[0].transcript;
+          const confidence = result[0].confidence;
           setIsHearing(true);
-          if (event.results[i].isFinal) {
+          if (result.isFinal) {
             setIsHearing(false);
-            processTranscript(text);
+            processTranscript(text, confidence);
           }
         }
       };
@@ -155,7 +213,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         }
 
         const result = await SpeechRecognition.start({
-          language: 'en-US',
+          language: langRef.current,
           partialResults: true,
           popup: false,
         });
@@ -179,7 +237,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         }
       }
     } catch (e) {
-      console.error('Speech recognition error:', e);
+      logger.error('Speech recognition error:', e);
       listeningLoopRef.current = false;
       if (activeRef.current && keepListeningRef.current) {
         timeoutRef.current = setTimeout(listenOnce, 3000);
@@ -194,7 +252,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     const granted = await requestPermissions();
     if (!granted) {
-      console.error('Microphone permission denied');
+      logger.error('Microphone permission denied');
       return;
     }
 

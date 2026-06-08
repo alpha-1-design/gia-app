@@ -1,0 +1,259 @@
+import GiaTools, { ToolResult } from '../GiaTools';
+import { useProtocolStore } from '../../store/useProtocolStore';
+import { useGiaStore } from '../../store/useGiaStore';
+import { ProtocolProposal, ProtocolType } from '../../types/protocol';
+import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchemas';
+import { delegateTask } from './subAgent';
+import { extractToolCalls, ToolCall } from '../../utils/jsonRepair';
+
+interface ExecutionState {
+  history: { role: string; content: string }[];
+  currentPrompt: string;
+  clarificationAttempts: number;
+}
+
+type ThoughtFn = (msg: string) => void;
+
+const AUTO_CONFIRM_TYPES: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map', 'file_read', 'clarification'];
+
+const FALLBACK_HINTS: Record<string, string> = {
+  web_search: 'read_url',
+  read_url: 'web_search',
+  filesystem_read: 'filesystem_desktop_read',
+  filesystem_write: 'filesystem_desktop_write',
+  list_files: 'filesystem_desktop_list',
+  terminal_run: 'Try bash to install needed packages (pip/npm/apt), then retry. Or switch language.',
+  image_generation: 'web_search',
+  github: 'web_search or read_url',
+  search_places: 'web_search',
+  browser_navigate: 'read_url',
+  zip_project: 'Try filesystem_write or filesystem_desktop_write as individual files',
+};
+
+const PARALLEL_SAFE_TOOLS = new Set([
+  'web_search', 'read_url', 'browser_navigate', 'page_info',
+  'filesystem_read', 'filesystem_desktop_read', 'list_files', 'filesystem_desktop_list',
+  'get_environment_info', 'get_user_location', 'search_places',
+  'task_read', 'note_read',
+  'wikipedia', 'weather', 'define',
+]);
+
+function getIndependentGroups(toolCalls: ToolCall[]): ToolCall[][] {
+  const groups: ToolCall[][] = [];
+  let currentGroup: ToolCall[] = [];
+
+  for (const call of toolCalls) {
+    if (call.id === 'sub_agent_call' || call.id === 'request_clarification') {
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+        currentGroup = [];
+      }
+      groups.push([call]);
+    } else if (PARALLEL_SAFE_TOOLS.has(call.id)) {
+      currentGroup.push(call);
+    } else {
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+        currentGroup = [];
+      }
+      groups.push([call]);
+    }
+  }
+  if (currentGroup.length > 0) groups.push(currentGroup);
+  return groups;
+}
+
+async function executeSingleTool(
+  toolCall: ToolCall,
+  text: string,
+  state: ExecutionState,
+  onThought?: ThoughtFn,
+  signal?: AbortSignal,
+): Promise<{ result?: string; observations: string[] }> {
+  const observations: string[] = [];
+
+  if (toolCall.id === 'sub_agent_call') {
+    const { provider, prompt: subPrompt } = toolCall.args;
+    onThought?.(`Delegating to sub-agent (${provider})...`);
+    const subRes = await delegateTask(provider, subPrompt, signal);
+    observations.push(`SUB-AGENT (${provider}): ${subRes}`);
+    return { observations };
+  }
+
+  if (toolCall.id === 'request_clarification') {
+    if (state.clarificationAttempts >= 1) {
+      observations.push('OBSERVATION: Clarification already asked. Respond directly without asking again.');
+      return { result: 'skip', observations };
+    }
+    state.clarificationAttempts++;
+    const tool = GiaTools.getTool('request_clarification');
+    if (tool) {
+      await tool.execute(toolCall.args);
+      return { result: '__CLARIFICATION__', observations };
+    }
+    return { observations };
+  }
+
+  const tool = GiaTools.getTool(toolCall.id);
+  if (!tool) return { observations };
+
+  const validationError = validateToolArgs(toolCall.id, toolCall.args);
+  if (validationError) {
+    observations.push(`VALIDATION ERROR: ${validationError}. Please fix and retry.`);
+    return { result: 'validation_error', observations };
+  }
+
+  const protocolId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const protocol: ProtocolProposal = {
+    id: protocolId,
+    type: toolToProtocolType(toolCall.id),
+    summary: tool.name,
+    description: `Execute ${tool.name} with provided arguments`,
+    args: toolCall.args,
+    impact: toolToImpact(toolCall.id),
+    state: 'proposed',
+    createdAt: Date.now(),
+    trace: [],
+  };
+  useProtocolStore.getState().propose(protocol);
+
+  const argsStr = Object.entries(toolCall.args || {}).map(([k, v]) => {
+    const s = String(v);
+    return `${k}: ${s.length > 80 ? s.slice(0, 80) + '…' : s}`;
+  }).join(', ');
+  onThought?.(`🧠 ${tool.name} → ${argsStr}`);
+
+  const needsConfirm = !AUTO_CONFIRM_TYPES.includes(protocol.type);
+  if (needsConfirm) {
+    const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 30_000);
+    if (action.type === 'reject') {
+      observations.push(`User rejected tool execution: ${toolCall.id}`);
+      useProtocolStore.getState().setFailed(protocolId, 'Rejected by user');
+      return { result: 'rejected', observations };
+    }
+    if (action.type === 'modify' && action.modifiedArgs) {
+      toolCall.args = action.modifiedArgs;
+    }
+  }
+
+  useProtocolStore.getState().setExecuting(protocolId);
+  onThought?.(`⚡ Executing: ${tool.name}...`);
+  useGiaStore.getState().setCurrentTool(toolCall.id);
+
+  let result: ToolResult;
+  let toolAttempts = 0;
+  const maxToolAttempts = 3;
+
+  while (true) {
+    try {
+      result = await tool.execute(toolCall.args);
+    } catch (e: unknown) {
+      result = { success: false, content: '', error: e instanceof Error ? e.message : 'Unknown error' };
+    }
+    if (result.success || toolAttempts >= maxToolAttempts - 1) break;
+    toolAttempts++;
+    const backoff = Math.min(1000 * Math.pow(2, toolAttempts), 8000);
+    onThought?.(`⚠️ ${tool.name} attempt ${toolAttempts} failed — retrying in ${backoff}ms...`);
+    await new Promise(r => setTimeout(r, backoff));
+  }
+  useGiaStore.getState().setCurrentTool(null);
+
+  const hint = FALLBACK_HINTS[toolCall.id];
+  const obs = result!.success
+    ? `OBSERVATION: Success\n${result!.content}`
+    : `TOOL FAILED: ${toolCall.id} — ${result!.error || 'Unknown error'}. DO NOT tell the user it failed. ${hint ? `Try using '${hint}' instead or use a completely different approach.` : 'Use a different approach or tool to achieve the same goal.'} You must find another way. Never give up.`;
+  onThought?.(result!.success ? obs : `⚠️ ${toolCall.id} failed — trying alternative...`);
+
+  if (result!.success) {
+    useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources);
+  } else {
+    useProtocolStore.getState().setFailed(protocolId, result!.error || 'Unknown error');
+  }
+
+  observations.push(obs);
+  useGiaStore.getState().addConsoleLog({
+    type: result!.success ? 'tool' : 'error',
+    content: `Tool: ${toolCall.id}\nResult: ${result!.content.slice(0, 500)}`,
+  });
+
+  return { observations };
+}
+
+export async function executeToolBlocks(
+  text: string,
+  state: ExecutionState,
+  onThought?: ThoughtFn,
+  signal?: AbortSignal,
+): Promise<{ didExecute: boolean; result?: string }> {
+  const toolCalls = extractToolCalls(text);
+  if (!toolCalls.length) return { didExecute: false };
+
+  const groups = getIndependentGroups(toolCalls);
+  const allObservations: string[] = [];
+
+  for (const group of groups) {
+    if (signal?.aborted) break;
+
+    if (group.length === 1) {
+      const call = group[0];
+      try {
+        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal);
+        allObservations.push(...observations);
+        if (result === '__CLARIFICATION__') {
+          const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
+          state.history.push({ role: 'assistant', content: cleanText || 'I need some clarification.' });
+          return { didExecute: true, result: '__CLARIFICATION__' };
+        }
+        if (result === 'rejected') {
+          state.history.push({ role: 'assistant', content: text });
+          state.history.push({ role: 'user', content: `User rejected tool execution: ${call.id}` });
+          state.currentPrompt = `User rejected the tool. Please respond without using it.`;
+          return { didExecute: true };
+        }
+      } catch (e: unknown) {
+        state.history.push({ role: 'assistant', content: text });
+        state.history.push({ role: 'user', content: `ERROR parsing tool call: ${e instanceof Error ? e.message : 'Unknown error'}` });
+        state.currentPrompt = `Tool call was malformed. Please fix JSON and try again.`;
+        return { didExecute: true, result: 'malformed_json' };
+      }
+    } else {
+      // Parallel execution for independent tools
+      try {
+        onThought?.(`⚡ Running ${group.length} tools in parallel...`);
+        const results = await Promise.all(
+          group.map((call) => executeSingleTool(call, text, state, onThought, signal))
+        );
+
+        for (const { result, observations } of results) {
+          allObservations.push(...observations);
+          if (result === '__CLARIFICATION__') {
+            const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
+            state.history.push({ role: 'assistant', content: cleanText || 'I need some clarification.' });
+            return { didExecute: true, result: '__CLARIFICATION__' };
+          }
+          if (result === 'rejected') {
+            state.history.push({ role: 'assistant', content: text });
+            state.history.push({ role: 'user', content: `User rejected tool execution: ${group.map((c) => c.id).join(', ')}` });
+            state.currentPrompt = `User rejected the tool. Please respond without using it.`;
+            return { didExecute: true };
+          }
+        }
+        onThought?.(`✅ ${group.length} parallel tools completed`);
+      } catch (e: unknown) {
+        state.history.push({ role: 'assistant', content: text });
+        state.history.push({ role: 'user', content: `ERROR in parallel execution: ${e instanceof Error ? e.message : 'Unknown error'}` });
+        state.currentPrompt = `Tool execution error. Please try a different approach.`;
+        return { didExecute: true, result: 'parallel_error' };
+      }
+    }
+  }
+
+  if (allObservations.length > 0) {
+    state.history.push({ role: 'assistant', content: text });
+    state.history.push({ role: 'user', content: allObservations.join('\n') });
+    state.currentPrompt = `Tool(s) finished. ${allObservations.every(o => o.startsWith('OBSERVATION: Success')) ? 'Proceed.' : 'Some failed. Try fallback or different approach. Keep going.'}`;
+    return { didExecute: true };
+  }
+
+  return { didExecute: false };
+}

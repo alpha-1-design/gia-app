@@ -1,5 +1,6 @@
+import { logger } from '../utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Folder, File, ChevronRight, ChevronDown, ArrowLeft, RefreshCw, X } from 'lucide-react';
+import { Folder, File, ChevronRight, ArrowLeft, RefreshCw, X } from 'lucide-react';
 
 interface FileEntry {
   name: string;
@@ -31,8 +32,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
         return a.name.localeCompare(b.name);
       });
       setEntries(result);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
       setEntries([]);
     } finally {
       setLoading(false);
@@ -44,8 +45,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
       const DesktopFS = (await import('../services/DesktopFS')).default;
       const content = await DesktopFS.readFile(path);
       setFilePreview({ path, content: content.slice(0, 5000) });
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -84,7 +85,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
         setCurrentPath('');
         loadEntries('');
       }
-    } catch {}
+    } catch (e) { logger.error('[FileBrowser] Failed to pick directory:', e); }
   };
 
   const isTextFile = (name: string) => {

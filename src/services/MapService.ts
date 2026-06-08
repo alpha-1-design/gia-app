@@ -76,7 +76,7 @@ class MapService {
       headers: { 'User-Agent': 'GIA/3.0 (Alpha-1 Studio, Ghana)' },
     });
     if (!res.ok) throw new Error(`Geocoding error: ${res.status}`);
-    const data: any[] = await res.json();
+    const data: { lat: string; lon: string; display_name: string; type?: string; importance?: number; osm_id?: string; osm_type?: string }[] = await res.json();
     return data.map((p) => ({
       lat: parseFloat(p.lat),
       lng: parseFloat(p.lon),
@@ -99,7 +99,7 @@ class MapService {
       headers: { 'User-Agent': 'GIA/3.0 (Alpha-1 Studio, Ghana)' },
     });
     if (!res.ok) throw new Error(`Reverse geocoding error: ${res.status}`);
-    const data: any = await res.json();
+    const data: { display_name?: string; address?: Record<string, string> } = await res.json();
     const addr = data.address || {};
     return {
       displayName: data.display_name || '',

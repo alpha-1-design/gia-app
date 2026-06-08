@@ -1,9 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Send, Loader2, Square, Mic, MicOff } from 'lucide-react';
 import { useGiaStore, IntentState } from '../store/useGiaStore';
-import { isNativePlatform } from '../utils/helpers';
 
-const isNative = isNativePlatform();
 
 interface AmbientInputProps {
   value: string;
@@ -37,7 +35,6 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   disabled = false,
   isLoading = false,
   multiline = false,
-  autoFocus = false,
 }) => {
   const { intentState } = useGiaStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);

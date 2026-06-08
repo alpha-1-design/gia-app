@@ -48,8 +48,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
     { id: 'import-brain', label: 'Import Brain', description: 'Restore GIA from a brain export file', icon: <Upload {...iconStyle} />, category: 'Files', execute: () => { store.addNotification('Go to Settings > Brain Export to import'); onClose(); } },
     { id: 'clear-session', label: 'Clear Current Chat', description: 'Remove all messages from current session', icon: <Eraser {...iconStyle} />, category: 'Chat', execute: () => { const sid = store.activeSessionId; if (sid) { store.clearSession(sid); store.addNotification('Session cleared'); } onClose(); } },
     { id: 'mcp-servers', label: 'Manage MCP Servers', description: 'Configure and connect to MCP servers', icon: <Wifi {...iconStyle} />, category: 'System', execute: () => { store.setModule('settings'); onClose(); } },
-    { id: 'task-board', label: 'Open Task Board', description: 'View and manage your tasks', icon: <ClipboardList {...iconStyle} />, category: 'Co-Work', execute: () => { /* handled via onNavigate prop */ onNavigate && onNavigate('task-board'); onClose(); } },
-    { id: 'notes-panel', label: 'Open Notes', description: 'View and manage your notes', icon: <StickyNote {...iconStyle} />, category: 'Co-Work', execute: () => { /* handled via onNavigate prop */ onNavigate && onNavigate('notes-panel'); onClose(); } },
+    { id: 'task-board', label: 'Open Task Board', description: 'View and manage your tasks', icon: <ClipboardList {...iconStyle} />, category: 'Co-Work', execute: () => { void onNavigate?.('task-board'); onClose(); } },
+    { id: 'notes-panel', label: 'Open Notes', description: 'View and manage your notes', icon: <StickyNote {...iconStyle} />, category: 'Co-Work', execute: () => { void onNavigate?.('notes-panel'); onClose(); } },
 ];
 
   const filtered = query.trim()
@@ -133,7 +133,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
               <p className="text-[9px] font-semibold uppercase tracking-wider px-2 py-1.5" style={{ color: 'var(--gia-muted-2)' }}>
                 {category}
               </p>
-              {items.map((action, idx) => {
+              {items.map((action) => {
                 const globalIdx = filtered.indexOf(action);
                 const isSelected = globalIdx === selectedIdx;
                 return (

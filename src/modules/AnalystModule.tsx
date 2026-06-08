@@ -1,10 +1,10 @@
+import { logger } from '../utils/logger';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { BarChart2 as BarChartIcon, Loader2, Paperclip, X, TrendingUp as LineChartIcon, Grid, Download, RefreshCw, PieChart as PieChartIcon } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import AmbientInput from '../components/AmbientInput';
-import MarkdownRenderer from '../components/MarkdownRenderer';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, AreaChart, Area
@@ -12,7 +12,31 @@ import {
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { extractJSON, isNativePlatform } from '../utils/helpers';
 
-interface DataPoint { label: string; value: number | string; color?: string; [key: string]: any }
+async function generateWithJsonRetry<T>(
+  generateFn: () => Promise<{ text: string }>,
+  maxRetries = 2
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await generateFn();
+      const parsed = extractJSON<T>(res.text);
+      return parsed;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      logger.warn(`[AnalystModule] JSON parse attempt ${attempt + 1} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  }
+  
+  throw lastError || new Error('Failed to parse JSON after retries');
+}
+
+interface DataPoint { label: string; value: number | string; color?: string; [key: string]: unknown }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
 const COLORS = ['#7c3aed','#4f46e5','#059669','#dc2626','#d97706','#0891b2','#be185d','#65a30d','#9333ea','#0284c7'];
 
@@ -31,7 +55,7 @@ const AnalystModule: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
 
-  const getVal = (v: any) => typeof v === 'number' ? v : parseFloat(v) || 0;
+  const getVal = (v: unknown) => typeof v === 'number' ? v : parseFloat(v as string) || 0;
 
   const [fileTruncated, setFileTruncated] = useState(false);
 
@@ -53,22 +77,26 @@ const AnalystModule: React.FC = () => {
     setLoading(true); setError(''); setNarrative(''); setIntentState('thinking');
     try {
       const prompt = fileData ? `Analyze this data:\n\n${fileData.slice(0,8000)}\n\nUser: ${text}` : text;
-      const res = await GiaBrain.generate({
-        signal: AbortSignal.timeout(30_000),
-        prompt,
-        systemPrompt: `You are a data analyst and insight engine. Respond with valid JSON only:
+      
+      const parsed = await generateWithJsonRetry<{ data: DataPoint[]; summary?: string; narrative?: string; columns?: string[] }>(
+        () => GiaBrain.generate({
+          signal: AbortSignal.timeout(30_000),
+          prompt,
+          systemPrompt: `You are a data analyst and insight engine. Respond with valid JSON only:
 {"summary":"One punchy insight sentence","narrative":"2-3 sentences of deeper analysis","data":[{"label":"Name","value":42}],"columns":["Label","Value"]}
 Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user wants a table, provide rich rows and columns.`,
-        systemPromptMode: 'append',
-        forceJson: true,
-        temperature: 0.25,
-        maxTokens: 1500,
-      });
-      const parsed = extractJSON(res.text);
+          systemPromptMode: 'append',
+          forceJson: true,
+          temperature: 0.25,
+          maxTokens: 1500,
+        }),
+        2
+      );
+      
       if (!parsed.data || !Array.isArray(parsed.data) || parsed.data.length === 0) {
         throw new Error('AI returned an invalid response format. Please try again.');
       }
-      setData(parsed.data.map((d: any, i: number) => ({ ...d, color: COLORS[i%COLORS.length] })));
+      setData(parsed.data.map((d, i: number) => ({ ...d, color: COLORS[i%COLORS.length] })));
       setSummary(parsed.summary ?? '');
       setNarrative(parsed.narrative ?? '');
       if (parsed.summary) {
@@ -98,7 +126,7 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
         addNotification(`📊 Analysis exported: Documents/${fileName}`);
         return;
       } catch (e) {
-        console.error('Native export failed, falling back to browser download:', e);
+        logger.error('Native export failed, falling back to browser download:', e);
       }
     }
     const blob = new Blob([csv], { type: 'text/csv' });

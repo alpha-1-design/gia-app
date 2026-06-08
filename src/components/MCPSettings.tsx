@@ -1,7 +1,8 @@
+import { logger } from '../utils/logger';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Power, PowerOff, Wifi, WifiOff, Loader2, Server, Globe, Terminal, ExternalLink } from 'lucide-react';
-import { useMCPStore, MCPServerConfig, MCPConnectionState } from '../store/useMCPStore';
+import { Plus, X, Power, PowerOff, Wifi, Loader2, Globe, Terminal } from 'lucide-react';
+import { useMCPStore, MCPConnectionState } from '../store/useMCPStore';
 import MCPManager from '../services/MCPManager';
 
 const isNodeEnvironment = typeof process !== 'undefined' && process.versions?.node;
@@ -11,8 +12,6 @@ const MCPSettings: React.FC = () => {
   const connections = useMCPStore(s => s.connections);
   const addServer = useMCPStore(s => s.addServer);
   const removeServer = useMCPStore(s => s.removeServer);
-  const updateServer = useMCPStore(s => s.updateServer);
-
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newTransport, setNewTransport] = useState<'sse' | 'stdio'>('sse');
@@ -22,7 +21,7 @@ const MCPSettings: React.FC = () => {
   const [connecting, setConnecting] = useState<string | null>(null);
 
   useEffect(() => {
-    MCPManager.init().catch(() => {});
+    MCPManager.init().catch((e) => { logger.error('[MCPSettings] MCPManager init failed:', e); });
   }, []);
 
   const handleConnect = async (id: string) => {

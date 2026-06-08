@@ -1,32 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Terminal as TerminalIcon, Wifi, WifiOff } from 'lucide-react';
-import { useProviderStore, ProviderType, PROVIDER_DEFAULTS, STATIC_MODELS, ModelOption } from '../store/useProviderStore';
+import { useProviderStore, ModelOption } from '../store/useProviderStore';
+import { providerRegistry } from '../services/ProviderRegistry';
 import { useGiaStore } from '../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 
 type LineType = 'cmd' | 'res' | 'err' | 'info' | 'prompt' | 'success';
 interface Line { type: LineType; text: string; id: number }
 type WizardStep =
   | null
   | { flow: 'select-provider' }
-  | { flow: 'enter-key'; provider: ProviderType }
-  | { flow: 'select-model'; provider: ProviderType; models: ModelOption[] };
+  | { flow: 'enter-key'; provider: string }
+  | { flow: 'select-model'; provider: string; models: ModelOption[] };
 
 let lid = 0;
 const mk = (type: LineType, text: string): Line => ({ type, text, id: lid++ });
-
-const ALL_PROVIDERS: ProviderType[] = ['openrouter', 'anthropic', 'openai', 'gemini', 'groq', 'opencode', 'deepseek', 'cerebras', 'mistral', 'huggingface'];
-const PROVIDER_ALIAS: Record<string, ProviderType> = {
-  or: 'openrouter', openrouter: 'openrouter',
-  ant: 'anthropic', anthropic: 'anthropic',
-  oai: 'openai', openai: 'openai',
-  gem: 'gemini', gemini: 'gemini',
-  groq: 'groq',
-  oc: 'opencode', opencode: 'opencode',
-  ds: 'deepseek', deepseek: 'deepseek',
-  cb: 'cerebras', cerebras: 'cerebras',
-  ms: 'mistral', mistral: 'mistral',
-  hf: 'huggingface', huggingface: 'huggingface',
-};
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
@@ -43,13 +31,18 @@ const BOOT: Line[] = [
 
 const EngineRoom: React.FC = () => {
   const { setShowTerminal } = useGiaStore();
-  const { providers, activeProvider, setProviderKey, setProviderModel, setActiveProvider, disconnectProvider, fetchModels } = useProviderStore();
+  const { providers, activeProvider, setProviderKey, setProviderModel, setActiveProvider, setProviderBaseUrl, disconnectProvider, fetchModels } = useProviderStore(useShallow(s => ({
+    providers: s.providers, activeProvider: s.activeProvider,
+    setProviderKey: s.setProviderKey, setProviderModel: s.setProviderModel,
+    setActiveProvider: s.setActiveProvider, setProviderBaseUrl: s.setProviderBaseUrl,
+    disconnectProvider: s.disconnectProvider, fetchModels: s.fetchModels,
+  })));
   const [history, setHistory] = useState<Line[]>(BOOT);
   const [input, setInput] = useState('');
   const [cmdHist, setCmdHist] = useState<string[]>([]);
   const [cmdIdx, setCmdIdx] = useState(-1);
-  const [wizard, _setWizard] = useState<WizardStep>(null);
-  const wizardRef = useRef<WizardStep>(null);
+   const [, _setWizard] = useState<WizardStep>(null);
+   const wizardRef = useRef<WizardStep>(null);
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,11 +96,11 @@ const EngineRoom: React.FC = () => {
     if (currentWizard) {
       if (currentWizard.flow === 'select-provider') {
         const idx = parseInt(trimmed) - 1;
-        if (!isNaN(idx) && ALL_PROVIDERS[idx]) {
-          const p = ALL_PROVIDERS[idx];
-          setWizard({ flow: 'enter-key', provider: p });
-          push(mk('res', `Provider: ${PROVIDER_DEFAULTS[p].label}`), mk('prompt', 'Paste your API key (or type "cancel"):'));
-        } else push(mk('err', `Enter 1–${ALL_PROVIDERS.length}.`));
+        const allProviders = providerRegistry.getAllProviders();
+        if (!isNaN(idx) && allProviders[idx]) {
+          const p = allProviders[idx].id;
+          push(mk('res', `Provider: ${providerRegistry.getLabel(p)}`), mk('prompt', 'Paste your API key (or type "cancel"):'));
+        } else push(mk('err', `Enter 1–${allProviders.length}.`));
         return;
       }
 
@@ -120,23 +113,23 @@ const EngineRoom: React.FC = () => {
           const models = await fetchModels(currentWizard.provider);
           if (models.length === 0) {
             push(mk('err', 'No models found. Using defaults.'));
-            const defaults = STATIC_MODELS[currentWizard.provider];
+            const defaults = providerRegistry.getModels(currentWizard.provider);
             setWizard({ flow: 'select-model', provider: currentWizard.provider, models: defaults });
             push(...showModels(defaults), mk('prompt', 'Enter model number:'));
           } else {
             setWizard({ flow: 'select-model', provider: currentWizard.provider, models });
             push(...showModels(models), mk('prompt', 'Enter model number:'));
           }
-        } catch (e) {
-          push(mk('err', `Fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`));
-          setWizard(null);
-        } finally {
-          setBusy(false);
-        }
-        return;
+      } catch (e: unknown) {
+        push(mk('err', `Fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`));
+        setWizard(null);
+      } finally {
+        setBusy(false);
       }
+      return;
+    }
 
-      if (currentWizard.flow === 'select-model') {
+    if (currentWizard.flow === 'select-model') {
         const idx = parseInt(trimmed) - 1;
         const { models, provider } = currentWizard;
         if (!isNaN(idx) && models[idx]) {
@@ -145,7 +138,7 @@ const EngineRoom: React.FC = () => {
           setWizard(null);
           push(
             mk('success', `✓ Model: ${models[idx].label}`),
-            mk('success', `✓ Active: ${PROVIDER_DEFAULTS[provider].label}`),
+            mk('success', `✓ Active: ${providerRegistry.getLabel(provider)}`),
             mk('res', ''),
             mk('res', 'GIA is ready. Go back to Chat.'),
           );
@@ -164,6 +157,7 @@ const EngineRoom: React.FC = () => {
         mk('res', '  use <alias>          Switch active provider'),
         mk('res', '  status               Show all provider states'),
         mk('res', '  disconnect <alias>   Remove provider key'),
+        mk('res', '  url <alias> <url>    Set custom base URL (for local providers)'),
         mk('res', '  clear                Clear terminal'),
         mk('res', '  exit / back          Close Engine Room'),
         mk('res', ''),
@@ -172,9 +166,10 @@ const EngineRoom: React.FC = () => {
     }
 
     if (cmd === 'connect') {
+      const allProviders = providerRegistry.getAllProviders();
       setWizard({ flow: 'select-provider' });
       push(mk('res', ''), mk('prompt', 'Select provider:'));
-      ALL_PROVIDERS.forEach((p, i) => push(mk('res', `  ${i + 1}. ${PROVIDER_DEFAULTS[p].label}`)));
+      allProviders.forEach((def, i) => push(mk('res', `  ${i + 1}. ${def.label}`)));
       push(mk('res', ''), mk('prompt', 'Enter number:'));
       return;
     }
@@ -183,14 +178,14 @@ const EngineRoom: React.FC = () => {
     if (connectMatch) {
       const alias = connectMatch[1].toLowerCase();
       const key = connectMatch[2];
-      const p = PROVIDER_ALIAS[alias];
+      const p = providerRegistry.resolveAlias(alias);
       if (!p) { push(mk('err', `Unknown alias "${alias}".`)); return; }
       setProviderKey(p, key);
-      push(mk('success', `✓ Key saved for ${PROVIDER_DEFAULTS[p].label}.`));
+      push(mk('success', `✓ Key saved for ${providerRegistry.getLabel(p)}.`));
       setBusy(true);
       try {
         const models = await fetchModels(p);
-        const list = models.length > 0 ? models : STATIC_MODELS[p];
+        const list = models.length > 0 ? models : providerRegistry.getModels(p);
         setWizard({ flow: 'select-model', provider: p, models: list });
         push(...showModels(list), mk('prompt', 'Enter model number:'));
       } catch (e) {
@@ -203,17 +198,17 @@ const EngineRoom: React.FC = () => {
 
     const modelMatch = trimmed.match(/^model\s+(\S+)$/i);
     if (modelMatch) {
-      const p = PROVIDER_ALIAS[modelMatch[1].toLowerCase()];
+      const p = providerRegistry.resolveAlias(modelMatch[1].toLowerCase());
       if (!p) { push(mk('err', `Unknown alias.`)); return; }
-      if (!providers[p].enabled) { push(mk('err', `${PROVIDER_DEFAULTS[p].label} not connected.`)); return; }
-      push(mk('prompt', `Fetching models for ${PROVIDER_DEFAULTS[p].label}...`));
+      if (!providers[p].enabled) { push(mk('err', `${providerRegistry.getLabel(p)} not connected.`)); return; }
+      push(mk('prompt', `Fetching models for ${providerRegistry.getLabel(p)}...`));
       setBusy(true);
       try {
         const models = await fetchModels(p);
-        const list = models.length > 0 ? models : STATIC_MODELS[p];
+        const list = models.length > 0 ? models : providerRegistry.getModels(p);
         setWizard({ flow: 'select-model', provider: p, models: list });
         push(...showModels(list), mk('prompt', 'Enter number:'));
-      } catch (e) {
+      } catch {
         push(mk('err', `Fetch failed.`));
       } finally {
         setBusy(false);
@@ -223,23 +218,23 @@ const EngineRoom: React.FC = () => {
 
     const useMatch = trimmed.match(/^use\s+(\S+)$/i);
     if (useMatch) {
-      const p = PROVIDER_ALIAS[useMatch[1].toLowerCase()];
+      const p = providerRegistry.resolveAlias(useMatch[1].toLowerCase());
       if (!p) { push(mk('err', `Unknown alias.`)); return; }
-      if (!providers[p].enabled) { push(mk('err', `${PROVIDER_DEFAULTS[p].label} not connected.`)); return; }
+      if (!providers[p].enabled) { push(mk('err', `${providerRegistry.getLabel(p)} not connected.`)); return; }
       setActiveProvider(p);
-      push(mk('success', `✓ Active → ${PROVIDER_DEFAULTS[p].label}`));
+      push(mk('success', `✓ Active → ${providerRegistry.getLabel(p)}`));
       return;
     }
 
     const discMatch = trimmed.match(/^disconnect\s+(\S+)$/i);
     if (discMatch) {
-      const p = PROVIDER_ALIAS[discMatch[1].toLowerCase()];
+      const p = providerRegistry.resolveAlias(discMatch[1].toLowerCase());
       if (!p) { push(mk('err', `Unknown alias.`)); return; }
       disconnectProvider(p);
-      push(mk('res', `✓ ${PROVIDER_DEFAULTS[p].label} disconnected.`));
+      push(mk('res', `✓ ${providerRegistry.getLabel(p)} disconnected.`));
       if (activeProvider === p) {
         const currentProviders = useProviderStore.getState().providers;
-        const other = ALL_PROVIDERS.find(x => x !== p && currentProviders[x]?.enabled);
+        const other = providerRegistry.getAllIds().find(x => x !== p && currentProviders[x]?.enabled);
         if (other) setActiveProvider(other);
       }
       return;
@@ -247,11 +242,24 @@ const EngineRoom: React.FC = () => {
 
     if (cmd === 'status') {
       push(mk('res', ''), mk('info', 'PROVIDER STATUS'));
-      ALL_PROVIDERS.forEach((p) => {
+      providerRegistry.getAllProviders().forEach((def) => {
+        const p = def.id;
         const cfg = providers[p];
         const active = p === activeProvider ? ' ← ACTIVE' : '';
-        push(mk(cfg.enabled ? 'success' : 'err', `  ${cfg.enabled ? '●' : '○'} ${PROVIDER_DEFAULTS[p].label.padEnd(12)} ${cfg.enabled ? cfg.model : 'off'}${active}`));
+        push(mk(cfg?.enabled ? 'success' : 'err', `  ${cfg?.enabled ? '●' : '○'} ${def.label.padEnd(12)} ${cfg?.enabled ? cfg.model : 'off'}${active}`));
       });
+      return;
+    }
+
+    const urlMatch = trimmed.match(/^url\s+(\S+)\s+(\S+)$/i);
+    if (urlMatch) {
+      const alias = urlMatch[1].toLowerCase();
+      const url = urlMatch[2];
+      const p = providerRegistry.resolveAlias(alias);
+      if (!p) { push(mk('err', `Unknown alias "${alias}".`)); return; }
+      if (!['ollama', 'lmstudio'].includes(p)) { push(mk('err', `Custom URLs only for local providers (ollama, lmstudio).`)); return; }
+      setProviderBaseUrl(p, url);
+      push(mk('success', `✓ Custom URL set for ${providerRegistry.getLabel(p)}: ${url}`));
       return;
     }
 
@@ -262,7 +270,7 @@ const EngineRoom: React.FC = () => {
     }
 
     push(mk('err', `Unknown: "${trimmed}".`));
-  }, [push, providers, activeProvider, setProviderKey, setProviderModel, setActiveProvider, disconnectProvider, fetchModels, setShowTerminal]);
+  }, [push, providers, activeProvider, setProviderKey, setProviderModel, setActiveProvider, setProviderBaseUrl, disconnectProvider, fetchModels, setShowTerminal]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,7 +284,8 @@ const EngineRoom: React.FC = () => {
     else if (e.key === 'ArrowDown') { e.preventDefault(); const i = Math.max(cmdIdx - 1, -1); setCmdIdx(i); setInput(i === -1 ? '' : cmdHist[i] ?? ''); }
   };
 
-  const connectedCount = ALL_PROVIDERS.filter(p => providers[p].enabled).length;
+  const allProviderIds = providerRegistry.getAllIds();
+  const connectedCount = allProviderIds.filter(p => providers[p]?.enabled).length;
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col font-mono text-sm">
@@ -291,17 +300,17 @@ const EngineRoom: React.FC = () => {
           <span className="text-xs font-medium text-zinc-400 tracking-widest uppercase">Engine Room</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-zinc-500">{connectedCount}/{ALL_PROVIDERS.length} connected</span>
-          {ALL_PROVIDERS.map(p => (
-            <div key={p} title={PROVIDER_DEFAULTS[p].label} className="flex items-center">
-              {providers[p].enabled
+          <span className="text-[10px] text-zinc-500">{connectedCount}/{allProviderIds.length} connected</span>
+          {allProviderIds.map(p => (
+            <div key={p} title={providerRegistry.getLabel(p)} className="flex items-center">
+              {providers[p]?.enabled
                 ? <Wifi size={11} className={p === activeProvider ? 'text-amber-400' : 'text-emerald-400'} />
                 : <WifiOff size={11} className="text-zinc-700" />}
             </div>
           ))}
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            <span className="text-[10px] text-indigo-400 uppercase tracking-wider">{PROVIDER_DEFAULTS[activeProvider]?.label ?? activeProvider}</span>
+            <span className="text-[10px] text-indigo-400 uppercase tracking-wider">{providerRegistry.getLabel(activeProvider)}</span>
           </div>
         </div>
       </div>

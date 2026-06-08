@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -14,7 +15,7 @@ class BiometricService {
       try {
         const result = await NativeBiometric.isAvailable();
         return result.isAvailable;
-      } catch { return false; }
+      } catch (e) { logger.warn('[BiometricService] Native biometric unavailable:', e); return false; }
     }
     // Web: check WebAuthn support
     return typeof window.PublicKeyCredential !== 'undefined';
@@ -35,7 +36,7 @@ class BiometricService {
         });
         return true;
       } catch (e) {
-        console.error('Biometric verification failed:', e);
+        logger.error('Biometric verification failed:', e);
         return await this.verifyPIN();
       }
     }

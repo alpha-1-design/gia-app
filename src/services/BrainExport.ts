@@ -1,7 +1,7 @@
+import { logger } from '../utils/logger';
 import { useMemoryStore, MemoryCategory, MemoryTier } from '../store/useMemoryStore';
-import { useGiaStore } from '../store/useGiaStore';
+import { useGiaStore, Skill } from '../store/useGiaStore';
 import { useGiaIdentity } from '../store/useGiaIdentity';
-import { useProviderStore } from '../store/useProviderStore';
 
 export interface BrainDump {
   version: 1;
@@ -56,7 +56,7 @@ export function loadCloudConfig(): CloudConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch (e) { logger.error('[BrainExport] Failed to load cloud config:', e); }
   return { url: '', username: '', password: '', enabled: false };
 }
 
@@ -73,10 +73,10 @@ export function serializeBrain(): BrainDump {
     key: m.key,
     value: m.value,
     category: m.category,
-    tier: (m as any).tier || 'semantic',
+    tier: m.tier || 'semantic',
     timestamp: m.timestamp,
     lastAccessed: m.lastAccessed,
-    confidence: (m as any).confidence || 1,
+    confidence: m.confidence || 1,
   }));
 
   return {
@@ -152,7 +152,7 @@ export function importBrainFromFile(file: File): Promise<{ success: boolean; mes
                 description: s.description,
                 systemPrompt: s.systemPrompt,
                 tools: s.tools,
-                category: s.category as any,
+                category: s.category as Skill['category'],
               });
             }
           });
@@ -167,7 +167,7 @@ export function importBrainFromFile(file: File): Promise<{ success: boolean; mes
         const identityStore = useGiaIdentity.getState();
         if (data.gia.name) {
           identityStore.setName(data.gia.name);
-          identityStore.setPersonality(data.gia.personalityStyle as any);
+          identityStore.setPersonality(data.gia.personalityStyle);
           identityStore.setCustomPrompt(data.gia.customPrompt);
           identityStore.setAvatar(data.gia.avatarIcon);
           identityStore.setFocusAreas(data.gia.focusAreas);
@@ -204,7 +204,7 @@ export async function exportBrainToCloud(config: CloudConfig): Promise<string> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     return 'Brain uploaded to cloud successfully.';
-  } catch (e: any) {
-    throw new Error(`Cloud upload failed: ${e.message}`);
+  } catch (e: unknown) {
+    throw new Error(`Cloud upload failed: ${(e as Error).message}`);
   }
 }

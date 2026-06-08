@@ -1,27 +1,11 @@
-import { useProviderStore, PROVIDER_DEFAULTS } from '../store/useProviderStore';
-import { isNativePlatform } from '../utils/helpers';
+import { useProviderStore } from '../store/useProviderStore';
+import { providerRegistry } from './ProviderRegistry';
 
 export interface ImageGenResult {
   url: string;
   revisedPrompt?: string;
   error?: string;
 }
-
-// Known image generation models per provider
-const IMAGE_MODELS: Record<string, string> = {
-  openai: 'dall-e-3',
-  openrouter: 'openai/dall-e-3',
-  anthropic: '',
-  gemini: '',
-  groq: '',
-  opencode: '',
-  deepseek: '',
-  cerebras: '',
-  mistral: '',
-  huggingface: 'black-forest-labs/FLUX.1-dev',
-};
-
-const isNative = isNativePlatform();
 
 class ImageService {
   private static instance: ImageService;
@@ -47,13 +31,12 @@ class ImageService {
     }
 
     const config = providers[targetProvider];
-    const targetDefaults = PROVIDER_DEFAULTS[targetProvider];
-    if (!targetDefaults) return { url: '', error: `${targetProvider} is not fully configured.` };
-    const { baseUrl } = targetDefaults;
-    const imageModel = IMAGE_MODELS[targetProvider];
+    const baseUrl = providerRegistry.getBaseUrl(targetProvider);
+    if (!baseUrl) return { url: '', error: `${targetProvider} is not fully configured.` };
+    const imageModel = providerRegistry.getImageModel(targetProvider);
 
     if (!imageModel) {
-      return { url: '', error: `${PROVIDER_DEFAULTS[targetProvider]?.label || targetProvider} does not support image generation. Please switch to OpenAI or OpenRouter.` };
+      return { url: '', error: `${providerRegistry.getLabel(targetProvider)} does not support image generation. Please switch to OpenAI or OpenRouter.` };
     }
 
     // HuggingFace: model-specific Inference API endpoint
@@ -77,8 +60,8 @@ class ImageService {
         const url = URL.createObjectURL(blob);
         this.lastBlobUrl = url;
         return { url };
-      } catch (e: any) {
-        return { url: '', error: e.message };
+      } catch (e: unknown) {
+        return { url: '', error: e instanceof Error ? e.message : String(e) };
       }
     }
 
@@ -115,9 +98,9 @@ class ImageService {
           url: data.data[0].url,
           revisedPrompt: data.data[0].revised_prompt
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (url === endpoints[endpoints.length - 1]) {
-          return { url: '', error: e.message };
+          return { url: '', error: e instanceof Error ? e.message : String(e) };
         }
       }
     }

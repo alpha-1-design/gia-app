@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import * as pdfjsLib from 'pdfjs-dist';
 
 const pdfVersion = pdfjsLib.version;
@@ -13,13 +14,12 @@ try {
   }).catch(() => {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
   });
-} catch { /* will use CDN fallback in the promise chain above */ }
+} catch (e) { logger.error('[PDFService] Failed to initialize Vite worker, falling back to CDN:', e); }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const extractPageText = (textContent: any): string => {
+const extractPageText = (textContent: { items: { str: string; transform?: number[]; width?: number }[] }): string => {
   const items: { str: string; x: number; y: number; width: number }[] = textContent.items
-    .filter((item: any): item is { str: string; transform?: number[]; width?: number } => typeof item.str === 'string')
-    .map((item: any) => ({
+    .filter((item): item is { str: string; transform?: number[]; width?: number } => typeof item.str === 'string')
+    .map((item) => ({
     str: item.str,
     x: item.transform?.[4] ?? 0,
     y: item.transform?.[5] ?? 0,
@@ -92,7 +92,7 @@ export class PDFService {
         const stripped = raw
           .replace(/\([^)]*\)/g, m => m.slice(1, -1))
           .replace(/<[^>]*>/g, '')
-          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ' ')
+          .replace(/[^ -~]/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
         if (stripped.length > 20) return stripped.slice(0, 10000);

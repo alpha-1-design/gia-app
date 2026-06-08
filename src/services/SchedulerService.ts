@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import GiaBrain from './GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
@@ -77,7 +78,7 @@ class SchedulerService {
             sound: 'default',
           }],
         });
-      } catch {}
+      } catch (e) { logger.error('[SchedulerService] Failed to show notification for task:', e); }
     } catch {
       updateTaskStatus(task.id, 'error', 'Task failed.');
     }

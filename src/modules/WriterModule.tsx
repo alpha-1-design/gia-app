@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
@@ -35,21 +36,24 @@ const WriterModule: React.FC = () => {
         setFormat(parsed.format || 'Essay');
         setWordTarget(parsed.wordTarget || 300);
       }
-    } catch {}
+    } catch (e) { logger.error('[WriterModule] Failed to load draft from localStorage:', e); }
   }, []);
+
 
   useEffect(() => {
     if (draft) {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ draft, prompt, format, wordTarget }));
-      } catch {}
+      } catch (e) { logger.error('[WriterModule] Failed to save draft to localStorage:', e); }
     }
   }, [draft, prompt, format, wordTarget]);
 
   const clearDraft = () => {
     setDraft('');
     setPrompt('');
-    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setFormat('Essay');
+    setWordTarget(300);
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { logger.error('[WriterModule] Failed to clear draft from localStorage:', e); }
   };
 
   const handleWrite = useCallback(async () => {
@@ -97,7 +101,7 @@ const WriterModule: React.FC = () => {
       });
       addNotification(`📄 Draft exported to Documents: ${fileName}`);
     } catch (e) {
-      console.error('Export failed', e);
+      logger.error('Export failed', e);
       const blob = new Blob([draft], { type: 'text/plain' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import { CapacitorHttp } from '@capacitor/core';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -81,13 +82,14 @@ class CodeRunner {
         return;
       }
       const logs: string[] = [];
-      (win as any).console = {
-        log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
-        error: (...args: any[]) => logs.push('[ERROR] ' + args.map(a => String(a)).join(' ')),
-        warn: (...args: any[]) => logs.push('[WARN] ' + args.map(a => String(a)).join(' ')),
+      const sandbox = win! as Window & { console: Record<string, (...args: unknown[]) => void>; Function: FunctionConstructor };
+      sandbox.console = {
+        log: (...args: unknown[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+        error: (...args: unknown[]) => logs.push('[ERROR] ' + args.map(a => String(a)).join(' ')),
+        warn: (...args: unknown[]) => logs.push('[WARN] ' + args.map(a => String(a)).join(' ')),
       };
       try {
-        const result = (win as any).Function(code)();
+        const result = new sandbox.Function(code)();
         clearTimeout(timeout);
         document.body.removeChild(iframe);
         const output = logs.join('\n');
@@ -96,10 +98,10 @@ class CodeRunner {
         } else {
           resolve({ output: output || 'undefined', error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' });
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         clearTimeout(timeout);
         document.body.removeChild(iframe);
-        resolve({ output: logs.join('\n'), error: e.message || 'JavaScript execution failed', exitCode: 1, language: 'javascript', version: 'local (browser)' });
+        resolve({ output: logs.join('\n'), error: e instanceof Error ? e.message : 'JavaScript execution failed', exitCode: 1, language: 'javascript', version: 'local (browser)' });
       }
     });
   }
@@ -112,13 +114,17 @@ class CodeRunner {
 
     // Run JavaScript locally in browser — instant, no network needed
     if (lang === 'javascript') {
-      return this.runLocalJS(req.code);
+      const result = await this.runLocalJS(req.code);
+      logger.warn('⚠️ JavaScript executed locally in sandboxed iframe. For full language support, use the Piston API endpoint in Settings → Code Execution.');
+      result.output = result.output + (result.output ? '\n' : '') + '⚠️ Running in local sandbox (limited). For full language support, configure Piston API in Settings.';
+      return result;
     }
 
     const files = [{ name: `main.${lang}`, content: req.code }];
 
     try {
-      let data: any;
+      interface PistonResponse { run?: { stdout?: string; stderr?: string; output?: string; code?: number }; version?: string }
+      let data: PistonResponse;
       const body = {
         language: lang,
         version: '*',
@@ -218,12 +224,12 @@ class CodeRunner {
     return { 'Content-Type': 'application/json', ...this.getAuthHeaders(), ...extra };
   }
 
-  private async fetchJSON(url: string, options?: RequestInit): Promise<any> {
+  private async fetchJSON(url: string, options?: RequestInit): Promise<unknown> {
     const headers = this.getRequestHeaders(options?.headers as Record<string, string> || {});
     const mergedOptions = { ...options, headers };
     if (isNative) {
       const method = (options?.method || 'GET').toLowerCase() as 'get' | 'post';
-      const res = await (CapacitorHttp as any)[method]({ url, connectTimeout: 10000, readTimeout: 10000, ...(options?.body ? { data: JSON.parse(options.body as string) } : {}), ...headers });
+      const res = await (CapacitorHttp as unknown as Record<string, (opts: Record<string, unknown>) => Promise<{ status: number; data: unknown }>>)[method]({ url, connectTimeout: 10000, readTimeout: 10000, ...(options?.body ? { data: JSON.parse(options.body as string) } : {}), ...headers });
       if (res.status === 401) throw new Error('Piston API requires authentication. Set an API key in Settings.');
       if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
       return res.data;
@@ -271,7 +277,7 @@ class CodeRunner {
       history.unshift(record);
       if (history.length > 100) history.length = 100;
       localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch {}
+    } catch (e) { logger.error('[CodeRunner] localStorage not available for saving history:', e); }
   }
 
   getHistory(): CodeRunRecord[] {

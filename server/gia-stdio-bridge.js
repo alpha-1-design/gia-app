@@ -85,17 +85,19 @@ async function start() {
       // MCP stdio uses newline-delimited JSON
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line);
-          handleMessage(i, cfg.name, child, msg);
-        } catch {}
-      }
+       for (const line of lines) {
+         if (!line.trim()) continue;
+         try {
+           const msg = JSON.parse(line);
+           handleMessage(i, cfg.name, child, msg);
+          } catch {
+            // Ignore parse errors - they'll be handled by the next chunk
+          }
+       }
     });
 
-    child.on('error', (err) => console.error(`[bridge] ${cfg.name} error:`, err.message));
-    child.on('exit', (code) => console.error(`[bridge] ${cfg.name} exited (${code})`));
+       child.on('error', () => console.error(`[bridge] ${cfg.name} error`));
+       child.on('exit', (code) => console.error(`[bridge] ${cfg.name} exited (${code})`));
 
     // Send initialize request
     sendJsonRpc(child, {
@@ -152,14 +154,14 @@ async function start() {
     if (req.method === 'POST' && req.url === '/message') {
       let body = '';
       req.on('data', (chunk) => body += chunk);
-      req.on('end', () => {
-        try {
-          const msg = JSON.parse(body);
-          handleClientMessage(msg);
-        } catch {}
-        res.writeHead(202, { 'Access-Control-Allow-Origin': '*' });
-        res.end();
-      });
+       req.on('end', () => {
+         try {
+           const msg = JSON.parse(body);
+           handleClientMessage(msg);
+          } catch {
+            // Ignore JSON parse errors
+          }
+       });
       return;
     }
 
@@ -207,8 +209,7 @@ async function start() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // Track SSE clients
-  const sseClients = [];
+  // Track SSE clients (placeholder for future use)
 
   function handleClientMessage(msg) {
     const serverIdx = msg.serverIndex ?? 0;

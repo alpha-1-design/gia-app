@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
+import { genId } from '../utils/id';
 
-export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam';
+export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 
@@ -17,14 +18,122 @@ export interface Message {
   model?: string;
   thinking?: boolean;
   thoughts?: string;
+  parentId?: string;
+  branchId?: string;
+}
+
+export interface MessageNode {
+  message: Message;
+  children: MessageNode[];
 }
 
 export interface ChatSession {
   id: string;
   title: string;
-  messages: Message[];
+  messages: MessageNode[]; // Tree structure
   createdAt: number;
   updatedAt: number;
+  currentBranchId: string; // Active branch
+  branches?: Record<string, { id: string; name: string; createdAt: number }>; // Named branches
+}
+
+// Tree helper functions
+function addMessageToTree(nodes: MessageNode[], msg: Message, branchId: string): MessageNode[] {
+  const newNode: MessageNode = { message: { ...msg, branchId }, children: [] };
+  
+  if (msg.parentId) {
+    // Find parent and add as child
+    return nodes.map(node => {
+      if (node.message.id === msg.parentId) {
+        return { ...node, children: [...node.children, newNode] };
+      }
+      if (node.children.length > 0) {
+        return { ...node, children: addMessageToTree(node.children, msg, branchId) };
+      }
+      return node;
+    });
+  }
+  
+  // Root message
+  return [...nodes, newNode];
+}
+
+function updateMessageInTree(nodes: MessageNode[], msgId: string, content: string, thoughts?: string): MessageNode[] {
+  return nodes.map(node => {
+    if (node.message.id === msgId) {
+      return { ...node, message: { ...node.message, content, ...(thoughts !== undefined ? { thoughts } : {}), thinking: false } };
+    }
+    if (node.children.length > 0) {
+      return { ...node, children: updateMessageInTree(node.children, msgId, content, thoughts) };
+    }
+    return node;
+  });
+}
+
+function findMessageInTree(nodes: MessageNode[], msgId: string): MessageNode | null {
+  for (const node of nodes) {
+    if (node.message.id === msgId) return node;
+    if (node.children.length > 0) {
+      const found = findMessageInTree(node.children, msgId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function getPathToMessage(nodes: MessageNode[], msgId: string): MessageNode[] {
+  const path: MessageNode[] = [];
+  
+  function dfs(node: MessageNode): boolean {
+    path.push(node);
+    if (node.message.id === msgId) return true;
+    for (const child of node.children) {
+      if (dfs(child)) return true;
+    }
+    path.pop();
+    return false;
+  }
+  
+  for (const node of nodes) {
+    if (dfs(node)) break;
+  }
+  return path;
+}
+
+function clonePathAsNewBranch(nodes: MessageNode[], path: MessageNode[], newBranchId: string): MessageNode[] {
+  if (path.length === 0) return [];
+  
+  // Clone the path, each node gets the new branchId
+  const clonedPath = path.map(p => ({
+    message: { ...p.message, branchId: newBranchId },
+    children: [] as MessageNode[]
+  }));
+  
+  // Link them as parent-child
+  for (let i = clonedPath.length - 1; i > 0; i--) {
+    clonedPath[i - 1].children = [clonedPath[i]];
+  }
+  
+  return [clonedPath[0]];
+}
+
+function flattenBranch(nodes: MessageNode[], branchId: string): Message[] {
+  const result: Message[] = [];
+  
+  function traverse(node: MessageNode) {
+    if (node.message.branchId === branchId || branchId === 'all') {
+      result.push(node.message);
+    }
+    for (const child of node.children) {
+      traverse(child);
+    }
+  }
+  
+  for (const node of nodes) {
+    traverse(node);
+  }
+  
+  return result;
 }
 
 export interface ScheduledTask {
@@ -42,7 +151,7 @@ export interface SkillTool {
   id: string;
   name: string;
   description: string;
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
 }
 
 export interface Skill {
@@ -91,11 +200,17 @@ interface GiaState {
   clarification: Clarification | null;
   wakeWord: string;
   keepListening: boolean;
+  autoStartWakeWord: boolean;
+  voiceLanguage: string;
   customInstructions: string;
   pinnedMemories: string[];
   theme: 'dark' | 'light' | 'system';
+  connectionStatus: 'online' | 'offline';
+  providerConnected: boolean;
+  currentTool: string | null;
 
   setModule: (module: Module) => void;
+  setCurrentTool: (tool: string | null) => void;
   setClarification: (c: Clarification | null) => void;
   setIntentState: (state: IntentState) => void;
   setShowTerminal: (show: boolean) => void;
@@ -105,6 +220,7 @@ interface GiaState {
   setThinkingPhase: (phase: ThinkingPhase) => void;
   setWakeWord: (word: string) => void;
   setKeepListening: (on: boolean) => void;
+  setVoiceLanguage: (lang: string) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -116,6 +232,12 @@ interface GiaState {
   forkSession: (sessionId: string, fromIndex: number) => string;
   clearSession: (sessionId: string) => void;
   getActiveSession: () => ChatSession | null;
+  switchBranch: (sessionId: string, branchId: string) => void;
+  getBranchMessages: (sessionId: string, branchId: string) => Message[];
+  getAllBranchIds: (sessionId: string) => string[];
+  addBranch: (sessionId: string, fromMsgId: string, branchName?: string) => string;
+  renameBranch: (sessionId: string, branchId: string, name: string) => void;
+  deleteBranch: (sessionId: string, branchId: string) => void;
   addScheduledTask: (task: ScheduledTask) => void;
   updateTaskStatus: (id: string, status: ScheduledTask['status'], result?: string, nextRun?: number) => void;
   deleteTask: (id: string) => void;
@@ -135,6 +257,8 @@ interface GiaState {
   clearConsole: () => void;
   setShowProtocols: (show: boolean) => void;
   setTheme: (theme: 'dark' | 'light' | 'system') => void;
+  setConnectionStatus: (status: 'online' | 'offline') => void;
+  setProviderConnected: (connected: boolean) => void;
 }
 
 export interface ExamResult {
@@ -149,12 +273,6 @@ export interface ExamResult {
   timestamp: number;
   timeSpent: number;
 }
-
-const genId = () => {
-  const arr = new Uint8Array(8);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
-};
 
 export const useGiaStore = create<GiaState>()(
   persist(
@@ -223,18 +341,24 @@ export const useGiaStore = create<GiaState>()(
       consoleLogs: [],
       showConsole: false,
       showProtocols: false,
-      webSearch: false,
+      webSearch: true,
       extThinking: false,
       handsOff: false,
       thinkingPhase: 'idle',
       clarification: null,
-      wakeWord: localStorage.getItem('gia-wake-word') || 'hey gia',
-      keepListening: localStorage.getItem('gia-keep-listening') !== 'false',
-      customInstructions: localStorage.getItem('gia-custom-instructions') || '',
-      pinnedMemories: JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'),
+      wakeWord: (() => { try { return localStorage.getItem('gia-wake-word') || 'hey gia'; } catch { return 'hey gia'; } })(),
+      keepListening: (() => { try { return localStorage.getItem('gia-keep-listening') === 'true'; } catch { return false; } })(),
+      autoStartWakeWord: (() => { try { return localStorage.getItem('gia-auto-start-wake-word') === 'true'; } catch { return false; } })(),
+      voiceLanguage: (() => { try { return localStorage.getItem('gia-voice-language') || 'en-US'; } catch { return 'en-US'; } })(),
+      customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
+      pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
       theme: 'dark',
+      connectionStatus: navigator.onLine ? 'online' : 'offline',
+      providerConnected: false,
+      currentTool: null,
 
       setModule: (module) => set({ currentModule: module }),
+      setCurrentTool: (tool) => set({ currentTool: tool }),
       setClarification: (c) => set({ clarification: c }),
       setIntentState: (state) => set({ intentState: state }),
       setShowTerminal: (show) => set({ showTerminal: show }),
@@ -249,6 +373,14 @@ export const useGiaStore = create<GiaState>()(
       setKeepListening: (on) => {
         localStorage.setItem('gia-keep-listening', String(on));
         set({ keepListening: on });
+      },
+      setAutoStartWakeWord: (on) => {
+        localStorage.setItem('gia-auto-start-wake-word', String(on));
+        set({ autoStartWakeWord: on });
+      },
+      setVoiceLanguage: (lang) => {
+        localStorage.setItem('gia-voice-language', lang);
+        set({ voiceLanguage: lang });
       },
       setCustomInstructions: (text) => {
         localStorage.setItem('gia-custom-instructions', text);
@@ -266,8 +398,9 @@ export const useGiaStore = create<GiaState>()(
 
       createSession: () => {
         const id = genId();
+        const branchId = genId();
         set((s) => ({
-          sessions: [{ id, title: 'New Chat', messages: [], createdAt: Date.now(), updatedAt: Date.now() }, ...s.sessions],
+          sessions: [{ id, title: 'New Chat', messages: [], createdAt: Date.now(), updatedAt: Date.now(), currentBranchId: branchId }, ...s.sessions],
           activeSessionId: id,
         }));
         return id;
@@ -277,7 +410,9 @@ export const useGiaStore = create<GiaState>()(
       addMessage: (sessionId, msg) =>
         set((s) => ({
           sessions: s.sessions.map((sess) =>
-            sess.id === sessionId ? { ...sess, messages: [...sess.messages, msg], updatedAt: Date.now() } : sess
+            sess.id === sessionId
+              ? { ...sess, messages: addMessageToTree(sess.messages, msg, sess.currentBranchId), updatedAt: Date.now() }
+              : sess
           ),
         })),
 
@@ -285,7 +420,7 @@ export const useGiaStore = create<GiaState>()(
         set((s) => ({
           sessions: s.sessions.map((sess) =>
             sess.id === sessionId
-              ? { ...sess, messages: sess.messages.map((m) => (m.id === msgId ? { ...m, content, ...(thoughts !== undefined ? { thoughts } : {}), thinking: false } : m)) }
+              ? { ...sess, messages: updateMessageInTree(sess.messages, msgId, content, thoughts) }
               : sess
           ),
         })),
@@ -299,24 +434,144 @@ export const useGiaStore = create<GiaState>()(
           return { sessions, activeSessionId: s.activeSessionId === sessionId ? (sessions[0]?.id ?? null) : s.activeSessionId };
         }),
 
-      forkSession: (sessionId, fromIndex) => {
+      forkSession: (sessionId, msgId) => {
         const { sessions } = get();
         const orig = sessions.find((s) => s.id === sessionId);
         if (!orig) return sessionId;
-        const id = genId();
+        const branchId = genId();
+        const newId = genId();
+        const parentMsg = findMessageInTree(orig.messages, msgId);
+        if (!parentMsg) return sessionId;
+        
+        // Get path from root to parent message
+        const path = getPathToMessage(orig.messages, msgId);
+        
+        // Create new tree with only the path, then add as new branch
+        const newTree = clonePathAsNewBranch(orig.messages, path, branchId);
+        
         set((s) => ({
-          sessions: [{ id, title: `Fork: ${orig.title}`, messages: orig.messages.slice(0, fromIndex + 1), createdAt: Date.now(), updatedAt: Date.now() }, ...s.sessions],
-          activeSessionId: id,
+          sessions: [{ id: newId, title: `Branch: ${orig.title}`, messages: newTree, createdAt: Date.now(), updatedAt: Date.now(), currentBranchId: branchId }, ...s.sessions],
+          activeSessionId: newId,
         }));
-        return id;
+        return newId;
       },
 
       clearSession: (sessionId) =>
         set((s) => ({
           sessions: s.sessions.map((sess) =>
-            sess.id === sessionId ? { ...sess, messages: [], title: 'New Chat', updatedAt: Date.now() } : sess
+            sess.id === sessionId ? { ...sess, messages: [], title: 'New Chat', updatedAt: Date.now(), currentBranchId: genId() } : sess
           ),
         })),
+
+      switchBranch: (sessionId, branchId) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === sessionId ? { ...sess, currentBranchId: branchId, updatedAt: Date.now() } : sess
+          ),
+        })),
+
+      getBranchMessages: (sessionId, branchId) => {
+        const { sessions } = get();
+        const sess = sessions.find((s) => s.id === sessionId);
+        if (!sess) return [];
+        return flattenBranch(sess.messages, branchId);
+      },
+
+      getAllBranchIds: (sessionId) => {
+        const { sessions } = get();
+        const sess = sessions.find((s) => s.id === sessionId);
+        if (!sess) return [sess?.currentBranchId || ''].filter(Boolean);
+        const branchIds = new Set<string>();
+        function collect(nodes: MessageNode[]) {
+          for (const node of nodes) {
+            if (node.message.branchId) branchIds.add(node.message.branchId);
+            collect(node.children);
+          }
+        }
+        collect(sess.messages);
+        return Array.from(branchIds);
+      },
+
+      addBranch: (sessionId, fromMsgId, branchName) => {
+        const { sessions } = get();
+        const orig = sessions.find((s) => s.id === sessionId);
+        if (!orig) return sessionId;
+        const branchId = genId();
+        const newBranchName = branchName || `Branch ${Object.keys(orig.branches || {}).length + 1}`;
+        const parentMsg = findMessageInTree(orig.messages, fromMsgId);
+        if (!parentMsg) return sessionId;
+        
+        // Get path from root to parent message
+        const path = getPathToMessage(orig.messages, fromMsgId);
+        
+        // Clone path as new branch
+        const newTree = clonePathAsNewBranch(orig.messages, path, branchId);
+        
+        // Get existing root messages that are NOT in this path, keeping them too
+        const otherRoots = orig.messages.filter(m => !path.find(p => p.message.id === m.message.id));
+        
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === sessionId
+              ? {
+                  ...sess,
+                  messages: [...newTree, ...otherRoots],
+                  currentBranchId: branchId,
+                  updatedAt: Date.now(),
+                  branches: {
+                    ...(sess.branches || {}),
+                    [branchId]: { id: branchId, name: newBranchName, createdAt: Date.now() },
+                  },
+                }
+              : sess
+          ),
+        }));
+        return branchId;
+      },
+
+      renameBranch: (sessionId, branchId, name) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === sessionId
+              ? { ...sess, branches: { ...(sess.branches || {}), [branchId]: { ...(sess.branches?.[branchId] || { id: branchId, createdAt: Date.now() }), name } } }
+              : sess
+          ),
+        })),
+
+      deleteBranch: (sessionId, branchId) =>
+        set((s) => {
+          const sess = s.sessions.find((se) => se.id === sessionId);
+          if (!sess) return s;
+          const allIds = (() => {
+            const ids = new Set<string>();
+            function collect(nodes: MessageNode[]) {
+              for (const node of nodes) {
+                if (node.message.branchId) ids.add(node.message.branchId);
+                collect(node.children);
+              }
+            }
+            collect(sess.messages);
+            return Array.from(ids);
+          })();
+          if (allIds.length <= 1) return s;
+          const newCurrent = sess.currentBranchId === branchId
+            ? allIds.find((id) => id !== branchId) || sess.currentBranchId
+            : sess.currentBranchId;
+          return {
+            sessions: s.sessions.map((se) =>
+              se.id === sessionId
+                ? {
+                    ...se,
+                    messages: se.messages.filter((m) => m.message.branchId !== branchId),
+                    currentBranchId: newCurrent,
+                    branches: Object.fromEntries(
+                      Object.entries(se.branches || {}).filter(([k]) => k !== branchId)
+                    ),
+                  }
+                : se
+            ),
+          };
+        }),
 
       getActiveSession: () => {
         const { sessions, activeSessionId } = get();
@@ -365,6 +620,8 @@ export const useGiaStore = create<GiaState>()(
       clearConsole: () => set({ consoleLogs: [] }),
       setShowProtocols: (show) => set({ showProtocols: show }),
       setTheme: (theme) => set({ theme }),
+      setConnectionStatus: (status) => set({ connectionStatus: status }),
+      setProviderConnected: (connected) => set({ providerConnected: connected }),
     }),
     {
       name: 'gia-store-v3',
@@ -381,6 +638,10 @@ export const useGiaStore = create<GiaState>()(
         extThinking: s.extThinking,
         handsOff: s.handsOff,
         theme: s.theme,
+        wakeWord: s.wakeWord,
+        keepListening: s.keepListening,
+        autoStartWakeWord: s.autoStartWakeWord,
+        voiceLanguage: s.voiceLanguage,
       }),
     }
   )

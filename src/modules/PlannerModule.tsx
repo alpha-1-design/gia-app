@@ -1,22 +1,42 @@
+import { logger } from '../utils/logger';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ListTodo, CheckCircle2, Circle, Download, Trash2, Plus, Loader2, Calendar, Clock, X, Edit3 } from 'lucide-react';
+import { ListTodo, CheckCircle2, Circle, Download, Trash2, Loader2, Calendar, Clock, X, Edit3 } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { extractJSON, getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
+import { extractJSON, getIntervalMs, formatNextRun } from '../utils/helpers';
+import { genId } from '../utils/id';
+
+async function generateWithJsonRetry<T>(
+  generateFn: () => Promise<{ text: string }>,
+  maxRetries = 2
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await generateFn();
+      const parsed = extractJSON<T>(res.text);
+      return parsed;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      logger.warn(`[PlannerModule] JSON parse attempt ${attempt + 1} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  }
+  
+  throw lastError || new Error('Failed to parse JSON after retries');
+}
 
 interface PlanStep { id: string; title: string; description: string; done: boolean; priority: 'high'|'medium'|'low'; eta?: string }
 const PRIORITY_COLORS = {
   high: 'text-rose-500 bg-rose-50 border-rose-100',
   medium: 'text-amber-500 bg-amber-50 border-amber-100',
   low: 'text-emerald-500 bg-emerald-50 border-emerald-100',
-};
-
-const genId = () => {
-  const arr = new Uint8Array(8);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => '0123456789abcdefghijklmnopqrstuvwxyz'[b % 36]).join('');
 };
 
 const PlannerModule: React.FC = () => {
@@ -65,18 +85,20 @@ const PlannerModule: React.FC = () => {
     const text = prompt.trim(); if (!text || loading) return;
     setLoading(true); setError(''); setIntentState('thinking');
     try {
-      const res = await GiaBrain.generate({
-        signal: AbortSignal.timeout(30_000),
-        prompt: text,
-        systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
+      const parsed = await generateWithJsonRetry<{ steps: Omit<PlanStep, 'done'>[]; title: string }>(
+        () => GiaBrain.generate({
+          signal: AbortSignal.timeout(30_000),
+          prompt: text,
+          systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
 {"title":"Concise plan title","steps":[{"id":"1","title":"Step title","description":"Specific actionable description","priority":"high|medium|low","eta":"e.g. Day 1, Week 2"}]}
 Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only JSON.`,
-        systemPromptMode: 'append',
-        forceJson: true,
-        temperature: 0.45,
-        maxTokens: 1500,
-      });
-      const parsed = extractJSON(res.text);
+          systemPromptMode: 'append',
+          forceJson: true,
+          temperature: 0.45,
+          maxTokens: 1500,
+        }),
+        2
+      );
       if (!parsed.steps || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
         throw new Error('AI returned an invalid response format. Please try again.');
       }
@@ -116,8 +138,8 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
       addNotification(`⏰ Scheduled: ${task.title.slice(0,25)}...`);
 
       mountTimeoutRef.current = setTimeout(() => runTask(task), delayMs);
-    } catch {} finally { setSchedLoading(false); }
-  }, [schedPrompt, schedInterval, schedLoading, editingTask, addScheduledTask, updateTaskStatus, deleteTask, addNotification, runTask]);
+    } catch (e) { logger.error('[PlannerModule] Scheduling failed:', e); } finally { setSchedLoading(false); }
+  }, [schedPrompt, schedInterval, schedLoading, editingTask, addScheduledTask, deleteTask, addNotification, runTask]);
 
   const startEdit = (task: ScheduledTask) => {
     setEditingTask(task);

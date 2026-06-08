@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 /**
  * Desktop File System Access API wrapper.
  * Provides read/write/list access to a user-picked directory.
@@ -23,7 +25,7 @@ class DesktopFS {
       return null;
     }
     try {
-      const handle = await (window as any).showDirectoryPicker();
+      const handle = await (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker();
       this._handle = handle as FileSystemDirectoryHandle;
       this._rootName = this._handle.name;
       this._persistHandle();
@@ -40,8 +42,8 @@ class DesktopFS {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     try {
-      const { name } = JSON.parse(raw);
-      const handles = await (navigator as any).storage?.getDirectory?.();
+      JSON.parse(raw);
+      const handles = await (navigator as Navigator & { storage?: { getDirectory?: () => Promise<unknown> } }).storage?.getDirectory?.();
       if (handles) {
         // In secure contexts, we can request the handle again
         // but for simplicity, require re-pick on page reload
@@ -104,7 +106,7 @@ class DesktopFS {
     }
     const entries: FileEntry[] = [];
     // `entries()` is a standard method on FileSystemDirectoryHandle
-    for await (const [name, entry] of (dir as any).entries()) {
+    for await (const [name, entry] of dir.entries()) {
       entries.push({
         name,
         path: path ? `${path}/${name}` : name,
@@ -137,7 +139,7 @@ class DesktopFS {
       // We can't persist FileSystemDirectoryHandle directly to localStorage,
       // but we can store the name for display. Require re-pick on reload.
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: this._rootName }));
-    } catch {}
+    } catch (e) { logger.error('[DesktopFS] localStorage not available for persisting handle:', e); }
   }
 }
 

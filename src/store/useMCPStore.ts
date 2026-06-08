@@ -69,13 +69,12 @@ export const useMCPStore = create<MCPStoreState>()(
       },
 
       removeServer: (id) =>
-        set((s) => {
-          const { [id]: _, ...rest } = s.connections;
-          return {
-            servers: s.servers.filter((sv) => sv.id !== id),
-            connections: rest,
-          };
-        }),
+        set((s) => ({
+          servers: s.servers.filter((sv) => sv.id !== id),
+          connections: Object.fromEntries(
+            Object.entries(s.connections).filter(([k]) => k !== id)
+          ),
+        })),
 
       updateServer: (id, config) =>
         set((s) => ({

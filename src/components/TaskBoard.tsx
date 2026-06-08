@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { GiaTask, useTaskStore, TaskPriority } from '../store/useTaskStore';
-import { Sparkles, Plus, Trash2, GripVertical, Clock, Tag } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Clock, Tag } from 'lucide-react';
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   low: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
@@ -161,7 +161,7 @@ function AddTaskForm({ status, onClose }: { status: GiaTask['status']; onClose: 
 }
 
 export function TaskBoard() {
-  const { tasks, columns, moveTask, deleteTask } = useTaskStore();
+  const { tasks, columns, moveTask } = useTaskStore();
   const [addingTo, setAddingTo] = useState<GiaTask['status'] | null>(null);
   const [search, setSearch] = useState('');
   const dragOverCol = useRef<string | null>(null);

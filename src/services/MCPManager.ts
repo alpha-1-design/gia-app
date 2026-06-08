@@ -1,5 +1,6 @@
+import { logger } from '../utils/logger';
 import { MCPClient, type MCPToolDefinition } from './MCPClient';
-import { useMCPStore, type MCPServerConfig, type MCPConnectionState } from '../store/useMCPStore';
+import { useMCPStore } from '../store/useMCPStore';
 import GiaTools from './GiaTools';
 
 class MCPManager {
@@ -12,14 +13,14 @@ class MCPManager {
     this.initialized = true;
 
     const store = useMCPStore.getState();
-    let servers = store.servers;
+    const servers = store.servers;
 
     // Auto-detect GIA Stdio Bridge at localhost:3080
     this._detectBridge(store);
 
     for (const server of servers) {
       if (server.enabled && server.autoConnect) {
-        this.connect(server.id).catch(() => {});
+        this.connect(server.id).catch((e) => { logger.error('[MCPManager] Auto-connect failed for server:', e); });
       }
     }
   }
@@ -33,8 +34,8 @@ class MCPManager {
           store.updateServer('mcp-local-bridge', { enabled: true });
         }
       }
-    } catch {
-      // Bridge not running, leave server disabled
+    } catch (e) {
+      logger.warn('[MCPManager] Bridge not detected, leaving server disabled:', e);
     }
   }
 
@@ -45,7 +46,7 @@ class MCPManager {
 
     const existing = this.clients.get(serverId);
     if (existing) {
-      await existing.disconnect().catch(() => {});
+      await existing.disconnect().catch((e) => { logger.error('[MCPManager] Failed to disconnect existing client:', e); });
       this.clients.delete(serverId);
     }
 
@@ -77,7 +78,7 @@ class MCPManager {
     const client = this.clients.get(serverId);
     if (client) {
       this._unregisterServerTools(serverId);
-      await client.disconnect().catch(() => {});
+      await client.disconnect().catch((e) => { logger.error('[MCPManager] Failed to disconnect client:', e); });
       this.clients.delete(serverId);
     }
     useMCPStore.getState().setConnectionState(serverId, {
@@ -86,7 +87,7 @@ class MCPManager {
     });
   }
 
-  async callTool(toolName: string, args: Record<string, unknown>): Promise<any> {
+  async callTool(toolName: string, args: Record<string, unknown>): Promise<{ success: boolean; content: string }> {
     const serverId = this.toolToServer.get(toolName);
     if (!serverId) {
       return { success: false, content: `MCP tool "${toolName}" not found on any connected server` };
@@ -114,7 +115,7 @@ class MCPManager {
 
   async shutdown(): Promise<void> {
     for (const [id] of this.clients) {
-      await this.disconnect(id).catch(() => {});
+      await this.disconnect(id).catch((e) => { logger.error('[MCPManager] Failed to disconnect during shutdown:', e); });
     }
     this.initialized = false;
   }

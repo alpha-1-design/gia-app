@@ -1,7 +1,16 @@
+import { logger } from '../utils/logger';
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Copy, Check } from 'lucide-react';
 import CodeBlock from './CodeBlock';
-import VisualRenderer from './VisualRenderer';
+import VisualRenderer from './visual';
+
+interface KaTeXStatic {
+  renderToString(formula: string, options: Record<string, unknown>): string;
+}
+interface MermaidAPI {
+  initialize(config: Record<string, unknown>): void;
+  run(options: Record<string, unknown>): Promise<unknown>;
+}
 
 interface Props { content: string; className?: string }
 
@@ -10,7 +19,7 @@ const InlineCode: React.FC<{ code: string }> = ({ code }) => {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copy = useCallback(() => {
-    navigator.clipboard.writeText(code).catch(() => console.warn('Clipboard write failed'));
+    navigator.clipboard.writeText(code).catch(() => logger.warn('Clipboard write failed'));
     setCopied(true);
     copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [code]);
@@ -107,10 +116,10 @@ const MATH_CACHE = new Map<string, string>();
 
 const MathBlock: React.FC<{ formula: string; inline: boolean }> = ({ formula, inline }) => {
   const ref = useRef<HTMLSpanElement>(null);
-  const [loaded, setLoaded] = useState(typeof (window as any).katex !== 'undefined');
+  const [loaded, setLoaded] = useState('katex' in window);
 
   useEffect(() => {
-    if (typeof (window as any).katex !== 'undefined') { setLoaded(true); return; }
+    if ('katex' in window) { setLoaded(true); return; }
     if (document.querySelector('script[src*="katex.min.js"]')) { setLoaded(true); return; }
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
@@ -127,7 +136,7 @@ const MathBlock: React.FC<{ formula: string; inline: boolean }> = ({ formula, in
     const cached = MATH_CACHE.get(formula);
     if (cached) { ref.current.innerHTML = cached; return; }
     try {
-      const html = (window as any).katex.renderToString(formula, { displayMode: !inline, throwOnError: false });
+      const html = (window as unknown as { katex: KaTeXStatic }).katex.renderToString(formula, { displayMode: !inline, throwOnError: false });
       MATH_CACHE.set(formula, html);
       ref.current.innerHTML = html;
     } catch { ref.current.textContent = formula; }
@@ -146,11 +155,11 @@ const MermaidDiagram: React.FC<{ definition: string }> = ({ definition }) => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (typeof (window as any).mermaid !== 'undefined') { setLoaded(true); return; }
+    if ('mermaid' in window) { setLoaded(true); return; }
     if (document.querySelector('script[src*="mermaid.min.js"]')) { setLoaded(true); return; }
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
-    s.onload = () => { (window as any).mermaid?.initialize({ startOnLoad: false, theme: 'dark' }); setLoaded(true); };
+    s.onload = () => { (window as unknown as { mermaid: MermaidAPI }).mermaid.initialize({ startOnLoad: false, theme: 'dark' }); setLoaded(true); };
     s.onerror = () => setError('Could not load Mermaid renderer');
     document.head.appendChild(s);
     return () => s.remove();
@@ -158,7 +167,7 @@ const MermaidDiagram: React.FC<{ definition: string }> = ({ definition }) => {
 
   useEffect(() => {
     if (!loaded || !ref.current) return;
-    (window as any).mermaid.run({ nodes: [ref.current] }).catch((e: any) => setError(e.message));
+    (window as unknown as { mermaid: MermaidAPI }).mermaid.run({ nodes: [ref.current] }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [loaded, definition]);
 
   if (error) return <div className="text-[11px] p-2 rounded" style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>{error}</div>;
@@ -175,7 +184,7 @@ const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers,
   useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
   const copyTable = useCallback(() => {
     const csv = [headers, ...rows].map(r => r.join('\t')).join('\n');
-    navigator.clipboard.writeText(csv).catch(() => {});
+    navigator.clipboard.writeText(csv).catch((e) => { logger.error('[MarkdownRenderer] Clipboard write failed:', e); });
     setCopied(true);
     copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   }, [headers, rows]);
@@ -228,7 +237,7 @@ const tryParseVisualBlock = (text: string): React.ReactNode | null => {
     if (parsed && typeof parsed === 'object' && parsed.type && parsed.data) {
       return <VisualRenderer code={trimmed} />;
     }
-  } catch {}
+  } catch (e) { logger.error('[MarkdownRenderer] Failed to parse visual block JSON:', e); }
   return null;
 };
 
@@ -291,14 +300,16 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
       } else if (lang === 'suggestions') {
         const items = codeLines.join('\n').split('\n').filter(s => s.trim());
         nodes.push(
-          <div key={`su-${i}`} className="flex flex-wrap gap-2 mt-3">
+          <div key={`su-${i}`} className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
             {items.map((item, si) => (
               <button key={si} onClick={() => {
-                const input = document.querySelector<HTMLTextAreaElement>('textarea');
-                if (input) { input.value = item.trim(); input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); }
-              }} className="text-[11px] px-3 py-1.5 rounded-full transition-colors hover:opacity-80"
-                style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)' }}>
-                {item.trim()}
+                const ta = document.querySelector<HTMLTextAreaElement>('textarea');
+                if (ta) { ta.value = item.trim(); ta.dispatchEvent(new Event('input', { bubbles: true }));
+                  requestAnimationFrame(() => { const form = ta.closest('form'); if (form) { const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]'); btn?.click(); } });
+                }
+              }} className="text-[11px] opacity-40 hover:opacity-90 transition-opacity cursor-pointer text-left"
+                style={{ color: 'var(--gia-text)' }}>
+                → {item.trim()}
               </button>
             ))}
           </div>
@@ -388,9 +399,9 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
     }
 
     // Unordered list
-    if (line.match(/^[\-\*\+] /)) {
+    if (line.match(/^[-*+] /)) {
       const items: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^[\-\*\+] /)) {
+      while (i < lines.length && lines[i].match(/^[-*+] /)) {
         const taskItem = parseTaskList(lines[i]);
         items.push(
           <li key={i} style={{ margin: '1px 0', listStyle: taskItem ? 'none' : 'disc' }}>
@@ -437,7 +448,6 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
   // Render footnotes section
   if (footnotes.size > 0) {
     const fnNodes: React.ReactNode[] = [];
-    let fnIdx = 0;
     for (const [label, text] of footnotes) {
       fnNodes.push(
         <div key={label} id={`fn-${label}`} className="flex items-start gap-2 py-1 text-[11px]" style={{ color: 'var(--gia-muted)' }}>
@@ -446,7 +456,6 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
           <a href={`#fnref-${label}`} style={{ color: 'var(--gia-muted-2)', textDecoration: 'none', marginLeft: '4px', fontSize: '10px' }}>↩</a>
         </div>
       );
-      fnIdx++;
     }
     nodes.push(
       <div key="footnotes" className="mt-6 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>

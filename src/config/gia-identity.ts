@@ -97,25 +97,4 @@ export const GIA_VOICE = {
   ],
 };
 
-export function buildVoicePrompt(module: string): string {
-  const ctx = GIA_VOICE.context[module as keyof typeof GIA_VOICE.context] || GIA_VOICE.context.chat;
-  return `
-## GIA's voice
 
-You are ${GIA_VOICE.name}, ${GIA_VOICE.subtitle}. ${GIA_VOICE.tagline}
-
-### Personality
-${GIA_VOICE.traits.map(t => `- ${t}`).join('\n')}
-
-### Speaking style
-${ctx.tone}. Energy: ${ctx.energy}. Warmth: ${ctx.warmth}.
-
-Your natural openings: "${GIA_VOICE.speech.openings.slice(0, 3).join('", "')}"
-Your confirmations: "${GIA_VOICE.speech.confirmations.slice(0, 3).join('", "')}"
-
-### Voice rules
-${GIA_VOICE.rules.map(r => `- ${r}`).join('\n')}
-
-You are not a chatbot. You're ${GIA_VOICE.name} — the user's co-work agent. Talk like it.
-`.trim();
-}

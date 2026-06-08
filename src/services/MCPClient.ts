@@ -1,4 +1,5 @@
-import type { MCPServerConfig, MCPConnectionState } from '../store/useMCPStore';
+import { logger } from '../utils/logger';
+import type { MCPServerConfig } from '../store/useMCPStore';
 import type { ToolResult } from './GiaTools';
 
 export interface MCPToolDefinition {
@@ -11,9 +12,16 @@ interface MCPClientEvents {
   onToolsChanged?: (tools: MCPToolDefinition[]) => void;
 }
 
+interface MCPClientHandle {
+  connect(transport: unknown): Promise<void>;
+  close(): Promise<void>;
+  callTool(params: { name: string; arguments: Record<string, unknown> }, options?: Record<string, unknown>, requestOptions?: Record<string, unknown>): Promise<{ content: Array<{ type: string; text?: string; resource?: { text?: string; uri?: string } }>; isError?: boolean }>;
+  listTools(): Promise<{ tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> }>;
+}
+
 export class MCPClient {
-  private _client: any = null;
-  private _transport: any = null;
+  private _client: MCPClientHandle | null = null;
+  private _transport: unknown = null;
   private _tools: MCPToolDefinition[] = [];
   private _config: MCPServerConfig;
   private _events: MCPClientEvents;
@@ -38,7 +46,7 @@ export class MCPClient {
 
     try {
       const { Client } = await import('@modelcontextprotocol/sdk/client');
-      let transport: any;
+      let transport: unknown;
 
       if (this._config.transport === 'sse') {
         transport = await this._createSSETransport();
@@ -68,7 +76,7 @@ export class MCPClient {
     this._disposed = true;
     try {
       if (this._client) {
-        await this._client.close().catch(() => {});
+        await this._client.close().catch((e) => { logger.error('[MCPClient] Failed to close client:', e); });
       }
     } finally {
       this._client = null;
@@ -93,7 +101,7 @@ export class MCPClient {
 
       const content = result.content
         ? result.content
-            .map((part: any) => {
+            .map((part) => {
               if (part.type === 'text') return part.text;
               if (part.type === 'resource') return `[Resource: ${part.resource?.text || part.resource?.uri || ''}]`;
               return JSON.stringify(part);
@@ -112,18 +120,18 @@ export class MCPClient {
     }
   }
 
-  private async _createSSETransport(): Promise<any> {
+  private async _createSSETransport(): Promise<unknown> {
     const url = this._config.url;
     if (!url) throw new Error('SSE URL is required');
 
     const { SSEClientTransport } = await import(
       '@modelcontextprotocol/sdk/client/sse'
-    ) as any;
+    ) as unknown as { SSEClientTransport: new (url: URL) => unknown };
 
     return new SSEClientTransport(new URL(url));
   }
 
-  private async _createStdioTransport(): Promise<any> {
+  private async _createStdioTransport(): Promise<unknown> {
     const { command, args } = this._config;
     if (!command) throw new Error('Stdio command is required');
 
@@ -131,7 +139,7 @@ export class MCPClient {
       const { StdioClientTransport } = await import(
         /* @vite-ignore */
         '@modelcontextprotocol/sdk/client/stdio'
-      ) as any;
+      ) as unknown as { StdioClientTransport: new (opts: { command: string; args: string[] }) => unknown };
       return new StdioClientTransport({
         command,
         args: args || [],
@@ -149,14 +157,14 @@ export class MCPClient {
 
     try {
       const result = await this._client.listTools();
-      this._tools = (result.tools || []).map((t: any) => ({
+      this._tools = (result.tools || []).map((t) => ({
         name: t.name,
         description: t.description || '',
         inputSchema: (t.inputSchema as Record<string, unknown>) || {},
       }));
       this._events.onToolsChanged?.(this._tools);
     } catch (err) {
-      console.warn(`[MCP] Failed to list tools for ${this._config.name}:`, err);
+      logger.warn(`[MCP] Failed to list tools for ${this._config.name}:`, err);
       this._tools = [];
     }
   }

@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 const DB_NAME = 'gia-db';
 const STORE_NAME = 'keyval';
 const DB_VERSION = 1;
@@ -11,8 +13,8 @@ function getDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       try {
         request.result.createObjectStore(STORE_NAME);
-      } catch {
-        // Store already exists — ignore
+      } catch (e) {
+        logger.error('[idb-storage] Failed to create object store:', e);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -39,7 +41,8 @@ export const idbStorage = {
         getRequest.onsuccess = () => resolve(getRequest.result || null);
         getRequest.onerror = () => reject(getRequest.error);
       });
-    } catch {
+    } catch (e) {
+      logger.error('[idb-storage] Failed to get item from IndexedDB:', e);
       return null;
     }
   },
@@ -53,8 +56,8 @@ export const idbStorage = {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-    } catch {
-      // Silently fail — Zustand persist will catch this
+    } catch (e) {
+      logger.error('[idb-storage] Failed to set item in IndexedDB:', e);
     }
   },
   removeItem: async (name: string): Promise<void> => {
@@ -67,8 +70,8 @@ export const idbStorage = {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-    } catch {
-      // Silently fail
+    } catch (e) {
+      logger.error('[idb-storage] Failed to remove item from IndexedDB:', e);
     }
   },
 };

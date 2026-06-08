@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, Play, RotateCcw, Download, Loader2, AlertCircle } from 'lucide-react';
 import CodeRunner, { CodeRunResult } from '../services/CodeRunner';
@@ -20,7 +21,7 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
   useEffect(() => { return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }; }, []);
 
   const copy = () => {
-    navigator.clipboard.writeText(currentCode).catch(() => console.warn('Clipboard write failed'));
+    navigator.clipboard.writeText(currentCode).catch(() => logger.warn('Clipboard write failed'));
     setCopied(true);
     copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };

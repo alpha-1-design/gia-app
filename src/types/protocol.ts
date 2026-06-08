@@ -26,7 +26,7 @@ export interface ProtocolProposal {
   type: ProtocolType;
   summary: string;
   description: string;
-  args: Record<string, any>;
+  args: Record<string, unknown>;
   impact: ProtocolImpact;
   state: ProtocolState;
   result?: string;
@@ -43,7 +43,7 @@ export interface ProtocolProposal {
 export interface ProtocolAction {
   type: 'confirm' | 'reject' | 'modify';
   protocolId: string;
-  modifiedArgs?: Record<string, any>;
+  modifiedArgs?: Record<string, unknown>;
   timestamp: number;
 }
 

@@ -1,0 +1,256 @@
+import { logger } from '../../utils/logger';
+import { z } from 'zod';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { isNativePlatform } from '../../utils/helpers';
+import { isPathSafe, blobToBase64, triggerDownload, MAX_FILE_SIZE } from './helpers';
+import { useGiaStore } from '../../store/useGiaStore';
+import type { Tool } from './types';
+
+const isNative = isNativePlatform;
+
+const filesystemRead: Tool = {
+  id: 'filesystem_read',
+  name: 'filesystem_read',
+  description: 'Read the content of a file from the local filesystem.',
+  schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path' }
+    },
+    required: ['path']
+  },
+  execute: async ({ path }) => {
+    const fileSchema = z.object({
+      path: z.string().min(1, "File path is required").max(500, "File path too long")
+    });
+
+    const validationResult = fileSchema.safeParse({ path });
+    if (!validationResult.success) {
+      return {
+        success: false,
+        content: '',
+        error: `Invalid file path: ${validationResult.error.issues.map((e: z.ZodIssue) => (e instanceof Error ? e.message : String(e))).join(', ')}`
+      };
+    }
+
+    if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
+    const pathErr = isPathSafe(path);
+    if (pathErr) return { success: false, content: '', error: pathErr };
+    try {
+      const result = await Filesystem.readFile({ path, directory: Directory.Documents, encoding: Encoding.UTF8 });
+      const content = result.data as string;
+      if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+      return { success: true, content };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+    }
+  }
+};
+
+const filesystemWrite: Tool = {
+  id: 'filesystem_write',
+  name: 'filesystem_write',
+  description: 'Write or update a file on the local filesystem.',
+  schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path' },
+      content: { type: 'string', description: 'File content' }
+    },
+    required: ['path', 'content']
+  },
+  execute: async ({ path, content }) => {
+    const fileWriteSchema = z.object({
+      path: z.string().min(1, "File path is required").max(500, "File path too long"),
+      content: z.string().max(10 * 1024 * 1024, "Content exceeds 10MB limit")
+    });
+
+    const validationResult = fileWriteSchema.safeParse({ path, content });
+    if (!validationResult.success) {
+      return {
+        success: false,
+        content: '',
+        error: `Invalid file write parameters: ${validationResult.error.issues.map((e: z.ZodIssue) => (e instanceof Error ? e.message : String(e))).join(', ')}`
+      };
+    }
+
+    const pathErr = isPathSafe(path);
+    if (pathErr) return { success: false, content: '', error: pathErr };
+    if (content && content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+    if (isNative()) {
+      try {
+        await Filesystem.writeFile({ path, data: content, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
+        await Filesystem.stat({ path, directory: Directory.Documents });
+        return { success: true, content: `File written to ${path} (verified)` };
+      } catch (e: unknown) {
+        return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+      }
+    }
+    const ext = path.split('.').pop()?.toLowerCase() || 'txt';
+    const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
+    const blob = new Blob([content], { type: mimeMap[ext] || 'text/plain' });
+    triggerDownload(blob, path.split('/').pop() || 'file.txt');
+    return { success: true, content: `File "${path}" ready for download.` };
+  }
+};
+
+const listFiles: Tool = {
+  id: 'list_files', name: 'list_files',
+  description: 'List files in a directory.',
+  schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Directory path (optional, default root)' }
+    }
+  },
+  execute: async ({ path = '' }) => {
+    const listSchema = z.object({
+      path: z.string().max(500, "Path too long").optional().default('')
+    });
+
+    const validationResult = listSchema.safeParse({ path });
+    if (!validationResult.success) {
+      return {
+        success: false,
+        content: '',
+        error: `Invalid list files parameters: ${validationResult.error.issues.map((e: z.ZodIssue) => (e instanceof Error ? e.message : String(e))).join(', ')}`
+      };
+    }
+
+    const validatedPath = validationResult.data.path;
+
+    if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
+    if (validatedPath) {
+      const pathErr = isPathSafe(validatedPath);
+      if (pathErr) return { success: false, content: '', error: pathErr };
+    }
+    try {
+      const result = await Filesystem.readdir({ path: validatedPath, directory: Directory.Documents });
+      return { success: true, content: result.files.map(f => f.name).join('\n') };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+    }
+  }
+};
+
+const zipProject: Tool = {
+  id: 'zip_project', name: 'zip_project',
+  description: 'Create a ZIP bundle of files. Provide "files" as [{path, content}] OR "paths" as string[] to read from device.',
+  execute: async ({ filename = 'project.zip', files, paths }) => {
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      if (files && Array.isArray(files)) {
+        files.forEach((f: { path: string; content: string | Record<string, unknown> }) => {
+          const name = f.path.replace(/\\/g, '/');
+          zip.file(name, typeof f.content === 'string' ? f.content : JSON.stringify(f.content), { binary: false });
+        });
+      }
+
+      if (paths && Array.isArray(paths)) {
+        if (!isNative()) return { success: false, content: '', error: 'Reading files from device paths requires the GIA mobile app.' };
+        for (const p of paths) {
+          const pathErr = isPathSafe(p);
+          if (pathErr) continue;
+          try {
+            const res = await Filesystem.readFile({ path: p, directory: Directory.Documents, encoding: Encoding.UTF8 });
+            zip.file(p, res.data as string);
+          } catch (e) { logger.error('[filesystem] Skipping unreadable file:', e); }
+        }
+      }
+
+      useGiaStore.getState().addNotification(`📦 Packaging ${filename}...`);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      useGiaStore.getState().addNotification(`✅ ${filename} ready`);
+
+      if (isNative()) {
+        try {
+          const base64 = await blobToBase64(blob);
+          await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents });
+          useGiaStore.getState().addNotification(`✅ ${filename} saved to Documents`);
+          return { success: true, content: `Created ${filename} and saved to your Documents folder.` };
+        } catch (e: unknown) {
+          return { success: false, content: '', error: `Native save failed: ${e.message}` };
+        }
+      }
+
+      triggerDownload(blob, filename);
+      return { success: true, content: `Created ${filename} — check your downloads.` };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+    }
+  }
+};
+
+const desktopRead: Tool = {
+  id: 'filesystem_desktop_read', name: 'filesystem_desktop_read',
+  description: 'Read a file from the user\'s selected project folder on desktop. Requires folder to be pre-selected via the UI button.',
+  execute: async ({ path }) => {
+    const DesktopFS = (await import('../DesktopFS')).default;
+    if (!DesktopFS.isAvailable) {
+      return { success: false, content: '', error: 'Desktop filesystem access requires a Chromium-based browser.' };
+    }
+    if (!DesktopFS.hasHandle) {
+      return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
+    }
+    const pathErr = isPathSafe(path);
+    if (pathErr) return { success: false, content: '', error: pathErr };
+    try {
+      const content = await DesktopFS.readFile(path);
+      if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+      return { success: true, content };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+    }
+  }
+};
+
+const desktopWrite: Tool = {
+  id: 'filesystem_desktop_write', name: 'filesystem_desktop_write',
+  description: 'Write or update a file in the user\'s selected project folder on desktop.',
+  execute: async ({ path, content }) => {
+    const DesktopFS = (await import('../DesktopFS')).default;
+    if (!DesktopFS.isAvailable) {
+      return { success: false, content: '', error: 'Desktop filesystem access requires a Chromium-based browser.' };
+    }
+    if (!DesktopFS.hasHandle) {
+      return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
+    }
+    const pathErr = isPathSafe(path);
+    if (pathErr) return { success: false, content: '', error: pathErr };
+    if (content && content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+    try {
+      await DesktopFS.writeFile(path, content);
+      return { success: true, content: `File written to ${DesktopFS.rootName || 'project'}/${path}` };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+    }
+  }
+};
+
+const desktopList: Tool = {
+  id: 'filesystem_desktop_list', name: 'filesystem_desktop_list',
+  description: 'List files and directories in the user\'s selected project folder on desktop.',
+  execute: async ({ path = '' }) => {
+    const DesktopFS = (await import('../DesktopFS')).default;
+    if (!DesktopFS.isAvailable) {
+      return { success: false, content: '', error: 'Desktop filesystem access requires a Chromium-based browser.' };
+    }
+    if (!DesktopFS.hasHandle) {
+      return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
+    }
+    try {
+      const entries = await DesktopFS.listFiles(path);
+      const lines = entries.map(e =>
+        `${e.kind === 'directory' ? '📁' : '📄'} ${e.name}`
+      );
+      const desc = path ? `Contents of "${path}":` : `Contents of "${DesktopFS.rootName || 'project'}":`;
+      return { success: true, content: `${desc}\n${lines.join('\n')}` };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
+    }
+  }
+};
+
+export const filesystemTools: Tool[] = [filesystemRead, filesystemWrite, listFiles, zipProject, desktopRead, desktopWrite, desktopList];

@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Image, Code, File, X, Download, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, Code, File, X, Loader2 } from 'lucide-react';
 import PDFService from '../services/PDFService';
-
-interface Props {
-  name: string;
-  type: string;
-  content: string;
-  onClose?: () => void;
-}
 
 const EXT_PREVIEW: Record<string, { icon: React.ReactNode; lang: string }> = {
   txt: { icon: <FileText size={14} />, lang: 'text' },
@@ -48,15 +41,15 @@ const FilePreview: React.FC<{ file: File | { name: string; type: string; data: s
     load();
   }, [ext, expanded, file]);
 
-  if (!expanded) {
-    return (
-      <div onClick={() => setExpanded(true)} className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[10px] cursor-pointer transition-all hover:opacity-80" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
-        {preview ? <img src={preview} alt="" className="w-6 h-6 rounded object-cover" /> : <span style={{ color: 'var(--gia-muted)' }}>{meta.icon}</span>}
-        <span className="truncate max-w-[120px]" style={{ color: 'var(--gia-text)' }}>{file.name}</span>
-        <span className="text-[8px] shrink-0" style={{ color: 'var(--gia-muted-2)' }}>Preview</span>
-      </div>
-    );
-  }
+   if (!expanded) {
+     return (
+       <div onClick={() => setExpanded(true)} className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[10px] cursor-pointer transition-all hover:opacity-80" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+         <span style={{ color: 'var(--gia-muted)' }}>{meta.icon}</span>
+         <span className="truncate max-w-[120px]" style={{ color: 'var(--gia-text)' }}>{file.name}</span>
+         <span className="text-[8px] shrink-0" style={{ color: 'var(--gia-muted-2)' }}>Preview</span>
+       </div>
+     );
+   }
 
   return (
     <div className="rounded-xl overflow-hidden mt-1" style={{ border: '1px solid var(--gia-border)' }}>

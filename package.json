@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest",
+    "test:run": "vitest run",
     "preview": "vite preview",
     "cap:add:android": "npx cap add android",
     "cap:sync": "npx cap sync android",
@@ -39,11 +41,15 @@
     "react-is": "^19.2.6",
     "recharts": "^3.8.1",
     "tailwind-merge": "^2.6.0",
+    "zod": "^4.4.3",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@tailwindcss/vite": "^4.1.6",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.0.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.15",
@@ -53,9 +59,11 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.0.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.6",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.24.1",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^4.1.8"
   }
 }
