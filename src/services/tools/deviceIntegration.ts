@@ -5,14 +5,16 @@ function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
     const path = i.path.length > 0 ? `"${i.path.join('.')}"` : 'value';
     if (i.code === 'invalid_type') {
-      return `${path}: expected ${i.expected}, got ${i.received === 'undefined' ? 'nothing' : i.received}`;
+      const expected = (i as Record<string, unknown>).expected ?? '?';
+      const received = (i as Record<string, unknown>).received ?? '?';
+      return `${path}: expected ${expected}, got ${received === 'undefined' ? 'nothing' : String(received)}`;
     }
-    if (i.code === 'too_small') {
-      const min = (i as z.ZodTooSmallIssue).minimum;
+    if (i.code === 'too_small' && 'minimum' in i) {
+      const min = (i as { minimum: number }).minimum;
       return `${path}: must be at least ${min} character${min === 1 ? '' : 's'}`;
     }
-    if (i.code === 'too_big') {
-      const max = (i as z.ZodTooBigIssue).maximum;
+    if (i.code === 'too_big' && 'maximum' in i) {
+      const max = (i as { maximum: number }).maximum;
       return `${path}: must be at most ${max} character${max === 1 ? '' : 's'}`;
     }
     return i.message;

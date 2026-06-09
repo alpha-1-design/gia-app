@@ -320,11 +320,12 @@ class DeviceIntegration {
       logger.warn('[DeviceIntegration] System info failed:', e);
       sysInfo = {
         platform: 'web', os: 'unknown', language: 'en', timezone: 'UTC',
-        screen: { width: 0, height: 0 },
-        network: { online: true, type: 'unknown' },
-        hardware: { cpuCores: null, memoryGB: null },
-        container: 'browser',
-        battery: { level: null, charging: null },
+        userAgent: '', timezoneOffset: 0, isMobile: false, isDesktop: true,
+        isNativeApp: false, container: 'browser',
+        screen: { width: 0, height: 0, colorDepth: 24, pixelRatio: 1 },
+        network: { online: true, type: 'unknown', downlink: null, rtt: null },
+        hardware: { cpuCores: null, memoryGB: null, touchScreen: false },
+        battery: { level: null, charging: null, dischargingTime: null },
       };
     }
 
