@@ -114,13 +114,22 @@ function handleIntentAction(action: string, data: IntentData) {
   if (pendingInput || pendingAction) return;
 
   if (action === 'android.intent.action.SEND') {
-    let text = data.text || '';
-    if (text) {
-      const urlMatch = text.match(/^(.*?)\nhttps?:\/\/\S+$/s);
+    const imageUri = data.imageUri as string | undefined;
+    const text = data.text as string | undefined;
+
+    if (imageUri) {
+      useGiaStore.getState().setPendingAction({
+        type: 'shared-image',
+        data: { uri: imageUri, mimeType: (data.mimeType as string) || '' },
+      });
+      useGiaStore.getState().setModule('chat');
+    } else if (text) {
+      let clean = text;
+      const urlMatch = clean.match(/^(.*?)\nhttps?:\/\/\S+$/s);
       if (urlMatch && urlMatch[1].trim()) {
-        text = urlMatch[1].trim();
+        clean = urlMatch[1].trim();
       }
-      useGiaStore.getState().setPendingInput(text);
+      useGiaStore.getState().setPendingInput(clean);
       useGiaStore.getState().setModule('chat');
     }
   } else if (data.uri?.startsWith('gia:') || data.uri?.startsWith('giap:') || data.uri?.startsWith('web+gian:')) {

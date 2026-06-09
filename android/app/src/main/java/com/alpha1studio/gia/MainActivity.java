@@ -12,6 +12,9 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         registerPlugin(GIAWakeWordPlugin.class);
         registerPlugin(GIAIntentPlugin.class);
+        registerPlugin(GIAOverlayPlugin.class);
+        registerPlugin(GIASMSPlugin.class);
+        registerPlugin(GIAAlarmPlugin.class);
     }
 
     @Override

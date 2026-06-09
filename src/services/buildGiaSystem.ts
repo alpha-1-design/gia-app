@@ -126,6 +126,18 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`show_map\` | Interactive map | \`center\`: {lat, lng} | Describe the map to user using coordinates |
 | \`export_brain\` | Download brain backup | none | Full JSON export |
 | \`import_brain\` | Restore brain | none | Settings > Brain Export |
+| \`device_info\` | Get device info | none | Battery, OS, model, network |
+| \`screen_brightness\` | Get/set brightness | \`action\`: get/set, \`value\`: 0-1 | Native Android only |
+| \`get_contacts\` | Search contacts | \`query\` (optional), \`maxResults\` | Needs contacts permission |
+| \`open_url\` | Open URL in browser | \`url\` | Any https:// or deep link |
+| \`clipboard\` | Read/write clipboard | \`action\`: read/write, \`text\` (write) | |
+| \`vibrate\` | Vibrate device | \`duration\` ms | |
+| \`share\` | Share content via native share | \`title\`, \`text\`, \`url\` | Opens share sheet |
+| \`send_sms\` | Send SMS directly | \`phone\`, \`message\` | Sends without opening SMS app |
+| \`send_whatsapp\` | Send WhatsApp message | \`phone\` (with country code), \`message\` | Opens WhatsApp pre-filled |
+| \`send_email\` | Compose email | \`to\`, \`subject\`, \`body\` | Opens email client pre-filled |
+| \`make_phone_call\` | Initiate phone call | \`phone\` (with country code) | Opens dialer pre-filled |
+| \`set_alarm\` | Set an alarm | \`hour\` (0-23), \`minute\` (0-59), \`label\`, \`days\`[] | Sets directly via AlarmManager |
 | \`create_goal\` | Create an autonomous goal | \`title\`, \`description\`, \`priority\` | GIA plans & executes autonomously |
 | \`list_goals\` | List all goals | none | Status, progress, priority |
 | \`goal_progress\` | Goal progress report | \`goalTitle\` | Shows steps & reflections |

@@ -11,7 +11,7 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             Intent serviceIntent = new Intent(context, GIAWakeWordService.class);
-            serviceIntent.putExtra("keyword", "HEY_GOOGLE");
+            serviceIntent.putExtra("keyword", "JARVIS");
             serviceIntent.putExtra("sensitivity", 0.7f);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -19,6 +19,8 @@ public class BootReceiver extends BroadcastReceiver {
             } else {
                 context.startService(serviceIntent);
             }
+
+            GIAAlarmPlugin.reRegisterAlarms(context);
         }
     }
 }

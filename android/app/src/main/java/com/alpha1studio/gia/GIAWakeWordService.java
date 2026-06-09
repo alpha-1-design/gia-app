@@ -36,7 +36,7 @@ public class GIAWakeWordService extends Service {
     }
 
     private String accessKey = "";
-    private String keyword = "HEY_GOOGLE";
+    private String keyword = "JARVIS";
     private float sensitivity = 0.7f;
     private String customModelPath = "";
     private PorcupineManager porcupineManager;
@@ -146,11 +146,11 @@ public class GIAWakeWordService extends Service {
     }
 
     private Porcupine.BuiltInKeyword parseBuiltInKeyword(String kw) {
-        if (kw == null) return Porcupine.BuiltInKeyword.HEY_GOOGLE;
+        if (kw == null) return Porcupine.BuiltInKeyword.JARVIS;
         try {
             return Porcupine.BuiltInKeyword.valueOf(kw.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return Porcupine.BuiltInKeyword.HEY_GOOGLE;
+            return Porcupine.BuiltInKeyword.JARVIS;
         }
     }
 

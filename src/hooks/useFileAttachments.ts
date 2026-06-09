@@ -1,11 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import PDFService from '../services/PDFService';
-import { useGiaStore } from '../store/useGiaStore';
-import { isVisionCapable } from '../services/brain/modelUtils';
 
 export type Attachment = { name: string; type: string; content: string; preview?: string };
 
-export function useFileAttachments(activeModel: string, activeProvider: string, providerLabel: string) {
+export function useFileAttachments() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [processingFiles, setProcessingFiles] = useState(false);
@@ -13,9 +11,6 @@ export function useFileAttachments(activeModel: string, activeProvider: string, 
   const dragCounter = useRef(0);
 
   const addFiles = useCallback(async (files: File[], isImage = false) => {
-    if (isImage && !isVisionCapable(activeModel, activeProvider)) {
-      useGiaStore.getState().addNotification(`This provider (${providerLabel}) may not support image analysis.`);
-    }
     setProcessingFiles(true);
     const newAtts: Attachment[] = [];
     for (const file of files) {
@@ -49,7 +44,7 @@ export function useFileAttachments(activeModel: string, activeProvider: string, 
     setAttachments(prev => [...prev, ...newAtts]);
     setProcessingFileName('');
     setProcessingFiles(false);
-  }, [activeModel, activeProvider, providerLabel]);
+  }, []);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
     const files = Array.from(e.target.files ?? []);

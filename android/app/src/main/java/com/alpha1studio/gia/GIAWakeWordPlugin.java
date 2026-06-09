@@ -41,7 +41,7 @@ public class GIAWakeWordPlugin extends Plugin {
         }
 
         String accessKey = call.getString("accessKey", "");
-        String keyword = call.getString("keyword", "HEY_GOOGLE");
+        String keyword = call.getString("keyword", "JARVIS");
         double sensitivity = call.getDouble("sensitivity", 0.7);
         String customModelPath = call.getString("customModelPath", "");
 

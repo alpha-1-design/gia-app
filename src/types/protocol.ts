@@ -19,6 +19,7 @@ export type ProtocolType =
   | 'clarification'
   | 'environment_info'
   | 'show_map'
+  | 'device_action'
   | 'custom';
 
 export interface ProtocolProposal {
@@ -66,5 +67,6 @@ export const PROTOCOL_META: Record<ProtocolType, { icon: string; color: string; 
   clarification:       { icon: '❓', color: '#eab308', label: 'Clarification' },
   environment_info:    { icon: 'ℹ', color: '#6b7280', label: 'Environment Info' },
   show_map:            { icon: '🗺', color: '#10b981', label: 'Show Map' },
+  device_action:       { icon: '📱', color: '#8b5cf6', label: 'Device Action' },
   custom:              { icon: '🔧', color: '#6b7280', label: 'Custom' },
 };

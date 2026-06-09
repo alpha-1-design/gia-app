@@ -1,6 +1,24 @@
 import { z } from 'zod';
 import type { Tool } from './types';
 
+function formatZodError(issues: z.ZodIssue[]): string {
+  return issues.map(i => {
+    const path = i.path.length > 0 ? `"${i.path.join('.')}"` : 'value';
+    if (i.code === 'invalid_type') {
+      return `${path}: expected ${i.expected}, got ${i.received === 'undefined' ? 'nothing' : i.received}`;
+    }
+    if (i.code === 'too_small') {
+      const min = (i as z.ZodTooSmallIssue).minimum;
+      return `${path}: must be at least ${min} character${min === 1 ? '' : 's'}`;
+    }
+    if (i.code === 'too_big') {
+      const max = (i as z.ZodTooBigIssue).maximum;
+      return `${path}: must be at most ${max} character${max === 1 ? '' : 's'}`;
+    }
+    return i.message;
+  }).join('; ');
+}
+
 const sendWhatsApp: Tool = {
   id: 'send_whatsapp',
   name: 'send_whatsapp',
@@ -15,11 +33,11 @@ const sendWhatsApp: Tool = {
   },
   execute: async (args) => {
     const schema = z.object({
-      phone: z.string().min(5).max(20).describe('Phone number with country code'),
-      message: z.string().min(1).max(5000).describe('Message text'),
+      phone: z.string().min(5, 'Phone: must be at least 5 digits').max(20, 'Phone: too long'),
+      message: z.string().min(1, 'Message: cannot be empty').max(5000, 'Message: too long (max 5000 chars)'),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       const result = await di.sendWhatsApp(parsed.data.phone, parsed.data.message);
@@ -54,7 +72,7 @@ const sendEmail: Tool = {
       body: z.string().min(1).max(50000),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       await di.sendEmail(parsed.data.to, parsed.data.subject, parsed.data.body);
@@ -71,7 +89,7 @@ const sendEmail: Tool = {
 const sendSMS: Tool = {
   id: 'send_sms',
   name: 'send_sms',
-  description: 'Send an SMS text message. Opens the default SMS app with a pre-filled message and recipient.',
+  description: 'Send an SMS text message directly. On Android with SEND_SMS permission, sends without opening any app. Falls back to opening SMS app.',
   schema: {
     type: 'object',
     properties: {
@@ -86,7 +104,7 @@ const sendSMS: Tool = {
       message: z.string().min(1).max(1000),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       await di.sendSMS(parsed.data.phone, parsed.data.message);
@@ -116,7 +134,7 @@ const makeCall: Tool = {
       phone: z.string().min(5).max(20),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       const result = await di.makeCall(parsed.data.phone);
@@ -150,7 +168,7 @@ const shareContent: Tool = {
       url: z.string().url().optional(),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       const result = await di.shareContent(parsed.data.title, parsed.data.text, parsed.data.url);
@@ -187,7 +205,7 @@ const clipboardTool: Tool = {
       text: z.string().max(50000).optional(),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     const { action, text } = parsed.data;
     try {
       const di = (await import('../DeviceIntegration')).default;
@@ -227,7 +245,7 @@ const vibrateTool: Tool = {
       duration: z.number().min(100).max(5000),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       const result = await di.vibrate(parsed.data.duration);
@@ -263,7 +281,7 @@ const brightnessTool: Tool = {
       value: z.number().min(0).max(1).optional(),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     const { action, value } = parsed.data;
     try {
       const di = (await import('../DeviceIntegration')).default;
@@ -328,7 +346,7 @@ const contactsTool: Tool = {
       maxResults: z.number().min(1).max(100).default(20),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       const contacts = await di.getContacts(parsed.data.query);
@@ -356,20 +374,26 @@ const contactsTool: Tool = {
 const openUrlTool: Tool = {
   id: 'open_url',
   name: 'open_url',
-  description: 'Open a URL in the default system browser or external app. Can open web links, deep links, and app URIs.',
+  description: 'Open a URL in the default system browser or external app. Only http:, https:, tel:, mailto:, sms:, and intent: schemes are allowed.',
   schema: {
     type: 'object',
     properties: {
-      url: { type: 'string', description: 'URL to open (https://, tel:, mailto:, or custom scheme)' },
+      url: { type: 'string', description: 'URL to open (https://, tel:, mailto:, etc.)' },
     },
     required: ['url'],
   },
   execute: async (args) => {
     const schema = z.object({
-      url: z.string().min(1).max(5000),
+      url: z.string()
+        .min(1, 'URL: cannot be empty')
+        .max(5000, 'URL: too long')
+        .refine(
+          v => /^https?:\/\/|^tel:|^mailto:|^sms:|^intent:\/\//.test(v),
+          'URL: must start with https://, tel:, mailto:, sms:, or intent://'
+        ),
     });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
       await di.openUrl(parsed.data.url);
@@ -377,6 +401,48 @@ const openUrlTool: Tool = {
       return {
         success: true,
         content: `## 🔗 URL Opened\n\n**URL:** [${parsed.data.url}](${parsed.data.url})\n**Domain:** \`${domain}\`\n\n*Opened in default browser.*`,
+      };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+};
+
+const setAlarmTool: Tool = {
+  id: 'set_alarm',
+  name: 'set_alarm',
+  description: 'Set an alarm on the device. On Android uses native AlarmManager to set directly (survives reboot). Falls back to opening Clock app. Supports one-time and recurring alarms by day of week (1=Sunday, 2=Monday, ..., 7=Saturday).',
+  schema: {
+    type: 'object',
+    properties: {
+      hour: { type: 'number', description: 'Hour in 24-hour format (0-23)' },
+      minute: { type: 'number', description: 'Minute (0-59)' },
+      label: { type: 'string', description: 'Optional alarm label/name (e.g. "Wake up", "Meeting")' },
+      days: { type: 'array', items: { type: 'number' }, description: 'Optional repeat days: 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat' },
+    },
+    required: ['hour', 'minute'],
+  },
+  execute: async (args) => {
+    const schema = z.object({
+      hour: z.number().int().min(0).max(23),
+      minute: z.number().int().min(0).max(59),
+      label: z.string().max(200).optional(),
+      days: z.array(z.number().int().min(1).max(7)).optional(),
+    });
+    const parsed = schema.safeParse(args);
+    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
+    try {
+      const di = (await import('../DeviceIntegration')).default;
+      const result = await di.setAlarm(parsed.data.hour, parsed.data.minute, parsed.data.label, parsed.data.days);
+      const h = parsed.data.hour.toString().padStart(2, '0');
+      const m = parsed.data.minute.toString().padStart(2, '0');
+      const dayNames = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const daysStr = parsed.data.days ? parsed.data.days.map(d => dayNames[d] || '').filter(Boolean).join(', ') : '';
+      const labelStr = parsed.data.label ? `\n**Label:** ${parsed.data.label}` : '';
+      const repeatStr = daysStr ? `\n**Repeat:** ${daysStr}` : '';
+      return {
+        success: true,
+        content: `## ⏰ Alarm Set\n\n**Time:** ${h}:${m}${labelStr}${repeatStr}\n\n*Clock app opened with alarm pre-filled. Check and confirm.*`,
       };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
@@ -396,4 +462,5 @@ export const deviceIntegrationTools: Tool[] = [
   deviceInfoTool,
   contactsTool,
   openUrlTool,
+  setAlarmTool,
 ];

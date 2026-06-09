@@ -77,8 +77,24 @@ public class GIAIntentPlugin extends Plugin {
     }
 
     private void handleSendMultipleIntent(Intent intent) {
-        // For multiple files/images
-        notifyListeners(EVENT_SHARE, new JSObject());
+        String type = intent.getType();
+        ArrayList<Uri> uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+
+        JSObject ret = new JSObject();
+        ret.put("type", "share");
+        ret.put("mimeType", type != null ? type : "");
+        ret.put("multiple", true);
+
+        if (uris != null && !uris.isEmpty()) {
+            ret.put("imageUri", uris.get(0).toString());
+            String[] uriArr = new String[uris.size()];
+            for (int i = 0; i < uris.size(); i++) {
+                uriArr[i] = uris.get(i).toString();
+            }
+            ret.put("uris", uriArr);
+        }
+
+        notifyListeners(EVENT_SHARE, ret);
     }
 
     private void handleViewIntent(Intent intent) {
@@ -107,7 +123,12 @@ public class GIAIntentPlugin extends Plugin {
 
             if (Intent.ACTION_SEND.equals(intent.getAction())) {
                 ret.put("text", intent.getStringExtra(Intent.EXTRA_TEXT));
+                ret.put("subject", intent.getStringExtra(Intent.EXTRA_SUBJECT));
                 ret.put("mimeType", intent.getType());
+                Uri streamUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                if (streamUri != null) {
+                    ret.put("imageUri", streamUri.toString());
+                }
             }
             if (intent.getData() != null) {
                 ret.put("uri", intent.getData().toString());

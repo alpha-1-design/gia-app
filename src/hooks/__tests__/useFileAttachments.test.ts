@@ -36,14 +36,14 @@ describe('useFileAttachments', () => {
   });
 
   it('returns initial state', () => {
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     expect(result.current.attachments).toEqual([]);
     expect(result.current.isDragging).toBe(false);
   });
 
   it('addFiles with text file adds attachment', async () => {
     const file = createMockFile('test.txt', 'text/plain', 'Hello world');
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     await act(async () => {
       await result.current.addFiles([file]);
     });
@@ -55,7 +55,7 @@ describe('useFileAttachments', () => {
 
   it('addFiles with image file creates preview', async () => {
     const file = createMockFile('img.png', 'image/png', 'fake-png-data');
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     await act(async () => {
       await result.current.addFiles([file], true);
     });
@@ -67,7 +67,7 @@ describe('useFileAttachments', () => {
   it('removeAttachment removes by index', async () => {
     const file1 = createMockFile('a.txt', 'text/plain', 'aaa');
     const file2 = createMockFile('b.txt', 'text/plain', 'bbb');
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     await act(async () => {
       await result.current.addFiles([file1, file2]);
     });
@@ -78,14 +78,14 @@ describe('useFileAttachments', () => {
   });
 
   it('handleDragEnter increments counter and sets isDragging', () => {
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     const e = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.DragEvent;
     act(() => result.current.handleDragEnter(e));
     expect(result.current.isDragging).toBe(true);
   });
 
   it('handleDragLeave decrements counter', () => {
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     const e = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.DragEvent;
     act(() => result.current.handleDragEnter(e));
     expect(result.current.isDragging).toBe(true);
@@ -94,7 +94,7 @@ describe('useFileAttachments', () => {
   });
 
   it('handleDragOver prevents default', () => {
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     const e = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.DragEvent;
     act(() => result.current.handleDragOver(e));
     expect(e.preventDefault).toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe('useFileAttachments', () => {
 
   it('handleDrop processes files and resets drag state', async () => {
     const file = createMockFile('dropped.txt', 'text/plain', 'dropped content');
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
+    const { result } = renderHook(() => useFileAttachments());
     const e = {
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
@@ -114,15 +114,5 @@ describe('useFileAttachments', () => {
     expect(result.current.isDragging).toBe(false);
     expect(result.current.attachments).toHaveLength(1);
     expect(result.current.attachments[0].content).toBe('dropped content');
-  });
-
-  it('notifies when adding images to non-vision model', async () => {
-    const file = createMockFile('img.png', 'image/png', 'data');
-    const { result } = renderHook(() => useFileAttachments('gpt-4', 'openai', 'OpenAI'));
-    mockAddNotification.mockClear();
-    await act(async () => {
-      await result.current.addFiles([file], true);
-    });
-    expect(mockAddNotification).toHaveBeenCalled();
   });
 });

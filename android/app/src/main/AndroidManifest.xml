@@ -23,6 +23,7 @@
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <!-- Required for VoiceInteractionService (default assistant) -->
     <uses-permission android:name="android.permission.BIND_VOICE_INTERACTION" />
@@ -114,6 +115,14 @@
             android:foregroundServiceType="microphone">
         </service>
 
+        <!-- Circle to Search overlay service -->
+        <service
+            android:name=".GIAOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection">
+        </service>
+
         <!-- VoiceInteractionService: makes GIA selectable as default assistant -->
         <service
             android:name=".GIAVoiceInteractionService"
@@ -136,6 +145,13 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".GIAAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <uses-permission android:name="android.permission.SEND_SMS" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

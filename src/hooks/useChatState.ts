@@ -93,7 +93,7 @@ export function useChatState() {
     addFiles, handleFile, handlePaste,
     handleDragEnter, handleDragLeave, handleDragOver, handleDrop,
     removeAttachment,
-  } = useFileAttachments(activeModel, activeProvider, providerLabel);
+  } = useFileAttachments();
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
     let newFeatureState: boolean | undefined;
@@ -105,7 +105,7 @@ export function useChatState() {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
       newFeatureState = newState;
-      if (newState) voiceRef.current.startListening();
+      if (newState) voiceRef.current.startListening(true);
       else voiceRef.current.stopListening();
     }
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
@@ -149,14 +149,18 @@ export function useChatState() {
     const pending = useGiaStore.getState().pendingCircleImage;
     if (!pending) return;
 
+    const overlayText = useGiaStore.getState().pendingInput || '';
+    useGiaStore.getState().setPendingInput(null);
+
+    const query = overlayText || 'What is in this area?';
     const attachment: Attachment = { name: 'screen-region.png', type: 'image/png', content: '', preview: pending };
     setAttachments(prev => [...prev, attachment]);
-    setInput('What is in this area?');
+    setInput(query);
     useGiaStore.getState().setPendingCircleImage(null);
 
     const t = setTimeout(() => {
       if (input.trim() || pending) {
-        gen.handleSend('What is in this area?', [...attachments, attachment], setInput, v => setAttachments(v as Attachment[]));
+        gen.handleSend(query, [...attachments, attachment], setInput, v => setAttachments(v as Attachment[]));
       }
     }, 300);
     return () => clearTimeout(t);
@@ -172,11 +176,21 @@ export function useChatState() {
     if (pendingInput) {
       setInput(pendingInput);
       useGiaStore.getState().setPendingInput(null);
+
+      // Auto-send for hands-free voice commands from overlay
+      setTimeout(() => {
+        const curInput = useGiaStore.getState().pendingInput;
+        useGiaStore.getState().setPendingInput(null);
+        if (curInput || pendingInput) {
+          gen.handleSend(pendingInput, attachments, setInput, v => setAttachments(v as Attachment[]));
+        }
+      }, 400);
     }
     if (pendingFiles.length > 0) {
       setAttachments(prev => [...prev, ...pendingFiles.map(f => ({ name: f.name, type: f.type, content: f.content || '', preview: f.preview }))]);
       useGiaStore.getState().setPendingFiles([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Pending action: handle deep links, file opens, and other external intents
@@ -195,6 +209,15 @@ export function useChatState() {
         setAttachments(prev => [...prev, attachment]);
         setInput(`Analyze this file: ${file.name}`);
         useGiaStore.getState().addNotification(`📄 Opened ${file.name}`);
+      }
+    } else if (action.type === 'shared-image') {
+      const uri = action.data?.uri as string;
+      const mimeType = (action.data?.mimeType as string) || 'image/png';
+      if (uri) {
+        const attachment: Attachment = { name: 'shared-image', type: mimeType, content: '', preview: uri };
+        setAttachments(prev => [...prev, attachment]);
+        setInput('Analyze this image');
+        useGiaStore.getState().addNotification('📷 Image received');
       }
     }
 

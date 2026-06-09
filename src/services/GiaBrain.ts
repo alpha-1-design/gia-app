@@ -76,7 +76,8 @@ class GiaBrain {
     }
 
     // Auto-select best model for this request's feature needs
-    const needsVision = !!(req.images && req.images.length > 0);
+    // Skip vision-based model switching when local vision is enabled
+    const needsVision = !!req.localVision ? false : !!(req.images && req.images.length > 0);
     const selection = selectBestModel(activeProvider, config.model, needsVision);
     const finalModel = selection.model;
     if (selection.switched) {

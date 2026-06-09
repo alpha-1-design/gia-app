@@ -251,6 +251,102 @@ export const toolSchemas: Record<string, { description: string; required: string
     }
   },
 
+  // Device integration tools
+  send_sms: {
+    description: 'Send an SMS text message directly without opening the SMS app.',
+    required: ['phone', 'message'],
+    properties: {
+      phone: { type: 'string', description: 'Recipient phone number with country code' },
+      message: { type: 'string', description: 'SMS message content' },
+    }
+  },
+  send_whatsapp: {
+    description: 'Send a WhatsApp message to a specific phone number.',
+    required: ['phone', 'message'],
+    properties: {
+      phone: { type: 'string', description: 'Phone number with country code (e.g. +233501234567)' },
+      message: { type: 'string', description: 'Message text' },
+    }
+  },
+  send_email: {
+    description: 'Compose an email with recipient, subject, and body.',
+    required: ['to', 'subject', 'body'],
+    properties: {
+      to: { type: 'string', description: 'Recipient email address' },
+      subject: { type: 'string', description: 'Email subject' },
+      body: { type: 'string', description: 'Email body text' },
+    }
+  },
+  make_phone_call: {
+    description: 'Initiate a phone call by opening the dialer with a pre-filled number.',
+    required: ['phone'],
+    properties: {
+      phone: { type: 'string', description: 'Phone number with country code' },
+    }
+  },
+  share: {
+    description: 'Share content using the native share sheet.',
+    required: ['title', 'text'],
+    properties: {
+      title: { type: 'string', description: 'Share title' },
+      text: { type: 'string', description: 'Share text content' },
+      url: { type: 'string', description: 'Optional URL to share' },
+    }
+  },
+  clipboard: {
+    description: 'Read from or write to the system clipboard.',
+    required: ['action'],
+    properties: {
+      action: { type: 'string', description: 'read or write' },
+      text: { type: 'string', description: 'Text to write (required for write action)' },
+    }
+  },
+  vibrate: {
+    description: 'Trigger device vibration or haptic feedback.',
+    required: ['duration'],
+    properties: {
+      duration: { type: 'number', description: 'Vibration duration in milliseconds (100-5000)' },
+    }
+  },
+  screen_brightness: {
+    description: 'Get or set device screen brightness (0.0 to 1.0).',
+    required: ['action'],
+    properties: {
+      action: { type: 'string', description: 'get or set' },
+      value: { type: 'number', description: 'Brightness level 0.0-1.0 (required for set)' },
+    }
+  },
+  device_info: {
+    description: 'Get comprehensive device and system information.',
+    required: [],
+    properties: {}
+  },
+  get_contacts: {
+    description: 'Search or list contacts from the device address book.',
+    required: [],
+    properties: {
+      query: { type: 'string', description: 'Optional search query' },
+      maxResults: { type: 'number', description: 'Max results (default 20, max 100)' },
+    }
+  },
+  open_url: {
+    description: 'Open a URL in the default browser or external app.',
+    required: ['url'],
+    properties: {
+      url: { type: 'string', description: 'URL to open (https://, tel:, mailto:, or custom scheme)' },
+    }
+  },
+  set_alarm: {
+    description: 'Set an alarm on the device. Uses AlarmManager to set directly.',
+    required: ['hour', 'minute'],
+    properties: {
+      hour: { type: 'number', description: 'Hour in 24-hour format (0-23)' },
+      minute: { type: 'number', description: 'Minute (0-59)' },
+      label: { type: 'string', description: 'Optional alarm label' },
+      days: { type: 'array', description: 'Repeat days: 1=Sun through 7=Sat', items: { type: 'number' } },
+    }
+  },
+
   // Autonomy tools
   create_goal: {
     description: 'Create a new autonomous goal for GIA to work on independently. GIA will plan, execute, and track progress.',
@@ -384,15 +480,24 @@ export function toolToProtocolType(id: string): ProtocolType {
     create_goal: 'settings_change', list_goals: 'environment_info',
     pause_goal: 'settings_change', goal_progress: 'environment_info',
     set_autonomy_config: 'settings_change',
+    // Device integration tools
+    send_sms: 'device_action', send_whatsapp: 'device_action',
+    send_email: 'device_action', make_phone_call: 'device_action',
+    share: 'device_action', clipboard: 'device_action',
+    vibrate: 'device_action', screen_brightness: 'device_action',
+    device_info: 'device_action', get_contacts: 'device_action',
+    open_url: 'device_action', set_alarm: 'device_action',
   };
   return map[id] || 'custom';
 }
 
 export function toolToImpact(id: string): ProtocolImpact {
   const readTools = ['web_search', 'read_url', 'filesystem_read', 'list_files', 'get_environment_info',
-    'get_user_location', 'search_places'];
+    'get_user_location', 'search_places', 'device_info', 'get_contacts'];
   const writeTools = ['filesystem_write', 'export_brain', 'import_brain', 'zip_project', 'forget_memory',
-    'toggle_feature', 'show_notification', 'summarize_conversation'];
+    'toggle_feature', 'show_notification', 'summarize_conversation',
+    'send_sms', 'send_whatsapp', 'send_email', 'make_phone_call',
+    'share', 'clipboard', 'vibrate', 'screen_brightness', 'open_url', 'set_alarm'];
   const destructiveTools = ['forget_memory'];
   const networkTools = ['web_search', 'read_url', 'terminal_run', 'image_generation', 'search_places', 'show_map'];
   const locationTools = ['get_user_location', 'search_places', 'show_map'];

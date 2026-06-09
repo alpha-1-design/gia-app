@@ -55,17 +55,7 @@ export async function buildMessages(req: BrainRequest): Promise<{ role: string; 
   if (req.history) msgs.push(...req.history);
 
   if (req.images && req.images.length > 0) {
-    if (isVisionCapable(config.model, activeProvider)) {
-      const content: { type: string; text?: string; image_url?: { url: string; detail: string } }[] = [{ type: 'text', text: req.prompt }];
-      req.images.forEach(img => {
-        const dataUrl = img.data.startsWith('data:') ? img.data : `data:${img.type};base64,${img.data}`;
-        content.push({
-          type: 'image_url',
-          image_url: { url: dataUrl, detail: 'auto' }
-        });
-      });
-      msgs.push({ role: 'user', content });
-    } else if (req.localVision) {
+    if (req.localVision) {
       useGiaStore.getState().addNotification(`🧠 Analyzing ${req.images.length} image(s) with local vision...`);
       const parts: string[] = [];
       for (const img of req.images) {
@@ -90,11 +80,21 @@ export async function buildMessages(req: BrainRequest): Promise<{ role: string; 
         : '';
       const content = `${descText}USER: ${req.prompt}`;
       msgs.push({ role: 'user', content });
+    } else if (isVisionCapable(config.model, activeProvider)) {
+      const content: { type: string; text?: string; image_url?: { url: string; detail: string } }[] = [{ type: 'text', text: req.prompt }];
+      req.images.forEach(img => {
+        const dataUrl = img.data.startsWith('data:') ? img.data : `data:${img.type};base64,${img.data}`;
+        content.push({
+          type: 'image_url',
+          image_url: { url: dataUrl, detail: 'auto' }
+        });
+      });
+      msgs.push({ role: 'user', content });
     } else {
       const names = req.images.map(i => i.name).join(', ');
-      const content = `[Image attached: ${names}]\n(System: Model ${config.model} lacks native vision. Enable local vision in tools for on-device analysis.)\n\nUSER: ${req.prompt}`;
+      const content = `[Image attached: ${names}]\n(System: ${config.model} cannot process images directly. Enable local on-device vision analysis in tools.)\n\nUSER: ${req.prompt}`;
       msgs.push({ role: 'user', content });
-      useGiaStore.getState().addNotification(`⚠️ ${config.model} can't see images. Enable "Vision" tool for local on-device analysis.`);
+      useGiaStore.getState().addNotification(`⚠️ ${config.model} cannot see images — enable local on-device vision in tools`);
     }
   } else {
     msgs.push({ role: 'user', content: req.prompt });

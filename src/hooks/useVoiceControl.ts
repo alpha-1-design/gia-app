@@ -78,10 +78,10 @@ function mapWakeWordToBuiltin(wakeWord: string): string {
     'jarvis': 'JARVIS',
     'picovoice': 'PICOVOICE',
     'porcupine': 'PORCUPINE',
-    'hey_gia': 'HEY_GOOGLE',
-    'gia': 'HEY_GOOGLE',
+    'hey_gia': 'JARVIS',
+    'gia': 'JARVIS',
   };
-  return known[w] || 'HEY_GOOGLE';
+  return known[w] || 'JARVIS';
 }
 
 export function useVoiceControl(config: VoiceControlConfig = {}) {
@@ -351,13 +351,12 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         sensitivity: nativeSensitivity,
       });
 
-      const handle = await GIAWakeWord.addListener('wakeWordDetected', ({ keyword: kw }) => {
+      const handle = await GIAWakeWord.addListener('wakeWordDetected', async ({ keyword: kw }) => {
         if (!activeRef.current) return;
         onWakeWordRef.current?.(kw || nativeKeyword);
         if (!keepListeningRef.current) {
           setTimeout(() => stopListening(), 500);
         }
-        captureQueryAfterWake();
       });
       nativeListenerRef.current = handle;
 
@@ -370,9 +369,9 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         restartBrowserRecognition();
       }
     }
-  }, [isNative, nativeSensitivity, captureQueryAfterWake, listenOnce, restartBrowserRecognition, stopListening]);
+  }, [isNative, nativeSensitivity, listenOnce, restartBrowserRecognition, stopListening]);
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(async (manual?: boolean) => {
     if (activeRef.current) return;
 
     const granted = await requestPermissions();
@@ -383,15 +382,17 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     activeRef.current = true;
 
-    if (isNative && nativeWakeWord) {
+    if (manual || !(isNative && nativeWakeWord)) {
+      if (isCapacitor) {
+        setIsListening(true);
+        listenOnce();
+      } else {
+        setIsListening(true);
+        restartBrowserRecognition();
+      }
+    } else {
       await startNativeWakeWord();
       if (!activeRef.current) return;
-    } else if (isCapacitor) {
-      setIsListening(true);
-      listenOnce();
-    } else {
-      setIsListening(true);
-      restartBrowserRecognition();
     }
 
     if (autoStopAfter > 0 && !keepListeningRef.current && !isNative) {

@@ -149,8 +149,14 @@ const App: React.FC = () => {
     if (!showCircleSearch) return;
     const start = async () => {
       try {
-        const dataUrl = await ScreenCaptureService.captureScreen();
-        setCapturedImage(dataUrl);
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          const { GIAOverlay } = await import('./services/GIAOverlay');
+          await GIAOverlay.startOverlay();
+        } else {
+          const dataUrl = await ScreenCaptureService.captureScreen();
+          setCapturedImage(dataUrl);
+        }
       } catch (e) {
         addNotification((e as Error).message || 'Screen capture failed');
         setShowCircleSearch(false);
@@ -324,6 +330,73 @@ const App: React.FC = () => {
         }
       })();
     }
+
+    // Native Circle to Search overlay result handler
+    (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+        const { GIAOverlay } = await import('./services/GIAOverlay');
+        await GIAOverlay.addListener('overlayResult', (result) => {
+          if (result.cancelled) return;
+          if (result.dataUrl) {
+            setPendingCircleImage(result.dataUrl);
+            if (result.text) useGiaStore.getState().setPendingInput(result.text);
+            setModule('chat');
+          } else if (result.text) {
+            useGiaStore.getState().setPendingInput(result.text);
+            setModule('chat');
+          }
+        });
+      } catch (e) {
+        logger.warn('[App] Native overlay setup failed:', e);
+      }
+    })();
+
+    // Chain wake word → circle overlay + voice capture on native
+    (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+        const { GIAWakeWord } = await import('./services/GIAWakeWord');
+        await GIAWakeWord.addListener('wakeWordDetected', async () => {
+          try {
+            const { GIAOverlay } = await import('./services/GIAOverlay');
+            await GIAOverlay.startOverlay();
+
+            // Auto-start voice capture after overlay appears
+            setTimeout(async () => {
+              try {
+                const { SpeechRecognition } = await import('@capgo/capacitor-speech-recognition');
+                const { available } = await SpeechRecognition.available();
+                if (!available) return;
+
+                const result = await SpeechRecognition.start({
+                  language: 'en-US',
+                  partialResults: false,
+                  popup: false,
+                });
+
+                if (result?.matches?.length && result.matches[0]?.length > 0) {
+                  const transcript = result.matches[0].replace(/[^\w\s']/g, '').trim();
+                  if (transcript.length >= 2) {
+                    useGiaStore.getState().setPendingInput(transcript);
+                    useGiaStore.getState().setModule('chat');
+                    await GIAOverlay.hideOverlay();
+                  }
+                }
+              } catch (e) {
+                logger.warn('[App] Voice capture after wake word failed:', e);
+              }
+            }, 600);
+          } catch (e) {
+            logger.warn('[App] Wake word overlay chaining failed:', e);
+          }
+        });
+      } catch (e) {
+        logger.warn('[App] Wake word overlay chain setup failed:', e);
+      }
+    })();
 
     if (locked) {
       handleBiometric();

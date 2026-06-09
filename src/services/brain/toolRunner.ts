@@ -30,6 +30,18 @@ const FALLBACK_HINTS: Record<string, string> = {
   search_places: 'web_search',
   browser_navigate: 'read_url',
   zip_project: 'Try filesystem_write or filesystem_desktop_write as individual files',
+  send_sms: 'Try send_whatsapp or send_email as an alternative',
+  set_alarm: 'Ask the user to set the alarm manually, or set a reminder via send_email',
+  send_whatsapp: 'Try send_sms or send_email instead',
+  send_email: 'Try send_whatsapp or send_sms instead',
+  make_phone_call: 'Ask the user to place the call manually',
+  share: 'Try clipboard instead, or ask the user to share manually',
+  clipboard: 'Ask the user to copy/paste manually',
+  vibrate: 'Skip vibration and proceed silently',
+  screen_brightness: 'Ask the user to adjust brightness manually',
+  device_info: 'Ask the user about their device specifications',
+  get_contacts: 'Ask the user for the contact details directly',
+  open_url: 'Share the URL via clipboard, send_email, or send_whatsapp instead',
 };
 
 const PARALLEL_SAFE_TOOLS = new Set([
