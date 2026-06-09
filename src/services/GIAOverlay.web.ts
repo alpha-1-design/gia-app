@@ -18,8 +18,8 @@ export class GIAOverlayWeb implements GIAOverlayPlugin {
   }
 
   addListener(
-    eventName: string,
-    handler: (data: unknown) => void,
+    eventName: 'overlayResult',
+    handler: (result: { dataUrl?: string; text?: string; cancelled?: boolean }) => void,
   ): Promise<PluginListenerHandle> {
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, []);

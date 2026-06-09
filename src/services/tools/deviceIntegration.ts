@@ -5,9 +5,9 @@ function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
     const path = i.path.length > 0 ? `"${i.path.join('.')}"` : 'value';
     if (i.code === 'invalid_type') {
-      const expected = (i as Record<string, unknown>).expected ?? '?';
-      const received = (i as Record<string, unknown>).received ?? '?';
-      return `${path}: expected ${expected}, got ${received === 'undefined' ? 'nothing' : String(received)}`;
+      const info = i as unknown as { expected: string; received: string };
+      const received = info.received === 'undefined' ? 'nothing' : info.received;
+      return `${path}: expected ${info.expected}, got ${received}`;
     }
     if (i.code === 'too_small' && 'minimum' in i) {
       const min = (i as { minimum: number }).minimum;
