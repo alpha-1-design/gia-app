@@ -438,18 +438,17 @@ class DeviceIntegration {
       logger.warn('[DeviceIntegration] Native alarm failed:', e);
     }
 
-    if (this.isCapacitor()) {
+    {
+      let url = `intent://alarm/#Intent;action=android.intent.action.SET_ALARM;` +
+        `I.android.intent.extra.alarm.HOUR=${hour};` +
+        `I.android.intent.extra.alarm.MINUTES=${minute}`;
+      if (label) url += `;S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(label)}`;
+      if (days && days.length > 0) {
+        url += `;S.android.intent.extra.alarm.DAYS=${days.join(',')}`;
+      }
+      url += `;end`;
       try {
-        const { Browser } = await import('@capacitor/browser');
-        let url = `intent://alarm/#Intent;action=android.intent.action.SET_ALARM;` +
-          `I.android.intent.extra.alarm.HOUR=${hour};` +
-          `I.android.intent.extra.alarm.MINUTES=${minute}`;
-        if (label) url += `;S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(label)}`;
-        if (days && days.length > 0) {
-          url += `;S.android.intent.extra.alarm.DAYS=${days.join(',')}`;
-        }
-        url += `;end`;
-        await Browser.open({ url });
+        window.open(url, '_blank');
         return { method: 'android_intent' };
       } catch (e) {
         logger.warn('[DeviceIntegration] Android intent alarm failed:', e);
