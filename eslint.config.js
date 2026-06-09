@@ -7,7 +7,7 @@ import { defineConfig } from 'eslint/config'
 
 export default defineConfig([
   {
-    ignores: ['dist/**', 'android/**', 'node_modules/**', '.git/**'],
+    ignores: ['dist/**', 'android/**', 'node_modules/**', '.git/**', 'public/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

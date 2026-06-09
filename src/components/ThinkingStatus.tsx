@@ -68,6 +68,20 @@ export function ThinkingStatus({ phase, toolName }: { phase?: ThinkingPhase; too
   const [currentPhase, setCurrentPhase] = useState(0);
   const [visible, setVisible] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const phases: ThinkingPhase[] = [
+    'gathering', 'reasoning', 'analyzing', 'planning', 'processing',
+  ];
+
+  useEffect(() => {
+    setVisible(true);
+    intervalRef.current = setInterval(() => {
+      setCurrentPhase((prev) => (prev + 1) % phases.length);
+    }, 1800);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [phases.length]);
 
   if (toolName && TOOL_LABELS[toolName]) {
     const tl = TOOL_LABELS[toolName];
@@ -94,21 +108,6 @@ export function ThinkingStatus({ phase, toolName }: { phase?: ThinkingPhase; too
       </div>
     );
   }
-
-  const phases: ThinkingPhase[] = [
-    'gathering', 'reasoning', 'analyzing', 'planning', 'processing',
-  ];
-
-  useEffect(() => {
-    setVisible(true);
-    intervalRef.current = setInterval(() => {
-      setCurrentPhase((prev) => (prev + 1) % phases.length);
-    }, 1800);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [phases.length]);
 
   const activePhase = phase || phases[currentPhase];
   const def = PHASE_MAP[activePhase] || PHASE_MAP.processing;
@@ -170,6 +169,16 @@ export function ThinkingOverlay({
   onStop?: () => void;
 }) {
   const [phaseIdx, setPhaseIdx] = useState(0);
+  const cycle: ThinkingPhase[] = [
+    'gathering', 'analyzing', 'reasoning', 'searching', 'coding', 'planning', 'writing',
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPhaseIdx((prev) => (prev + 1) % cycle.length);
+    }, 1200);
+    return () => clearInterval(timer);
+  }, [cycle.length]);
 
   if (toolName && TOOL_LABELS[toolName]) {
     const tl = TOOL_LABELS[toolName];
@@ -207,17 +216,6 @@ export function ThinkingOverlay({
       </div>
     );
   }
-
-  const cycle: ThinkingPhase[] = [
-    'gathering', 'analyzing', 'reasoning', 'searching', 'coding', 'planning', 'writing',
-  ];
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setPhaseIdx((prev) => (prev + 1) % cycle.length);
-    }, 1200);
-    return () => clearInterval(timer);
-  }, [cycle.length]);
 
   const activePhase = phase || cycle[phaseIdx];
   const def = PHASE_MAP[activePhase] || PHASE_MAP.processing;

@@ -435,7 +435,7 @@ const setAlarmTool: Tool = {
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
-      const result = await di.setAlarm(parsed.data.hour, parsed.data.minute, parsed.data.label, parsed.data.days);
+      await di.setAlarm(parsed.data.hour, parsed.data.minute, parsed.data.label, parsed.data.days);
       const h = parsed.data.hour.toString().padStart(2, '0');
       const m = parsed.data.minute.toString().padStart(2, '0');
       const dayNames = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

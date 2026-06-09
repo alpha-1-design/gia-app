@@ -21,6 +21,12 @@ export function extractJSON<T = unknown>(text: string): T {
   } else if (firstObj !== -1 && lastObj > firstObj) {
     start = firstObj;
     end = lastObj + 1;
+  } else if (firstObj !== -1 && lastObj === -1) {
+    start = firstObj;
+    end = cleaned.length;
+  } else if (firstArray !== -1 && lastArray === -1) {
+    start = firstArray;
+    end = cleaned.length;
   } else {
     // Strategy 2: try parsing the whole thing
     try { return JSON.parse(cleaned); } catch (e) { logger.error('[helpers] JSON parse failed (strategy 2):', e); }
@@ -93,6 +99,12 @@ function repairTruncatedJSON(json: string): string {
       if (ch === '{' || ch === '[') depth++;
       else if (ch === '}' || ch === ']') depth--;
     }
+  }
+
+  // Close unclosed string if needed
+  if (inString) {
+    result += '"';
+    inString = false;
   }
 
   // Add missing closing brackets

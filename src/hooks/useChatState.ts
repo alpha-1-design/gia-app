@@ -127,10 +127,10 @@ export function useChatState() {
         m.default.notifyOnComplete('GIA Response Ready', msg.length > 80 ? msg.slice(0, 80) + '…' : msg)
       );
     }
-  }, [gen.loading, gen.streamingMsgId]);
+  }, [gen.loading, gen.streamingMsgId, gen.responseStartRef, gen.responseTimesRef, gen.lastUserMsgRef]);
 
   // Abort in-flight requests on unmount
-  useEffect(() => () => { gen.abortRef.current?.abort(); if (gen.abortTimeoutRef.current) clearTimeout(gen.abortTimeoutRef.current); }, []);
+  useEffect(() => () => { gen.abortRef.current?.abort(); if (gen.abortTimeoutRef.current) clearTimeout(gen.abortTimeoutRef.current); }, [gen.abortRef, gen.abortTimeoutRef]);
 
   useEffect(() => {
     const el = inputContainerRef.current;
@@ -222,7 +222,7 @@ export function useChatState() {
     }
 
     useGiaStore.getState().setPendingAction(null);
-  }, []);
+  }, [setAttachments]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -252,6 +252,7 @@ export function useChatState() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gen.loading, gen.handleStop, toggleFeature]);
 
   const handleInputChange = useCallback((value: string) => {
@@ -270,10 +271,12 @@ export function useChatState() {
       return;
     }
     gen.handleSend(input, attachments, setInput, v => setAttachments(v as Attachment[]));
-  }, [input, attachments, gen.handleSend]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, attachments, gen.handleSend, setAttachments]);
 
   const handleEditResend = useCallback((msgId: string) => {
     msgOps.handleEditResend(msgId, setInput);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgOps.handleEditResend]);
 
   return {

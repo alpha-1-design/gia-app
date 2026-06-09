@@ -369,7 +369,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         restartBrowserRecognition();
       }
     }
-  }, [isNative, nativeSensitivity, listenOnce, restartBrowserRecognition, stopListening]);
+  }, [isNative, nativeSensitivity, listenOnce, restartBrowserRecognition, stopListening, isCapacitor]);
 
   const startListening = useCallback(async (manual?: boolean) => {
     if (activeRef.current) return;

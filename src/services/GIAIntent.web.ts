@@ -8,12 +8,10 @@ export class GIAIntentWeb implements GIAIntentPlugin {
 
   async clearIntent(): Promise<void> {}
 
-  async addListener(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _eventName: any,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _handler: any
-  ): Promise<PluginListenerHandle> {
+  async addListener(eventName: 'onAssist', handler: (data: { source: string; type: string }) => void): Promise<PluginListenerHandle>;
+  async addListener(eventName: 'onDeepLink', handler: (data: { type: string; uri: string; scheme: string; host: string; path: string; query: string }) => void): Promise<PluginListenerHandle>;
+  async addListener(eventName: 'onShareReceived', handler: (data: { type: string; mimeType: string; text?: string; subject?: string; imageUri?: string }) => void): Promise<PluginListenerHandle>;
+  async addListener(): Promise<PluginListenerHandle> {
     return { remove: async () => {} };
   }
 

@@ -370,7 +370,7 @@ export const RegionSelectorOverlay: React.FC<RegionSelectorOverlayProps> = ({ im
     const final = smoothPath(snapped, 2);
 
     snappedRef.current = final;
-  }, [dims, imgW, imgH]);
+  }, [imgW, imgH]);
 
   // Touch/mouse handlers
   const getPos = useCallback((e: React.MouseEvent | React.TouchEvent): Point => {

@@ -16,6 +16,7 @@ vi.mock('../../store/useGiaStore', () => ({
       voiceLanguage: 'en-US',
       addNotification: vi.fn(),
       setInput: vi.fn(),
+      setVoiceOverlay: vi.fn(),
     })) }
   ),
 }));
