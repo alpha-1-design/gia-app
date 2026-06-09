@@ -1,7 +1,8 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 import type { GIAOverlayPlugin } from './GIAOverlay';
 
-type ListenerMap = Map<string, Array<(data: unknown) => void>>;
+type OverlayHandler = (result: { dataUrl?: string; text?: string; cancelled?: boolean }) => void;
+type ListenerMap = Map<string, Array<OverlayHandler>>;
 
 export class GIAOverlayWeb implements GIAOverlayPlugin {
   private listeners: ListenerMap = new Map();
