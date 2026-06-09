@@ -86,14 +86,49 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Custom Instructions** | User-defined rules injected into every conversation system prompt |
 | **Voice** | Wake-word ("Hey Gia"), push-to-talk, transcript polishing, TTS |
 | **Web Search** | DuckDuckGo with formatted citations and clickable source badges |
-| **File Operations** | Read/write files (native), ZIP bundling, download triggers (browser) |
+| **File Operations** | Read/write files (native + desktop), ZIP bundling, download triggers (browser) |
 | **Code Execution** | Run Python/JS/C++ via Piston API, auto-fix on error |
 | **Image Generation** | DALL-E 3 / OpenRouter image models, inline display in chat |
 | **Skills System** | Role-based presets (Tutor, Developer, Researcher, Creative, Security) |
 | **Knowledge Manager** | Browse, search, filter, pin, add, delete, import, export memories |
 | **Conversation Search** | Search across session titles and message content with match count |
+| **Autonomous Goals** | Create goals → auto-decompose → execute steps → reflect on outcomes |
+| **Conversation Branching** | Tree-based branching and forking from any message |
+| **MCP Support** | Model Context Protocol — extend tools via external MCP servers (SSE/stdio) |
+| **Plugin System** | Hook-based plugin architecture with tool registration API |
+| **Scheduled Tasks** | Hourly/daily/weekly background AI task execution |
+| **Circle-to-Search** | Screen capture → region select → AI vision analysis |
+| **Brain Export/Import** | Full memory backup and restore as JSON |
+| **Deep Links** | `gia://` and `web+gia://` protocol handling |
+| **PWA Share Target** | Receive shared content from other apps |
+| **Clipboard Monitor** | Detects copied text with "Ask GIA" toast |
+| **Clarification System** | Structured Q&A when input is ambiguous |
+| **Protocol System** | Tool execution approval workflow (auto-confirm low-risk, require OK for high-risk) |
+| **Extended Thinking** | Configurable reasoning budget for o1/o3/o4-mini and Gemini models |
+| **Input Guardrails** | Prompt injection detection, dangerous command blocking, URL safety checks |
+| **Output Validation** | Auto-repair malformed JSON, missing fences, repeated text patterns |
+| **Smart Fallback** | Automatic provider failover based on latency/error tracking |
+| **Response Caching** | Cache identical requests to reduce API costs |
 
-### Visualization in Chat
+### Interactive Visual Blocks
+
+GIA can render rich interactive visualizations in chat using ` ```visual ` code blocks:
+
+| Type | Tag | Example |
+|------|-----|---------|
+| **Charts** | `chart` | Bar, line, pie, area charts via Recharts |
+| **Data Tables** | `table` | Sortable, copyable data tables |
+| **Mind Maps** | `mindmap` | Tree/radial diagrams |
+| **Timelines** | `timeline` | Chronological event displays |
+| **Code Diffs** | `diff` | Side-by-side code comparison |
+| **Image Galleries** | `gallery` | Grid image layouts |
+| **Terminal Output** | `terminal` | ANSI-colored terminal output |
+| **Metric Widgets** | `widget` | KPI metric cards |
+| **Document Outlines** | `outline` | Tree/table-of-contents views |
+| **Maps** | `map` | Interactive Leaflet/OpenStreetMap |
+| **Audio Waveforms** | `waveform` | Audio visualization |
+
+### Markdown Rendering
 
 | Feature | Support |
 |---------|---------|
@@ -107,6 +142,8 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Definition lists** | `term` / `: definition` rendering |
 | **Images** | `![alt](url)` inline display |
 | **Inline code** | Click-to-copy with visual feedback |
+| **Highlight** | `==text==` for highlighted spans |
+| **Colored spans** | `<span style="color:...">` inline HTML |
 
 ### UI Improvements
 
@@ -116,8 +153,117 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 - Streaming cursor (blinking `▋`) during token delivery
 - Transparent input area with backdrop blur
 - Empty state spacing for new chats
+- **Context menus** — right-click or long-press on messages for copy/edit/retry/fork/delete/continue
+- **Live thinking panel** — per-message collapsible reasoning trace with real-time streaming
 
 ---
+
+## 🧩 Model Context Protocol (MCP)
+
+GIA supports the **Model Context Protocol** for extending tool capabilities via external MCP servers:
+
+- **Transport**: SSE (Server-Sent Events) and stdio transports
+- **Auto-discovery**: Automatically detects GIA Stdio Bridge at `localhost:3080`
+- **Dynamic tool registration**: MCP server tools are registered/unregistered on connect/disconnect
+- **Management UI**: Configure servers in Settings → MCP
+- **Default servers**: Pre-configured entries for local bridge and Ollama
+
+MCP tools appear in GIA's tool registry with an `mcp__` prefix and are callable from the agentic loop.
+
+## 🤖 Autonomous Agent System
+
+GIA includes a full autonomous goal execution engine:
+
+- **Goal Creation**: Accept high-level goals, automatically decompose into actionable steps
+- **Step Execution**: Each step executed with tool access, LLM reasoning, and result evaluation
+- **Reflection Engine**: Post-execution self-evaluation (success/partial/failure) with lessons learned
+- **Proactive Mode**: Background execution during user idle time (configurable threshold)
+- **Progress Tracking**: Visual progress bars, step-by-step status, reflection history
+- **Priority System**: Low/Medium/High/Critical with automatic ordering
+- **Management UI**: Dedicated Autonomy module with create/edit/pause/resume/delete controls
+
+## 🔌 Plugin System
+
+Extend GIA's capabilities through a hook-based plugin architecture:
+
+- **Plugin API**: `registerTool`, `unregisterTool`, `addNotification`, store access
+- **Lifecycle Hooks**: `onInit`, `onActivate`, `onDeactivate`, `onBeforeGenerate`, `onAfterGenerate`, `onToolRegister`
+- **Persistence**: Plugin enable/disable state persisted across sessions
+- **Management**: Install, enable, disable plugins via Settings → Plugins
+- **Tool Registration**: Plugins can register custom tools dynamically
+
+## 🗂 Conversation Branching & Forking
+
+Full tree-based conversation management:
+
+- **Branching**: Create named branches from any message to explore alternative paths
+- **Forking**: Fork an entire session at any message into a new independent session
+- **Branch View**: Visual tree explorer showing conversation topology
+- **Branch Management**: Rename, delete, and switch between branches seamlessly
+- **Undo Delete**: 5-second undo toast for accidental message deletions
+
+## 💾 Scheduler Service
+
+Schedule periodic AI tasks that run automatically:
+
+- **Intervals**: Hourly, daily, weekly scheduled prompts
+- **Execution**: Runs via GIA Brain with full tool access
+- **Notifications**: Local push notifications on task completion
+- **Persistence**: Scheduled tasks stored and survive app restarts
+
+## 🖥 Desktop File System Access
+
+Chromium-only: GIA can read/write to a user-selected project folder:
+
+- **Folder Picker**: Click "Pick Project Folder" in settings to grant access
+- **Tools**: `filesystem_desktop_read`, `filesystem_desktop_write`, `filesystem_desktop_list`
+- **File System Access API**: Uses the native browser File System Access API
+- **Scope**: Limited to the selected directory tree only
+
+## 🧠 Brain Export/Import
+
+Full backup and restore of GIA's knowledge:
+
+- **Export**: Download a complete `.gia-brain.json` file containing all memories, skills, identity config
+- **Import**: Restore from a previously exported file via Settings → Brain Export
+- **Scope**: Includes memories (all tiers), user profile, custom instructions, pinned memories
+
+## 📱 Circle-to-Search
+
+Screen capture + region selection for AI analysis:
+
+- **Trigger**: Keyboard shortcut `Ctrl+Shift+C` or via command palette
+- **Capture**: Takes a screenshot using native Capacitor plugin or browser `getDisplayMedia`
+- **Crop**: Interactive region selection overlay with drag handles
+- **Analysis**: Cropped image sent to GIA's vision-capable model for analysis
+- **Fallback**: Multiple capture strategies (native, html2canvas, screen capture API)
+
+## 🔗 Deep Link Support
+
+- **`gia://` protocol**: Handles pasted `gia://` URIs as deep links
+- **`web+gia://` protocol**: Detected from URL query parameters (`?url=web+gia://...`)
+- **PWA Share Target**: Receives content shared from other apps via PWA API
+- **Clipboard Monitor**: Detects copied text and shows "Ask GIA" toast
+
+## 🔄 Clarification System
+
+GIA can ask clarifying questions when input is ambiguous:
+
+- **Single question per turn**: Guard against clarification loops
+- **Structured options**: Multiple choice answers with tap-to-respond
+- **Bottom sheet UI**: Slide-up panel with question and option buttons
+- **Session-aware**: Linked to active session and specific assistant message
+
+## 🔧 Protocol System (Tool Approval)
+
+Every tool execution follows an approval workflow:
+
+1. **Proposed**: GIA requests to execute a tool with specific arguments
+2. **Confirmed/Modified**: User approves, rejects, or modifies arguments
+3. **Executing**: Tool runs with live status indicator
+4. **Completed/Failed**: Result displayed with observation note
+
+Low-risk tools (web_search, read_url, environment_info, show_map, file_read, clarification) are auto-approved. High-risk tools (terminal_run, filesystem_write, etc.) require explicit user confirmation.
 
 ## 🛡️ Security & Enterprise Hardening
 

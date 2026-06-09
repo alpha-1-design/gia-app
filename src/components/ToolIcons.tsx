@@ -304,7 +304,7 @@ export const FileTextIcon: React.FC<AnimatedIconProps> = ({ size = 20, color = '
 
 // ─── Autonomy / Goals ───
 
-export const TargetIcon: React.FC<AnimatedIconProps> = ({ size = 20, color = '#a855f7' }) => (
+export const TargetIcon: React.FC<AnimatedIconProps> = ({ size = 20, color = '#a855f7', animated = true }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.3" fill={`${color}10`} />
     <circle cx="12" cy="12" r="5" stroke={color} strokeWidth="1.3" fill={`${color}15`} />

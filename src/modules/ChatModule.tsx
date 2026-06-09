@@ -49,7 +49,7 @@ const ChatModule: React.FC = () => {
     webSearch, extThinking, handsOff,
     localVision,
     activeSkillId, setSkill,
-    skills, thinkingPhase, showConsole, consoleLogs,
+    skills, thinkingPhase, currentTool, showConsole, consoleLogs,
     messages, activeSession, providerConnected, providerLabel,
     activeModel,
     toggleFeature, handleStop, handleUndoDelete,
@@ -220,6 +220,7 @@ const ChatModule: React.FC = () => {
           setShowThoughts={setShowThoughts}
           liveThoughts={liveThoughts}
           thinkingPhase={thinkingPhase}
+          currentTool={currentTool}
           responseTimesRef={responseTimesRef}
           onCopyMessage={copyMessage}
           onEdit={handleEditResend}
@@ -263,7 +264,7 @@ const ChatModule: React.FC = () => {
       </AnimatePresence>
 
       {loading && (
-        <ThinkingOverlay phase={thinkingPhase} onStop={handleStop} />
+        <ThinkingOverlay phase={thinkingPhase} toolName={currentTool} onStop={handleStop} />
       )}
 
       <AnimatePresence>

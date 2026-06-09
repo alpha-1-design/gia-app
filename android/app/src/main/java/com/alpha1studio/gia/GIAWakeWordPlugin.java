@@ -4,16 +4,16 @@ import android.Manifest;
 import android.content.Intent;
 
 import com.getcapacitor.JSObject;
-import com.getcapacitor.Permission;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
 
 @CapacitorPlugin(
     name = "GIAWakeWord",
     permissions = {
-        @Permission(string = Manifest.permission.RECORD_AUDIO, alias = "record_audio")
+        @Permission(strings = {Manifest.permission.RECORD_AUDIO}, alias = "record_audio")
     }
 )
 public class GIAWakeWordPlugin extends Plugin {
@@ -36,7 +36,7 @@ public class GIAWakeWordPlugin extends Plugin {
     @PluginMethod
     public void startListening(PluginCall call) {
         if (!hasPermission("record_audio")) {
-            requestPermissionForAlias("record_audio", call);
+            requestPermissionForAlias("record_audio", call, Manifest.permission.RECORD_AUDIO);
             return;
         }
 

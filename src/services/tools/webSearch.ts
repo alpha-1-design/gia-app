@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Tool } from './types';
+import type { Tool, ToolContext } from './types';
 import { useGiaStore } from '../../store/useGiaStore';
 
 const webSearchTool: Tool = {
@@ -13,8 +13,7 @@ const webSearchTool: Tool = {
     },
     required: ['query']
   },
-  execute: async ({ query }) => {
-    // Validate input using Zod
+  execute: async ({ query }, ctx?: ToolContext) => {
     const searchSchema = z.object({
       query: z.string().min(1, "Search query cannot be empty").max(500, "Search query too long")
     });
@@ -29,12 +28,16 @@ const webSearchTool: Tool = {
     }
 
     try {
+      ctx?.onProgress?.(0.1, 'Searching...');
       const { default: fallback } = await import('../FallbackWebSearch');
+      ctx?.onProgress?.(0.3, 'Fetching results...');
       const results = await fallback.search(query as string);
       if (results.length === 0) return { success: true, content: 'No results found.', sources: [] };
+      ctx?.onProgress?.(0.7, 'Processing results...');
       const content = results.map((r, i) =>
         `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.snippet}\n    _(via ${r.source})_`
       ).join('\n\n');
+      ctx?.onProgress?.(1, 'Done');
       return {
         success: true,
         content: `WEB SEARCH RESULTS for "${query}":\n\n${content}\n\nUse these results to inform your response. Cite sources using [1], [2], etc.`,
@@ -58,12 +61,16 @@ const readUrlTool: Tool = {
     },
     required: ['url'],
   },
-  execute: async ({ url, maxChars }) => {
+  execute: async ({ url, maxChars }, ctx?: ToolContext) => {
     try {
+      ctx?.onProgress?.(0.1, 'Connecting...');
       const { default: fallback } = await import('../FallbackWebSearch');
+      ctx?.onProgress?.(0.3, 'Fetching page...');
       const page = await fallback.scrape(url as string, (maxChars as number) || 60000);
+      ctx?.onProgress?.(0.7, 'Extracting content...');
       const header = `# ${page.title}\n*From [${page.url}](${page.url})* ~ Source: ${page.source}\n\n`;
       const excerpt = page.content.length > 0 ? '' : `*No content extracted.*\n`;
+      ctx?.onProgress?.(1, 'Done');
       return { success: true, content: `${header}${excerpt}${page.content}`, sources: [{ title: page.title || url as string, url: url as string }] };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : 'Fetch failed' };
@@ -81,19 +88,23 @@ const browserNavigateTool: Tool = {
     },
     required: ['url'],
   },
-  execute: async ({ url }) => {
+  execute: async ({ url }, ctx?: ToolContext) => {
     try {
       if (!url || typeof url !== 'string') return { success: false, content: '', error: 'URL is required' };
+      ctx?.onProgress?.(0.1, 'Preparing browser...');
       const BrowserRunner = (await import('../BrowserRunner')).default;
       useGiaStore.getState().addNotification(`🌐 Navigating to ${new URL(url).hostname}…`);
+      ctx?.onProgress?.(0.3, 'Navigating...');
       const result = await BrowserRunner.navigate(url, (status) => {
         useGiaStore.getState().addNotification(`🌐 ${status}`);
       });
+      ctx?.onProgress?.(0.7, 'Extracting content...');
       const snippet = result.text.slice(0, 2000);
       const title = result.title ? `**${result.title}**\n\n` : '';
       const summary = snippet.length < result.text.length
         ? `\n\n*(Content truncated — ${result.text.length} chars total)*`
         : '';
+      ctx?.onProgress?.(1, 'Done');
       return { success: true, content: `${title}${snippet}${summary}` };
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === 'AbortError') return { success: false, content: '', error: 'Cancelled' };

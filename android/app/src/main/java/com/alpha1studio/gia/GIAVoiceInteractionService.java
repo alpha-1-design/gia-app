@@ -3,7 +3,6 @@ package com.alpha1studio.gia;
 import android.content.Intent;
 import android.os.Bundle;
 import android.service.voice.VoiceInteractionService;
-import android.service.voice.VoiceInteractionSession;
 
 public class GIAVoiceInteractionService extends VoiceInteractionService {
 
@@ -29,7 +28,7 @@ public class GIAVoiceInteractionService extends VoiceInteractionService {
     }
 
     @Override
-    public VoiceInteractionSession onNewSession(Bundle args) {
-        return new GIAVoiceInteractionSession(this);
+    public void onPrepareToShowSession(Bundle args, int typeFlags) {
+        // GIA handles showing sessions differently — no-op here
     }
 }

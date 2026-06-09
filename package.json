@@ -24,7 +24,7 @@
     "@capacitor/device": "^8.0.2",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/geolocation": "^8.2.0",
-    "@capacitor/clipboard": "^8.0.2",
+    "@capacitor/clipboard": "^8.0.1",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/local-notifications": "^8.0.2",
     "@capacitor/share": "^8.0.1",

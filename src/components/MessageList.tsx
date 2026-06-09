@@ -17,6 +17,7 @@ interface MessageListProps {
   setShowThoughts: React.Dispatch<React.SetStateAction<Set<string>>>;
   liveThoughts: Record<string, string>;
   thinkingPhase: ThinkingPhase;
+  currentTool: string | null;
   responseTimesRef: React.MutableRefObject<Record<string, number>>;
   onCopyMessage: (id: string, content: string) => void;
   onEdit: (id: string) => void;
@@ -41,7 +42,7 @@ const MessageList: React.FC<MessageListProps> = ({
   messages, loading, streamingMsgId,
   expandedMsgs, setExpandedMsgs,
   showThoughts, setShowThoughts,
-  liveThoughts, thinkingPhase,
+  liveThoughts, thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
   onFork, onRetry, onEditResend,
@@ -90,7 +91,7 @@ const MessageList: React.FC<MessageListProps> = ({
               >
                 {msg.thinking ? (
                   <div>
-                    <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} />
+                    <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} />
                     {liveThoughts[msg.id] || msg.thoughts ? (
                       <ThinkingPanel
                         thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
@@ -173,8 +174,8 @@ const MessageList: React.FC<MessageListProps> = ({
                         <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Sources</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                           {msg.sources.map((src, si) => {
-                            const url = typeof src === 'string' ? src : (src as { url?: string; title?: string }).url || src;
-                            const title = typeof src === 'string' ? url : (src as { url?: string; title?: string }).title || `Source ${si + 1}`;
+                            const url = typeof src === 'string' ? src : (src as { url: string; title?: string }).url || '';
+                            const title = typeof src === 'string' ? url : (src as { url: string; title?: string }).title || `Source ${si + 1}`;
                             const domain = (() => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } })();
                             return (
                               <motion.a

@@ -161,7 +161,7 @@ class FallbackWebSearch {
 
     const validated = validateAndDeduplicateSources(allResults, maxResults);
     const final = validated.map(v => ({
-      title: sanitizeTitle(v.title),
+      title: sanitizeTitle(v.title ?? ''),
       url: v.url,
       snippet: v.snippet || v.snippet?.slice(0, 200) || '',
       source: v.source || 'web',

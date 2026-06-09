@@ -157,9 +157,9 @@ class VisionService {
       const img = await this.imageFromData(imageData);
       const result = await (pipe as { (input: HTMLCanvasElement | HTMLImageElement): Promise<Array<{ label?: string; score?: number; box?: { xmin: number; ymin: number; xmax: number; ymax: number } }>> })(img);
       const objects = (result || []).map(r => ({
-        label: r.label,
-        score: Math.round(r.score * 100) / 100,
-        box: r.box,
+        label: r.label ?? '',
+        score: Math.round((r.score ?? 0) * 100) / 100,
+        box: r.box ?? { xmin: 0, ymin: 0, xmax: 0, ymax: 0 },
       }));
       return {
         objects,

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
 import { useGiaStore } from '../store/useGiaStore';
+import AnalyticsService from '../services/AnalyticsService';
 import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
 import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock } from '../utils/streamParser';
@@ -90,6 +91,7 @@ export function useChatGeneration() {
     };
 
     state.addMessage(sessionId, userMsg);
+    AnalyticsService.trackMessage('user');
     TTSService.stop();
     const sentAttachments = [...attachments];
     setInput('');

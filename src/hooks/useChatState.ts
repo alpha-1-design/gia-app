@@ -9,6 +9,7 @@ import { useFileAttachments } from './useFileAttachments';
 import type { Attachment } from './useFileAttachments';
 import { useChatGeneration } from './useChatGeneration';
 import { useChatMessages } from './useChatMessages';
+import AnalyticsService from '../services/AnalyticsService';
 
 export function useChatState() {
   const [input, setInput] = useState('');
@@ -46,7 +47,7 @@ export function useChatState() {
     localVision, setLocalVision,
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase,
-    keepListening,
+    keepListening, currentTool,
   } = useGiaStore(useShallow(s => ({
     sessions: s.sessions,
     activeSessionId: s.activeSessionId, createSession: s.createSession, setActiveSession: s.setActiveSession,
@@ -64,6 +65,7 @@ export function useChatState() {
     skills: s.skills, activeSkillId: s.activeSkillId, setSkill: s.setSkill,
     wakeWord: s.wakeWord, thinkingPhase: s.thinkingPhase, setThinkingPhase: s.setThinkingPhase,
     keepListening: s.keepListening, setKeepListening: s.setKeepListening,
+    currentTool: s.currentTool,
   })));
 
   const { providers, activeProvider } = useProviderStore(useShallow(s => ({
@@ -94,16 +96,19 @@ export function useChatState() {
   } = useFileAttachments(activeModel, activeProvider, providerLabel);
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
-    if (feature === 'webSearch') setWebSearch(!webSearch);
-    if (feature === 'extThinking') setExtThinking(!extThinking);
-    if (feature === 'handsOff') setHandsOff(!handsOff);
-    if (feature === 'vision') setLocalVision(!localVision);
+    let newFeatureState: boolean | undefined;
+    if (feature === 'webSearch') { setWebSearch(!webSearch); newFeatureState = !webSearch; }
+    if (feature === 'extThinking') { setExtThinking(!extThinking); newFeatureState = !extThinking; }
+    if (feature === 'handsOff') { setHandsOff(!handsOff); newFeatureState = !handsOff; }
+    if (feature === 'vision') { setLocalVision(!localVision); newFeatureState = !localVision; }
     if (feature === 'listen') {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
+      newFeatureState = newState;
       if (newState) voiceRef.current.startListening();
       else voiceRef.current.stopListening();
     }
+    if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
   }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, voiceEnabled, voiceRef]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
@@ -180,13 +185,13 @@ export function useChatState() {
     if (!action) return;
 
     if (action.type === 'deep-link') {
-      const url = action.data?.url || '';
+      const url = (action.data?.url as string) || '';
       setInput(`Handle this link: ${url}`);
       useGiaStore.getState().addNotification(`🔗 Deep link ready to process: ${url.slice(0, 50)}`);
     } else if (action.type === 'file-open') {
-      const file = action.data;
-      if (file) {
-        const attachment: Attachment = { name: file.name, type: file.type, content: file.content || '', preview: undefined };
+      const file = action.data as { name?: string; type?: string; content?: string } | undefined;
+      if (file?.name) {
+        const attachment: Attachment = { name: file.name, type: file.type || '', content: file.content || '', preview: undefined };
         setAttachments(prev => [...prev, attachment]);
         setInput(`Analyze this file: ${file.name}`);
         useGiaStore.getState().addNotification(`📄 Opened ${file.name}`);
@@ -280,7 +285,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     handsOff, setHandsOff,
     localVision, setLocalVision,
     skills, activeSkillId, setSkill,
-    wakeWord, thinkingPhase, setThinkingPhase,
+    wakeWord, thinkingPhase, setThinkingPhase, currentTool,
     providers, activeProvider, activeProtocols,
     keepListening, voiceLanguage, activeSession, messages,
     providerLabel, providerConnected, activeModel,

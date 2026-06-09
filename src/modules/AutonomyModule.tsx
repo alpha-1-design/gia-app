@@ -246,7 +246,7 @@ export default function AutonomyModule() {
         )}
 
         {activeGoals.map(goal => (
-          <GoalCard key={goal.id} goal={goal} onToggle={() => {}} />
+          <GoalCard key={goal.id} goal={goal} />
         ))}
 
         {completedGoals.length > 0 && (
@@ -256,7 +256,7 @@ export default function AutonomyModule() {
               History ({completedGoals.length})
             </div>
             {completedGoals.map(goal => (
-              <GoalCard key={goal.id} goal={goal} onToggle={() => {}} />
+              <GoalCard key={goal.id} goal={goal} />
             ))}
           </>
         )}

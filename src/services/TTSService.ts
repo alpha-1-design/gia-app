@@ -35,7 +35,24 @@ class TTSService {
 
     if (isNative) {
       try {
-        await TextToSpeech.speak({ text: cleanText, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' });
+        if (!isStreaming) {
+          await TextToSpeech.speak({ text: cleanText, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' });
+        } else {
+          this.streamBuffer += cleanText;
+          if (this.streamTimer) clearTimeout(this.streamTimer);
+          const sentenceMatch = this.streamBuffer.match(/.*?[.!?\n]+/);
+          if (sentenceMatch && sentenceMatch[0].length > 20) {
+            const toSpeak = sentenceMatch[0];
+            this.streamBuffer = this.streamBuffer.slice(toSpeak.length);
+            await TextToSpeech.speak({ text: toSpeak, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' });
+          }
+          this.streamTimer = setTimeout(async () => {
+            if (this.streamBuffer) {
+              await TextToSpeech.speak({ text: this.streamBuffer, lang: 'en-US', rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' });
+              this.streamBuffer = '';
+            }
+          }, 2000);
+        }
       } catch (e) { logger.error('TTS native error:', e); }
     } else {
       try {
@@ -51,7 +68,6 @@ class TTSService {
           this.currentUtterance = utterance;
           window.speechSynthesis?.speak(utterance);
         } else {
-          // Buffer streaming chunks and flush on sentence boundary or timeout
           this.streamBuffer += cleanText;
           if (this.streamTimer) clearTimeout(this.streamTimer);
           const sentenceMatch = this.streamBuffer.match(/.*?[.!?\n]+/);
@@ -65,7 +81,6 @@ class TTSService {
             utterance.volume = 1.0;
             window.speechSynthesis?.speak(utterance);
           }
-          // Flush remaining buffer after 2s of silence
           this.streamTimer = setTimeout(() => {
             if (this.streamBuffer) {
               const utterance = new SpeechSynthesisUtterance(this.streamBuffer);

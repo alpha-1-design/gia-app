@@ -11,7 +11,7 @@ import android.os.IBinder;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-import ai.picovoice.porcupine.BuiltInKeyword;
+import ai.picovoice.porcupine.Porcupine;
 import ai.picovoice.porcupine.PorcupineManager;
 import ai.picovoice.porcupine.PorcupineManagerCallback;
 import ai.picovoice.porcupine.PorcupineException;
@@ -145,12 +145,12 @@ public class GIAWakeWordService extends Service {
         }
     }
 
-    private BuiltInKeyword parseBuiltInKeyword(String kw) {
-        if (kw == null) return BuiltInKeyword.HEY_GOOGLE;
+    private Porcupine.BuiltInKeyword parseBuiltInKeyword(String kw) {
+        if (kw == null) return Porcupine.BuiltInKeyword.HEY_GOOGLE;
         try {
-            return BuiltInKeyword.valueOf(kw.toUpperCase());
+            return Porcupine.BuiltInKeyword.valueOf(kw.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return BuiltInKeyword.HEY_GOOGLE;
+            return Porcupine.BuiltInKeyword.HEY_GOOGLE;
         }
     }
 

@@ -268,7 +268,6 @@ class DeviceIntegration {
             name: true,
             phones: true,
             emails: true,
-            thumbnail: true,
           },
         });
         const contacts = (result.contacts || []).map((c: { contactId?: string; displayName?: string; phones?: { number?: string | null; label?: string | null }[]; emails?: { address?: string | null; label?: string | null }[]; thumbnail?: string }) => ({

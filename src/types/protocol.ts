@@ -38,6 +38,8 @@ export interface ProtocolProposal {
   executedAt?: number;
   completedAt?: number;
   messageId?: string;
+  progress?: number;
+  progressLabel?: string;
 }
 
 export interface ProtocolAction {

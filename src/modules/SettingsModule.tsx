@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Terminal, Shield, User, Save, ChevronRight,
-  Trash2, Zap, Sparkles, Download, Smartphone, Globe, Sun, Moon
+  Trash2, Zap, Sparkles, Download, Smartphone, Globe, Sun, Moon, BarChart3
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useGiaIdentity } from '../store/useGiaIdentity';
@@ -24,6 +24,9 @@ import { BrowserSection } from '../components/settings/BrowserSection';
 import { SearchSection } from '../components/settings/SearchSection';
 import { ReliabilitySection } from '../components/settings/ReliabilitySection';
 import { providerRegistry } from '../services/ProviderRegistry';
+import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
+import type { ProviderCapabilities } from '../services/providers/capabilities';
+import AnalyticsService from '../services/AnalyticsService';
 
 const SettingsModule: React.FC = () => {
   const { 
@@ -160,6 +163,55 @@ const SettingsModule: React.FC = () => {
       {/* MCP Servers */}
       <div className="gia-card p-4">
         <MCPSettings />
+      </div>
+
+      {/* Provider Capability Matrix */}
+      <div className="gia-card p-4">
+        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--gia-text)' }}>
+          <Zap size={14} className="inline mr-2" style={{ color: '#f59e0b' }} />
+          Provider Capabilities
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr>
+                <th className="text-left py-2 pr-3 font-medium" style={{ color: 'var(--gia-muted)' }}>Provider</th>
+                {Object.entries(CAPABILITY_LABELS).map(([key, cap]) => (
+                  <th key={key} className="px-2 py-2 text-center font-medium" style={{ color: 'var(--gia-muted)' }} title={cap.label}>
+                    {cap.icon}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {providerRegistry.getAllIds().map(id => {
+                const p = providers[id];
+                const model = p?.model || providerRegistry.getDefaultModel(id);
+                const listingType = providerRegistry.getListingType(id);
+                const caps = getProviderCapabilities(listingType, model);
+                return (
+                  <tr key={id} className="border-t" style={{ borderColor: 'var(--gia-border)' }}>
+                    <td className="py-2 pr-3 font-medium" style={{ color: 'var(--gia-text)' }}>
+                      {providerRegistry.getLabel(id)}
+                    </td>
+                    {(Object.keys(CAPABILITY_LABELS) as Array<keyof ProviderCapabilities>).map(key => (
+                      <td key={key} className="px-2 py-2 text-center">
+                        {caps[key] ? (
+                          <span className="text-green-400">✓</span>
+                        ) : (
+                          <span className="opacity-20">—</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[10px] mt-2" style={{ color: 'var(--gia-muted)' }}>
+          Based on provider type and selected model. Update model in Engine Room for accurate results.
+        </p>
       </div>
 
       {/* Theme */}
@@ -307,6 +359,43 @@ const SettingsModule: React.FC = () => {
               {f.label} {f.available ? '✓' : '~'}
             </span>
           ))}
+        </div>
+      </div>
+
+      {/* Analytics */}
+      <div className="gia-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#0d0d14', border: '1px solid rgba(139,92,246,0.2)' }}>
+              <BarChart3 size={18} style={{ color: '#a78bfa' }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Usage Analytics</p>
+              <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>
+                {AnalyticsService.isOptedIn() ? 'Local-only, no data leaves device' : 'Opt in to track usage locally'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const v = !AnalyticsService.isOptedIn();
+              AnalyticsService.setOptIn(v);
+              useGiaStore.getState().addNotification(v ? 'Analytics enabled (local only)' : 'Analytics disabled');
+            }}
+            className="relative w-11 h-6 rounded-full transition-colors"
+            style={{
+              background: AnalyticsService.isOptedIn() ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.1)',
+              border: `1px solid ${AnalyticsService.isOptedIn() ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.15)'}`,
+            }}
+          >
+            <div
+              className="absolute top-0.5 w-5 h-5 rounded-full transition-transform shadow-sm"
+              style={{
+                background: AnalyticsService.isOptedIn() ? '#a78bfa' : '#6b7280',
+                transform: AnalyticsService.isOptedIn() ? 'translateX(22px)' : 'translateX(2px)',
+              }}
+            />
+          </button>
         </div>
       </div>
 

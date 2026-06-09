@@ -4,7 +4,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '../../utils/helpers';
 import { isPathSafe, blobToBase64, triggerDownload, MAX_FILE_SIZE } from './helpers';
 import { useGiaStore } from '../../store/useGiaStore';
-import type { Tool } from './types';
+import type { Tool, ToolContext } from './types';
 
 const isNative = isNativePlatform;
 
@@ -136,11 +136,12 @@ const listFiles: Tool = {
 const zipProject: Tool = {
   id: 'zip_project', name: 'zip_project',
   description: 'Create a ZIP bundle of files. Provide "files" as [{path, content}] OR "paths" as string[] to read from device.',
-  execute: async ({ filename = 'project.zip', files, paths }) => {
+  execute: async ({ filename = 'project.zip', files, paths }, ctx?: ToolContext) => {
     try {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
 
+      ctx?.onProgress?.(0.05, 'Adding files...');
       if (files && Array.isArray(files)) {
         files.forEach((f: { path: string; content: string | Record<string, unknown> }) => {
           const name = f.path.replace(/\\/g, '/');
@@ -154,6 +155,7 @@ const zipProject: Tool = {
           const pathErr = isPathSafe(p);
           if (pathErr) continue;
           try {
+            ctx?.onProgress?.(0.1, `Reading ${p}...`);
             const res = await Filesystem.readFile({ path: p, directory: Directory.Documents, encoding: Encoding.UTF8 });
             zip.file(p, res.data as string);
           } catch (e) { logger.error('[filesystem] Skipping unreadable file:', e); }
@@ -161,7 +163,11 @@ const zipProject: Tool = {
       }
 
       useGiaStore.getState().addNotification(`📦 Packaging ${filename}...`);
-      const blob = await zip.generateAsync({ type: 'blob' });
+      ctx?.onProgress?.(0.3, 'Compressing...');
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }, (meta) => {
+        ctx?.onProgress?.(0.3 + meta.percent / 100 * 0.6, `Compressing... ${Math.round(meta.percent)}%`);
+      });
+      ctx?.onProgress?.(0.95, 'Finalizing...');
       useGiaStore.getState().addNotification(`✅ ${filename} ready`);
 
       if (isNative()) {

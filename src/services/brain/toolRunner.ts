@@ -6,6 +6,7 @@ import { ProtocolProposal, ProtocolType } from '../../types/protocol';
 import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchemas';
 import { delegateTask } from './subAgent';
 import { extractToolCalls, ToolCall } from '../../utils/jsonRepair';
+import AnalyticsService from '../AnalyticsService';
 
 interface ExecutionState {
   history: { role: string; content: string }[];
@@ -159,9 +160,16 @@ async function executeSingleTool(
   let toolAttempts = 0;
   const maxToolAttempts = 3;
 
+  const toolContext = {
+    signal,
+    onProgress: (progress: number, label: string) => {
+      useProtocolStore.getState().setProgress(protocolId, progress, label);
+    },
+  };
+
   while (true) {
     try {
-      result = await tool.execute(toolCall.args);
+      result = await tool.execute(toolCall.args, toolContext);
     } catch (e: unknown) {
       result = { success: false, content: '', error: e instanceof Error ? e.message : 'Unknown error' };
     }
@@ -172,6 +180,7 @@ async function executeSingleTool(
     await new Promise(r => setTimeout(r, backoff));
   }
   useGiaStore.getState().setCurrentTool(null);
+  AnalyticsService.trackTool(toolCall.id, result!.success);
 
   const hint = FALLBACK_HINTS[toolCall.id];
   const obs = result!.success

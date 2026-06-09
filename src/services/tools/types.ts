@@ -5,6 +5,11 @@ export interface ToolResult {
   sources?: { title: string; url: string }[];
 }
 
+export interface ToolContext {
+  onProgress?: (progress: number, label: string) => void;
+  signal?: AbortSignal;
+}
+
 export interface Tool {
   id: string;
   name: string;
@@ -14,5 +19,5 @@ export interface Tool {
     properties: Record<string, unknown>;
     required?: string[];
   };
-  execute: (args: Record<string, unknown>) => Promise<ToolResult>;
+  execute: (args: Record<string, unknown>, context?: ToolContext) => Promise<ToolResult>;
 }

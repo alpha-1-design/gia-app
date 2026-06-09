@@ -4,6 +4,7 @@ import { useProviderStore, ModelOption } from '../store/useProviderStore';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { useGiaStore } from '../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
+import { getProviderCapabilities, CAPABILITY_LABELS, type ProviderCapabilities } from '../services/providers/capabilities';
 
 type LineType = 'cmd' | 'res' | 'err' | 'info' | 'prompt' | 'success';
 interface Line { type: LineType; text: string; id: number }
@@ -67,8 +68,14 @@ const EngineRoom: React.FC = () => {
 
   const lc = (t: LineType) => ({ cmd: 'text-emerald-400', err: 'text-rose-400', info: 'text-indigo-300', prompt: 'text-amber-300', success: 'text-emerald-300', res: 'text-zinc-300' }[t]);
 
-  const showModels = (models: ModelOption[]) =>
-    models.map((m, i) => mk('res', `  ${String(i + 1).padStart(2)}. ${m.label.slice(0, 36).padEnd(36)} ${m.context ?? '?  '} ${m.free ? ' FREE' : 'PAID'} ${m.vision ? '👁' : '  '} ${m.tools === false ? '   ' : ' 🛠'}`));
+  const showModels = (models: ModelOption[], provider?: string) =>
+    models.map((m, i) => {
+      const caps = provider ? getProviderCapabilities(providerRegistry.getListingType(provider), m.id, m.vision, m.tools) : null;
+      const capStr = caps
+        ? `${caps.vision ? '👁' : '  '}${caps.tools ? '🛠' : '  '}${caps.thinking ? '🧠' : '  '}${caps.jsonMode ? '📋' : '  '}`
+        : `${m.vision ? '👁' : '  '}${m.tools === false ? '   ' : ' 🛠'}    `;
+      return mk('res', `  ${String(i + 1).padStart(2)}. ${m.label.slice(0, 32).padEnd(32)} ${m.context?.padEnd(5) ?? '?    '} ${m.free ? 'FREE' : 'PAID'} ${capStr}`);
+    });
 
   const handleCommand = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
@@ -115,10 +122,10 @@ const EngineRoom: React.FC = () => {
             push(mk('err', 'No models found. Using defaults.'));
             const defaults = providerRegistry.getModels(currentWizard.provider);
             setWizard({ flow: 'select-model', provider: currentWizard.provider, models: defaults });
-            push(...showModels(defaults), mk('prompt', 'Enter model number:'));
+            push(...showModels(defaults, currentWizard.provider), mk('prompt', 'Enter model number:'));
           } else {
             setWizard({ flow: 'select-model', provider: currentWizard.provider, models });
-            push(...showModels(models), mk('prompt', 'Enter model number:'));
+            push(...showModels(models, currentWizard.provider), mk('prompt', 'Enter model number:'));
           }
       } catch (e: unknown) {
         push(mk('err', `Fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`));
@@ -154,6 +161,7 @@ const EngineRoom: React.FC = () => {
         mk('res', '  connect              Guided setup wizard'),
         mk('res', '  connect <alias> <key> Quick connect'),
         mk('res', '  model <alias>        Change model for provider'),
+        mk('res', '  capabilities / caps  Show active provider capabilities'),
         mk('res', '  use <alias>          Switch active provider'),
         mk('res', '  status               Show all provider states'),
         mk('res', '  disconnect <alias>   Remove provider key'),
@@ -187,7 +195,7 @@ const EngineRoom: React.FC = () => {
         const models = await fetchModels(p);
         const list = models.length > 0 ? models : providerRegistry.getModels(p);
         setWizard({ flow: 'select-model', provider: p, models: list });
-        push(...showModels(list), mk('prompt', 'Enter model number:'));
+        push(...showModels(list, p), mk('prompt', 'Enter model number:'));
       } catch (e) {
         push(mk('err', `Fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`));
       } finally {
@@ -207,7 +215,7 @@ const EngineRoom: React.FC = () => {
         const models = await fetchModels(p);
         const list = models.length > 0 ? models : providerRegistry.getModels(p);
         setWizard({ flow: 'select-model', provider: p, models: list });
-        push(...showModels(list), mk('prompt', 'Enter number:'));
+        push(...showModels(list, p), mk('prompt', 'Enter number:'));
       } catch {
         push(mk('err', `Fetch failed.`));
       } finally {
@@ -246,8 +254,36 @@ const EngineRoom: React.FC = () => {
         const p = def.id;
         const cfg = providers[p];
         const active = p === activeProvider ? ' ← ACTIVE' : '';
-        push(mk(cfg?.enabled ? 'success' : 'err', `  ${cfg?.enabled ? '●' : '○'} ${def.label.padEnd(12)} ${cfg?.enabled ? cfg.model : 'off'}${active}`));
+        const model = cfg?.model || 'off';
+        push(mk(cfg?.enabled ? 'success' : 'err', `  ${cfg?.enabled ? '●' : '○'} ${def.label.padEnd(12)} ${model}${active}`));
+        if (cfg?.enabled && model !== 'off') {
+          const caps = getProviderCapabilities(def.listingType, model);
+          const capStr = (Object.keys(CAPABILITY_LABELS) as (keyof ProviderCapabilities)[])
+            .filter(k => caps[k])
+            .map(k => CAPABILITY_LABELS[k].icon)
+            .join(' ');
+          push(mk('res', `     ${capStr}`));
+        }
       });
+      return;
+    }
+
+    if (cmd === 'capabilities' || cmd === 'caps' || cmd === 'info') {
+      const p = activeProvider;
+      const cfg = providers[p];
+      if (!cfg?.enabled) { push(mk('err', 'No active provider.')); return; }
+      const caps = getProviderCapabilities(providerRegistry.getListingType(p), cfg.model);
+      const def = providerRegistry.getProvider(p);
+      push(mk('res', ''), mk('info', `CAPABILITIES: ${def?.label || p}`));
+      push(mk('res', `  Model:     ${cfg.model}`));
+      push(mk('res', `  Type:      ${def?.listingType || 'unknown'}`));
+      push(mk('res', ''));
+      (Object.keys(CAPABILITY_LABELS) as (keyof ProviderCapabilities)[])
+        .forEach(k => {
+          const meta = CAPABILITY_LABELS[k];
+          push(mk(caps[k] ? 'success' : 'err', `  ${meta.icon} ${meta.label.padEnd(18)} ${caps[k] ? '✓ Supported' : '— Unsupported'}`));
+        });
+      push(mk('res', ''));
       return;
     }
 

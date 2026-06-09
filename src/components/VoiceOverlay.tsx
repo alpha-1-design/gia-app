@@ -96,7 +96,7 @@ export const VoiceOverlay: React.FC = () => {
   // Auto-dismiss on done
   useEffect(() => {
     if (state === 'done') {
-      setTimeout(() => setVoiceOverlay({ visible: false, state: 'idle', transcript: '' }), 1400);
+      const t = setTimeout(() => setVoiceOverlay({ visible: false, state: 'idle', transcript: '' }), 1400);
       return () => clearTimeout(t);
     }
   }, [state, setVoiceOverlay]);

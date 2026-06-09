@@ -130,6 +130,29 @@ export const CodeExecutionSection: React.FC<{ codeEndpoint: string; setCodeEndpo
           ))}
         </div>
       )}
+      <details className="mt-1">
+        <summary className="text-[10px] cursor-pointer font-medium" style={{ color: 'var(--gia-muted)' }}>
+          🖥 Self-host Piston server
+        </summary>
+        <div className="mt-2 text-[10px] space-y-1.5" style={{ color: 'var(--gia-muted-2)' }}>
+          <p><strong>Quick start (Docker):</strong></p>
+          <pre className="p-2 rounded-lg text-[9px] overflow-x-auto" style={{ background: '#0d0d14', border: '1px solid var(--gia-border)' }}>
+{`docker run -d \\
+  --name piston \\
+  -p 2000:2000 \\
+  -e PISTON_REPO_URL="" \\
+  ghcr.io/engineerman/piston:latest`}
+          </pre>
+          <p>Then set endpoint to <code>http://localhost:2000</code>. No API key needed for local instances.</p>
+          <p><strong>Or run without Docker (requires Node.js):</strong></p>
+          <pre className="p-2 rounded-lg text-[9px] overflow-x-auto" style={{ background: '#0d0d14', border: '1px solid var(--gia-border)' }}>
+{`git clone https://github.com/engineerman/piston
+cd piston
+npm install
+node index.js`}</pre>
+          <p>Install runtimes inside the container: <code>docker exec piston node /piston/index.js install python</code></p>
+        </div>
+      </details>
       <p className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
         {codeEndpoint ? `Custom: ${codeEndpoint}` : 'Default: emkc.org Piston API'}
       </p>

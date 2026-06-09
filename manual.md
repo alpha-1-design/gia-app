@@ -13,6 +13,7 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Custom Instructions** | Write rules GIA follows in every conversation (e.g. "always reply in Twi") |
 | **Conversation Search** | Search across all session titles and message content with match count |
 | **Rich Markdown** | Mermaid diagrams, KaTeX math, SVG blocks, task lists, collapsible sections, footnotes, definition lists, rich tables with copy, inline code click-to-copy |
+| **Interactive Visual Blocks** | Charts, maps, mind maps, timelines, data tables, galleries, terminal output, metric widgets, document outlines |
 | **Image Generation** | DALL-E 3 or OpenRouter image models — images render inline in chat |
 | **Search Citations** | Source numbered badges `[1]` with clickable links in search results |
 | **File Preview** | PDF text extraction, code preview with syntax coloring, file info cards |
@@ -28,6 +29,22 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Phase Badges** | Thinking… → Generating… → Done (with model name) |
 | **Streaming Cursor** | Blinking `▋` cursor during token delivery |
 | **Voice (enhanced)** | Native wake word engine (Porcupine), background detection, transcript polishing, TTS |
+| **Message Context Menu** | Right-click or long-press on messages for Copy/Edit/Retry/Continue/Fork/Delete |
+| **Conversation Branching** | Tree-based branching from any message — rename, switch, delete branches |
+| **Session Forking** | Fork entire session at any message into a new independent session |
+| **Autonomous Goals** | Goal creation → auto-decomposition → step execution → self-reflection |
+| **Proactive Engine** | Background goal execution during idle time |
+| **Circle-to-Search** | Screen capture with region crop for AI vision analysis |
+| **Scheduled Tasks** | Schedule hourly/daily/weekly AI prompts |
+| **Brain Export/Import** | Full memory backup and restore from JSON |
+| **Smart Provider Fallback** | Automatic provider failover based on real-time latency/error tracking |
+| **Input Guardrails** | Blocks prompt injection attempts and dangerous commands |
+| **Output Validation** | Auto-repairs malformed JSON, missing fences, repeated text |
+| **Response Caching** | Cache identical requests to reduce API costs |
+| **Desktop File Access** | Read/write/list files in a selected project folder (Chrome) |
+| **PWA Share Target** | Receive content shared from other apps |
+| **Deep Link Support** | `gia://` and `web+gia://` protocol handling |
+| **Clipboard Monitor** | Detects copied text with "Ask GIA" button |
 
 ## 🛠 Core Modules
 
@@ -38,7 +55,8 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Writer** | Professional drafting and creative writing |
 | **Planner** | Task management and goal-oriented execution |
 | **Exam** | Educational assessment, WASSCE-tuned testing |
-| **Settings** | API keys (Engine Room), skills management, theme, export data |
+| **Settings** | API keys (Engine Room), skills, MCP, plugins, theme, export data |
+| **Autonomy** | Autonomous goal management — create, track, and manage AI-executed goals |
 
 ## 🤖 Tools Available to GIA
 
@@ -47,13 +65,40 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | Tool | Purpose |
 |------|---------|
 | `web_search` | Real-time DuckDuckGo search with source citations |
+| `read_url` | Extract clean markdown from any web page |
+| `browser_navigate` | Full JS-rendered page navigation (iframe sandbox) |
+| `page_info` | Lightweight page metadata without full fetch |
 | `terminal_run` | Execute code via Piston API (Python, JS, C++, more) |
 | `filesystem_read` | Read files from device storage |
 | `filesystem_write` | Write files to device storage |
-| `image_generation` | Generate and inline images via DALL-E 3 |
+| `list_files` | List directory contents (mobile) |
+| `filesystem_desktop_read/write/list` | Project folder access (Chrome desktop only) |
 | `zip_project` | Bundle project files into .zip |
+| `image_generation` | Generate and inline images via DALL-E 3 |
 | `sub_agent_call` | Delegate to another AI provider/model for sub-tasks |
 | `request_clarification` | Ask user a single clarifying question |
+| `switch_module` | Navigate to any module (chat/exam/analyst/writer/planner/settings) |
+| `toggle_feature` | Enable/disable web_search, thinking, hands_off |
+| `show_notification` | Display a global toast notification |
+| `get_environment_info` | Full introspection of GIA identity, capabilities, environment |
+| `get_user_location` | GPS location (mobile + browser) |
+| `search_places` | OpenStreetMap place search |
+| `show_map` | Render interactive OpenStreetMap with markers |
+| `wikipedia` | Wikipedia article summaries |
+| `weather` | Current weather for any city |
+| `define` | Dictionary definitions with examples |
+| `github` | Fetch GitHub user/repo/file data |
+| `summarize_conversation` | Compress conversation history |
+| `forget_memory` | Delete specific memories |
+| `export_brain` | Download full brain backup as JSON |
+| `import_brain` | Restore brain from backup |
+| `task_create/read/update/delete/move` | Full task management |
+| `note_create/read/update/delete` | Sticky notes management |
+| `create_goal` | Create autonomous goals |
+| `list_goals` | List all autonomous goals |
+| `goal_progress` | Get goal progress report |
+| `pause_goal` | Pause/resume/cancel a goal |
+| `set_autonomy_config` | Configure autonomy settings |
 
 ---
 
@@ -138,7 +183,10 @@ When enabled in Settings, GIA reads her responses out loud using the device's te
 
 ## ⚡ Neural Command Palette
 
-Tap `/` in Chat to open the command palette. Switch between **Developer Mode**, **General Assistant**, or your own **Custom Skills**.
+Tap `Cmd+K` (or `/` in Chat) to open the command palette:
+- Switch between **Skills** (Developer Mode, General Assistant, etc.)
+- Quick actions: New Session, Open Settings, Toggle Protocols
+- Keyboard shortcuts displayed inline
 
 ## ⚙️ Skills
 
@@ -146,6 +194,14 @@ Tap `/` in Chat to open the command palette. Switch between **Developer Mode**, 
 2. Tap **+** to create a custom assistant
 3. Define system prompt + allowed tools
 4. Skills appear in `/` command palette
+
+Pre-installed skills:
+- **General Assistant** — Balanced help for general tasks
+- **Developer Mode** — Expert software engineering
+- **Research Analyst** — Deep web research & synthesis
+- **Creative Architect** — Copywriting & storytelling
+- **Academic Tutor** — WASSCE/BECE exam prep
+- **Security Expert** — Code vulnerability audits
 
 ## 🧠 Knowledge Panel
 
@@ -164,15 +220,131 @@ Tap the brain icon in the chat toolbar to open the Knowledge Panel:
 - Write persistent rules GIA follows in every conversation
 - Examples: "Always answer in Twi", "Never mention competitors", "Use British spelling"
 
+## 🧩 Visual Blocks
+
+GIA can render interactive data visualizations inside chat messages. These are generated by GIA using ` ```visual ` code blocks:
+
+- **Charts** — Bar, line, pie, area charts with interactive tooltips
+- **Tables** — Sortable data tables with copy support
+- **Mind Maps** — Tree diagram visualizations
+- **Timelines** — Chronological event sequences
+- **Code Diffs** — Side-by-side code comparison
+- **Image Galleries** — Grid image displays
+- **Terminal Output** — ANSI-colored terminal simulation
+- **Metric Widgets** — KPI cards with labels and values
+- **Document Outlines** — Tree/table-of-contents views
+- **Maps** — Interactive Leaflet/OpenStreetMap with markers and routes
+- **Audio Waveforms** — Audio visualization
+
+GIA will use these automatically when presenting structured data.
+
+## 🔄 Conversation Branching
+
+Every conversation supports tree-based branching:
+
+- **Create a branch**: Right-click/long-press any message → **Fork** to create a named branch
+- **Switch branches**: Use the branch indicator to switch between active branches
+- **Rename branches**: Give meaningful names to track different exploration paths
+- **Delete branches**: Remove unwanted branches without affecting others
+- **Session forking**: Fork an entire session at any message into a new independent session
+
+Use branching to explore alternative responses without losing context.
+
+## 🎯 Autonomous Goals
+
+GIA can work autonomously on complex goals. Access via the **Autonomy** module:
+
+1. **Create a Goal**: Set a title, description, and priority (Low/Medium/High/Critical)
+2. **Auto-Decomposition**: GIA breaks the goal into actionable steps
+3. **Execution**: Each step is executed with full tool access and LLM reasoning
+4. **Reflection**: After each step, GIA evaluates success and learns lessons
+5. **Progress Tracking**: Visual progress bar, step status indicators, reflection history
+
+Enable **Autonomy Mode** (toggle in Autonomy module) to allow GIA to work on goals during idle time. Adjust **Proactiveness** slider to control how aggressively GIA pursues goals.
+
+## 🔍 Circle-to-Search
+
+Select any region of your screen for AI analysis:
+
+1. Press `Ctrl+Shift+C` or activate via command palette
+2. GIA captures the current screen
+3. Drag to select a region of interest
+4. The cropped region is sent to GIA's vision model for analysis
+
+## ⏰ Scheduled Tasks
+
+Schedule recurring AI operations:
+
+1. Create a task via GIA (e.g., "summarize the news every morning")
+2. Choose interval: Hourly, Daily, or Weekly
+3. GIA executes the prompt on schedule and notifies you with results
+
+Configure and manage scheduled tasks in Settings.
+
+## 📦 Brain Export/Import
+
+Back up and restore all of GIA's knowledge:
+
+- **Export**: Settings → Brain Export → Download — saves all memories, skills, identity as `.gia-brain.json`
+- **Import**: Settings → Brain Export → Upload — restores from a previous backup
+
+## 🖥 Desktop File Access (Chrome)
+
+GIA can access files in a project folder on desktop browsers:
+
+1. Click **"Pick Project Folder"** in Settings or the tools panel
+2. Select a folder in the browser's file picker
+3. GIA can now read, write, and list files in that folder using dedicated tools
+
+## 🌐 MCP (Model Context Protocol)
+
+Connect GIA to external MCP servers for extended tool capabilities:
+
+- **Configure**: Settings → MCP — add SSE or stdio servers
+- **Auto-connect**: Servers marked as auto-connect are linked on app start
+- **Auto-discovery**: Detects GIA Stdio Bridge at `localhost:3080`
+- **Tools**: MCP tools appear in GIA's tool set with an `mcp__` prefix
+
+## 🔧 Protocol System (Tool Approval)
+
+Every tool execution follows a transparent approval workflow:
+
+- **Low-risk tools** (web_search, read_url, show_map, file_read, clarification): Auto-approved
+- **High-risk tools** (terminal_run, filesystem_write, ...): Require explicit user confirmation
+- **Protocol Panel**: `Ctrl+Shift+O` or tap the ⚡ button to see pending/active/completed tool executions
+- **Modify**: You can edit tool arguments before approving
+- **Reject**: Decline tool execution — GIA will try an alternative approach
+
+## 📋 Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+K` | Toggle Command Palette |
+| `Cmd+N` | New Session |
+| `Cmd+Shift+S` | Open Settings |
+| `Cmd+Shift+O` | Toggle Protocol Panel |
+| `Cmd+Shift+C` | Circle-to-Search |
+| `Escape` | Close Command Palette |
+| Right-click / Long-press | Message context menu (Copy/Edit/Retry/Fork/Delete) |
+
 ## 🖥 Engine Room
 
 Configure provider API keys in Settings → Engine Room:
 
-- **Anthropic** — CLAUDE.md key
-- **OpenAI** — GPT-4o, o1, o3, o4-mini
-- **Gemini** — Google AI Flash/Pro
+- **Anthropic** — Claude models with extended thinking
+- **OpenAI** — GPT-4o, o1, o3, o4-mini (with reasoning_effort)
+- **Gemini** — Google AI Flash/Pro (with vision)
 - **Groq** — Ultra-fast inference
-- **OpenRouter** — 100+ models
+- **OpenRouter** — 100+ models (DeepSeek, Llama, Gemma, etc.)
+- **OpenCode** — Specialized coding provider
+- **Ollama (Local)** — Run models locally via Ollama
+- **LM Studio (Local)** — Run models locally via LM Studio
+
+GIA automatically:
+- **Falls back** to an alternative provider if the active one fails
+- **Switches models** based on task requirements (e.g., vision for images)
+- **Monitors latency/errors** — chooses the healthiest provider
+- **Caches responses** for identical requests to save API costs
 
 ---
 

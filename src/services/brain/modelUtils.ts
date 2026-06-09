@@ -1,43 +1,13 @@
 import { useProviderStore, ProviderType, ModelOption } from '../../store/useProviderStore';
 import { useGiaStore } from '../../store/useGiaStore';
+import { getProviderCapabilities } from '../providers/capabilities';
+import { providerRegistry } from '../ProviderRegistry';
 
 import type { BrainRequest } from '../providers/types';
 
 export function isVisionCapable(model: string, provider: string): boolean {
-  const m = model.toLowerCase();
-  const p = provider.toLowerCase();
-
-  if (p === 'openai') {
-    if (m.includes('gpt-4o') || m.includes('gpt-4.1') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return true;
-    return false;
-  }
-
-  if (p === 'anthropic') {
-    return m.includes('claude');
-  }
-
-  if (p === 'gemini') {
-    return true;
-  }
-
-  if (p === 'groq') {
-    return m.includes('llama-3.2-11b') || m.includes('llama-3.2-90b') || m.includes('llama-4') || m.includes('vision');
-  }
-
-  if (p === 'huggingface') {
-    return m.includes('vision') || m.includes('pixtral') || m.includes('llava') || m.includes('vl') || m.includes('multimodal');
-  }
-
-  const visionPatterns = [
-    'vision', 'gpt-4o', 'gpt-4.1', 'claude-3', 'claude-4', 'opus',
-    'gemini', 'gemma-3', 'pixtral', 'llava', '/vl', '-vl', 'vl-',
-    'florence', 'cogvlm', 'qwen-vl', 'qwen2-vl',
-    'llama-3.2', 'llama-4',
-    'idefics', 'fuyu', 'palmyra-vision', 'minicpm',
-    'glm-4v', 'internvl', 'deepseek-vl', 'phi-3-vision',
-    'molmo', 'dpo-vision', 'reka', 'aria',
-  ];
-  return visionPatterns.some(pattern => m.includes(pattern));
+  const listingType = providerRegistry.getListingType(provider);
+  return getProviderCapabilities(listingType, model).vision;
 }
 
 export function selectBestModel(

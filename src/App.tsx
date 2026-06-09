@@ -314,13 +314,15 @@ const App: React.FC = () => {
 
     // Auto-start wake word listening if enabled
     if (autoStartWakeWord) {
-      try {
-        const { default: GIAWakeWord } = await import('./services/GIAWakeWord');
-        await GIAWakeWord.startListening();
-        addNotification('Wake word listening enabled');
-      } catch (e) {
-        logger.error('[App] Auto-start wake word failed:', e);
-      }
+      (async () => {
+        try {
+          const { GIAWakeWord } = await import('./services/GIAWakeWord');
+          await GIAWakeWord.startListening();
+          addNotification('Wake word listening enabled');
+        } catch (e) {
+          logger.error('[App] Auto-start wake word failed:', e);
+        }
+      })();
     }
 
     if (locked) {

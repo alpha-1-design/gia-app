@@ -1,13 +1,15 @@
+import { logger } from '../utils/logger';
+
 export class ScreenCaptureService {
   static async captureScreen(): Promise<string> {
     try {
-      const Capacitor = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; plugin?: (name: string) => { take?: () => Promise<{ dataUrl?: string; base64?: string } | string> } } }).Capacitor;
+      const Capacitor = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; plugin?: (name: string) => { take?: () => Promise<Record<string, string>> } } }).Capacitor;
       if (Capacitor?.isNativePlatform?.()) {
         try {
-          const Screenshot = Capacitor.plugin('Screenshot');
+          const Screenshot = Capacitor.plugin?.('Screenshot');
           if (Screenshot?.take) {
             const result = await Screenshot.take();
-            return result.dataUrl || result.base64 || result;
+            return result.dataUrl || result.base64 || '';
           }
         } catch { /* ignore */ }
 

@@ -168,21 +168,38 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
           </motion.div>
         </div>
 
-        {/* Execution status line */}
+        {/* Execution status line with progress */}
         {isExecuting && (
           <motion.div
-            className="flex items-center gap-1.5 text-[10px]"
-            style={{ color: toolColor }}
+            className="space-y-1.5"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
           >
-            <motion.span
-              className="w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ background: toolColor }}
-              animate={{ scale: [1, 1.3, 1], opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            Working...
+            <div className="flex items-center gap-1.5 text-[10px]" style={{ color: toolColor }}>
+              <motion.span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ background: toolColor }}
+                animate={{ scale: [1, 1.3, 1], opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              />
+              {protocol.progressLabel || 'Working...'}
+              {protocol.progress !== undefined && (
+                <span className="text-[9px] ml-auto" style={{ color: 'var(--gia-muted-2)' }}>
+                  {Math.round(protocol.progress * 100)}%
+                </span>
+              )}
+            </div>
+            {protocol.progress !== undefined && (
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: `${toolColor}15` }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: `linear-gradient(90deg, ${toolColor}, ${toolColor}80)` }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${protocol.progress * 100}%` }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                />
+              </div>
+            )}
           </motion.div>
         )}
 

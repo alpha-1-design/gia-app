@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { useNotesStore } from '../../store/useNotesStore';
-import type { Tool } from './types';
+import type { Tool, ToolContext } from './types';
 
 const httpRequest: Tool = {
   id: 'http_request',
@@ -18,11 +18,11 @@ const httpRequest: Tool = {
     },
     required: ['url'],
   },
-  execute: async (args) => {
+  execute: async (args, ctx?: ToolContext) => {
     const schema = z.object({
       url: z.string().url('Must be a valid URL').max(5000),
       method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default('GET'),
-      headers: z.record(z.string()).optional(),
+      headers: z.record(z.string(), z.string()).optional(),
       body: z.string().optional(),
       timeout: z.number().min(1000).max(60000).default(15000),
     });
@@ -30,6 +30,7 @@ const httpRequest: Tool = {
     if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
     const { url, method, headers, body, timeout } = parsed.data;
     try {
+      ctx?.onProgress?.(0.1, `Connecting to ${new URL(url).hostname}...`);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
       const res = await fetch(url, {
@@ -39,12 +40,15 @@ const httpRequest: Tool = {
         signal: controller.signal,
       });
       clearTimeout(timer);
+      ctx?.onProgress?.(0.6, 'Reading response...');
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
+      ctx?.onProgress?.(0.9, 'Processing response...');
       let content = text;
       if (contentType.includes('application/json') || contentType.includes('json')) {
         try { content = JSON.stringify(JSON.parse(text), null, 2); } catch { content = text; }
       }
+      ctx?.onProgress?.(1, 'Done');
       return {
         success: res.ok,
         content: `${res.status} ${res.statusText}\n\n${content.slice(0, 50000)}`,
@@ -68,7 +72,7 @@ const webScrape: Tool = {
     },
     required: ['url'],
   },
-  execute: async (args) => {
+  execute: async (args, ctx?: ToolContext) => {
     const schema = z.object({
       url: z.string().url('Must be a valid URL').max(5000),
       maxChars: z.number().min(1000).max(100000).default(25000),
@@ -77,8 +81,11 @@ const webScrape: Tool = {
     if (!parsed.success) return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
     const { url, maxChars } = parsed.data;
     try {
+      ctx?.onProgress?.(0.1, 'Connecting...');
       const { default: fallback } = await import('../FallbackWebSearch');
+      ctx?.onProgress?.(0.3, 'Fetching page...');
       const page = await fallback.scrape(url, maxChars);
+      ctx?.onProgress?.(0.8, 'Extracting content...');
       return { success: true, content: `# ${page.title}\n\n${page.content}\n\n---\n_Fetched via ${page.source}_` };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };

@@ -104,6 +104,7 @@ export function useNativeIntents() {
 interface IntentData {
   text?: string;
   urls?: string[];
+  uri?: string;
   [key: string]: unknown;
 }
 

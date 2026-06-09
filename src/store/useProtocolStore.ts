@@ -19,6 +19,7 @@ interface ProtocolStore {
   reject: (protocolId: string) => void;
   modify: (protocolId: string, args: Record<string, unknown>) => void;
   setExecuting: (protocolId: string) => void;
+  setProgress: (protocolId: string, progress: number, label: string) => void;
   setCompleted: (protocolId: string, result: string, sources?: { title: string; url: string }[]) => void;
   setFailed: (protocolId: string, error: string) => void;
   clearProtocols: () => void;
@@ -85,6 +86,17 @@ export const useProtocolStore = create<ProtocolStore>()(
           ),
           consoleProtocols: s.consoleProtocols.map((p) =>
             p.id === protocolId ? { ...p, state: 'executing' as const, executedAt: Date.now() } : p
+          ),
+        }));
+      },
+
+      setProgress: (protocolId, progress, label) => {
+        set((s) => ({
+          protocols: s.protocols.map((p) =>
+            p.id === protocolId ? { ...p, progress: Math.max(0, Math.min(1, progress)), progressLabel: label } : p
+          ),
+          consoleProtocols: s.consoleProtocols.map((p) =>
+            p.id === protocolId ? { ...p, progress: Math.max(0, Math.min(1, progress)), progressLabel: label } : p
           ),
         }));
       },
