@@ -77,7 +77,7 @@ export const DataTableVisual: React.FC<{ data: Record<string, unknown> }> = ({ d
             {pageRows.map((row: Record<string, unknown>, ri: number) => (
               <tr key={ri} style={{ background: ri % 2 === 1 ? 'var(--gia-surface-2)' : 'transparent' }}>
                 {cols.map((c: string) => (
-                  <td key={c} className="px-3 py-1.5" style={{ color: 'var(--gia-text)', borderBottom: '1px solid var(--gia-border)' }}>{row[c] ?? ''}</td>
+                  <td key={c} className="px-3 py-1.5" style={{ color: 'var(--gia-text)', borderBottom: '1px solid var(--gia-border)' }}>{String(row[c] ?? '')}</td>
                 ))}
               </tr>
             ))}

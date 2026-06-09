@@ -242,7 +242,7 @@ class CodeRunner {
 
   async getRuntimes(): Promise<PistonRuntime[]> {
     try {
-      return await this.fetchJSON(PISTON_RUNTIMES_URL);
+      return (await this.fetchJSON(PISTON_RUNTIMES_URL)) as PistonRuntime[];
     } catch {
       return Object.entries(LANGUAGE_MAP).map(([alias, name]) => ({
         language: name, version: '*', aliases: [alias],

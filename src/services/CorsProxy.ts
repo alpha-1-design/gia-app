@@ -61,6 +61,13 @@ export class CorsProxy {
     throw new Error(`Failed to fetch ${url.slice(0, 60)} — all proxies exhausted`);
   }
 
+  proxyUrl(url: string): string {
+    if (this.customProxy) {
+      return this.customProxy + encodeURIComponent(url);
+    }
+    return PROXY_LIST[0] + encodeURIComponent(url);
+  }
+
   async fetchJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
     const res = await this.fetch(url, options);
     return res.json();

@@ -169,19 +169,35 @@ const MessageList: React.FC<MessageListProps> = ({
                       />
                     )}
                     {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
+                      <div className="mt-4 space-y-1.5">
                         <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Sources</p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                           {msg.sources.map((src, si) => {
                             const url = typeof src === 'string' ? src : (src as { url?: string; title?: string }).url || src;
                             const title = typeof src === 'string' ? url : (src as { url?: string; title?: string }).title || `Source ${si + 1}`;
                             const domain = (() => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } })();
                             return (
-                              <a key={si} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] transition-all hover:scale-105" style={{ background: 'rgba(59,130,246,0.06)', color: '#94a3b8', border: '1px solid rgba(59,130,246,0.1)' }}>
+                              <motion.a
+                                key={si}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ type: 'spring', stiffness: 300, damping: 24, mass: 0.8, delay: si * 0.08 }}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.1)' }}
+                              >
+                                <span className="w-5 h-5 rounded-md flex items-center justify-center text-[8px] font-bold shrink-0"
+                                  style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>
+                                  {si + 1}
+                                </span>
                                 <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`} alt="" className="w-3.5 h-3.5 rounded shrink-0" loading="lazy" />
-                                <span className="max-w-[140px] truncate">{title}</span>
-                                <span className="text-[8px] opacity-50 shrink-0">{domain}</span>
-                              </a>
+                                <div className="min-w-0 flex-1">
+                                  <span className="block truncate font-medium" style={{ color: '#e2e8f0' }}>{title}</span>
+                                  <span className="block text-[7px] truncate" style={{ color: '#64748b' }}>{domain}</span>
+                                </div>
+                              </motion.a>
                             );
                           })}
                         </div>

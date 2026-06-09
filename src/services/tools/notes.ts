@@ -6,13 +6,13 @@ export const noteTools: Tool[] = [
     description: 'Create a new note with title, content, color, and tags.',
     execute: async ({ title, content = '', color = '', tags = [] }) => {
       const store = useNotesStore.getState();
-      if (!title || !title.trim()) {
+      if (!(title as string) || !(title as string).trim()) {
         return { success: false, content: '', error: 'Note title is required' };
       }
       const id = store.addNote({
-        title: title.trim(),
-        content,
-        color: color || randomNoteColor(),
+        title: (title as string).trim(),
+        content: content as string,
+        color: (color as string) || randomNoteColor(),
         pinned: false,
         tags: Array.isArray(tags) ? tags : [],
       });
@@ -25,7 +25,7 @@ export const noteTools: Tool[] = [
     execute: async ({ id = null, search = null }) => {
       const store = useNotesStore.getState();
       if (id) {
-        const note = store.getNote(id);
+        const note = store.getNote(id as string);
         if (!note) {
           return { success: false, content: '', error: `Note with ID ${id} not found` };
         }
@@ -66,7 +66,7 @@ export const noteTools: Tool[] = [
     description: 'Update a note by ID with new properties.',
     execute: async ({ id, title, content, color, tags }) => {
       const store = useNotesStore.getState();
-      const note = store.getNote(id);
+      const note = store.getNote(id as string);
       if (!note) {
         return { success: false, content: '', error: `Note with ID ${id} not found` };
       }
@@ -78,7 +78,7 @@ export const noteTools: Tool[] = [
       if (Object.keys(updates).length === 0) {
         return { success: false, content: '', error: 'No updates provided' };
       }
-      store.updateNote(id, updates);
+      store.updateNote(id as string, updates);
       return { success: true, content: `Updated note ${id}` };
     }
   },
@@ -87,11 +87,11 @@ export const noteTools: Tool[] = [
     description: 'Delete a note by ID.',
     execute: async ({ id }) => {
       const store = useNotesStore.getState();
-      const note = store.getNote(id);
+      const note = store.getNote(id as string);
       if (!note) {
-        return { success: false, content: '', error: `Note with ID ${id} not found` };
+        return { success: false, content: '', error: `Note with ID ${id as string} not found` };
       }
-      store.deleteNote(id);
+      store.deleteNote(id as string);
       return { success: true, content: `Deleted note "${note.title}"` };
     }
   },
@@ -100,11 +100,11 @@ export const noteTools: Tool[] = [
     description: 'Toggle the pinned state of a note.',
     execute: async ({ id }) => {
       const store = useNotesStore.getState();
-      const note = store.getNote(id);
+      const note = store.getNote(id as string);
       if (!note) {
-        return { success: false, content: '', error: `Note with ID ${id} not found` };
+        return { success: false, content: '', error: `Note with ID ${id as string} not found` };
       }
-      store.togglePin(id);
+      store.togglePin(id as string);
       return { success: true, content: `Toggled pin for note "${note.title}"` };
     }
   }

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, X, Upload, FileCode, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
-import { usePluginStore } from '../../store/usePluginStore';
+import { Plus, Upload, FileCode, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import PluginManager from '../../services/PluginManager';
-import { addNotification } from '../../store/useGiaStore';
+import { useGiaStore } from '../../store/useGiaStore';
 
 export const PluginInstallSection: React.FC = () => {
   const [installUrl, setInstallUrl] = useState('');
@@ -38,20 +37,20 @@ export const PluginInstallSection: React.FC = () => {
         if (moduleResponse.ok) {
           const moduleText = await moduleResponse.text();
           // Simple eval for hooks - in production you'd want sandboxing
-          const exports = {};
+          const exports: Record<string, unknown> = {};
           const module = { exports };
           new Function('exports', 'module', moduleText)(exports, module);
-          hooks = module.exports.hooks || {};
-          setup = module.exports.setup;
+          hooks = (module.exports.hooks as Record<string, unknown>) || {};
+          setup = module.exports.setup as ((...args: unknown[]) => unknown) | undefined;
         }
       } catch {
         // Hooks optional
       }
 
-      await PluginManager.register(manifest, hooks, setup);
+      await PluginManager.register(manifest, hooks, setup as ((api: import('../../types/plugin').PluginAPI) => void | Promise<void>) | undefined);
       setResult({ success: true, message: `Plugin "${manifest.name}" installed successfully!` });
       setInstallUrl('');
-      addNotification(`Plugin installed: ${manifest.name}`);
+      useGiaStore.getState().addNotification(`Plugin installed: ${manifest.name}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Installation failed';
       setResult({ success: false, message: msg });
@@ -73,7 +72,7 @@ export const PluginInstallSection: React.FC = () => {
 
         await PluginManager.register(manifest, {}, undefined);
         setResult({ success: true, message: `Plugin "${manifest.name}" installed from file!` });
-        addNotification(`Plugin installed: ${manifest.name}`);
+        useGiaStore.getState().addNotification(`Plugin installed: ${manifest.name}`);
       } catch (err) {
         setResult({ success: false, message: err instanceof Error ? err.message : 'File parse failed' });
       }

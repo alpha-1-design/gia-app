@@ -195,17 +195,17 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         const origLoad = xhr.onload;
         const origError = xhr.onerror;
         const origAbort = xhr.onabort;
-        xhr.onload = function (this: XMLHttpRequest, e: Event) {
+        xhr.onload = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origLoad) origLoad.call(this, e);
+          if (origLoad) (origLoad as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
-        xhr.onerror = function (this: XMLHttpRequest, e: Event) {
+        xhr.onerror = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origError) origError.call(this, e);
+          if (origError) (origError as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
-        xhr.onabort = function (this: XMLHttpRequest, e: Event) {
+        xhr.onabort = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origAbort) origAbort.call(this, e);
+          if (origAbort) (origAbort as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
       }
 

@@ -8,6 +8,8 @@ import { locationTools } from './tools/location';
 import { taskTools } from './tools/tasks';
 import { noteTools } from './tools/notes';
 import { autonomyTools } from './tools/autonomy';
+import { powerTools } from './tools/powerTools';
+import { deviceIntegrationTools } from './tools/deviceIntegration';
 
 export type { ToolResult };
 export type { Tool };
@@ -30,6 +32,8 @@ class GiaTools {
       ...taskTools,
       ...noteTools,
       ...autonomyTools,
+      ...powerTools,
+      ...deviceIntegrationTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

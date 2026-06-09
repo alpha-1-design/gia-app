@@ -128,9 +128,9 @@ class SystemService {
       const battery = await nav.getBattery?.();
       if (battery) {
         info.battery = {
-          charging: battery.charging,
-          level: battery.level,
-          dischargingTime: battery.dischargingTime === Infinity ? null : battery.dischargingTime,
+          charging: battery.charging ?? null,
+          level: battery.level ?? null,
+          dischargingTime: battery.dischargingTime === Infinity ? null : (battery.dischargingTime ?? null),
         };
       }
     } catch (e) { logger.error('[SystemService] Failed to get battery info:', e); }
@@ -190,14 +190,16 @@ class SystemService {
     window.addEventListener('offline', updateNetwork);
 
     const conn = nav.connection;
-    if (conn) {
+    if (conn && typeof conn.addEventListener === 'function') {
       conn.addEventListener('change', updateNetwork);
     }
 
     this._networkListener = () => {
       window.removeEventListener('online', updateNetwork);
       window.removeEventListener('offline', updateNetwork);
-      conn?.removeEventListener('change', updateNetwork);
+      if (conn && typeof conn.removeEventListener === 'function') {
+        conn.removeEventListener('change', updateNetwork);
+      }
     };
 
     // Battery changes
@@ -206,15 +208,19 @@ class SystemService {
       if (battery) {
         const updateBattery = () => {
           if (!this._lastInfo || !this._lastInfo.battery) return;
-          this._lastInfo.battery.charging = battery.charging;
-          this._lastInfo.battery.level = battery.level;
+          this._lastInfo.battery.charging = battery.charging ?? null;
+          this._lastInfo.battery.level = battery.level ?? null;
           this._onChange?.({ ...this._lastInfo });
         };
-        battery.addEventListener('chargingchange', updateBattery);
-        battery.addEventListener('levelchange', updateBattery);
+        if (typeof battery.addEventListener === 'function') {
+          battery.addEventListener('chargingchange', updateBattery);
+          battery.addEventListener('levelchange', updateBattery);
+        }
         this._batteryListener = () => {
-          battery.removeEventListener('chargingchange', updateBattery);
-          battery.removeEventListener('levelchange', updateBattery);
+          if (typeof battery.removeEventListener === 'function') {
+            battery.removeEventListener('chargingchange', updateBattery);
+            battery.removeEventListener('levelchange', updateBattery);
+          }
         };
       }
     } catch (e) { logger.error('[SystemService] Failed to start battery monitoring:', e); }

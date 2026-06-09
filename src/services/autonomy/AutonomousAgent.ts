@@ -19,7 +19,7 @@ export class AutonomousAgent {
     const goalId = store.addGoal(title, description, priority);
 
     const decomposition = await goalPlanner.decompose(title, description);
-    const planId = store.createPlan(goalId, decomposition.steps);
+    store.createPlan(goalId, decomposition.steps);
 
     useMemoryStore.getState().addMemory({
       key: 'goal_set',
@@ -66,7 +66,7 @@ Use the tools available to you to complete this step. Be thorough and resourcefu
       const reflection = await reflectionEngine.evaluate(
         goal.id, step.description, step.action, res.text
       );
-      const reflectionId = store.addReflection({ ...reflection, stepId: step.id });
+      store.addReflection({ ...reflection, stepId: step.id });
       store.updateStepStatus(plan.id, step.id, reflection.outcome === 'success' ? 'completed' : 'failed', res.text);
       store.setActiveGoal(goal.id);
 

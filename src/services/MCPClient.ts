@@ -59,7 +59,7 @@ export class MCPClient {
       this._client = new Client(
         { name: 'GIA', version: '2.3.1.0' },
         { capabilities: {} }
-      );
+      ) as unknown as MCPClientHandle;
 
       await this._client.connect(transport);
       this._transport = transport;

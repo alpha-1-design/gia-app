@@ -35,7 +35,7 @@ const terminalRun: Tool = {
     }
 
     try {
-      const result = await CodeRunner.run({ language, code: command });
+      const result = await CodeRunner.run({ language: language as string, code: command as string });
       return result.error ? { success: false, content: result.output, error: result.error } : { success: true, content: result.output };
     } catch (e: unknown) {
       return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
@@ -123,39 +123,44 @@ const github: Tool = {
     },
     required: ['action'],
   },
-  execute: async ({ action, username, repo, path, sort }: { action: string; username?: string; repo?: string; path?: string; sort?: string }) => {
+  execute: async (args: Record<string, unknown>) => {
+    const action = args.action as string;
+    const username = args.username as string | undefined;
+    const repo = args.repo as string | undefined;
+    const path = args.path as string | undefined;
+    const sort = args.sort as string | undefined;
     if (!username) return { success: false, content: '', error: 'GitHub username is required — ask the user for their GitHub username.' };
     const githubUser = username;
     const gh = (await import('../GitHubService')).default;
     try {
-      let data: unknown;
+      let data: string;
       switch (action) {
         case 'get_user':
-          data = await gh.getUser(githubUser);
+          data = JSON.stringify(await gh.getUser(githubUser), null, 2);
           break;
         case 'list_repos':
-          data = await gh.listRepos(githubUser, (sort as 'updated' | 'created' | 'pushed' | 'full_name') || 'updated');
+          data = JSON.stringify(await gh.listRepos(githubUser, (sort as 'updated' | 'created' | 'pushed' | 'full_name') || 'updated'), null, 2);
           break;
         case 'get_repo':
           if (!repo) return { success: false, content: '', error: 'repo is required' };
-          data = await gh.getRepo(githubUser, repo);
+          data = JSON.stringify(await gh.getRepo(githubUser, repo), null, 2);
           break;
         case 'list_contents':
           if (!repo) return { success: false, content: '', error: 'repo is required' };
-          data = await gh.listRepoContents(githubUser, repo, path || '');
+          data = JSON.stringify(await gh.listRepoContents(githubUser, repo, path || ''), null, 2);
           break;
         case 'get_file':
           if (!repo || !path) return { success: false, content: '', error: 'repo and path are required' };
-          data = await gh.getFileContent(githubUser, repo, path);
+          data = await gh.getFileContent(githubUser, repo, path) as string;
           return { success: true, content: data };
         case 'get_readme':
           if (!repo) return { success: false, content: '', error: 'repo is required' };
-          data = await gh.getReadme(githubUser, repo);
+          data = await gh.getReadme(githubUser, repo) as string;
           return { success: true, content: data };
         default:
           return { success: false, content: '', error: `Unknown action: ${action}` };
       }
-      return { success: true, content: JSON.stringify(data, null, 2) };
+      return { success: true, content: data };
     } catch (e: unknown) {
       return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
     }
@@ -174,7 +179,7 @@ const wikipedia: Tool = {
   execute: async ({ query, maxChars }) => {
     try {
       const tb = (await import('../ToolboxService')).default;
-      const result = await tb.wikipedia(query, maxChars || 5000);
+      const result = await tb.wikipedia(query as string, (maxChars as number) || 5000);
       return { success: true, content: `# ${result.title}\n\n${result.extract}\n\n[Read more on Wikipedia](${result.url})` };
     } catch (e: unknown) { return { success: false, content: '', error: e instanceof Error ? (e instanceof Error ? e.message : String(e)) : 'Wikipedia fetch failed' }; }
   }
@@ -191,7 +196,7 @@ const weather: Tool = {
   execute: async ({ location }) => {
     try {
       const tb = (await import('../ToolboxService')).default;
-      const w = await tb.weather(location);
+      const w = await tb.weather(location as string);
       return { success: true, content: `## Weather in ${w.location}\n- **Condition:** ${w.condition}\n- **Temperature:** ${w.temp} (feels ${w.feelsLike})\n- **Humidity:** ${w.humidity}\n- **Wind:** ${w.wind}` };
     } catch (e: unknown) { return { success: false, content: '', error: e instanceof Error ? (e instanceof Error ? e.message : String(e)) : 'Weather fetch failed' }; }
   }
@@ -208,7 +213,7 @@ const define: Tool = {
   execute: async ({ word }) => {
     try {
       const tb = (await import('../ToolboxService')).default;
-      const d = await tb.define(word);
+      const d = await tb.define(word as string) as { word: string; phonetic: string; meanings: { partOfSpeech: string; definitions: { definition: string; example?: string }[] }[] };
       const meanings = d.meanings.map(m =>
         `*${m.partOfSpeech}*\n${m.definitions.map((df, i) => `${i + 1}. ${df.definition}${df.example ? ` — "${df.example}"` : ''}`).join('\n')}`
       ).join('\n\n');
@@ -243,7 +248,7 @@ const imageGeneration: Tool = {
 
     try {
       const ImageService = (await import('../ImageService')).default;
-      const result = await ImageService.generate(prompt);
+      const result = await ImageService.generate(prompt as string) as { error?: string; revisedPrompt?: string; url: string };
       if (result.error) return { success: false, content: '', error: result.error };
       const caption = result.revisedPrompt ? `*${result.revisedPrompt}*` : prompt;
       return { success: true, content: `![${caption}](${result.url})\n${caption}` };

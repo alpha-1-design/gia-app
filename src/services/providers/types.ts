@@ -9,6 +9,7 @@ export interface BrainRequest {
   useWebSearch?: boolean;
   useExtendedThinking?: boolean;
   handsOff?: boolean;
+  localVision?: boolean;
   onStream?: (chunk: string) => void;
   onThought?: (thought: string) => void;
   signal?: AbortSignal;

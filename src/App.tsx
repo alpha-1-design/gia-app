@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense, useState, useRef } from 'react';
+import React, { useEffect, lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
@@ -14,6 +14,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
 import ProtocolPanel from './components/ProtocolPanel';
 import CommandPalette from './components/CommandPalette';
+import { VoiceOverlay } from './components/VoiceOverlay';
+import { SourcesPanel } from './components/SourcesPanel';
+import { RegionSelectorOverlay } from './components/RegionSelectorOverlay';
+import { ScreenCaptureService } from './services/ScreenCaptureService';
 import SchedulerService from './services/SchedulerService';
 import BiometricService from './services/BiometricService';
 import MCPManager from './services/MCPManager';
@@ -25,6 +29,10 @@ import { useProviderStore } from './store/useProviderStore';
 import { providerRegistry } from './services/ProviderRegistry';
 import { setSystemContext } from './services/GiaBrain';
 import { logger } from './utils/logger';
+import { useShareTarget } from './hooks/useShareTarget';
+import { useClipboardMonitor } from './hooks/useClipboardMonitor';
+import { useNativeIntents } from './hooks/useNativeIntents';
+import { ClipboardIcon } from 'lucide-react';
 import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
@@ -115,7 +123,7 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, createSession, addNotification, connectionStatus, providerConnected, autoStartWakeWord, setVoiceEnabled } = useGiaStore(useShallow(s => ({
+  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, createSession, addNotification, connectionStatus, providerConnected, autoStartWakeWord } = useGiaStore(useShallow(s => ({
     currentModule: s.currentModule, setModule: s.setModule,
     showTerminal: s.showTerminal, userProfile: s.userProfile,
     notifications: s.notifications, clearNotification: s.clearNotification,
@@ -124,18 +132,115 @@ const App: React.FC = () => {
     theme: s.theme,
     createSession: s.createSession, addNotification: s.addNotification,
     connectionStatus: s.connectionStatus, providerConnected: s.providerConnected,
-    autoStartWakeWord: s.autoStartWakeWord, setVoiceEnabled: s.setVoiceEnabled,
+    autoStartWakeWord: s.autoStartWakeWord,
   })));
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moduleOpen, setModuleOpen] = useState(false);
   const moduleRef = useRef<HTMLDivElement>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const showCircleSearch = useGiaStore(s => s.showCircleSearch);
+  const setShowCircleSearch = useGiaStore(s => s.setShowCircleSearch);
+  const setPendingCircleImage = useGiaStore(s => s.setPendingCircleImage);
+  const setModule_ = useGiaStore(s => s.setModule);
+
+  // Trigger screen capture when circle search is activated
+  useEffect(() => {
+    if (!showCircleSearch) return;
+    const start = async () => {
+      try {
+        const dataUrl = await ScreenCaptureService.captureScreen();
+        setCapturedImage(dataUrl);
+      } catch (e) {
+        addNotification((e as Error).message || 'Screen capture failed');
+        setShowCircleSearch(false);
+      }
+    };
+    start();
+  }, [showCircleSearch, addNotification, setShowCircleSearch]);
+
+  const handleRegionSelect = useCallback((croppedUrl: string) => {
+    setCapturedImage(null);
+    setShowCircleSearch(false);
+    setPendingCircleImage(croppedUrl);
+    setModule_('chat');
+    addNotification('Region captured! Analyzing with GIA...');
+  }, [setShowCircleSearch, setPendingCircleImage, setModule_, addNotification]);
+
+  const handleCircleCancel = useCallback(() => {
+    setCapturedImage(null);
+    setShowCircleSearch(false);
+  }, [setShowCircleSearch]);
+
+  // PWA share target
+  const { sharedContent, applySharedContent } = useShareTarget();
+
+  useEffect(() => {
+    if (sharedContent) {
+      addNotification('📩 Content shared to GIA');
+      applySharedContent();
+    }
+  }, [sharedContent, addNotification, applySharedContent]);
+
+  // Clipboard monitor — shows toast when interesting content is copied
+  const { copiedText, dismissCopied, pasteCopied } = useClipboardMonitor();
+
+  // Native Android intent handling (ASSIST, deep links, share target)
+  useNativeIntents();
+
+  // Register service worker for PWA + deep link detection
+  useEffect(() => {
+    const init = async () => {
+      if ('serviceWorker' in navigator) {
+        try {
+          await navigator.serviceWorker.register('/sw.js');
+          logger.log('[SW] Registered');
+        } catch (e) {
+          logger.warn('[SW] Registration failed:', e);
+        }
+      }
+
+      // Deep link detection — handle ?url= param
+      const params = new URLSearchParams(window.location.search);
+      const deepLink = params.get('url');
+      if (deepLink) {
+        const decoded = decodeURIComponent(deepLink);
+        const giaMatch = decoded.match(/^web\+gian:\/\/(.+)/);
+        if (giaMatch) {
+          const target = decodeURIComponent(giaMatch[1]);
+          useGiaStore.getState().setPendingAction({
+            type: 'deep-link',
+            data: { url: target, raw: decoded },
+          });
+          useGiaStore.getState().addNotification(`🔗 Deep link received: ${target.slice(0, 40)}...`);
+          useGiaStore.getState().setModule('chat');
+          window.history.replaceState(null, '', '/');
+        }
+      }
+
+      // Clipboard pasting detection — handle pasted gia:// links
+      const handlePaste = (e: ClipboardEvent) => {
+        const text = e.clipboardData?.getData('text');
+        if (text && text.startsWith('gia://')) {
+          useGiaStore.getState().setPendingAction({
+            type: 'deep-link',
+            data: { url: text.replace('gia://', ''), raw: text },
+          });
+          useGiaStore.getState().addNotification('🔗 Pasted GIA link detected');
+        }
+      };
+      document.addEventListener('paste', handlePaste);
+      return () => document.removeEventListener('paste', handlePaste);
+    };
+    init();
+  }, []);
 
   useKeyboardShortcuts([
     { key: 'k', meta: true, handler: () => setPaletteOpen(o => !o) },
     { key: 'n', meta: true, handler: () => { createSession(); addNotification('New session created'); } },
     { key: 's', meta: true, shift: true, handler: () => { setModule('settings'); } },
     { key: 'o', meta: true, shift: true, handler: () => { setShowProtocols(!showProtocols); } },
+    { key: 'c', meta: true, shift: true, handler: () => { useGiaStore.getState().setShowCircleSearch(true); } },
     { key: 'escape', handler: () => { if (paletteOpen) setPaletteOpen(false); } },
   ]);
 
@@ -209,18 +314,13 @@ const App: React.FC = () => {
 
     // Auto-start wake word listening if enabled
     if (autoStartWakeWord) {
-      const startWakeWord = async () => {
-        try {
-          setVoiceEnabled(true);
-          const { useVoiceInput } = await import('./hooks/useVoiceInput');
-          const voiceInput = useVoiceInput({ current: null });
-          await voiceInput.voiceRef.current?.startListening();
-          addNotification('Wake word listening enabled');
-        } catch (e) {
-          logger.error('[App] Auto-start wake word failed:', e);
-        }
-      };
-      startWakeWord();
+      try {
+        const { default: GIAWakeWord } = await import('./services/GIAWakeWord');
+        await GIAWakeWord.startListening();
+        addNotification('Wake word listening enabled');
+      } catch (e) {
+        logger.error('[App] Auto-start wake word failed:', e);
+      }
     }
 
     if (locked) {
@@ -465,7 +565,47 @@ const App: React.FC = () => {
         <ModuleView />
       </main>
 
-
+      {/* Clipboard toast */}
+      <AnimatePresence>
+        {copiedText && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 left-4 right-4 z-50 max-w-md mx-auto"
+          >
+            <div
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl"
+              style={{
+                background: 'rgba(20,20,30,0.95)',
+                border: '1px solid rgba(168,85,247,0.2)',
+                backdropFilter: 'blur(20px)',
+              }}
+            >
+              <ClipboardIcon size={16} className="text-violet-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-medium text-zinc-400">Copied to clipboard</p>
+                <p className="text-xs text-zinc-200 truncate">{copiedText.slice(0, 100)}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={pasteCopied}
+                  className="text-[10px] font-semibold px-3 py-1.5 rounded-xl transition-all"
+                  style={{ background: 'rgba(168,85,247,0.2)', color: '#a855f7' }}
+                >
+                  Ask GIA
+                </button>
+                <button
+                  onClick={dismissCopied}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Engine Room overlay */}
       <AnimatePresence>
@@ -517,6 +657,19 @@ const App: React.FC = () => {
           }
         }} 
       />
+
+      <AnimatePresence>
+        {showCircleSearch && capturedImage && (
+          <RegionSelectorOverlay
+            imageSrc={capturedImage}
+            onSelect={handleRegionSelect}
+            onCancel={handleCircleCancel}
+          />
+        )}
+      </AnimatePresence>
+
+      <VoiceOverlay />
+      <SourcesPanel />
     </div>
   );
 };

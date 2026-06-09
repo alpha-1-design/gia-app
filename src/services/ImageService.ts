@@ -24,7 +24,7 @@ class ImageService {
 
     // Determine best image-capable provider
     let targetProvider = activeProvider;
-    if (!IMAGE_MODELS[activeProvider] || !providers[activeProvider]?.enabled) {
+    if (!providerRegistry.getImageModel(activeProvider) || !providers[activeProvider]?.enabled) {
       if (providers.openrouter?.enabled) targetProvider = 'openrouter';
       else if (providers.openai?.enabled) targetProvider = 'openai';
       else return { url: '', error: 'No image-capable provider connected. GIA needs OpenAI (DALL-E 3) or OpenRouter with a compatible image model configured in Engine Room.' };

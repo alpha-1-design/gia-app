@@ -16,7 +16,7 @@ try {
   });
 } catch (e) { logger.error('[PDFService] Failed to initialize Vite worker, falling back to CDN:', e); }
 
-const extractPageText = (textContent: { items: { str: string; transform?: number[]; width?: number }[] }): string => {
+const extractPageText = (textContent: { items: { str?: string; transform?: number[]; width?: number }[] }): string => {
   const items: { str: string; x: number; y: number; width: number }[] = textContent.items
     .filter((item): item is { str: string; transform?: number[]; width?: number } => typeof item.str === 'string')
     .map((item) => ({
@@ -79,7 +79,7 @@ export class PDFService {
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
+        const textContent = await page.getTextContent() as unknown as { items: { str?: string; transform?: number[]; width?: number }[] };
         const pageText = extractPageText(textContent);
         fullText += `[Page ${i}]\n${pageText}\n\n`;
       }

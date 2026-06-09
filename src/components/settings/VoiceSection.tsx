@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Headphones } from 'lucide-react';
+import { Headphones, Radio } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import TTSService from '../../services/TTSService';
 import { LANGUAGES } from '../../config/constants';
+import { Switch } from '../ui/Switch';
 
 export const VoiceSection: React.FC = () => {
   const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');
@@ -10,6 +11,8 @@ export const VoiceSection: React.FC = () => {
   const [autoStart, setAutoStart] = useState(() => localStorage.getItem('gia-auto-start-wake-word') === 'true');
   const [ttsEnabled, setTtsEnabled] = useState(() => TTSService.isEnabled());
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
+  const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
+  const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
 
   useEffect(() => {
     localStorage.setItem('gia-wake-word', wakeWord);
@@ -29,6 +32,16 @@ export const VoiceSection: React.FC = () => {
     localStorage.setItem('gia-voice-language', voiceLang);
     useGiaStore.getState().setVoiceLanguage(voiceLang);
   }, [voiceLang]);
+
+  useEffect(() => {
+    localStorage.setItem('gia-native-wake-word', String(nativeWW));
+    useGiaStore.getState().setNativeWakeWord(nativeWW);
+  }, [nativeWW]);
+
+  useEffect(() => {
+    localStorage.setItem('gia-native-sensitivity', String(sensitivity));
+    useGiaStore.getState().setNativeSensitivity(sensitivity);
+  }, [sensitivity]);
 
   return (
     <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -73,66 +86,59 @@ export const VoiceSection: React.FC = () => {
         </select>
       </div>
 
-      <label className="flex items-center gap-3 tap-feedback" style={{ cursor: 'pointer' }}>
-        <div
-          onClick={() => setAutoStart(k => !k)}
-          className="w-8 h-4 rounded-full relative transition-all shrink-0"
-          style={{ background: autoStart ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)' }}
-        >
-          <div
-            className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-            style={{ left: autoStart ? '18px' : '2px', background: autoStart ? '#a855f7' : 'var(--gia-muted-2)' }}
-          />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Auto-Start Wake Word</p>
-          <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-            Automatically start listening for wake word when app opens.
-          </p>
-        </div>
-      </label>
+      <Switch
+        checked={nativeWW}
+        onChange={setNativeWW}
+        icon={<Radio size={11} />}
+        label="Background Wake Word"
+        description="Uses native wake word engine (Porcupine). Works when app is in background."
+        accentColor="#a855f7"
+      />
 
-      <label className="flex items-center gap-3 tap-feedback" style={{ cursor: 'pointer' }}>
-        <div
-          onClick={() => setKeepListening(k => !k)}
-          className="w-8 h-4 rounded-full relative transition-all shrink-0"
-          style={{ background: keepListening ? 'rgba(236,72,153,0.4)' : 'rgba(255,255,255,0.1)' }}
-        >
-          <div
-            className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-            style={{ left: keepListening ? '18px' : '2px', background: keepListening ? '#ec4899' : 'var(--gia-muted-2)' }}
+      {nativeWW && (
+        <div>
+          <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+            Sensitivity: {sensitivity.toFixed(1)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={sensitivity}
+            onChange={e => setSensitivity(parseFloat(e.target.value))}
+            style={{ width: '100%', accentColor: '#a855f7' }}
           />
+          <div className="flex justify-between text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+            <span>Fewer detections</span>
+            <span>More detections</span>
+          </div>
         </div>
-        <div className="flex-1">
-          <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Stay Listening</p>
-          <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-            Keep listening for more wake words after each detection. Off = one-shot.
-          </p>
-        </div>
-      </label>
+      )}
 
-      <label className="flex items-center gap-3 tap-feedback" style={{ cursor: 'pointer' }}>
-        <div
-          onClick={() => {
-            const newVal = !ttsEnabled;
-            setTtsEnabled(newVal);
-            TTSService.setEnabled(newVal);
-          }}
-          className="w-8 h-4 rounded-full relative transition-all shrink-0"
-          style={{ background: ttsEnabled ? 'rgba(236,72,153,0.4)' : 'rgba(255,255,255,0.1)' }}
-        >
-          <div
-            className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-            style={{ left: ttsEnabled ? '18px' : '2px', background: ttsEnabled ? '#ec4899' : 'var(--gia-muted-2)' }}
-          />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Voice Response (TTS)</p>
-          <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-            GIA will read her responses out loud.
-          </p>
-        </div>
-      </label>
+      <Switch
+        checked={autoStart}
+        onChange={setAutoStart}
+        label="Auto-Start Wake Word"
+        description="Automatically start listening for wake word when app opens."
+        accentColor="#a855f7"
+      />
+
+      <Switch
+        checked={keepListening}
+        onChange={setKeepListening}
+        label="Stay Listening"
+        description="Keep listening for more wake words after each detection. Off = one-shot."
+        accentColor="#ec4899"
+      />
+
+      <Switch
+        checked={ttsEnabled}
+        onChange={v => { setTtsEnabled(v); TTSService.setEnabled(v); }}
+        label="Voice Response (TTS)"
+        description="GIA will read her responses out loud."
+        accentColor="#ec4899"
+      />
     </div>
   );
 };

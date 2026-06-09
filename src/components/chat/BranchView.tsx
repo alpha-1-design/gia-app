@@ -22,11 +22,11 @@ export const BranchView: React.FC<BranchViewProps> = ({ session, onClose, messag
         if (node.message.branchId) {
           if (!arr.includes(node.message.branchId)) arr.push(node.message.branchId!);
         }
-        collect(node.children, arr);
+        collect(node.children as { message: { branchId?: string }; children: unknown[] }[], arr);
       }
     }
     const result: string[] = [];
-    collect(session.messages, result);
+    collect(session.messages as { message: { branchId?: string }; children: unknown[] }[], result);
     return result;
   })();
 

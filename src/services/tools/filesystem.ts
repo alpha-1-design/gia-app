@@ -34,10 +34,10 @@ const filesystemRead: Tool = {
     }
 
     if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
-    const pathErr = isPathSafe(path);
+    const pathErr = isPathSafe(path as string);
     if (pathErr) return { success: false, content: '', error: pathErr };
     try {
-      const result = await Filesystem.readFile({ path, directory: Directory.Documents, encoding: Encoding.UTF8 });
+      const result = await Filesystem.readFile({ path: path as string, directory: Directory.Documents, encoding: Encoding.UTF8 });
       const content = result.data as string;
       if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
       return { success: true, content };
@@ -74,22 +74,22 @@ const filesystemWrite: Tool = {
       };
     }
 
-    const pathErr = isPathSafe(path);
+    const pathErr = isPathSafe(path as string);
     if (pathErr) return { success: false, content: '', error: pathErr };
-    if (content && content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+    if ((content as string) && (content as string).length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
     if (isNative()) {
       try {
-        await Filesystem.writeFile({ path, data: content, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
-        await Filesystem.stat({ path, directory: Directory.Documents });
-        return { success: true, content: `File written to ${path} (verified)` };
+        await Filesystem.writeFile({ path: path as string, data: content as string, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
+        await Filesystem.stat({ path: path as string, directory: Directory.Documents });
+        return { success: true, content: `File written to ${path as string} (verified)` };
       } catch (e: unknown) {
         return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
       }
     }
-    const ext = path.split('.').pop()?.toLowerCase() || 'txt';
+    const ext = (path as string).split('.').pop()?.toLowerCase() || 'txt';
     const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
-    const blob = new Blob([content], { type: mimeMap[ext] || 'text/plain' });
-    triggerDownload(blob, path.split('/').pop() || 'file.txt');
+    const blob = new Blob([content as string], { type: mimeMap[ext] || 'text/plain' });
+    triggerDownload(blob, (path as string).split('/').pop() || 'file.txt');
     return { success: true, content: `File "${path}" ready for download.` };
   }
 };
@@ -167,15 +167,15 @@ const zipProject: Tool = {
       if (isNative()) {
         try {
           const base64 = await blobToBase64(blob);
-          await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents });
-          useGiaStore.getState().addNotification(`✅ ${filename} saved to Documents`);
-          return { success: true, content: `Created ${filename} and saved to your Documents folder.` };
+          await Filesystem.writeFile({ path: filename as string, data: base64, directory: Directory.Documents });
+          useGiaStore.getState().addNotification(`✅ ${filename as string} saved to Documents`);
+          return { success: true, content: `Created ${filename as string} and saved to your Documents folder.` };
         } catch (e: unknown) {
-          return { success: false, content: '', error: `Native save failed: ${e.message}` };
+          return { success: false, content: '', error: `Native save failed: ${(e as Error).message}` };
         }
       }
 
-      triggerDownload(blob, filename);
+      triggerDownload(blob, filename as string);
       return { success: true, content: `Created ${filename} — check your downloads.` };
     } catch (e: unknown) {
       return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
@@ -194,10 +194,10 @@ const desktopRead: Tool = {
     if (!DesktopFS.hasHandle) {
       return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
     }
-    const pathErr = isPathSafe(path);
+    const pathErr = isPathSafe(path as string);
     if (pathErr) return { success: false, content: '', error: pathErr };
     try {
-      const content = await DesktopFS.readFile(path);
+      const content = await DesktopFS.readFile(path as string);
       if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
       return { success: true, content };
     } catch (e: unknown) {
@@ -217,11 +217,11 @@ const desktopWrite: Tool = {
     if (!DesktopFS.hasHandle) {
       return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
     }
-    const pathErr = isPathSafe(path);
+    const pathErr = isPathSafe(path as string);
     if (pathErr) return { success: false, content: '', error: pathErr };
-    if (content && content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+    if ((content as string) && (content as string).length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
     try {
-      await DesktopFS.writeFile(path, content);
+      await DesktopFS.writeFile(path as string, content as string);
       return { success: true, content: `File written to ${DesktopFS.rootName || 'project'}/${path}` };
     } catch (e: unknown) {
       return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
@@ -241,7 +241,7 @@ const desktopList: Tool = {
       return { success: false, content: '', error: 'No project folder selected. Click "Pick Project Folder" in settings or the tools panel.' };
     }
     try {
-      const entries = await DesktopFS.listFiles(path);
+      const entries = await DesktopFS.listFiles(path as string);
       const lines = entries.map(e =>
         `${e.kind === 'directory' ? '📁' : '📄'} ${e.name}`
       );

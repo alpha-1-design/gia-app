@@ -48,7 +48,7 @@ const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
     case 'widget':
     case 'metric':
     case 'metrics':
-      return <MetricWidgetVisual data={data} />;
+      return <MetricWidgetVisual data={data as never} />;
     case 'waveform':
     case 'audio':
       return <WaveformVisual data={data} />;

@@ -1,21 +1,25 @@
 import { useState, useCallback, useRef } from 'react';
-import GiaBrain from '../services/GiaBrain';
 import PDFService from '../services/PDFService';
 import { useGiaStore } from '../store/useGiaStore';
+import { isVisionCapable } from '../services/brain/modelUtils';
 
 export type Attachment = { name: string; type: string; content: string; preview?: string };
 
 export function useFileAttachments(activeModel: string, activeProvider: string, providerLabel: string) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState(false);
+  const [processingFileName, setProcessingFileName] = useState('');
   const dragCounter = useRef(0);
 
   const addFiles = useCallback(async (files: File[], isImage = false) => {
-    if (isImage && !GiaBrain.isVisionCapable(activeModel, activeProvider)) {
+    if (isImage && !isVisionCapable(activeModel, activeProvider)) {
       useGiaStore.getState().addNotification(`This provider (${providerLabel}) may not support image analysis.`);
     }
+    setProcessingFiles(true);
     const newAtts: Attachment[] = [];
     for (const file of files) {
+      setProcessingFileName(file.name);
       await new Promise<void>((resolve) => {
         const reader = new FileReader();
         const onError = () => { newAtts.push({ name: file.name, type: file.type || 'application/octet-stream', content: `Failed to read file: ${file.name}` }); resolve(); };
@@ -43,6 +47,8 @@ export function useFileAttachments(activeModel: string, activeProvider: string, 
       });
     }
     setAttachments(prev => [...prev, ...newAtts]);
+    setProcessingFileName('');
+    setProcessingFiles(false);
   }, [activeModel, activeProvider, providerLabel]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {
@@ -115,6 +121,7 @@ export function useFileAttachments(activeModel: string, activeProvider: string, 
   return {
     attachments, setAttachments,
     isDragging, setIsDragging,
+    processingFiles, processingFileName,
     dragCounter,
     addFiles, handleFile, handlePaste,
     handleDragEnter, handleDragLeave, handleDragOver, handleDrop,

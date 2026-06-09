@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
+import { Capacitor } from '@capacitor/core';
 
 interface BrowserSpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -58,10 +59,29 @@ export interface VoiceControlConfig {
   keepListening?: boolean;
   confidenceThreshold?: number;
   language?: string;
+  nativeWakeWord?: boolean;
+  nativeSensitivity?: number;
 }
 
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function mapWakeWordToBuiltin(wakeWord: string): string {
+  const w = wakeWord.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const known: Record<string, string> = {
+    'hey_google': 'HEY_GOOGLE',
+    'ok_google': 'OK_GOOGLE',
+    'hey_siri': 'HEY_SIRI',
+    'alexa': 'ALEXA',
+    'computer': 'COMPUTER',
+    'jarvis': 'JARVIS',
+    'picovoice': 'PICOVOICE',
+    'porcupine': 'PORCUPINE',
+    'hey_gia': 'HEY_GOOGLE',
+    'gia': 'HEY_GOOGLE',
+  };
+  return known[w] || 'HEY_GOOGLE';
 }
 
 export function useVoiceControl(config: VoiceControlConfig = {}) {
@@ -73,6 +93,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     keepListening = false,
     confidenceThreshold = 0.3,
     language = 'en-US',
+    nativeWakeWord = true,
+    nativeSensitivity = 0.7,
   } = config;
 
   const [isListening, setIsListening] = useState(false);
@@ -82,8 +104,10 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const lastResultRef = useRef(0);
   const srRef = useRef<BrowserSpeechRecognition | null>(null);
   const isCapacitor = !!SpeechRecognitionAPI.Capacitor;
+  const isNative = isCapacitor && Capacitor.isPluginAvailable?.('GIAWakeWord');
   const listeningLoopRef = useRef(false);
   const wakeWordRegexRef = useRef(new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i'));
+  const nativeListenerRef = useRef<{ remove: () => void } | null>(null);
 
   useEffect(() => {
     wakeWordRegexRef.current = new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i');
@@ -106,6 +130,19 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     activeRef.current = false;
     listeningLoopRef.current = false;
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+
+    if (nativeListenerRef.current) {
+      try { nativeListenerRef.current.remove(); } catch { /* ignore */ }
+      nativeListenerRef.current = null;
+    }
+
+    if (isNative) {
+      try {
+        const { GIAWakeWord } = await import('../services/GIAWakeWord');
+        await GIAWakeWord.stopListening();
+      } catch { /* ignore */ }
+    }
+
     try {
       if (isCapacitor) {
         await SpeechRecognition.stop();
@@ -119,7 +156,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     } catch (e) { logger.error('[useVoiceControl] Failed to stop speech recognition:', e); }
     setIsListening(false);
     setIsHearing(false);
-  }, [isCapacitor]);
+  }, [isCapacitor, isNative]);
 
   const wakeWordRef = useRef(wakeWord);
   const keepListeningRef = useRef(keepListening);
@@ -149,7 +186,6 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       return;
     }
 
-    // Check direct commands before LLM dispatch
     const onDirectCommand = onDirectCommandRef.current;
     if (onDirectCommand) {
       for (const [re, cmd] of DIRECT_COMMANDS) {
@@ -164,6 +200,63 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     onTranscriptRef.current?.(cleaned);
   }, [stopListening]);
+
+  const captureQueryAfterWake = useCallback(async () => {
+    if (!activeRef.current) return;
+    setIsHearing(true);
+
+    try {
+      if (isCapacitor) {
+        const { available } = await SpeechRecognition.available();
+        if (!available || !activeRef.current) { setIsHearing(false); return; }
+
+        const result = await SpeechRecognition.start({
+          language: langRef.current,
+          partialResults: false,
+          popup: false,
+        });
+
+        setIsHearing(false);
+
+        if (activeRef.current && result?.matches?.length && result.matches[0]?.length > 0) {
+          const transcript = result.matches[0].replace(/[^\w\s']/g, '').trim();
+          if (transcript.length >= 2) {
+            onTranscriptRef.current?.(transcript);
+          }
+        }
+
+        if (activeRef.current && keepListeningRef.current) {
+          timeoutRef.current = setTimeout(captureQueryAfterWake, 1500);
+        }
+      } else {
+        const SR = SpeechRecognitionAPI.SpeechRecognition || SpeechRecognitionAPI.webkitSpeechRecognition;
+        if (!SR) { setIsHearing(false); return; }
+        const sr = new SR();
+        sr.continuous = false;
+        sr.interimResults = false;
+        sr.lang = langRef.current;
+        sr.onresult = (event: SpeechRecognitionEvent) => {
+          setIsHearing(false);
+          const text = event.results[0]?.[0]?.transcript;
+          if (text && activeRef.current) {
+            const cleaned = text.replace(/[^\w\s']/g, '').trim();
+            if (cleaned.length >= 2) onTranscriptRef.current?.(cleaned);
+          }
+        };
+        sr.onerror = () => setIsHearing(false);
+        sr.onend = () => setIsHearing(false);
+        sr.start();
+        srRef.current = sr;
+
+        if (keepListeningRef.current) {
+          timeoutRef.current = setTimeout(captureQueryAfterWake, 10000);
+        }
+      }
+    } catch (e) {
+      setIsHearing(false);
+      logger.error('Query capture error:', e);
+    }
+  }, [isCapacitor]);
 
   const restartBrowserRecognition = useCallback(() => {
     if (!activeRef.current || isCapacitor || listeningLoopRef.current) return;
@@ -247,6 +340,38 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     }
   }, [isCapacitor, processTranscript, stopListening]);
 
+  const startNativeWakeWord = useCallback(async () => {
+    if (!activeRef.current || !isNative) return;
+    try {
+      const { GIAWakeWord } = await import('../services/GIAWakeWord');
+      const nativeKeyword = mapWakeWordToBuiltin(wakeWordRef.current);
+
+      await GIAWakeWord.startListening({
+        keyword: nativeKeyword,
+        sensitivity: nativeSensitivity,
+      });
+
+      const handle = await GIAWakeWord.addListener('wakeWordDetected', ({ keyword: kw }) => {
+        if (!activeRef.current) return;
+        onWakeWordRef.current?.(kw || nativeKeyword);
+        if (!keepListeningRef.current) {
+          setTimeout(() => stopListening(), 500);
+        }
+        captureQueryAfterWake();
+      });
+      nativeListenerRef.current = handle;
+
+      setIsListening(true);
+    } catch (e) {
+      logger.error('[useVoiceControl] Native wake word start failed, falling back:', e);
+      if (isCapacitor) {
+        listenOnce();
+      } else {
+        restartBrowserRecognition();
+      }
+    }
+  }, [isNative, nativeSensitivity, captureQueryAfterWake, listenOnce, restartBrowserRecognition, stopListening]);
+
   const startListening = useCallback(async () => {
     if (activeRef.current) return;
 
@@ -257,18 +382,22 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     }
 
     activeRef.current = true;
-    setIsListening(true);
 
-    if (isCapacitor) {
+    if (isNative && nativeWakeWord) {
+      await startNativeWakeWord();
+      if (!activeRef.current) return;
+    } else if (isCapacitor) {
+      setIsListening(true);
       listenOnce();
     } else {
+      setIsListening(true);
       restartBrowserRecognition();
     }
 
-    if (autoStopAfter > 0 && !keepListeningRef.current) {
+    if (autoStopAfter > 0 && !keepListeningRef.current && !isNative) {
       timeoutRef.current = setTimeout(() => stopListening(), autoStopAfter);
     }
-  }, [isCapacitor, listenOnce, restartBrowserRecognition, autoStopAfter, stopListening, requestPermissions]);
+  }, [isNative, nativeWakeWord, startNativeWakeWord, isCapacitor, listenOnce, restartBrowserRecognition, autoStopAfter, stopListening, requestPermissions]);
 
   useEffect(() => {
     return () => { activeRef.current = false; stopListening(); };

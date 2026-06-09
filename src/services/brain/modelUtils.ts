@@ -95,11 +95,36 @@ export async function buildMessages(req: BrainRequest): Promise<{ role: string; 
         });
       });
       msgs.push({ role: 'user', content });
+    } else if (req.localVision) {
+      useGiaStore.getState().addNotification(`🧠 Analyzing ${req.images.length} image(s) with local vision...`);
+      const parts: string[] = [];
+      for (const img of req.images) {
+        try {
+          const { default: visionService } = await import('../VisionService');
+          const analysis = await visionService.analyze(img.data);
+          const imgParts: string[] = [];
+          if (analysis.caption?.description) imgParts.push(`Caption: ${analysis.caption.description}`);
+          if (analysis.ocr?.text) imgParts.push(`OCR Text: "${analysis.ocr.text}"`);
+          if (analysis.objects && analysis.objects.objects.length > 0) {
+            const objList = analysis.objects.objects.map(o => `${o.label} (${Math.round(o.score * 100)}%)`).join(', ');
+            imgParts.push(`Detected objects: ${objList}`);
+          }
+          if (analysis.classification?.label) imgParts.push(`Classification: ${analysis.classification.label} (${Math.round(analysis.classification.score * 100)}%)`);
+          parts.push(`[${img.name}]: ${imgParts.join('; ')}`);
+        } catch {
+          parts.push(`[${img.name}]: (local vision failed)`);
+        }
+      }
+      const descText = parts.length > 0
+        ? `\n\n[Local Vision Analysis of attached image(s):\n${parts.join('\n')}]\n\n`
+        : '';
+      const content = `${descText}USER: ${req.prompt}`;
+      msgs.push({ role: 'user', content });
     } else {
       const names = req.images.map(i => i.name).join(', ');
-      const content = `[Image attached: ${names}]\n(System: Model ${config.model} lacks native vision. Analyzing via metadata fallback...)\n\nUSER: ${req.prompt}`;
+      const content = `[Image attached: ${names}]\n(System: Model ${config.model} lacks native vision. Enable local vision in tools for on-device analysis.)\n\nUSER: ${req.prompt}`;
       msgs.push({ role: 'user', content });
-      useGiaStore.getState().addNotification(`⚠️ ${config.model} can't see images. Image "${names}" was passed as filename text only.`);
+      useGiaStore.getState().addNotification(`⚠️ ${config.model} can't see images. Enable "Vision" tool for local on-device analysis.`);
     }
   } else {
     msgs.push({ role: 'user', content: req.prompt });

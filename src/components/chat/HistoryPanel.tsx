@@ -50,9 +50,9 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
         {sessions.filter(s => {
           if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
           if (!historySearch) return false;
-          return s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()));
+          return s.messages.some(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase()));
         }).map((sess) => {
-          const matchCount = historySearch ? sess.messages.filter(m => m.content.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
+          const matchCount = historySearch ? sess.messages.filter(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
           return (
             <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
               <div className="flex-1 min-w-0">
@@ -68,7 +68,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
         {sessions.filter(s => {
           if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
           if (!historySearch) return false;
-          return s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()));
+          return s.messages.some(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase()));
         }).length === 0 && (
           <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
         )}

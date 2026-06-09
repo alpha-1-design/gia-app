@@ -27,6 +27,7 @@
 | **Charts** | Recharts |
 | **Diagrams** | Mermaid (loaded on-demand from CDN) |
 | **Math** | KaTeX (loaded on-demand from CDN) |
+| **Wake Word** | Porcupine by Picovoice (on-device DNN, no audio leaves the phone) |
 
 ---
 
@@ -40,6 +41,38 @@ GIA connects directly to provider APIs — no proxy, no middleman:
 - **Groq** — Ultra-fast Llama-3/Mistral inference
 - **OpenRouter** — 100+ models (DeepSeek, Llama, etc.)
 - **OpenCode** — Specialized coding provider
+
+---
+
+## 🎙 Wake Word System
+
+GIA uses **Porcupine** by Picovoice — an on-device deep neural network wake word engine:
+
+- **100% offline** — all audio processing stays on your phone. No audio data is ever sent to any server.
+- **Foreground Service** — on Android, GIA runs a persistent foreground service with a notification, keeping the wake word detector alive even when the app is backgrounded.
+- **Auto-restart** — after a device reboot, the wake word service automatically restarts via `BOOT_COMPLETED` receiver.
+- **Porcupine DNN** — trained on real-world environments with 97%+ accuracy. Adjustable sensitivity (0–1) to tune false positives vs. misses.
+- **Custom wake word** — the shipped fallback uses `HEY_GOOGLE` (a free built-in Porcupine keyword for testing). To use a custom "Hey GIA" model, train one at [Picovoice Console](https://console.picovoice.ai/) and place the `.ppn` file in `android/app/src/main/assets/`.
+
+### Why `HEY_GOOGLE` appears in the code
+
+Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`, etc.) for development/testing without training a custom model. The code uses `HEY_GOOGLE` as the default keyword. The JS configuration on the settings page still shows "hey gia" — the two are independent:
+- The **JS-side** wake word ("hey gia") is used by the browser-based fallback (regex on STT transcript)
+- The **native** Porcupine keyword (`HEY_GOOGLE`) is used by the Android foreground service
+- Once a custom "Hey GIA" `.ppn` model is trained and deployed, Porcupine switches to it automatically
+
+### UX Flow — What happens when you say "Hey GIA"
+
+1. Porcupine's DNN processes the live audio stream (16kHz, on-device)
+2. On detection → the foreground service fires a `wakeWordDetected` event to GIA's WebView
+3. A short **audio beep** plays (880 Hz sine tone, 150ms)
+4. A notification "Wake word detected" appears in the UI
+5. GIA immediately starts a **speech-to-text session** to capture your command
+6. The transcribed text is **polished** (grammar, punctuation) via AI
+7. The polished text appears in the chat input field
+8. GIA processes the query autonomously
+
+*Note: a full-screen voice overlay with animated waveform (similar to Siri/Gemini) is planned for a future release.*
 
 ---
 
@@ -83,6 +116,82 @@ GIA connects directly to provider APIs — no proxy, no middleman:
 - Streaming cursor (blinking `▋`) during token delivery
 - Transparent input area with backdrop blur
 - Empty state spacing for new chats
+
+---
+
+## 🛡️ Security & Enterprise Hardening
+
+GIA is architected for **zero-trust, no-backend security**. Every protection is implemented client-side with no external dependencies:
+
+### No Attack Surface
+- **No HTTP server** — GIA does not listen on any port. No remote control surface exists.
+- **No WebSocket server** — no persistent inbound connections.
+- **No telemetry** — zero outbound connections beyond user-configured APIs.
+- **No backend** — there is no cloud service to compromise.
+
+### API Key Protection
+- API keys stored in **IndexedDB** (sandboxed per origin, not accessible to other apps).
+- Optional **PIN lock** with SHA-256 hashing via Web Crypto API.
+- Keys never appear in logs, URL parameters, or error messages.
+- All provider communication is direct HTTPS (no proxy/middleman).
+
+### Android WebView Hardening
+- `android:usesCleartextTraffic="false"` recommended for production builds.
+- JavaScript interface exposure is **zero** — no `@JavascriptInterface` bridges.
+- File access restricted to app sandbox.
+- `FOREGROUND_SERVICE_MICROPHONE` declared explicitly (Android 14+).
+
+### Wake Word Security
+- **Porcupine runs fully on-device** — no audio data ever leaves the phone.
+- No network permission required for wake word detection.
+- Audio capture stops when the service is stopped (no persistent recording).
+
+### Input & Tool Security
+- All tool inputs validated via Zod schemas before execution.
+- Code execution is sandboxed via **Piston API** (not on-device).
+- File operations restricted to app-scoped directories on Android.
+- SQL injection, path traversal, and command injection guards on all file/code tools.
+- No `eval()` or dynamic code execution in the GIA codebase.
+
+### Network Security
+- All outbound traffic is **HTTPS only** (no HTTP fallback).
+- Content Security Policy enforced via `<meta>` tag:
+  - No `unsafe-inline` for scripts (strict CSP).
+  - CDN resources pinned to specific origins.
+- `fetch` and `XMLHttpRequest` restricted to configured API endpoints.
+
+### Build Hardening (Android)
+| Measure | Status |
+|---------|--------|
+| ProGuard/R8 minification | ✅ Applied |
+| `android:exported="false"` on activities | ✅ (except launcher) |
+| `allowBackup="false"` | ✅ Recommended |
+| `networkSecurityConfig` | ✅ XML-based (allows only specific API domains) |
+| Certificate Pinning | 🔜 Planned (OkHttp pinning for provider APIs) |
+
+### Recommended Production Config
+
+```xml
+<!-- android/app/src/main/res/xml/network_security_config.xml -->
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- Allow specific API domains only -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.anthropic.com</domain>
+        <domain includeSubdomains="true">api.openai.com</domain>
+        <domain includeSubdomains="true">generativelanguage.googleapis.com</domain>
+        <domain includeSubdomains="true">api.groq.com</domain>
+        <domain includeSubdomains="true">openrouter.ai</domain>
+        <domain includeSubdomains="true">duckduckgo.com</domain>
+        <domain includeSubdomains="true">piston.api</domain>
+    </domain-config>
+</network-security-config>
+```
 
 ---
 

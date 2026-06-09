@@ -159,7 +159,6 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
     }, 1000);
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
-  submitQuizRef.current = handleSubmitQuiz;
 
   const handleAnswer = (questionId: string, optionIndex: number) => {
     if (submittedQuestions.has(questionId)) return;
@@ -214,6 +213,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
     });
     useGiaStore.getState().addNotification(`📝 ${examSystem} ${subject} quiz: ${correct}/${questions.length} (${Math.round((correct / questions.length) * 100)}%)`);
   };
+  submitQuizRef.current = handleSubmitQuiz;
 
   const handleNewQuiz = () => {
     setTab('setup');

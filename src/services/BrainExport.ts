@@ -167,7 +167,7 @@ export function importBrainFromFile(file: File): Promise<{ success: boolean; mes
         const identityStore = useGiaIdentity.getState();
         if (data.gia.name) {
           identityStore.setName(data.gia.name);
-          identityStore.setPersonality(data.gia.personalityStyle);
+          identityStore.setPersonality(data.gia.personalityStyle as import('../store/useGiaIdentity').PersonalityStyle);
           identityStore.setCustomPrompt(data.gia.customPrompt);
           identityStore.setAvatar(data.gia.avatarIcon);
           identityStore.setFocusAreas(data.gia.focusAreas);

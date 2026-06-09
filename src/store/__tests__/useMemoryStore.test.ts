@@ -96,8 +96,8 @@ describe('useMemoryStore', () => {
 
     it('defaults tier to semantic', () => {
       useMemoryStore.getState().addMemory({
-        key: 'test', value: 'val', category: 'fact', confidence: 0.8,
-      } as Partial<import('../useMemoryStore').MemoryEntry>);
+        key: 'test', value: 'val', category: 'fact', tier: 'semantic', confidence: 0.8,
+      });
 
       const { memories } = useMemoryStore.getState();
       expect(memories[0].tier).toBe('semantic');

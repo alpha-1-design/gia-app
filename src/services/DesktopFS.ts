@@ -105,8 +105,7 @@ class DesktopFS {
       dir = await dir.getDirectoryHandle(part);
     }
     const entries: FileEntry[] = [];
-    // `entries()` is a standard method on FileSystemDirectoryHandle
-    for await (const [name, entry] of dir.entries()) {
+    for await (const [name, entry] of (dir as unknown as { entries: () => AsyncIterableIterator<[string, FileSystemFileHandle | FileSystemDirectoryHandle]> }).entries()) {
       entries.push({
         name,
         path: path ? `${path}/${name}` : name,

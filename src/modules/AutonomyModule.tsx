@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Target, Plus, Pause, Play, X, Trash2, ChevronDown, ChevronRight,
-  AlertCircle, CheckCircle, Clock, ListTodo, Settings2,
+  Target, Plus, Pause, Play, Trash2, ChevronDown, ChevronRight,
+  AlertCircle, CheckCircle, ListTodo, Settings2,
 } from 'lucide-react';
-import { useAutonomyStore, type Goal, type Plan } from '../store/useAutonomyStore';
+import { useAutonomyStore, type Goal } from '../store/useAutonomyStore';
 import { autonomousAgent } from '../services/autonomy/AutonomousAgent';
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -21,7 +21,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   failed: <AlertCircle size={12} className="text-red-500" />,
 };
 
-function GoalCard({ goal, onToggle }: { goal: Goal; onToggle: () => void }) {
+function GoalCard({ goal }: { goal: Goal }) {
   const [expanded, setExpanded] = useState(false);
   const store = useAutonomyStore.getState();
   const plan = store.plans.find(p => p.id === goal.planId);

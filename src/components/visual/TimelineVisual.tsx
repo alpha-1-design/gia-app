@@ -31,7 +31,7 @@ export const TimelineVisual: React.FC<{ data: Record<string, unknown> }> = ({ da
             <div className="ml-2">
               <span className="text-[9px] font-semibold" style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}>{String(event.date || event.time || event.year)}</span>
               <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--gia-text)' }}>{String(event.title || event.name)}</p>
-              {event.description && <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{String(event.description)}</p>}
+              {!!event.description && <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{String(event.description)}</p>}
             </div>
           </div>
         ))}

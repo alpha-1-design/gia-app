@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { useVoiceControl } from './useVoiceControl';
@@ -12,6 +12,8 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
   const keepListeningRef = useRef(keepListening);
   keepListeningRef.current = keepListening;
   const voiceLanguage = useGiaStore(s => s.voiceLanguage);
+  const nativeWakeWord = useGiaStore(s => s.nativeWakeWord);
+  const nativeSensitivity = useGiaStore(s => s.nativeSensitivity);
 
   const playBeep = useCallback(() => {
     try {
@@ -47,8 +49,11 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
 
     if (transcript.split(' ').length < 8) {
       setInput(transcript);
+      useGiaStore.getState().setVoiceOverlay({ visible: true, state: 'done', transcript });
       return;
     }
+
+    useGiaStore.getState().setVoiceOverlay({ visible: true, state: 'processing', transcript });
 
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 5000);
@@ -65,10 +70,12 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
       clearTimeout(timeout);
       if (res.text && !ctrl.signal.aborted) {
         setInput(res.text.trim());
+        useGiaStore.getState().setVoiceOverlay({ visible: true, state: 'done', transcript: res.text.trim() });
       }
     } catch {
       clearTimeout(timeout);
       setInput(transcript);
+      useGiaStore.getState().setVoiceOverlay({ visible: true, state: 'done', transcript });
     }
   }, [abortTimeoutRef]);
 
@@ -76,6 +83,7 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
     const query = handleWakeWord(transcript);
     if (query) {
       useGiaStore.getState().addNotification('Wake word detected');
+      useGiaStore.getState().setVoiceOverlay({ visible: true, state: 'listening' });
     }
   }, [handleWakeWord]);
 
@@ -83,14 +91,23 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
     wakeWord,
     onWakeWord,
     onTranscript: (transcript: string) => {
-      const setInput = useGiaStore.getState().setInput;
+      const setInput = (useGiaStore.getState() as unknown as Record<string, unknown>).setInput as ((v: string) => void) | undefined;
       if (setInput) handleVoiceTranscript(transcript, setInput);
     },
     keepListening,
     autoStopAfter: 120000,
     confidenceThreshold: 0.3,
     language: voiceLanguage,
+    nativeWakeWord,
+    nativeSensitivity,
   });
+
+  // Show voice overlay when toggled on manually (non-wake-word path)
+  useEffect(() => {
+    if (voiceEnabled && voiceControl.isListening) {
+      useGiaStore.getState().setVoiceOverlay({ visible: true, state: 'listening' });
+    }
+  }, [voiceEnabled, voiceControl.isListening]);
 
   const voiceRef = useRef(voiceControl);
   voiceRef.current = voiceControl;

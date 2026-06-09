@@ -5,7 +5,7 @@ import { useGiaStore } from '../../store/useGiaStore';
 const webSearchTool: Tool = {
   id: 'web_search',
   name: 'web_search',
-  description: 'Search the web for real-time information using DuckDuckGo.',
+  description: 'Search the web for real-time information using multiple search engines (DuckDuckGo, Google, Bing, Wikipedia). Falls back automatically if one engine fails.',
   schema: {
     type: 'object',
     properties: {
@@ -29,10 +29,17 @@ const webSearchTool: Tool = {
     }
 
     try {
-      const SearchService = (await import('../SearchService')).default;
-      const result = await SearchService.searchWithSources(query);
-      if (!result.content) return { success: true, content: 'No results found.', sources: [] };
-      return { success: true, content: result.content, sources: result.sources };
+      const { default: fallback } = await import('../FallbackWebSearch');
+      const results = await fallback.search(query as string);
+      if (results.length === 0) return { success: true, content: 'No results found.', sources: [] };
+      const content = results.map((r, i) =>
+        `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.snippet}\n    _(via ${r.source})_`
+      ).join('\n\n');
+      return {
+        success: true,
+        content: `WEB SEARCH RESULTS for "${query}":\n\n${content}\n\nUse these results to inform your response. Cite sources using [1], [2], etc.`,
+        sources: results.map(r => ({ title: r.title, url: r.url })),
+      };
     } catch (e: unknown) {
       return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
     }
@@ -51,13 +58,13 @@ const readUrlTool: Tool = {
     },
     required: ['url'],
   },
-  execute: async ({ url, format, maxChars }) => {
+  execute: async ({ url, maxChars }) => {
     try {
-      const wf = (await import('../WebFetchService')).default;
-      const page = await wf.fetch(url, { format: format || 'markdown', maxChars: maxChars || 60000 });
-      const header = `# ${page.title}\n*From [${page.url}](${page.url})* ${page.siteName ? `— ${page.siteName}` : ''}\n\n`;
+      const { default: fallback } = await import('../FallbackWebSearch');
+      const page = await fallback.scrape(url as string, (maxChars as number) || 60000);
+      const header = `# ${page.title}\n*From [${page.url}](${page.url})* ~ Source: ${page.source}\n\n`;
       const excerpt = page.content.length > 0 ? '' : `*No content extracted.*\n`;
-      return { success: true, content: `${header}${excerpt}${page.content}` };
+      return { success: true, content: `${header}${excerpt}${page.content}`, sources: [{ title: page.title || url as string, url: url as string }] };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : 'Fetch failed' };
     }
@@ -108,7 +115,7 @@ const pageInfoTool: Tool = {
   execute: async ({ url }) => {
     try {
       const tb = (await import('../ToolboxService')).default;
-      const meta = await tb.getPageMetadata(url);
+      const meta = await tb.getPageMetadata(url as string);
       return { success: true, content: `**${meta.title}**\n${meta.description || ''}\n*${meta.siteName || ''}*\n${url}` };
     } catch (e: unknown) { return { success: false, content: '', error: e instanceof Error ? e.message : 'Metadata fetch failed' }; }
   }

@@ -78,7 +78,7 @@ export const ChartVisual: React.FC<{ data: Record<string, unknown> }> = ({ data 
             </AreaChart>
           ) : type === 'pie' ? (
             <PieChart>
-              <Pie data={chartData} dataKey={keys[0]} nameKey="name" cx="50%" cy="50%" outerRadius={expanded ? 130 : 70} label={({ name, percent }: { name: string; percent: number }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`} labelLine={true}>
+              <Pie data={chartData} dataKey={keys[0]} nameKey="name" cx="50%" cy="50%" outerRadius={expanded ? 130 : 70} label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent || 0) * 100).toFixed(0)}%`} labelLine={true}>
                 {chartData.map((_: Record<string, unknown>, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Pie>
               <RechartsTooltip contentStyle={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', borderRadius: '8px', fontSize: '12px' }} />

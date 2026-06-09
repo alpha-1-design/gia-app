@@ -4,8 +4,7 @@ import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 import type {
   Goal, Plan, PlanStep, Reflection, AutonomousState,
-  GoalStatus, GoalPriority, StepStatus, Outcome,
-  DEFAULT_AUTONOMOUS_STATE,
+  GoalStatus, GoalPriority, StepStatus,
 } from '../types/autonomy';
 
 export type { Goal, Plan, PlanStep, Reflection };

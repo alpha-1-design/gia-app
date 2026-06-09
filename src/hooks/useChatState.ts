@@ -6,6 +6,7 @@ import { useProtocolStore } from '../store/useProtocolStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useVoiceInput } from './useVoiceInput';
 import { useFileAttachments } from './useFileAttachments';
+import type { Attachment } from './useFileAttachments';
 import { useChatGeneration } from './useChatGeneration';
 import { useChatMessages } from './useChatMessages';
 
@@ -42,8 +43,10 @@ export function useChatState() {
     webSearch, setWebSearch,
     extThinking, setExtThinking,
     handsOff, setHandsOff,
+    localVision, setLocalVision,
     skills, activeSkillId, setSkill,
-    wakeWord, thinkingPhase, setThinkingPhase
+    wakeWord, thinkingPhase, setThinkingPhase,
+    keepListening,
   } = useGiaStore(useShallow(s => ({
     sessions: s.sessions,
     activeSessionId: s.activeSessionId, createSession: s.createSession, setActiveSession: s.setActiveSession,
@@ -57,8 +60,10 @@ export function useChatState() {
     webSearch: s.webSearch, setWebSearch: s.setWebSearch,
     extThinking: s.extThinking, setExtThinking: s.setExtThinking,
     handsOff: s.handsOff, setHandsOff: s.setHandsOff,
+    localVision: s.localVision, setLocalVision: s.setLocalVision,
     skills: s.skills, activeSkillId: s.activeSkillId, setSkill: s.setSkill,
     wakeWord: s.wakeWord, thinkingPhase: s.thinkingPhase, setThinkingPhase: s.setThinkingPhase,
+    keepListening: s.keepListening, setKeepListening: s.setKeepListening,
   })));
 
   const { providers, activeProvider } = useProviderStore(useShallow(s => ({
@@ -77,27 +82,29 @@ export function useChatState() {
 
   const {
     voiceEnabled, setVoiceEnabled, voiceRef, keepListeningRef,
-    voiceLanguage, keepListening,
+    voiceLanguage,
   } = useVoiceInput(gen.abortTimeoutRef);
 
   const {
     attachments, setAttachments, isDragging, dragCounter,
+    processingFiles, processingFileName,
     addFiles, handleFile, handlePaste,
     handleDragEnter, handleDragLeave, handleDragOver, handleDrop,
     removeAttachment,
   } = useFileAttachments(activeModel, activeProvider, providerLabel);
 
-  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen') => {
+  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
     if (feature === 'webSearch') setWebSearch(!webSearch);
     if (feature === 'extThinking') setExtThinking(!extThinking);
     if (feature === 'handsOff') setHandsOff(!handsOff);
+    if (feature === 'vision') setLocalVision(!localVision);
     if (feature === 'listen') {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
       if (newState) voiceRef.current.startListening();
       else voiceRef.current.stopListening();
     }
-  }, [setWebSearch, setExtThinking, setHandsOff, setVoiceEnabled, webSearch, extThinking, handsOff, voiceEnabled, voiceRef]);
+  }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, voiceEnabled, voiceRef]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
 
@@ -130,6 +137,63 @@ export function useChatState() {
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  // Circle-to-search: watch for pending image from screen region capture
+  useEffect(() => {
+    const pending = useGiaStore.getState().pendingCircleImage;
+    if (!pending) return;
+
+    const attachment: Attachment = { name: 'screen-region.png', type: 'image/png', content: '', preview: pending };
+    setAttachments(prev => [...prev, attachment]);
+    setInput('What is in this area?');
+    useGiaStore.getState().setPendingCircleImage(null);
+
+    const t = setTimeout(() => {
+      if (input.trim() || pending) {
+        gen.handleSend('What is in this area?', [...attachments, attachment], setInput, v => setAttachments(v as Attachment[]));
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Share target: watch for pending input/files from PWA share target
+  useEffect(() => {
+    const pendingInput = useGiaStore.getState().pendingInput;
+    const pendingFiles = useGiaStore.getState().pendingFiles;
+    if (!pendingInput && pendingFiles.length === 0) return;
+
+    if (pendingInput) {
+      setInput(pendingInput);
+      useGiaStore.getState().setPendingInput(null);
+    }
+    if (pendingFiles.length > 0) {
+      setAttachments(prev => [...prev, ...pendingFiles.map(f => ({ name: f.name, type: f.type, content: f.content || '', preview: f.preview }))]);
+      useGiaStore.getState().setPendingFiles([]);
+    }
+  }, []);
+
+  // Pending action: handle deep links, file opens, and other external intents
+  useEffect(() => {
+    const action = useGiaStore.getState().pendingAction;
+    if (!action) return;
+
+    if (action.type === 'deep-link') {
+      const url = action.data?.url || '';
+      setInput(`Handle this link: ${url}`);
+      useGiaStore.getState().addNotification(`🔗 Deep link ready to process: ${url.slice(0, 50)}`);
+    } else if (action.type === 'file-open') {
+      const file = action.data;
+      if (file) {
+        const attachment: Attachment = { name: file.name, type: file.type, content: file.content || '', preview: undefined };
+        setAttachments(prev => [...prev, attachment]);
+        setInput(`Analyze this file: ${file.name}`);
+        useGiaStore.getState().addNotification(`📄 Opened ${file.name}`);
+      }
+    }
+
+    useGiaStore.getState().setPendingAction(null);
   }, []);
 
   const handleScroll = () => {
@@ -177,7 +241,7 @@ export function useChatState() {
       setShowSkillPicker(true);
       return;
     }
-    gen.handleSend(input, attachments, setInput, v => setAttachments(v as unknown[]));
+    gen.handleSend(input, attachments, setInput, v => setAttachments(v as Attachment[]));
   }, [input, attachments, gen.handleSend]);
 
   const handleEditResend = useCallback((msgId: string) => {
@@ -196,7 +260,7 @@ export function useChatState() {
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
     liveThoughts: gen.liveThoughts, setLiveThoughts: gen.setLiveThoughts,
     showKnowledge, setShowKnowledge,
-    clarAnswer, setClarAnswer, isDragging,
+    clarAnswer, setClarAnswer, processingFiles, processingFileName, isDragging,
     showFileBrowser, setShowFileBrowser, showTools, setShowTools,
     inputContainerHeight, setInputContainerHeight,
     keepListeningRef, voiceRef, dragCounter, undoTimeoutRef: msgOps.undoTimeoutRef,
@@ -213,7 +277,9 @@ sessions, activeSessionId, createSession, setActiveSession,
     userProfile, setIntentState,
     addNotification, setShowConsole, showConsole, consoleLogs,
     webSearch, setWebSearch, extThinking, setExtThinking,
-    handsOff, setHandsOff, skills, activeSkillId, setSkill,
+    handsOff, setHandsOff,
+    localVision, setLocalVision,
+    skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase,
     providers, activeProvider, activeProtocols,
     keepListening, voiceLanguage, activeSession, messages,

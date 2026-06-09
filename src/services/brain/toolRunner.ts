@@ -1,6 +1,7 @@
 import GiaTools, { ToolResult } from '../GiaTools';
 import { useProtocolStore } from '../../store/useProtocolStore';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useSearchActivity } from '../../store/useSearchActivity';
 import { ProtocolProposal, ProtocolType } from '../../types/protocol';
 import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchemas';
 import { delegateTask } from './subAgent';
@@ -69,11 +70,12 @@ async function executeSingleTool(
   state: ExecutionState,
   onThought?: ThoughtFn,
   signal?: AbortSignal,
+  sourcesAcc?: string[],
 ): Promise<{ result?: string; observations: string[] }> {
   const observations: string[] = [];
 
   if (toolCall.id === 'sub_agent_call') {
-    const { provider, prompt: subPrompt } = toolCall.args;
+    const { provider, prompt: subPrompt } = toolCall.args as { provider: string; prompt: string };
     onThought?.(`Delegating to sub-agent (${provider})...`);
     const subRes = await delegateTask(provider, subPrompt, signal);
     observations.push(`SUB-AGENT (${provider}): ${subRes}`);
@@ -140,6 +142,19 @@ async function executeSingleTool(
   onThought?.(`⚡ Executing: ${tool.name}...`);
   useGiaStore.getState().setCurrentTool(toolCall.id);
 
+  // Emit live search activity event before execution starts
+  const isWebTool = ['web_search', 'read_url', 'browser_navigate'].includes(toolCall.id);
+  if (isWebTool) {
+    const sa = useSearchActivity.getState();
+    sa.setPanelOpen(true);
+    if (toolCall.id === 'web_search') {
+      sa.addEvent({ type: 'query', message: (toolCall.args.query as string) || '', done: false });
+    } else {
+      const u = (toolCall.args.url as string) || '';
+      sa.addEvent({ type: 'fetch', message: u, url: u, done: false });
+    }
+  }
+
   let result: ToolResult;
   let toolAttempts = 0;
   const maxToolAttempts = 3;
@@ -166,6 +181,29 @@ async function executeSingleTool(
 
   if (result!.success) {
     useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources);
+    if (sourcesAcc && result!.sources?.length) {
+      for (const s of result!.sources) {
+        if (!sourcesAcc.includes(s.url)) sourcesAcc.push(s.url);
+      }
+    }
+    // Complete search activity events (started before execution)
+    if (isWebTool) {
+      const sa = useSearchActivity.getState();
+      const msg = toolCall.id === 'web_search'
+        ? (toolCall.args.query as string) || ''
+        : (toolCall.args.url as string) || '';
+      sa.completeEvent(msg);
+      if (toolCall.id === 'web_search') {
+        sa.addEvent({ type: 'info', message: `Found ${result!.sources?.length || 0} results`, done: true });
+        result!.sources?.forEach(s => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
+      } else {
+        if (result!.sources?.length) {
+          result!.sources.forEach(s => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
+        } else {
+          sa.addSource({ title: (toolCall.args.url as string) || '', url: (toolCall.args.url as string) || '', snippet: '', source: 'web' });
+        }
+      }
+    }
   } else {
     useProtocolStore.getState().setFailed(protocolId, result!.error || 'Unknown error');
   }
@@ -184,6 +222,7 @@ export async function executeToolBlocks(
   state: ExecutionState,
   onThought?: ThoughtFn,
   signal?: AbortSignal,
+  sourcesAcc?: string[],
 ): Promise<{ didExecute: boolean; result?: string }> {
   const toolCalls = extractToolCalls(text);
   if (!toolCalls.length) return { didExecute: false };
@@ -197,7 +236,7 @@ export async function executeToolBlocks(
     if (group.length === 1) {
       const call = group[0];
       try {
-        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal);
+        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal, sourcesAcc);
         allObservations.push(...observations);
         if (result === '__CLARIFICATION__') {
           const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
@@ -221,7 +260,7 @@ export async function executeToolBlocks(
       try {
         onThought?.(`⚡ Running ${group.length} tools in parallel...`);
         const results = await Promise.all(
-          group.map((call) => executeSingleTool(call, text, state, onThought, signal))
+          group.map((call) => executeSingleTool(call, text, state, onThought, signal, sourcesAcc))
         );
 
         for (const { result, observations } of results) {

@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
-import { useGiaStore } from '../store/useGiaStore';
+import { useGiaStore, type MessageNode } from '../store/useGiaStore';
 
 export function useChatMessages() {
-  const [undoMsg, setUndoMsg] = useState<{ id: string; sessionId: string; backup: unknown[] } | null>(null);
+  const [undoMsg, setUndoMsg] = useState<{ id: string; sessionId: string; backup: MessageNode[] } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -17,7 +17,7 @@ export function useChatMessages() {
     useGiaStore.setState({
       sessions: state.sessions.map(s =>
         s.id === state.activeSessionId
-          ? { ...s, messages: s.messages.filter(m => m.id !== msgId), updatedAt: Date.now() }
+          ? { ...s, messages: s.messages.filter(m => m.message.id !== msgId), updatedAt: Date.now() }
           : s
       ),
     });
@@ -33,7 +33,7 @@ export function useChatMessages() {
     useGiaStore.setState({
       sessions: useGiaStore.getState().sessions.map(s =>
         s.id === undoMsg.sessionId
-          ? { ...s, messages: undoMsg.backup, updatedAt: Date.now() }
+          ? { ...s, messages: undoMsg.backup as MessageNode[], updatedAt: Date.now() }
           : s
       ),
     });
@@ -57,9 +57,9 @@ export function useChatMessages() {
   const handleEditResend = useCallback((msgId: string, setInput: (v: string) => void) => {
     const state = useGiaStore.getState();
     const currMsgs = state.getActiveSession()?.messages ?? [];
-    const userMsgIndex = currMsgs.findIndex(m => m.id === msgId) - 1;
+    const userMsgIndex = currMsgs.findIndex(m => m.message.id === msgId) - 1;
     if (userMsgIndex >= 0 && state.activeSessionId) {
-      setInput(currMsgs[userMsgIndex].content);
+      setInput(currMsgs[userMsgIndex].message.content);
       state.addNotification('Edit and resend');
     }
   }, []);
@@ -78,7 +78,7 @@ export function useChatMessages() {
     const state = useGiaStore.getState();
     const activeSession = state.getActiveSession();
     if (!activeSession) return;
-    const text = activeSession.messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
+    const text = activeSession.messages.map(m => `[${m.message.role.toUpperCase()}]\n${m.message.content}`).join('\n\n---\n\n');
     const blob = new Blob([text], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

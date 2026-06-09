@@ -12,10 +12,10 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
     if (Array.isArray(m.content)) {
       return {
         ...m,
-        content: m.content.map((c: { type: string; image_url?: { url: string } }) => {
+        content: m.content.map((c: { type: string; image_url?: { url?: string } }) => {
           if (c.type === 'image_url') {
             try {
-              const url = c.image_url!.url;
+              const url = c.image_url?.url ?? '';
               const match = url.match(/^data:(image\/(jpeg|png|gif|webp));base64,(.*)$/);
               if (match) {
                 return {
@@ -24,7 +24,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
                 };
               }
             } catch (e) { logger.error(e); }
-            throw new Error(`Unsupported image format for Anthropic. Supported: JPEG, PNG, GIF, WebP. Got: ${c.image_url.url?.slice(0, 50)}`);
+            throw new Error(`Unsupported image format for Anthropic. Supported: JPEG, PNG, GIF, WebP. Got: ${c.image_url?.url?.slice(0, 50) || 'unknown'}`);
           }
           return c;
         })
@@ -166,17 +166,17 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
         const origLoad = xhr.onload;
         const origError = xhr.onerror;
         const origAbort = xhr.onabort;
-        xhr.onload = function (this: XMLHttpRequest, e: Event) {
+        xhr.onload = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origLoad) origLoad.call(this, e);
+          if (origLoad) (origLoad as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
-        xhr.onerror = function (this: XMLHttpRequest, e: Event) {
+        xhr.onerror = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origError) origError.call(this, e);
+          if (origError) (origError as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
-        xhr.onabort = function (this: XMLHttpRequest, e: Event) {
+        xhr.onabort = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origAbort) origAbort.call(this, e);
+          if (origAbort) (origAbort as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
       }
 

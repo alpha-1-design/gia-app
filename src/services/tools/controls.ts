@@ -36,9 +36,9 @@ export const controlTools: Tool[] = [
     description: 'Enable or disable GIA features (web_search, thinking, hands_off).',
     execute: async ({ feature, enabled }) => {
       const store = useGiaStore.getState();
-      if (feature === 'web_search') store.setWebSearch(enabled);
-      else if (feature === 'thinking') store.setExtThinking(enabled);
-      else if (feature === 'hands_off') store.setHandsOff(enabled);
+      if (feature === 'web_search') store.setWebSearch(enabled as boolean);
+      else if (feature === 'thinking') store.setExtThinking(enabled as boolean);
+      else if (feature === 'hands_off') store.setHandsOff(enabled as boolean);
       else return { success: false, content: '', error: `Invalid feature: ${feature}` };
       store.addNotification(`GIA turned ${feature} ${enabled ? 'ON' : 'OFF'}`);
       return { success: true, content: `${feature} is now ${enabled ? 'enabled' : 'disabled'}` };
@@ -48,7 +48,7 @@ export const controlTools: Tool[] = [
     id: 'show_notification', name: 'show_notification',
     description: 'Show a global notification toast to the user.',
     execute: async ({ message }) => {
-      useGiaStore.getState().addNotification(message);
+      useGiaStore.getState().addNotification(message as string);
       return { success: true, content: 'Notification sent' };
     }
   },
@@ -57,7 +57,7 @@ export const controlTools: Tool[] = [
     description: 'Ask the user a clarifying question when you need more information.',
     execute: async ({ question, options }) => {
       useGiaStore.getState().setClarification({
-        question: question || 'Could you clarify?',
+        question: (question as string) || 'Could you clarify?',
         options: Array.isArray(options) && options.length >= 2 ? options : ['Yes', 'No'],
         sessionId: useGiaStore.getState().activeSessionId || '',
         assistantMsgId: '',

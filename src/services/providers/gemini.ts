@@ -20,7 +20,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
   if (req.images) {
     req.images.forEach(img => {
       const base64Data = img.data.split(',')[1] || img.data;
-      currentParts.push({ inline_data: { mime_type: img.type, data: base64Data } });
+      currentParts.push({ inline_data: { mime_type: img.type, data: base64Data } } as unknown as { text: string });
     });
   }
   contents.push({ role: 'user', parts: currentParts });
@@ -157,15 +157,15 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
         const origAbort = xhr.onabort;
         xhr.onload = function (this: XMLHttpRequest, e: Event) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origLoad) origLoad.call(this, e);
+          if (origLoad) origLoad.call(this, e as unknown as ProgressEvent<EventTarget>);
         };
         xhr.onerror = function (this: XMLHttpRequest, e: Event) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origError) origError.call(this, e);
+          if (origError) origError.call(this, e as unknown as ProgressEvent<EventTarget>);
         };
         xhr.onabort = function (this: XMLHttpRequest, e: Event) {
           req.signal?.removeEventListener('abort', onAbort);
-          if (origAbort) origAbort.call(this, e);
+          if (origAbort) origAbort.call(this, e as unknown as ProgressEvent<EventTarget>);
         };
       }
 

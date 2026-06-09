@@ -25,7 +25,7 @@ export interface PluginAPI {
   getTool: (id: string) => Tool | undefined;
   getAllTools: () => Tool[];
   addNotification: (msg: string) => void;
-  getStore: () => import('../store/useGiaStore').GiaState;
+  getStore: () => ReturnType<typeof import('../store/useGiaStore').useGiaStore.getState>;
 }
 
 export interface Plugin {

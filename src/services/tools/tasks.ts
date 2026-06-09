@@ -6,16 +6,16 @@ export const taskTools: Tool[] = [
     description: 'Create a new task with title, description, priority, tags, and due date.',
     execute: async ({ title, description = '', priority = 'medium', tags = [], dueDate = null }) => {
       const store = useTaskStore.getState();
-      if (!title || !title.trim()) {
+      if (!(title as string) || !(title as string).trim()) {
         return { success: false, content: '', error: 'Task title is required' };
       }
       const id = store.addTask({
-        title: title.trim(),
-        description,
+        title: (title as string).trim(),
+        description: description as string,
         status: 'todo',
         priority: priority as 'low' | 'medium' | 'high' | 'critical',
         tags: Array.isArray(tags) ? tags : [],
-        dueDate: dueDate || null,
+        dueDate: (dueDate as string) || null,
       });
       return { success: true, content: `Created task "${title}" with ID: ${id}` };
     }
@@ -80,7 +80,7 @@ export const taskTools: Tool[] = [
       if (Object.keys(updates).length === 0) {
         return { success: false, content: '', error: 'No updates provided' };
       }
-      store.updateTask(id, updates);
+      store.updateTask(id as string, updates);
       return { success: true, content: `Updated task ${id}` };
     }
   },
@@ -91,9 +91,9 @@ export const taskTools: Tool[] = [
       const store = useTaskStore.getState();
       const task = store.tasks.find(t => t.id === id);
       if (!task) {
-        return { success: false, content: '', error: `Task with ID ${id} not found` };
+        return { success: false, content: '', error: `Task with ID ${id as string} not found` };
       }
-      store.deleteTask(id);
+      store.deleteTask(id as string);
       return { success: true, content: `Deleted task "${task.title}"` };
     }
   },
@@ -106,10 +106,10 @@ export const taskTools: Tool[] = [
       if (!task) {
         return { success: false, content: '', error: `Task with ID ${id} not found` };
       }
-      if (!['todo', 'in_progress', 'done'].includes(status)) {
-        return { success: false, content: '', error: `Invalid status: ${status}` };
+      if (!(['todo', 'in_progress', 'done'] as string[]).includes(status as string)) {
+        return { success: false, content: '', error: `Invalid status: ${status as string}` };
       }
-      store.moveTask(id, status as 'todo' | 'in_progress' | 'done');
+      store.moveTask(id as string, status as 'todo' | 'in_progress' | 'done');
       return { success: true, content: `Moved task "${task.title}" to ${status}` };
     }
   }

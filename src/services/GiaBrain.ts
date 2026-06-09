@@ -12,6 +12,10 @@ import { executeToolBlocks } from './brain/toolRunner';
 import { extractMemories } from './brain/memoryExtractor';
 import { retryFetch, friendlyError } from './brain/network';
 import PluginManager from './PluginManager';
+import { isVisionCapable as _isVisionCapable } from './brain/modelUtils';
+import ResponseCache from './ResponseCache';
+import ProviderMonitor from './ProviderMonitor';
+import OutputValidator from './OutputValidator';
 export { setSystemContext };
 
 export type { BrainRequest, BrainResponse } from './providers/types';
@@ -19,6 +23,7 @@ export type { BrainRequest, BrainResponse } from './providers/types';
 class GiaBrain {
   private static instance: GiaBrain;
   static getInstance() { if (!this.instance) this.instance = new GiaBrain(); return this.instance; }
+  static isVisionCapable(model: string, provider: string): boolean { return _isVisionCapable(model, provider); }
 
   private buildSystemPrompt(prompt: string, moduleSpecific?: string, mode: 'append' | 'replace' = 'append'): string {
     if (mode === 'replace' && moduleSpecific) return moduleSpecific;
@@ -29,25 +34,21 @@ class GiaBrain {
 
   private async callProvider(req: BrainRequest): Promise<BrainResponse> {
     const { activeProvider } = useProviderStore.getState();
+    const ctx: import('./providers/types').BrainContext = {
+      buildSystemPrompt: (p, m, mode) => this.buildSystemPrompt(p, m, mode),
+      buildMessages: buildMessages as import('./providers/types').BrainContext['buildMessages'],
+      buildOpenAITools: (() => buildOpenAITools() as unknown as ReturnType<import('./providers/types').BrainContext['buildOpenAITools']>) as unknown as import('./providers/types').BrainContext['buildOpenAITools'],
+      buildAnthropicTools: (() => buildAnthropicTools() as unknown as ReturnType<import('./providers/types').BrainContext['buildAnthropicTools']>) as unknown as import('./providers/types').BrainContext['buildAnthropicTools'],
+      buildGeminiTools: (() => buildGeminiTools() as unknown as ReturnType<import('./providers/types').BrainContext['buildGeminiTools']>) as unknown as import('./providers/types').BrainContext['buildGeminiTools'],
+      retryFetch, friendlyError,
+    };
     if (activeProvider === 'anthropic') {
-      return callAnthropic(req, {
-        buildSystemPrompt: (p, m, mode) => this.buildSystemPrompt(p, m, mode),
-        buildMessages, buildOpenAITools, buildAnthropicTools, buildGeminiTools,
-        retryFetch, friendlyError,
-      });
+      return callAnthropic(req, ctx);
     }
     if (activeProvider === 'gemini') {
-      return callGeminiNative(req, {
-        buildSystemPrompt: (p, m, mode) => this.buildSystemPrompt(p, m, mode),
-        buildMessages, buildOpenAITools, buildAnthropicTools, buildGeminiTools,
-        retryFetch, friendlyError,
-      });
+      return callGeminiNative(req, ctx);
     }
-    return callOpenAICompat(req, {
-      buildSystemPrompt: (p, m, mode) => this.buildSystemPrompt(p, m, mode),
-      buildMessages, buildOpenAITools, buildAnthropicTools, buildGeminiTools,
-      retryFetch, friendlyError,
-    });
+    return callOpenAICompat(req, ctx);
   }
 
   async generate(req: BrainRequest): Promise<BrainResponse> {
@@ -57,13 +58,30 @@ class GiaBrain {
       throw new Error('No provider connected. Go to Settings → Engine Room and type: connect');
     }
 
+    const state = useGiaStore.getState();
+    const effectiveModel = config.model;
+
+    // ── ResponseCache: check for cached response ──────────────
+    if (state.responseCache && !req.onStream) {
+      const cached = ResponseCache.get({
+        prompt: req.prompt,
+        model: effectiveModel,
+        provider: activeProvider,
+        systemPrompt: req.systemPrompt,
+      });
+      if (cached) {
+        logger.log('[GiaBrain] Cache hit');
+        return { text: cached, provider: activeProvider, model: effectiveModel };
+      }
+    }
+
     // Auto-select best model for this request's feature needs
     const needsVision = !!(req.images && req.images.length > 0);
     const selection = selectBestModel(activeProvider, config.model, needsVision);
-    const effectiveModel = selection.model;
+    const finalModel = selection.model;
     if (selection.switched) {
-      useProviderStore.getState().setProviderModel(activeProvider, effectiveModel);
-      useGiaStore.getState().addNotification(selection.reason || `Switched to ${effectiveModel}`);
+      useProviderStore.getState().setProviderModel(activeProvider, finalModel);
+      useGiaStore.getState().addNotification(selection.reason || `Switched to ${finalModel}`);
     }
 
     // Run plugin beforeGenerate hooks
@@ -72,6 +90,7 @@ class GiaBrain {
     let iterations = 0;
     const maxIterations = 10;
     let clarificationAttempts = 0;
+    const sourcesAcc: string[] = [];
 
     // Calibrate temperature based on prompt type
     const calibratedTemp = (() => {
@@ -91,12 +110,16 @@ class GiaBrain {
       loopReq.prompt = currentPrompt;
       loopReq.history = history;
 
+      const callStart = performance.now();
       let res: BrainResponse | undefined;
+
       try {
         res = await this.callProvider(loopReq);
+        ProviderMonitor.recordSuccess(activeProvider, finalModel, Math.round(performance.now() - callStart));
       } catch (e: unknown) {
         const origError = e as Error;
         const msg = e instanceof Error ? e.message.toLowerCase() : '';
+        ProviderMonitor.recordFailure(activeProvider, finalModel, msg, Math.round(performance.now() - callStart));
 
         // Retry once without native tool schemas
         if (!loopReq._skipNativeSchemas && !req.onStream && (
@@ -107,36 +130,60 @@ class GiaBrain {
           loopReq._skipNativeSchemas = true;
           try {
             res = await this.callProvider(loopReq);
+            if (res) ProviderMonitor.recordSuccess(activeProvider, finalModel, Math.round(performance.now() - callStart));
           } catch (e) {
             logger.error('[GiaBrain] Retry failed:', e);
           }
           if (res) continue;
         }
 
-        // Provider-level fallback
-        const { providers } = useProviderStore.getState();
-        const { activeProvider } = useProviderStore.getState();
-        const fallbackProvider = (Object.entries(providers) as [string, { enabled: boolean; apiKey: string; model: string }][])
-          .find(([p, cfg]) => p !== activeProvider && cfg.enabled && cfg.apiKey);
+        // Smart fallback using ProviderMonitor
+        if (state.smartFallback) {
+          const { providers } = useProviderStore.getState();
+          const availableProviders = Object.entries(providers)
+            .filter(([p, cfg]) => p !== activeProvider && cfg.enabled && cfg.apiKey)
+            .map(([p, cfg]) => ({ provider: p, model: cfg.model }));
 
-        if (fallbackProvider) {
-          const [newProvider, newCfg] = fallbackProvider;
-          useProviderStore.getState().setActiveProvider(newProvider);
-          const sel = selectBestModel(newProvider, newCfg.model, false);
-          if (sel.switched) useProviderStore.getState().setProviderModel(newProvider, sel.model);
-          loopReq._skipNativeSchemas = false;
-          try {
-            res = await this.callProvider(loopReq);
-          } catch (e) {
-            logger.error('[GiaBrain] Fallback also failed:', e);
+          const best = ProviderMonitor.getBestProvider(availableProviders);
+          if (best) {
+            useProviderStore.getState().setActiveProvider(best.provider);
+            useGiaStore.getState().addNotification(`Failing over to ${best.provider}/${best.model}`);
+            loopReq._skipNativeSchemas = false;
+            try {
+              res = await this.callProvider(loopReq);
+              ProviderMonitor.recordSuccess(best.provider, best.model, Math.round(performance.now() - callStart));
+            } catch (e) {
+              logger.error('[GiaBrain] Smart fallback also failed:', e);
+              throw origError;
+            }
+          } else {
             throw origError;
           }
         } else {
-          throw origError;
+          // Legacy fallback
+          const { providers } = useProviderStore.getState();
+          const fallbackProvider = (Object.entries(providers) as [string, { enabled: boolean; apiKey: string; model: string }][])
+            .find(([p, cfg]) => p !== activeProvider && cfg.enabled && cfg.apiKey);
+
+          if (fallbackProvider) {
+            const [newProvider, newCfg] = fallbackProvider;
+            useProviderStore.getState().setActiveProvider(newProvider);
+            const sel = selectBestModel(newProvider, newCfg.model, false);
+            if (sel.switched) useProviderStore.getState().setProviderModel(newProvider, sel.model);
+            loopReq._skipNativeSchemas = false;
+            try {
+              res = await this.callProvider(loopReq);
+            } catch (e) {
+              logger.error('[GiaBrain] Fallback also failed:', e);
+              throw origError;
+            }
+          } else {
+            throw origError;
+          }
         }
       }
 
-      const text = res!.text;
+      let text = res!.text;
       const finishReason = res!.finishReason || 'stop';
       const wasTruncated = res!.wasTruncated || finishReason === 'length' || finishReason === 'max_tokens' || finishReason === 'MAX_TOKENS';
 
@@ -145,31 +192,42 @@ class GiaBrain {
         continue;
       }
 
-      const state = { history, currentPrompt, clarificationAttempts };
-      const toolResult = await executeToolBlocks(text, state, req.onThought, req.signal);
-      currentPrompt = state.currentPrompt;
-      clarificationAttempts = state.clarificationAttempts;
+      // ── OutputValidator: validate and repair ────────────────
+      if (state.outputValidation && !req.onStream) {
+        const validated = OutputValidator.validate(text);
+        if (validated.issues.length > 0) {
+          logger.log('[GiaBrain] Output validation:', validated.issues);
+          text = validated.sanitized;
+        }
+      }
+
+      const toolState = { history: history as { role: string; content: string }[], currentPrompt, clarificationAttempts };
+      const toolResult = await executeToolBlocks(text, toolState, req.onThought, req.signal, sourcesAcc);
+      currentPrompt = toolState.currentPrompt;
+      clarificationAttempts = toolState.clarificationAttempts;
 
       if (!toolResult.didExecute) {
-        // No tool blocks — final response
-        // Check if response was truncated and auto-continue
         if (wasTruncated && iterations < maxIterations) {
           req.onThought?.('⚠️ Response truncated — continuing...');
-          // Add the partial response to history and continue
           history.push({ role: 'assistant', content: text });
           currentPrompt = 'Continue from where you left off. Do not repeat. Just continue naturally.';
           continue;
         }
         extractMemories(req.prompt, text);
+
+        // Cache the final response
+        if (state.responseCache && !req.onStream) {
+          ResponseCache.set({ prompt: req.prompt, model: finalModel, provider: activeProvider, systemPrompt: req.systemPrompt }, text);
+        }
+
         const finalResponse = await PluginManager.runAfterGenerate({ text, provider: activeProvider, model: config.model });
-        return { ...finalResponse, finishReason, wasTruncated };
+        return { ...finalResponse, sources: sourcesAcc.length > 0 ? sourcesAcc : undefined, finishReason, wasTruncated };
       }
 
       if (toolResult.result === '__CLARIFICATION__') {
         return { text: '__CLARIFICATION__', provider: activeProvider, model: config.model };
       }
 
-      // If tool execution failed due to malformed JSON, inject repair hint and loop
       if (toolResult.result === 'malformed_json') {
         currentPrompt = `Your previous response had invalid JSON in a tool block. Fix the syntax and try again.`;
         continue;

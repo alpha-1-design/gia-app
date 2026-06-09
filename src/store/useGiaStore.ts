@@ -14,7 +14,7 @@ export interface Message {
   error?: boolean;
   timestamp: number;
   attachments?: { name: string; type: string; content: string; preview?: string }[];
-  sources?: string[];
+  sources?: (string | { url: string; title?: string })[];
   model?: string;
   thinking?: boolean;
   thoughts?: string;
@@ -196,18 +196,41 @@ interface GiaState {
   webSearch: boolean;
   extThinking: boolean;
   handsOff: boolean;
+  localVision: boolean;
+  localSummarize: boolean;
+  localTranslate: boolean;
+  responseCache: boolean;
+  inputGuardrails: boolean;
+  outputValidation: boolean;
+  smartFallback: boolean;
   thinkingPhase: ThinkingPhase;
   clarification: Clarification | null;
   wakeWord: string;
   keepListening: boolean;
   autoStartWakeWord: boolean;
   voiceLanguage: string;
+  nativeWakeWord: boolean;
+  nativeSensitivity: number;
+  voiceOverlay: { visible: boolean; state: 'idle' | 'listening' | 'processing' | 'done'; transcript: string };
+  setVoiceOverlay: (overlay: { visible: boolean; state?: 'idle' | 'listening' | 'processing' | 'done'; transcript?: string }) => void;
   customInstructions: string;
   pinnedMemories: string[];
   theme: 'dark' | 'light' | 'system';
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
+  showCircleSearch: boolean;
+  setShowCircleSearch: (v: boolean) => void;
+  pendingCircleImage: string | null;
+  setPendingCircleImage: (v: string | null) => void;
+  pendingInput: string | null;
+  setPendingInput: (v: string | null) => void;
+  pendingFiles: { name: string; type: string; content: string; preview?: string }[];
+  setPendingFiles: (v: { name: string; type: string; content: string; preview?: string }[]) => void;
+  pendingAction: { type: string; data: Record<string, unknown> } | null;
+  setPendingAction: (v: { type: string; data: Record<string, unknown> } | null) => void;
+  deepLinkQueue: string[];
+  setDeepLinkQueue: (v: string[]) => void;
 
   setModule: (module: Module) => void;
   setCurrentTool: (tool: string | null) => void;
@@ -217,10 +240,20 @@ interface GiaState {
   setWebSearch: (enabled: boolean) => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
+  setLocalVision: (enabled: boolean) => void;
+  setLocalSummarize: (enabled: boolean) => void;
+  setLocalTranslate: (enabled: boolean) => void;
+  setResponseCache: (enabled: boolean) => void;
+  setInputGuardrails: (enabled: boolean) => void;
+  setOutputValidation: (enabled: boolean) => void;
+  setSmartFallback: (enabled: boolean) => void;
   setThinkingPhase: (phase: ThinkingPhase) => void;
   setWakeWord: (word: string) => void;
   setKeepListening: (on: boolean) => void;
+  setAutoStartWakeWord: (on: boolean) => void;
   setVoiceLanguage: (lang: string) => void;
+  setNativeWakeWord: (on: boolean) => void;
+  setNativeSensitivity: (val: number) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -229,7 +262,7 @@ interface GiaState {
   updateMessage: (sessionId: string, msgId: string, content: string, thoughts?: string) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
-  forkSession: (sessionId: string, fromIndex: number) => string;
+  forkSession: (sessionId: string, msgId: string) => string;
   clearSession: (sessionId: string) => void;
   getActiveSession: () => ChatSession | null;
   switchBranch: (sessionId: string, branchId: string) => void;
@@ -344,18 +377,34 @@ export const useGiaStore = create<GiaState>()(
       webSearch: true,
       extThinking: false,
       handsOff: false,
+      localVision: false,
+      localSummarize: true,
+      localTranslate: false,
+      responseCache: true,
+      inputGuardrails: true,
+      outputValidation: true,
+      smartFallback: true,
       thinkingPhase: 'idle',
       clarification: null,
       wakeWord: (() => { try { return localStorage.getItem('gia-wake-word') || 'hey gia'; } catch { return 'hey gia'; } })(),
       keepListening: (() => { try { return localStorage.getItem('gia-keep-listening') === 'true'; } catch { return false; } })(),
       autoStartWakeWord: (() => { try { return localStorage.getItem('gia-auto-start-wake-word') === 'true'; } catch { return false; } })(),
       voiceLanguage: (() => { try { return localStorage.getItem('gia-voice-language') || 'en-US'; } catch { return 'en-US'; } })(),
+      nativeWakeWord: (() => { try { return localStorage.getItem('gia-native-wake-word') !== 'false'; } catch { return true; } })(),
+      nativeSensitivity: (() => { try { return parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'); } catch { return 0.7; } })(),
+      voiceOverlay: { visible: false, state: 'idle', transcript: '' },
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
       theme: 'dark',
       connectionStatus: navigator.onLine ? 'online' : 'offline',
       providerConnected: false,
       currentTool: null,
+      showCircleSearch: false,
+      pendingCircleImage: null,
+      pendingInput: null,
+      pendingFiles: [],
+      pendingAction: null,
+      deepLinkQueue: [],
 
       setModule: (module) => set({ currentModule: module }),
       setCurrentTool: (tool) => set({ currentTool: tool }),
@@ -365,6 +414,13 @@ export const useGiaStore = create<GiaState>()(
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
       setHandsOff: (enabled) => set({ handsOff: enabled }),
+      setLocalVision: (enabled) => set({ localVision: enabled }),
+      setLocalSummarize: (enabled) => set({ localSummarize: enabled }),
+      setLocalTranslate: (enabled) => set({ localTranslate: enabled }),
+      setResponseCache: (enabled) => set({ responseCache: enabled }),
+      setInputGuardrails: (enabled) => set({ inputGuardrails: enabled }),
+      setOutputValidation: (enabled) => set({ outputValidation: enabled }),
+      setSmartFallback: (enabled) => set({ smartFallback: enabled }),
       setThinkingPhase: (phase) => set({ thinkingPhase: phase }),
       setWakeWord: (word) => {
         localStorage.setItem('gia-wake-word', word);
@@ -382,6 +438,27 @@ export const useGiaStore = create<GiaState>()(
         localStorage.setItem('gia-voice-language', lang);
         set({ voiceLanguage: lang });
       },
+      setNativeWakeWord: (on) => {
+        localStorage.setItem('gia-native-wake-word', String(on));
+        set({ nativeWakeWord: on });
+      },
+      setNativeSensitivity: (val) => {
+        localStorage.setItem('gia-native-sensitivity', String(val));
+        set({ nativeSensitivity: val });
+      },
+      setVoiceOverlay: (overlay) => set((s) => ({
+        voiceOverlay: {
+          visible: overlay.visible,
+          state: overlay.state ?? s.voiceOverlay.state,
+          transcript: overlay.transcript ?? s.voiceOverlay.transcript,
+        },
+      })),
+      setShowCircleSearch: (v) => set({ showCircleSearch: v }),
+      setPendingCircleImage: (v) => set({ pendingCircleImage: v }),
+      setPendingInput: (v) => set({ pendingInput: v }),
+      setPendingFiles: (v) => set({ pendingFiles: v }),
+      setPendingAction: (v) => set({ pendingAction: v }),
+      setDeepLinkQueue: (v) => set({ deepLinkQueue: v }),
       setCustomInstructions: (text) => {
         localStorage.setItem('gia-custom-instructions', text);
         set({ customInstructions: text });
@@ -480,7 +557,7 @@ export const useGiaStore = create<GiaState>()(
       getAllBranchIds: (sessionId) => {
         const { sessions } = get();
         const sess = sessions.find((s) => s.id === sessionId);
-        if (!sess) return [sess?.currentBranchId || ''].filter(Boolean);
+        if (!sess) return [];
         const branchIds = new Set<string>();
         function collect(nodes: MessageNode[]) {
           for (const node of nodes) {
@@ -600,12 +677,12 @@ export const useGiaStore = create<GiaState>()(
         const inactive = sessions.filter(s => s.id !== active.id && s.messages.length > 0);
         if (inactive.length <= 5) return;
         const toArchive = inactive.slice(0, inactive.length - 5).map(s => ({
-          ...s, messages: s.messages.slice(0, 1).map(m => ({ ...m, content: `Archived — ${m.content.slice(0, 100)}` }))
+          ...s, messages: s.messages.slice(0, 1).map(m => ({ ...m.message, content: `Archived — ${m.message.content.slice(0, 100)}` } as Message))
         }));
         set((s) => ({
           sessions: s.sessions.map(sess =>
             toArchive.find(a => a.id === sess.id)
-              ? { ...sess, messages: sess.messages.slice(0, 1).map(m => ({ ...m, content: `Archived — ${m.content.slice(0, 100)}` })) }
+              ? { ...sess, messages: sess.messages.slice(0, 1).map(m => ({ message: { ...m.message, content: `Archived — ${m.message.content.slice(0, 100)}` }, children: m.children })) }
               : sess
           ),
         }));
@@ -642,6 +719,8 @@ export const useGiaStore = create<GiaState>()(
         keepListening: s.keepListening,
         autoStartWakeWord: s.autoStartWakeWord,
         voiceLanguage: s.voiceLanguage,
+        nativeWakeWord: s.nativeWakeWord,
+        nativeSensitivity: s.nativeSensitivity,
       }),
     }
   )

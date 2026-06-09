@@ -27,7 +27,7 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Blurred Input** | Transparent/glass input area with backdrop blur |
 | **Phase Badges** | Thinking… → Generating… → Done (with model name) |
 | **Streaming Cursor** | Blinking `▋` cursor during token delivery |
-| **Voice (enhanced)** | Reactive wake word, transcript noise rejection, debounced mic reengagement |
+| **Voice (enhanced)** | Native wake word engine (Porcupine), background detection, transcript polishing, TTS |
 
 ## 🛠 Core Modules
 
@@ -55,11 +55,86 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `sub_agent_call` | Delegate to another AI provider/model for sub-tasks |
 | `request_clarification` | Ask user a single clarifying question |
 
-## 🎙 Voice
+---
 
-- **Wake word:** "Hey Gia" (works in background on Android with overlay permission)
-- **Push-to-talk:** Tap mic icon in chat toolbar
-- **Transcript polishing:** Automatic noise rejection and cleanup
+## 🎙 Voice Control
+
+### Wake Word System
+
+GIA uses **Porcupine** by Picovoice — a deep neural network wake word engine that runs **100% on-device**. No audio data ever leaves your phone.
+
+#### How it works
+
+1. **Porcupine DNN** continuously monitors the microphone audio stream (16kHz, on-device)
+2. When the wake word is detected, Porcupine fires a signal with millisecond-level latency
+3. GIA's **Android Foreground Service** receives the signal and notifies the app
+4. GIA immediately starts a **speech-to-text session** to capture your command
+5. The transcribed text is **polished** (grammar, punctuation, noise rejection) via AI
+6. The polished text appears in the chat input field and GIA processes your request
+
+#### What happens when you say "Hey GIA"
+
+```
+You say "Hey GIA, what's the weather?"
+    │
+    ▼
+[Porcupine] on-device DNN detects "Hey GIA" (~200ms)
+    │
+    ├──→ Audio beep (880 Hz, 150ms)
+    ├──→ Notification: "Wake word detected"
+    ├──→ Speech-to-text starts (captures "what's the weather?")
+    ├──→ AI polishes transcript ("What's the weather?")
+    └──→ Text appears in chat input → GIA processes it
+```
+
+#### Key capabilities
+
+| Feature | Behavior |
+|---------|----------|
+| **Background detection** | Works when app is minimized (foreground service keeps listening) |
+| **Screen off** | Works with screen locked (service runs independently of Activity) |
+| **Auto-restart** | Automatically resumes after device reboot |
+| **Sensitivity** | Adjustable (0–1) in Settings — lower = fewer false positives, higher = catches more |
+| **Stay Listening** | On: GIA stays in wake word mode after each command. Off: one-shot, returns to idle |
+| **Auto-Start** | Automatically starts listening when the app opens |
+| **Privacy** | 100% on-device wake word detection — no cloud, no audio upload |
+
+#### Settings
+
+Go to **Settings → Voice Control**:
+
+- **Wake Word** — the phrase that activates listening (default: "hey gia")
+- **Recognition Language** — speech-to-text language (e.g., en-US, fr-FR)
+- **Background Wake Word** — toggle the native Porcupine engine on/off
+- **Sensitivity** — how sensitive the wake word detection is (0.0–1.0)
+- **Auto-Start** — automatically start listening when the app opens
+- **Stay Listening** — keep listening after each wake word (vs. one-shot)
+- **Voice Response (TTS)** — GIA reads responses out loud
+
+#### About "Hey Google" in the code
+
+Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`) for testing without training a custom model. The default fallback uses `HEY_GOOGLE`. To use "Hey GIA" as a native keyword:
+
+1. Sign up at [Picovoice Console](https://console.picovoice.ai/) (free tier available)
+2. Train a custom "Hey GIA" wake word model
+3. Download the `.ppn` file
+4. Place it in `android/app/src/main/assets/`
+5. Get your free **AccessKey** from the Picovoice Console dashboard
+6. Pass it to GIA (hardcoded or via the plugin config)
+
+The JS-side setting ("hey gia") is used by the browser-based fallback (regex on transcript). The native Porcupine keyword is configured separately.
+
+---
+
+### Push-to-Talk
+
+Tap the **mic icon** in the chat toolbar to start speaking. Tap again to stop. GIA polishes the transcript automatically.
+
+### Voice Response (TTS)
+
+When enabled in Settings, GIA reads her responses out loud using the device's text-to-speech engine.
+
+---
 
 ## ⚡ Neural Command Palette
 
@@ -98,6 +173,22 @@ Configure provider API keys in Settings → Engine Room:
 - **Gemini** — Google AI Flash/Pro
 - **Groq** — Ultra-fast inference
 - **OpenRouter** — 100+ models
+
+---
+
+---
+
+## 🔒 Security
+
+See [`SECURITY.md`](SECURITY.md) for full details. Key points:
+
+- **No backend** — there is no cloud service to hack
+- **No remote control** — GIA doesn't listen on any port
+- **No telemetry** — zero data collection
+- **Wake word is on-device** — audio never leaves your phone
+- **API keys are local** — stored in IndexedDB, never shared
+- **Input validation** — every tool input is validated via Zod schemas
+- **HTTPS only** — all outbound traffic encrypted
 
 ---
 

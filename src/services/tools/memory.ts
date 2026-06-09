@@ -11,7 +11,7 @@ export const memoryTools: Tool[] = [
         store.clearMemories();
         return { success: true, content: 'All memories cleared.' };
       }
-      const matches = store.queryMemories(key);
+      const matches = store.queryMemories(key as string);
       matches.forEach(m => store.deleteMemory(m.id));
       return {
         success: true,

@@ -33,7 +33,7 @@ export const MindMapVisual: React.FC<{ data: Record<string, unknown> }> = ({ dat
 
   const tree = useMemo(() => {
     if (root) return root;
-    return { name: title || 'Root', children: nodes || [] };
+    return { name: title || 'Root', x: 0, y: 0, children: nodes || [] };
   }, [root, nodes, title]);
 
   const copyData = useCallback(() => copy(JSON.stringify(tree, null, 2)), [tree, copy]);

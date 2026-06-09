@@ -4,9 +4,12 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
+  Eye, CheckCircle2, Loader2, Scan,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
+import { useProtocolStore } from '../store/useProtocolStore';
+import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { ThinkingOverlay } from '../components/ThinkingStatus';
 import MessageList from '../components/MessageList';
@@ -15,7 +18,7 @@ import SkillPicker from '../components/SkillPicker';
 import GiaConsole from '../components/GiaConsole';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 import FileBrowser from '../components/FileBrowser';
-import ProtocolCard from '../components/ProtocolCard';
+import InlineToolExecution from '../components/InlineToolExecution';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
@@ -32,6 +35,7 @@ const ChatModule: React.FC = () => {
   const {
     input, setInput, loading, streamingMsgId, voiceEnabled,
     showHistory, setShowHistory, historySearch, setHistorySearch, attachments,
+    processingFiles, processingFileName,
     showScrollBtn, undoMsg, showSkillPicker,
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
     liveThoughts, showKnowledge, setShowKnowledge,
@@ -42,14 +46,16 @@ const ChatModule: React.FC = () => {
     activeSessionId, setActiveSession, sessions,
     createSession, deleteSession, clearSession,
     addNotification,
-    webSearch, extThinking, handsOff, activeSkillId, setSkill,
+    webSearch, extThinking, handsOff,
+    localVision,
+    activeSkillId, setSkill,
     skills, thinkingPhase, showConsole, consoleLogs,
     messages, activeSession, providerConnected, providerLabel,
-    activeModel, activeProtocols,
+    activeModel,
     toggleFeature, handleStop, handleUndoDelete,
     handleInputChange, handleSend, handleClarificationAnswer,
     handleDeleteWithUndo, handleContinue, handleFork, handleRetry, handleEditResend,
-    handlePaste, handleEdit, handleDragEnter, handleDragLeave,
+    handlePaste, handleDragEnter, handleDragLeave,
     handleDragOver, handleDrop, handleFile, removeAttachment,
     copyMessage, scrollToBottom, handleScroll, exportChat,
     setShowSkillPicker, setShowTools, setShowConsole,
@@ -84,9 +90,9 @@ const ChatModule: React.FC = () => {
           {sessions.filter(s => {
             if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
             if (!historySearch) return false;
-            return s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()));
+            return s.messages.some(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase()));
           }).map((sess) => {
-            const matchCount = historySearch ? sess.messages.filter(m => m.content.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
+            const matchCount = historySearch ? sess.messages.filter(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
             return (
               <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
                 <div className="flex-1 min-w-0">
@@ -102,7 +108,7 @@ const ChatModule: React.FC = () => {
           {sessions.filter(s => {
             if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
             if (!historySearch) return false;
-            return s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()));
+            return s.messages.some(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase()));
           }).length === 0 && (
             <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
           )}
@@ -157,6 +163,7 @@ const ChatModule: React.FC = () => {
           </div>
           <button onClick={() => setShowFileBrowser(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title="Browse files"><Folder size={13} /></button>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
+          <SearchActivityButton />
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Download size={13} /></button>
           <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Trash2 size={13} /></button>
           <button onClick={createSession} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Plus size={13} /></button>
@@ -197,13 +204,6 @@ const ChatModule: React.FC = () => {
           </div>
         )}
 
-        {activeProtocols.length > 0 && (
-          <div className="space-y-1.5 px-1">
-            <p className="text-[8px] font-semibold uppercase tracking-widest px-1" style={{ color: 'var(--gia-muted)' }}>Actions</p>
-            {activeProtocols.slice(-5).map(p => <ProtocolCard key={p.id} protocol={p} />)}
-          </div>
-        )}
-
         {activeSession && activeSession.currentBranchId && (
           <div className="mb-2">
             <SummaryBanner sessionId={activeSession.id} branchId={activeSession.currentBranchId} />
@@ -220,16 +220,18 @@ const ChatModule: React.FC = () => {
           setShowThoughts={setShowThoughts}
           liveThoughts={liveThoughts}
           thinkingPhase={thinkingPhase}
-          activeSessionId={activeSessionId ?? ''}
           responseTimesRef={responseTimesRef}
           onCopyMessage={copyMessage}
-          onEdit={handleEdit}
+          onEdit={handleEditResend}
           onDeleteWithUndo={handleDeleteWithUndo}
           onContinue={handleContinue}
           onFork={handleFork}
           onRetry={handleRetry}
           onEditResend={handleEditResend}
         />
+
+        {/* Inline tool execution cards — show recent tools inline in the chat flow */}
+        <RecentToolExecutions loading={loading} />
 
         {useGiaStore.getState().clarification && (
           <ClarificationBottomSheet
@@ -290,6 +292,15 @@ const ChatModule: React.FC = () => {
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 
+        {processingFiles && (
+          <div className="flex items-center gap-2 mb-2.5 px-1">
+            <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />
+            <span className="text-[10px] text-zinc-400 truncate">
+              Processing {processingFileName}...
+            </span>
+          </div>
+        )}
+
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2.5">
             {attachments.map((att, idx) => (
@@ -342,8 +353,10 @@ const ChatModule: React.FC = () => {
                   { label: 'Think', feature: 'extThinking' as const, icon: Brain, active: extThinking, color: '#f59e0b' },
                   { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
                   { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
-                ].map((tool) => (
-                  <button type="button" key={tool.label} onClick={() => toggleFeature(tool.feature)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
+                  { label: 'Vision', feature: 'vision' as const, icon: Eye, active: localVision, color: '#22c55e' },
+                  { label: 'Circle', feature: 'circle' as const, icon: Scan, active: false, color: '#a855f7', action: true },
+                ].map((tool: { label: string; feature: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string; action?: boolean }) => (
+                  <button type="button" key={tool.label} onClick={() => tool.action ? useGiaStore.getState().setShowCircleSearch(true) : toggleFeature(tool.feature as 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision')} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
                     <tool.icon size={11} />
                     {tool.label}
                   </button>
@@ -360,9 +373,10 @@ const ChatModule: React.FC = () => {
                     {webSearch && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-blue-500/20 text-blue-400"><Globe size={10} /></div>}
                     {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
                     {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
+                    {localVision && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-emerald-500/20 text-emerald-400"><Eye size={10} /></div>}
                   </div>
                   <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                    {(!webSearch && !extThinking && !handsOff) ? 'No active tools' : 'Tools active'}
+                    {(!webSearch && !extThinking && !handsOff && !localVision) ? 'No active tools' : 'Tools active'}
                   </span>
                 </motion.div>
               )}
@@ -407,3 +421,71 @@ const ChatModule: React.FC = () => {
 };
 
 export default React.memo(ChatModule);
+
+const SearchActivityButton: React.FC = () => {
+  const { queryCount, sources, panelOpen, setPanelOpen } = useSearchActivity();
+  const total = queryCount + sources.length;
+  if (total === 0) return null;
+  return (
+    <button
+      onClick={() => setPanelOpen(!panelOpen)}
+      className="p-1.5 rounded-lg tap-feedback shrink-0 relative"
+      style={{ color: panelOpen ? '#a855f7' : 'var(--gia-muted)' }}
+      title="Search Activity"
+    >
+      <Globe size={13} />
+      <span
+        className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold text-white"
+        style={{ background: '#a855f7' }}
+      >
+        {total > 9 ? '9+' : total}
+      </span>
+    </button>
+  );
+};
+
+const RecentToolExecutions: React.FC<{ loading: boolean }> = ({ loading }) => {
+  const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
+  const recentTools = consoleProtocols.slice(-6);
+
+  if (recentTools.length === 0) return null;
+
+  const active = recentTools.filter(p => p.state === 'executing' || p.state === 'proposed');
+  const done = recentTools.filter(p => p.state === 'completed' || p.state === 'failed' || p.state === 'rejected').slice(-4);
+
+  if (done.length === 0 && active.length === 0) return null;
+
+  return (
+    <div className="space-y-0.5 px-1">
+      {loading && active.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5 px-1">
+            <motion.div
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ background: '#a855f7' }}
+              animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+            />
+            <span className="text-[8px] font-semibold uppercase tracking-widest" style={{ color: '#a855f7' }}>Executing tools</span>
+          </div>
+          {active.map((p, i) => <InlineToolExecution key={p.id} protocol={p} index={i} />)}
+        </div>
+      )}
+      {!loading && done.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5 px-1">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+            >
+              <CheckCircle2 size={9} style={{ color: '#22c55e' }} />
+            </motion.div>
+            <span className="text-[8px] font-semibold uppercase tracking-widest" style={{ color: '#22c55e' }}>Actions completed</span>
+          </div>
+          {done.map((p, i) => <InlineToolExecution key={p.id} protocol={p} index={i} />)}
+        </div>
+      )}
+    </div>
+  );
+};

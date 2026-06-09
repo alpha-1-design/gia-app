@@ -21,6 +21,8 @@ import { PluginInstallSection } from '../components/settings/PluginInstallSectio
 import { CodeHistorySection } from '../components/settings/CodeHistorySection';
 import { InstallSection } from '../components/settings/InstallSection';
 import { BrowserSection } from '../components/settings/BrowserSection';
+import { SearchSection } from '../components/settings/SearchSection';
+import { ReliabilitySection } from '../components/settings/ReliabilitySection';
 import { providerRegistry } from '../services/ProviderRegistry';
 
 const SettingsModule: React.FC = () => {
@@ -260,7 +262,9 @@ const SettingsModule: React.FC = () => {
       <SecuritySection />
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
       <BrowserSection />
+      <SearchSection />
       <CodeHistorySection />
+      <ReliabilitySection />
       <PluginSection />
       <PluginInstallSection />
       <InstallSection />

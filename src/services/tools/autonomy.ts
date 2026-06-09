@@ -1,5 +1,4 @@
 import { useAutonomyStore } from '../../store/useAutonomyStore';
-import { useGiaStore } from '../../store/useGiaStore';
 import { autonomousAgent } from '../autonomy/AutonomousAgent';
 import type { Tool } from './types';
 
@@ -36,7 +35,6 @@ export const autonomyTools: Tool[] = [
     description: 'List all current autonomous goals with their status and progress.',
     execute: async () => {
       const store = useAutonomyStore.getState();
-      const activeGoals = store.getActiveGoals();
       const allGoals = store.goals;
 
       if (allGoals.length === 0) {

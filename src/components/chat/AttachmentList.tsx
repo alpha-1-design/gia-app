@@ -1,6 +1,6 @@
 import React from 'react';
 import { Paperclip, X } from 'lucide-react';
-import type { Attachment } from '../../hooks/useChatState';
+import type { Attachment } from '../../hooks/useFileAttachments';
 
 interface AttachmentListProps {
   attachments: Attachment[];
