@@ -718,4 +718,3 @@ public class GIAOverlayService extends Service {
             overlayView = null;
         }
     }
-}
