@@ -128,8 +128,35 @@ const EngineRoom: React.FC = () => {
             push(...showModels(models, currentWizard.provider), mk('prompt', 'Enter model number:'));
           }
       } catch (e: unknown) {
-        push(mk('err', `Fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`));
-        setWizard(null);
+        const msg = e instanceof Error ? e.message : 'Unknown error';
+        push(mk('err', `Fetch failed: ${msg}`));
+        push(mk('info', 'Type "retry" to try again, or "cancel" to go back.'));
+        // Stay in enter-key flow so user can retry
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // Retry fetch models from enter-key flow
+    if (currentWizard && currentWizard.flow === 'enter-key' && cmd === 'retry') {
+      push(mk('success', 'Retrying model fetch...'));
+      setBusy(true);
+      try {
+        const models = await fetchModels(currentWizard.provider);
+        if (models.length === 0) {
+          push(mk('err', 'No models found. Using defaults.'));
+          const defaults = providerRegistry.getModels(currentWizard.provider);
+          setWizard({ flow: 'select-model', provider: currentWizard.provider, models: defaults });
+          push(...showModels(defaults, currentWizard.provider), mk('prompt', 'Enter model number:'));
+        } else {
+          setWizard({ flow: 'select-model', provider: currentWizard.provider, models });
+          push(...showModels(models, currentWizard.provider), mk('prompt', 'Enter model number:'));
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Unknown error';
+        push(mk('err', `Fetch failed: ${msg}`));
+        push(mk('info', 'Type "retry" to try again, or "cancel" to go back.'));
       } finally {
         setBusy(false);
       }
@@ -166,6 +193,8 @@ const EngineRoom: React.FC = () => {
         mk('res', '  status               Show all provider states'),
         mk('res', '  disconnect <alias>   Remove provider key'),
         mk('res', '  url <alias> <url>    Set custom base URL (for local providers)'),
+        mk('res', '  net status           Show network state'),
+        mk('res', '  net ping             Test connectivity'),
         mk('res', '  clear                Clear terminal'),
         mk('res', '  exit / back          Close Engine Room'),
         mk('res', ''),
@@ -302,6 +331,27 @@ const EngineRoom: React.FC = () => {
     if (cmd === 'clear') {
       const freshBoot = BOOT.slice(0, 4).map(l => ({ ...l, id: lid++ }));
       setHistory(freshBoot);
+      return;
+    }
+
+    // ── NET COMMANDS ────────────────────────────────────────────────
+    if (cmd.startsWith('net ')) {
+      const netCmd = cmd.slice(4).trim();
+      if (netCmd === 'status' || netCmd === '') {
+        push(mk('res', ''), mk('info', 'NETWORK STATUS'));
+        // TODO: Connect to CorePlugin when available
+        push(mk('res', '  Status: Unknown (CorePlugin not yet connected)'));
+        push(mk('res', '  Type: Unknown'));
+        push(mk('res', '  Metered: Unknown'));
+        push(mk('res', '  Latency: Unknown'));
+        push(mk('res', ''));
+      } else if (netCmd === 'ping') {
+        push(mk('res', ''), mk('info', 'PINGING...'));
+        push(mk('res', '  CorePlugin not yet connected. Cannot ping.'));
+        push(mk('res', ''));
+      } else {
+        push(mk('err', `Unknown net command: ${netCmd}. Use 'net status' or 'net ping'.`));
+      }
       return;
     }
 

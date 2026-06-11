@@ -1,9 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Headphones, Radio } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Headphones, Radio, Mic, MicOff, Activity, Beaker, Play, Square, AlertTriangle } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import TTSService from '../../services/TTSService';
 import { LANGUAGES } from '../../config/constants';
 import { Switch } from '../ui/Switch';
+
+// ── Diagnostics types ──────────────────────────────────────────────
+interface DetectionEvent {
+  id: number;
+  timestamp: number;
+  text: string;
+  confidence: number;
+}
+
+interface ServiceStatus {
+  running: boolean;
+  micPermission: boolean | null;
+  modelLoaded: boolean;
+  error?: string;
+}
 
 export const VoiceSection: React.FC = () => {
   const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');
@@ -13,6 +28,73 @@ export const VoiceSection: React.FC = () => {
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
   const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
   const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
+
+  // ── Diagnostics state ──────────────────────────────────────────────
+  const [serviceStatus, setServiceStatus] = useState<ServiceStatus>({
+    running: false,
+    micPermission: null,
+    modelLoaded: false,
+  });
+  const [testing, setTesting] = useState(false);
+  const [detectionLog, setDetectionLog] = useState<DetectionEvent[]>([]);
+  const didRef = useRef(0);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Mock check — will be replaced by CorePlugin in Phase 1
+  const checkService = useCallback(async () => {
+    try {
+      // Check if native module is available
+      const hasModule = typeof (window as any).GIAWakeWord !== 'undefined';
+      if (hasModule) {
+        const status = await (window as any).GIAWakeWord.getStatus();
+        setServiceStatus(status);
+      } else {
+        setServiceStatus({
+          running: false,
+          micPermission: null,
+          modelLoaded: false,
+          error: 'Native module not loaded — will be available after GIACoreService build (Phase 1)',
+        });
+      }
+    } catch {
+      setServiceStatus(s => ({ ...s, error: 'Failed to check service' }));
+    }
+  }, []);
+
+  const testWakeWord = useCallback(async () => {
+    setTesting(true);
+    setDetectionLog([]);
+    try {
+      const hasModule = typeof (window as any).GIAWakeWord !== 'undefined';
+      if (hasModule) {
+        await (window as any).GIAWakeWord.startTest(detectionLog.length);
+      } else {
+        // Simulate detection events for preview
+        const simPatterns = ['JARVIS', 'HEY GIA', 'ALEXA', 'OK GOOGLE'];
+        for (let i = 0; i < 5; i++) {
+          await new Promise(r => setTimeout(r, 800));
+          const e: DetectionEvent = {
+            id: didRef.current++,
+            timestamp: Date.now(),
+            text: simPatterns[Math.floor(Math.random() * simPatterns.length)],
+            confidence: 0.5 + Math.random() * 0.5,
+          };
+          setDetectionLog(prev => [...prev.slice(-49), e]);
+        }
+      }
+    } catch (e) {
+      setDetectionLog(prev => [...prev, {
+        id: didRef.current++, timestamp: Date.now(),
+        text: `Error: ${e instanceof Error ? e.message : 'Unknown'}`,
+        confidence: 0,
+      }]);
+    } finally {
+      setTesting(false);
+    }
+  }, [detectionLog.length]);
+
+  useEffect(() => { checkService(); }, [checkService]);
+  useEffect(() => { if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [detectionLog]);
 
   useEffect(() => {
     localStorage.setItem('gia-wake-word', wakeWord);
@@ -139,6 +221,101 @@ export const VoiceSection: React.FC = () => {
         description="GIA will read her responses out loud."
         accentColor="#ec4899"
       />
+
+      {/* ── Diagnostics Section ───────────────────────────────────── */}
+      <div className="flex items-center gap-2 mt-4">
+        <Activity size={14} style={{ color: '#a855f7' }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+          Wake Word Diagnostics
+        </span>
+      </div>
+
+      {/* Status Badges */}
+      <div className="grid grid-cols-3 gap-2">
+        {/* Service status */}
+        <div className="flex flex-col items-center gap-1 p-2 rounded" style={{ background: 'var(--gia-bg-2)' }}>
+          {serviceStatus.running
+            ? <Mic size={14} className="text-emerald-400" />
+            : <MicOff size={14} className="text-zinc-500" />}
+          <span className={`text-[9px] font-medium ${serviceStatus.running ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            {serviceStatus.running ? 'Running' : serviceStatus.error ? 'Error' : 'Idle'}
+          </span>
+        </div>
+        {/* Mic permission */}
+        <div className="flex flex-col items-center gap-1 p-2 rounded" style={{ background: 'var(--gia-bg-2)' }}>
+          {serviceStatus.micPermission === true
+            ? <Mic size={14} className="text-emerald-400" />
+            : serviceStatus.micPermission === false
+              ? <AlertTriangle size={14} className="text-rose-400" />
+              : <MicOff size={14} className="text-zinc-500" />}
+          <span className={`text-[9px] font-medium ${
+            serviceStatus.micPermission === true ? 'text-emerald-400'
+              : serviceStatus.micPermission === false ? 'text-rose-400'
+                : 'text-zinc-500'
+          }`}>
+            {serviceStatus.micPermission === true ? 'Mic OK'
+              : serviceStatus.micPermission === false ? 'No Mic'
+                : 'Unknown'}
+          </span>
+        </div>
+        {/* Model loaded */}
+        <div className="flex flex-col items-center gap-1 p-2 rounded" style={{ background: 'var(--gia-bg-2)' }}>
+          {serviceStatus.modelLoaded
+            ? <Activity size={14} className="text-emerald-400" />
+            : <Activity size={14} className="text-zinc-500" />}
+          <span className={`text-[9px] font-medium ${serviceStatus.modelLoaded ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            {serviceStatus.modelLoaded ? 'Model Ready' : 'No Model'}
+          </span>
+        </div>
+      </div>
+
+      {/* Service error */}
+      {serviceStatus.error && (
+        <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
+          <AlertTriangle size={10} className="inline mr-1" />
+          {serviceStatus.error}
+        </div>
+      )}
+
+      {/* Test Button */}
+      <div className="flex gap-2">
+        <button
+          onClick={testWakeWord}
+          disabled={testing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-colors"
+          style={{ background: testing ? 'var(--gia-bg-2)' : '#a855f7', color: testing ? 'var(--gia-muted)' : 'white' }}
+        >
+          {testing ? <Square size={11} /> : <Play size={11} />}
+          {testing ? 'Testing...' : 'Test Wake Word'}
+        </button>
+        <button
+          onClick={() => setDetectionLog([])}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium"
+          style={{ background: 'var(--gia-bg-2)', color: 'var(--gia-muted)' }}
+        >
+          Clear Log
+        </button>
+      </div>
+
+      {/* Detection Log */}
+      {detectionLog.length > 0 && (
+        <div className="p-2 rounded max-h-28 overflow-y-auto" style={{ background: 'var(--gia-bg-2)', fontFamily: 'monospace', fontSize: '10px' }}>
+          {detectionLog.map(e => {
+            const confPct = Math.round(e.confidence * 100);
+            const time = new Date(e.timestamp).toLocaleTimeString();
+            return (
+              <div key={e.id} className="flex items-center gap-2 py-0.5">
+                <span className="text-zinc-500 shrink-0">{time}</span>
+                <span style={{ color: confPct > 80 ? '#34d399' : confPct > 50 ? '#fbbf24' : '#f87171' }}>
+                  {e.text}
+                </span>
+                <span className="text-zinc-500 shrink-0">({confPct}%)</span>
+              </div>
+            );
+          })}
+          <div ref={logEndRef} />
+        </div>
+      )}
     </div>
   );
 };
