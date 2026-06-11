@@ -23,6 +23,7 @@ import { InstallSection } from '../components/settings/InstallSection';
 import { BrowserSection } from '../components/settings/BrowserSection';
 import { SearchSection } from '../components/settings/SearchSection';
 import { ReliabilitySection } from '../components/settings/ReliabilitySection';
+import { VisionSection } from '../components/settings/VisionSection';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
@@ -311,6 +312,7 @@ const SettingsModule: React.FC = () => {
       </div>
 
       <VoiceSection />
+      <VisionSection />
       <SecuritySection />
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
       <BrowserSection />

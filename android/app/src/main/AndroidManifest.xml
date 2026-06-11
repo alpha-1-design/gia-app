@@ -24,6 +24,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Required for VoiceInteractionService (default assistant) -->
     <uses-permission android:name="android.permission.BIND_VOICE_INTERACTION" />
@@ -108,6 +111,37 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Accessibility Service for Circle-to-Search (gesture shortcut → screen capture) -->
+        <service
+            android:name=".GIAAccessibilityService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:label="GIA Circle-to-Search">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- GIACoreService: unified background service (wake lock, network, autonomy) -->
+        <service
+            android:name=".GIACoreService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection|dataSync|connectedDevice|specialUse">
+        </service>
+
+        <!-- Hidden Terminal foreground service (proot+Alpine) -->
+        <service
+            android:name=".GIATerminalService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+        </service>
 
         <!-- Wake word foreground service -->
         <service

@@ -6,6 +6,7 @@ import { useGiaStore } from '../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getProviderCapabilities, CAPABILITY_LABELS, type ProviderCapabilities } from '../services/providers/capabilities';
 import { providerMonitor, type ProviderHealthRecord } from '../services/ProviderMonitor';
+import { persistenceManager } from '../services/PersistenceManager';
 
 type LineType = 'cmd' | 'res' | 'err' | 'info' | 'prompt' | 'success';
 interface Line { type: LineType; text: string; id: number }
@@ -17,6 +18,8 @@ type WizardStep =
 
 let lid = 0;
 const mk = (type: LineType, text: string): Line => ({ type, text, id: lid++ });
+
+let lastExport: string | null = null;
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
@@ -48,6 +51,9 @@ const EngineRoom: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [importBuffer, setImportBuffer] = useState('');
+  const importingRef = useRef(false);
+  const importBufferRef = useRef('');
 
   const setWizard = (w: WizardStep) => {
     wizardRef.current = w;
@@ -197,6 +203,8 @@ const EngineRoom: React.FC = () => {
         mk('res', '  url <alias> <url>    Set custom base URL (for local providers)'),
         mk('res', '  net status           Show network state'),
         mk('res', '  net ping             Test connectivity & latency'),
+        mk('res', '  export               Export all data as JSON'),
+        mk('res', '  import               Import data from JSON string'),
         mk('res', '  clear                Clear terminal'),
         mk('res', '  exit / back          Close Engine Room'),
         mk('res', ''),
@@ -360,6 +368,92 @@ const EngineRoom: React.FC = () => {
     if (cmd === 'clear') {
       const freshBoot = BOOT.slice(0, 4).map(l => ({ ...l, id: lid++ }));
       setHistory(freshBoot);
+      return;
+    }
+
+    // ── EXPORT ────────────────────────────────────────────────────────
+    if (cmd === 'export') {
+      push(mk('info', 'Exporting all data...'));
+      setBusy(true);
+      persistenceManager.exportAll()
+        .then((json) => {
+          push(mk('success', `✓ Exported ${json.length.toLocaleString()} bytes`));
+          push(mk('res', ''));
+          // Show first/last few chars so user can verify
+          const preview = json.length > 200 ? json.slice(0, 100) + '\n...\n' + json.slice(-100) : json;
+          push(mk('res', preview));
+          push(mk('res', ''));
+          push(mk('info', 'Copy the JSON above to save, or use the button below:'));
+          push(mk('info', '  Type  copy-export  to copy to clipboard'));
+          // Store export json in a ref-like way — we push a hidden marker
+          push(mk('prompt', 'TIP: "copy-export" copies export data to clipboard'));
+          // Store the export data in a module-level variable
+          lastExport = json;
+        })
+        .catch((e) => push(mk('err', `Export failed: ${e instanceof Error ? e.message : 'Unknown'}`)))
+        .finally(() => setBusy(false));
+      return;
+    }
+
+    // ── IMPORT ────────────────────────────────────────────────────────
+    if (cmd === 'import') {
+      push(mk('info', 'Paste your JSON export data (multi-line), then type "END" on a new line:'));
+      push(mk('res', ''));
+      setImportBuffer('');
+      importBufferRef.current = '';
+      importingRef.current = true;
+      return;
+    }
+
+    // Handle multi-line import buffer
+    if (importingRef.current) {
+      if (trimmed === 'END') {
+        importingRef.current = false;
+        const json = importBufferRef.current;
+        if (!json || json.trim().length < 10) {
+          push(mk('err', 'No data provided. Import cancelled.'));
+          setImportBuffer('');
+          importBufferRef.current = '';
+          return;
+        }
+        push(mk('info', 'Importing data...'));
+        setBusy(true);
+        persistenceManager.importAll(json)
+          .then((result) => {
+            if (result.success) {
+              push(mk('success', '✓ Import successful!'));
+              push(mk('info', 'Reload the app to apply changes.'));
+            } else {
+              push(mk('err', `Import completed with ${result.errors.length} error(s):`));
+              result.errors.slice(0, 5).forEach((err) => push(mk('err', `  • ${err}`)));
+              if (result.errors.length > 5) {
+                push(mk('err', `  … and ${result.errors.length - 5} more`));
+              }
+            }
+          })
+          .catch((e) => push(mk('err', `Import failed: ${e instanceof Error ? e.message : 'Unknown'}`)))
+          .finally(() => { setBusy(false); setImportBuffer(''); importBufferRef.current = ''; });
+      } else {
+        const newVal = importBufferRef.current
+          ? importBufferRef.current + '\n' + trimmed
+          : trimmed;
+        importBufferRef.current = newVal;
+        setImportBuffer(newVal);
+        push(mk('info', `  [${newVal.length} chars buffered]`));
+      }
+      return;
+    }
+
+    // ── COPY EXPORT ───────────────────────────────────────────────────
+    if (cmd === 'copy-export') {
+      if (lastExport) {
+        navigator.clipboard.writeText(lastExport).then(
+          () => push(mk('success', '✓ Export data copied to clipboard')),
+          () => push(mk('err', 'Failed to copy to clipboard'))
+        );
+      } else {
+        push(mk('err', 'No export data available. Run "export" first.'));
+      }
       return;
     }
 

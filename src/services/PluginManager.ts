@@ -4,6 +4,8 @@ import GiaTools from './GiaTools';
 import { useGiaStore } from '../store/useGiaStore';
 import { usePluginStore } from '../store/usePluginStore';
 import { logger } from '../utils/logger';
+import { Sandbox } from './plugins/Sandbox';
+import { PermissionManager } from './plugins/PermissionManager';
 
 export class PluginManager {
   private static instance: PluginManager;
@@ -24,6 +26,73 @@ export class PluginManager {
       addNotification: (msg: string) => useGiaStore.getState().addNotification(msg),
       getStore: () => useGiaStore.getState(),
     };
+  }
+
+  /** Build a PluginAPI scoped to a specific plugin. */
+  private getPluginAPI(pluginId: string): PluginAPI {
+    return {
+      ...this.createAPI(),
+      // Future: add plugin-scoped overrides here
+    };
+  }
+
+  /**
+   * Execute a hook function through the Sandbox worker.
+   * Converts the function to source, runs it in the isolated worker,
+   * and returns the result. Falls back to direct call if sandbox
+   * is unavailable or the hook is a no-permission-required hook.
+   */
+  private async executeHookInSandbox<T>(
+    hookFn: Function | undefined,
+    pluginId: string,
+    hookName: string,
+    payload?: any,
+    timeoutMs?: number,
+  ): Promise<T | undefined> {
+    if (!hookFn) return undefined;
+
+    const effTimeout = timeoutMs ?? 5000;
+    const permManager = PermissionManager.getInstance();
+
+    // Ensure the plugin has at least the default permission for this hook
+    const defaultLevel = permManager.getDefaultLevelForHook(hookName);
+    if (!permManager.hasPermission(pluginId, `hook:${hookName}`)) {
+      permManager.requestPermission(pluginId, {
+        hooks: [hookName],
+        permissions: [`hook:${hookName}`],
+        maxExecutionMs: effTimeout,
+      });
+    }
+
+    const sandbox = Sandbox.getInstance();
+    const logs: string[] = [];
+
+    // Convert the function to source code and run in the sandbox
+    const code = hookFn.toString();
+    const result = await sandbox.execute(
+      code,
+      {
+        pluginApi: this.getPluginAPI(pluginId),
+        payload,
+        console: {
+          log: (...args: any[]) => logs.push(`[LOG] ${args.join(' ')}`),
+          warn: (...args: any[]) => logs.push(`[WARN] ${args.join(' ')}`),
+          error: (...args: any[]) => logs.push(`[ERROR] ${args.join(' ')}`),
+        },
+      },
+      effTimeout,
+    );
+
+    // Surface collected logs
+    for (const l of result.logs ?? logs) {
+      logger.debug(`[PluginManager] [${pluginId}/${hookName}] ${l}`);
+    }
+
+    if (result.error) {
+      throw new Error(`Plugin hook "${hookName}" error: ${result.error}`);
+    }
+
+    return result.result as T | undefined;
   }
 
   async register(manifest: PluginManifest, hooks: PluginHooks, setup?: (api: PluginAPI) => void | Promise<void>): Promise<void> {
@@ -81,7 +150,7 @@ export class PluginManager {
 
     try {
       if (plugin.hooks.onActivate) {
-        await plugin.hooks.onActivate();
+        await this.executeHookInSandbox(plugin.hooks.onActivate, id, 'onActivate');
       }
       plugin.enabled = true;
       usePluginStore.getState().setPluginEnabled(id, true);
@@ -97,7 +166,7 @@ export class PluginManager {
 
     try {
       if (plugin.hooks.onDeactivate) {
-        await plugin.hooks.onDeactivate();
+        await this.executeHookInSandbox(plugin.hooks.onDeactivate, id, 'onDeactivate');
       }
       plugin.enabled = false;
       usePluginStore.getState().setPluginEnabled(id, false);
@@ -126,7 +195,13 @@ export class PluginManager {
     for (const [, plugin] of this.plugins) {
       if (plugin.enabled && plugin.hooks.onBeforeGenerate) {
         try {
-          result = await plugin.hooks.onBeforeGenerate(result);
+          const hookResult = await this.executeHookInSandbox<string>(
+            plugin.hooks.onBeforeGenerate,
+            plugin.manifest.id,
+            'onBeforeGenerate',
+            result,
+          );
+          if (hookResult !== undefined) result = hookResult;
         } catch (e) {
           logger.error(`[PluginManager] onBeforeGenerate error in ${plugin.manifest.id}:`, e);
         }
@@ -140,7 +215,13 @@ export class PluginManager {
     for (const [, plugin] of this.plugins) {
       if (plugin.enabled && plugin.hooks.onAfterGenerate) {
         try {
-          result = await plugin.hooks.onAfterGenerate(result);
+          const hookResult = await this.executeHookInSandbox<{ text: string; provider: string; model: string }>(
+            plugin.hooks.onAfterGenerate,
+            plugin.manifest.id,
+            'onAfterGenerate',
+            result,
+          );
+          if (hookResult !== undefined) result = hookResult;
         } catch (e) {
           logger.error(`[PluginManager] onAfterGenerate error in ${plugin.manifest.id}:`, e);
         }

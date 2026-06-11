@@ -21,6 +21,7 @@ import { ScreenCaptureService } from './services/ScreenCaptureService';
 import SchedulerService from './services/SchedulerService';
 import BiometricService from './services/BiometricService';
 import MCPManager from './services/MCPManager';
+import SetupWizard from './components/SetupWizard';
 import { proactiveEngine } from './services/autonomy/ProactiveEngine';
 import { useAutonomyStore } from './store/useAutonomyStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -137,6 +138,7 @@ const App: React.FC = () => {
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moduleOpen, setModuleOpen] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const moduleRef = useRef<HTMLDivElement>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const showCircleSearch = useGiaStore(s => s.showCircleSearch);
@@ -239,6 +241,13 @@ const App: React.FC = () => {
       return () => document.removeEventListener('paste', handlePaste);
     };
     init();
+
+    // Show Setup Wizard if no provider is configured on first launch
+    const { providers } = useProviderStore.getState();
+    const hasAnyProvider = Object.values(providers).some(p => p.enabled && p.apiKey);
+    if (!hasAnyProvider) {
+      setShowSetup(true);
+    }
   }, []);
 
   useKeyboardShortcuts([
@@ -732,6 +741,10 @@ const App: React.FC = () => {
           }
         }} 
       />
+
+      <AnimatePresence>
+        {showSetup && <SetupWizard onComplete={() => setShowSetup(false)} />}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showCircleSearch && capturedImage && (
