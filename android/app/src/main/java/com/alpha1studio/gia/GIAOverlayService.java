@@ -501,51 +501,6 @@ public class GIAOverlayService extends Service {
         }
     }
 
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-
-            canvas.drawColor(0x88000000);
-
-            canvas.drawPath(drawPath, drawPaint);
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            float x = event.getX();
-            float y = event.getY();
-
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    drawPath.reset();
-                    drawPath.moveTo(x, y);
-                    touchX = x;
-                    touchY = y;
-                    isDrawing = true;
-                    invalidate();
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    float dx = Math.abs(x - touchX);
-                    float dy = Math.abs(y - touchY);
-                    if (isDrawing || dx > 8 || dy > 8) {
-                        isDrawing = true;
-                        drawPath.quadTo(touchX, touchY, (x + touchX) / 2, (y + touchY) / 2);
-                        touchX = x;
-                        touchY = y;
-                        invalidate();
-                    }
-                    return true;
-                case MotionEvent.ACTION_UP:
-                    if (isDrawing) {
-                        drawPath.lineTo(x, y);
-                        invalidate();
-                    }
-                    return true;
-            }
-            return super.onTouchEvent(event);
-        }
-    }
-
     private void captureAndCrop() {
         captureAndCrop("");
     }
