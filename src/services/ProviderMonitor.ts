@@ -1,148 +1,198 @@
+/**
+ * ProviderMonitor — tracks latency, error rate, and health per provider.
+ * Phase 0.3: Foundation for Engine Room health dashboard.
+ */
 import { logger } from '../utils/logger';
 import { useProviderStore } from '../store/useProviderStore';
+import { providerRegistry } from './ProviderRegistry';
+import { corsProxy } from './CorsProxy';
 
-interface ProviderMetrics {
+export interface ProviderHealthRecord {
+  providerId: string;
+  latencyMs: number | null;
+  errorRate: number;          // 0–1
   totalCalls: number;
-  successfulCalls: number;
   failedCalls: number;
-  totalLatencyMs: number;
-  lastLatencyMs: number;
+  lastSuccess: number | null; // timestamp
   lastError: string | null;
-  lastCallAt: number | null;
-  consecutiveFailures: number;
-  isDegraded: boolean;
-  degradedAt: number | null;
+  lastChecked: number;
+  online: boolean;
 }
 
-interface ProviderHealth {
-  provider: string;
-  model: string;
-  status: 'healthy' | 'degraded' | 'down';
-  avgLatencyMs: number;
-  successRate: number;
-  lastError: string | null;
+export interface NetworkState {
+  online: boolean;
+  type: 'wifi' | 'cellular' | 'ethernet' | 'none';
+  metered: boolean;
+  latencyMs: number | null;
+  lastChange: number;
 }
 
-const DEGRADE_THRESHOLD = 3;
-const DEGRADE_WINDOW_MS = 5 * 60 * 1000;
-const RECOVERY_THRESHOLD_MS = 2 * 60 * 1000;
+type HealthCallback = (record: ProviderHealthRecord) => void;
 
-class ProviderMonitor {
-  private static instance: ProviderMonitor;
-  private metrics: Map<string, ProviderMetrics> = new Map();
+class ProviderMonitorImpl {
+  private records = new Map<string, ProviderHealthRecord>();
+  private listeners = new Set<HealthCallback>();
+  private network: NetworkState = {
+    online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    type: 'none',
+    metered: false,
+    latencyMs: null,
+    lastChange: Date.now(),
+  };
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
-  static getInstance() {
-    if (!this.instance) this.instance = new ProviderMonitor();
-    return this.instance;
+  constructor() {
+    // Track online status from browser
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => this.updateNetwork({ online: true, lastChange: Date.now() }));
+      window.addEventListener('offline', () => this.updateNetwork({ online: false, lastChange: Date.now() }));
+    }
   }
 
-  private key(provider: string, model: string): string {
-    return `${provider}:${model}`;
+  // ── Network ─────────────────────────────────────────────────────
+
+  getNetwork(): NetworkState {
+    return { ...this.network };
   }
 
-  private getOrCreate(provider: string, model: string): ProviderMetrics {
-    const k = this.key(provider, model);
-    if (!this.metrics.has(k)) {
-      this.metrics.set(k, {
-        totalCalls: 0,
-        successfulCalls: 0,
-        failedCalls: 0,
-        totalLatencyMs: 0,
-        lastLatencyMs: 0,
-        lastError: null,
-        lastCallAt: null,
-        consecutiveFailures: 0,
-        isDegraded: false,
-        degradedAt: null,
+  private updateNetwork(partial: Partial<NetworkState>) {
+    this.network = { ...this.network, ...partial };
+    logger.info('[ProviderMonitor] Network changed:', this.network);
+  }
+
+  async pingNetwork(): Promise<number> {
+    const start = performance.now();
+    try {
+      await corsProxy.fetch('https://httpbin.org/get', {
+        signal: AbortSignal.timeout(5000),
       });
-    }
-    return this.metrics.get(k)!;
-  }
-
-  recordSuccess(provider: string, model: string, latencyMs: number): void {
-    const m = this.getOrCreate(provider, model);
-    m.totalCalls++;
-    m.successfulCalls++;
-    m.totalLatencyMs += latencyMs;
-    m.lastLatencyMs = latencyMs;
-    m.lastCallAt = Date.now();
-    m.consecutiveFailures = 0;
-    if (m.isDegraded && m.degradedAt && Date.now() - m.degradedAt > RECOVERY_THRESHOLD_MS) {
-      m.isDegraded = false;
-      m.degradedAt = null;
-      logger.log(`[ProviderMonitor] ${provider}/${model} recovered from degraded state`);
+      const ms = Math.round(performance.now() - start);
+      this.updateNetwork({ online: true, latencyMs: ms, lastChange: Date.now() });
+      return ms;
+    } catch {
+      this.updateNetwork({ online: false, latencyMs: null, lastChange: Date.now() });
+      throw new Error('Network unreachable');
     }
   }
 
-  recordFailure(provider: string, model: string, error: string, latencyMs: number): void {
-    const m = this.getOrCreate(provider, model);
-    m.totalCalls++;
-    m.failedCalls++;
-    m.totalLatencyMs += latencyMs;
-    m.lastLatencyMs = latencyMs;
-    m.lastError = error;
-    m.lastCallAt = Date.now();
-    m.consecutiveFailures++;
-    if (m.consecutiveFailures >= DEGRADE_THRESHOLD && !m.isDegraded) {
-      m.isDegraded = true;
-      m.degradedAt = Date.now();
-      logger.warn(`[ProviderMonitor] ${provider}/${model} marked degraded (${m.consecutiveFailures} consecutive failures)`);
+  // ── Provider Health ──────────────────────────────────────────────
+
+  getRecord(providerId: string): ProviderHealthRecord {
+    if (!this.records.has(providerId)) {
+      this.records.set(providerId, this.emptyRecord(providerId));
     }
+    return this.records.get(providerId)!;
   }
 
-  getHealth(provider: string, model: string): ProviderHealth {
-    const m = this.getOrCreate(provider, model);
-    const successRate = m.totalCalls > 0 ? m.successfulCalls / m.totalCalls : 1;
-    const avgLatency = m.totalCalls > 0 ? Math.round(m.totalLatencyMs / m.totalCalls) : 0;
-    let status: ProviderHealth['status'] = 'healthy';
-    if (m.isDegraded) status = 'degraded';
-    if (m.consecutiveFailures >= 10) status = 'down';
-    if (m.totalCalls === 0) status = 'healthy';
-    const degradedRecently = m.degradedAt && Date.now() - m.degradedAt < DEGRADE_WINDOW_MS;
-    if (degradedRecently && m.isDegraded) status = 'degraded';
-
-    return { provider, model, status, avgLatencyMs: avgLatency, successRate, lastError: m.lastError };
+  getAllRecords(): ProviderHealthRecord[] {
+    const ids = providerRegistry.getAllIds();
+    return ids.map(id => this.getRecord(id));
   }
 
-  getBestProvider(models: { provider: string; model: string }[]): { provider: string; model: string } | null {
-    let best: { provider: string; model: string } | null = null;
-    let bestScore = -Infinity;
-
-    for (const { provider, model } of models) {
-      const health = this.getHealth(provider, model);
-      const { providers } = useProviderStore.getState();
-      const cfg = providers[provider];
-      if (!cfg?.enabled || !cfg?.apiKey) continue;
-      if (health.status === 'down') continue;
-      const score = health.successRate * 100 - health.avgLatencyMs / 10;
-      if (score > bestScore) {
-        bestScore = score;
-        best = { provider, model };
-      }
-    }
-    return best;
+  private emptyRecord(providerId: string): ProviderHealthRecord {
+    return {
+      providerId,
+      latencyMs: null,
+      errorRate: 0,
+      totalCalls: 0,
+      failedCalls: 0,
+      lastSuccess: null,
+      lastError: null,
+      lastChecked: Date.now(),
+      online: false,
+    };
   }
 
-  resetMetrics(provider?: string, model?: string): void {
-    if (provider && model) {
-      this.metrics.delete(this.key(provider, model));
-    } else if (provider) {
-      for (const [k] of this.metrics) {
-        if (k.startsWith(`${provider}:`)) this.metrics.delete(k);
-      }
+  recordCall(providerId: string, success: boolean, ms: number, error?: string) {
+    const record = this.getRecord(providerId);
+    record.totalCalls++;
+    record.lastChecked = Date.now();
+    if (success) {
+      record.latencyMs = ms;
+      record.lastSuccess = Date.now();
+      record.online = true;
     } else {
-      this.metrics.clear();
+      record.failedCalls++;
+      record.lastError = error || 'Unknown error';
+      record.errorRate = record.failedCalls / record.totalCalls;
     }
+    this.records.set(providerId, record);
+    this.notify(record);
   }
 
-  getAllHealth(): ProviderHealth[] {
-    const result: ProviderHealth[] = [];
-    for (const [k] of this.metrics) {
-      const [provider, ...modelParts] = k.split(':');
-      result.push(this.getHealth(provider, modelParts.join(':')));
+  async testProvider(providerId: string): Promise<ProviderHealthRecord> {
+    const record = this.getRecord(providerId);
+    const def = providerRegistry.getProvider(providerId);
+    const { providers } = useProviderStore.getState();
+    const config = providers[providerId];
+
+    if (!def || !config?.enabled) {
+      record.online = false;
+      record.lastError = 'Provider not configured';
+      return record;
     }
-    return result;
+
+    const start = performance.now();
+    try {
+      // Ping the provider's /models endpoint as a health check
+      const baseUrl = config?.baseUrl || def.baseUrl;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+
+      const res = await corsProxy.fetch(`${baseUrl}/models`, {
+        headers,
+        signal: AbortSignal.timeout(8000),
+      });
+
+      const ms = Math.round(performance.now() - start);
+      this.recordCall(providerId, res.ok, ms, res.ok ? undefined : `HTTP ${res.status}`);
+    } catch (e) {
+      const ms = Math.round(performance.now() - start);
+      this.recordCall(providerId, false, ms, e instanceof Error ? e.message : 'Fetch failed');
+    }
+
+    return this.getRecord(providerId);
+  }
+
+  async testAllProviders(): Promise<ProviderHealthRecord[]> {
+    const providers = useProviderStore.getState().providers;
+    const results: ProviderHealthRecord[] = [];
+    for (const [id, cfg] of Object.entries(providers)) {
+      if (cfg.enabled) {
+        results.push(await this.testProvider(id));
+      }
+    }
+    return results;
+  }
+
+  // ── Listeners ───────────────────────────────────────────────────
+
+  subscribe(cb: HealthCallback): () => void {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  }
+
+  private notify(record: ProviderHealthRecord) {
+    this.listeners.forEach(cb => {
+      try { cb(record); } catch { /* ignore listener errors */ }
+    });
+  }
+
+  // ── Lifecycle ────────────────────────────────────────────────────
+
+  startAutoPing(intervalMs = 60000) {
+    this.stopAutoPing();
+    this.pingInterval = setInterval(() => {
+      this.pingNetwork().catch(() => {});
+    }, intervalMs);
+  }
+
+  stopAutoPing() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
   }
 }
 
-export default ProviderMonitor.getInstance();
+export const providerMonitor = new ProviderMonitorImpl();

@@ -5,6 +5,7 @@ import { providerRegistry } from '../services/ProviderRegistry';
 import { useGiaStore } from '../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getProviderCapabilities, CAPABILITY_LABELS, type ProviderCapabilities } from '../services/providers/capabilities';
+import { providerMonitor, type ProviderHealthRecord } from '../services/ProviderMonitor';
 
 type LineType = 'cmd' | 'res' | 'err' | 'info' | 'prompt' | 'success';
 interface Line { type: LineType; text: string; id: number }
@@ -190,11 +191,12 @@ const EngineRoom: React.FC = () => {
         mk('res', '  model <alias>        Change model for provider'),
         mk('res', '  capabilities / caps  Show active provider capabilities'),
         mk('res', '  use <alias>          Switch active provider'),
-        mk('res', '  status               Show all provider states'),
+        mk('res', '  status               Show all provider states + health'),
+        mk('res', '  health               Ping all providers, show latency'),
         mk('res', '  disconnect <alias>   Remove provider key'),
         mk('res', '  url <alias> <url>    Set custom base URL (for local providers)'),
         mk('res', '  net status           Show network state'),
-        mk('res', '  net ping             Test connectivity'),
+        mk('res', '  net ping             Test connectivity & latency'),
         mk('res', '  clear                Clear terminal'),
         mk('res', '  exit / back          Close Engine Room'),
         mk('res', ''),
@@ -284,7 +286,11 @@ const EngineRoom: React.FC = () => {
         const cfg = providers[p];
         const active = p === activeProvider ? ' ← ACTIVE' : '';
         const model = cfg?.model || 'off';
-        push(mk(cfg?.enabled ? 'success' : 'err', `  ${cfg?.enabled ? '●' : '○'} ${def.label.padEnd(12)} ${model}${active}`));
+        const status = cfg?.enabled ? '●' : '○';
+        const health = providerMonitor.getRecord(p);
+        const latency = health.latencyMs !== null ? ` ${health.latencyMs}ms` : '';
+        const errs = health.failedCalls > 0 ? ` ⚠${health.failedCalls}` : '';
+        push(mk(cfg?.enabled ? 'success' : 'err', `  ${status} ${def.label.padEnd(12)} ${model}${latency}${errs}${active}`));
         if (cfg?.enabled && model !== 'off') {
           const caps = getProviderCapabilities(def.listingType, model);
           const capStr = (Object.keys(CAPABILITY_LABELS) as (keyof ProviderCapabilities)[])
@@ -294,6 +300,29 @@ const EngineRoom: React.FC = () => {
           push(mk('res', `     ${capStr}`));
         }
       });
+      push(mk('res', ''));
+      const net = providerMonitor.getNetwork();
+      push(mk('info', `NETWORK: ${net.online ? '● Online' : '○ Offline'}  ${net.type}  ${net.latencyMs ? `${net.latencyMs}ms` : ''}`));
+      return;
+    }
+
+    if (cmd === 'health') {
+      push(mk('res', ''), mk('info', 'HEALTH CHECK — pinging all enabled providers...'));
+      setBusy(true);
+      providerMonitor.testAllProviders().then((results) => {
+        results.forEach(r => {
+          const icon = r.online ? '●' : '○';
+          const lat = r.latencyMs !== null ? `${r.latencyMs}ms` : '—';
+          const err = r.online ? '' : `  ${r.lastError || 'unreachable'}`;
+          push(mk(r.online ? 'success' : 'err',
+            `  ${icon} ${r.providerId.padEnd(12)} ${lat.padEnd(7)} calls:${r.totalCalls} errs:${r.failedCalls}${err}`));
+        });
+        push(mk('res', ''));
+        const net = providerMonitor.getNetwork();
+        push(mk('info', `NETWORK: ${net.online ? '● Online' : '○ Offline'}  ${net.type}  latency: ${net.latencyMs ? `${net.latencyMs}ms` : '?'}`));
+      }).catch(() => {
+        push(mk('err', 'Health check failed.'));
+      }).finally(() => setBusy(false));
       return;
     }
 
@@ -338,17 +367,20 @@ const EngineRoom: React.FC = () => {
     if (cmd.startsWith('net ')) {
       const netCmd = cmd.slice(4).trim();
       if (netCmd === 'status' || netCmd === '') {
+        const net = providerMonitor.getNetwork();
         push(mk('res', ''), mk('info', 'NETWORK STATUS'));
-        // TODO: Connect to CorePlugin when available
-        push(mk('res', '  Status: Unknown (CorePlugin not yet connected)'));
-        push(mk('res', '  Type: Unknown'));
-        push(mk('res', '  Metered: Unknown'));
-        push(mk('res', '  Latency: Unknown'));
+        push(mk('res', `  Status:  ${net.online ? '● Online' : '○ Offline'}`));
+        push(mk('res', `  Type:    ${net.type || 'Unknown'}`));
+        push(mk('res', `  Metered: ${net.metered ? 'Yes' : 'No'}`));
+        push(mk('res', `  Latency: ${net.latencyMs !== null ? `${net.latencyMs}ms` : '?'}`));
         push(mk('res', ''));
       } else if (netCmd === 'ping') {
         push(mk('res', ''), mk('info', 'PINGING...'));
-        push(mk('res', '  CorePlugin not yet connected. Cannot ping.'));
-        push(mk('res', ''));
+        setBusy(true);
+        providerMonitor.pingNetwork()
+          .then(ms => push(mk('success', `  ✓ ${ms}ms`)))
+          .catch(() => push(mk('err', '  ✗ Network unreachable')))
+          .finally(() => { push(mk('res', '')); setBusy(false); });
       } else {
         push(mk('err', `Unknown net command: ${netCmd}. Use 'net status' or 'net ping'.`));
       }
