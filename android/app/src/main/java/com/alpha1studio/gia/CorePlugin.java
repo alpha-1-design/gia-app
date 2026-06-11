@@ -18,7 +18,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * Capacitor bridge for GIACoreService — exposes background service
  * status, network state, and autonomy config to the WebView.
  */
-@CapacitorPlugin(name = "GIA Core")
+@CapacitorPlugin(name = "GIACore")
 public class CorePlugin extends Plugin {
 
     private GIACoreService coreService;

@@ -65,14 +65,13 @@ public class GIATerminalService extends Service {
 
         private final PipedInputStream stdinIn;
         private final InputStream stdout;
-        private final InputStream stderr;
         private final StringBuilder outputBuffer;
         private Thread readerThread;
         private volatile boolean done;
 
         TerminalSession(String id, String command, Process process,
                         PipedOutputStream stdinOut, PipedInputStream stdinIn,
-                        InputStream stdout, InputStream stderr) {
+                        InputStream stdout) {
             this.id = id;
             this.command = command;
             this.createdAt = System.currentTimeMillis();
@@ -80,7 +79,6 @@ public class GIATerminalService extends Service {
             this.stdinOut = stdinOut;
             this.stdinIn = stdinIn;
             this.stdout = stdout;
-            this.stderr = stderr;
             this.outputBuffer = new StringBuilder();
             this.done = false;
 
@@ -145,7 +143,6 @@ public class GIATerminalService extends Service {
             }
             try { stdinIn.close(); } catch (IOException ignored) {}
             try { stdout.close(); } catch (IOException ignored) {}
-            try { stderr.close(); } catch (IOException ignored) {}
             process.destroyForcibly();
         }
     }
@@ -287,9 +284,9 @@ public class GIATerminalService extends Service {
         // Build proot command: run Alpine's /bin/sh -c "<command>"
         String prootCmd = buildProotCommand(context, command);
 
-        // Setup I/O pipes
-        PipedOutputStream stdinOut = new PipedOutputStream();
-        PipedInputStream stdinIn = new PipedInputStream(stdinOut);
+        // Setup I/O pipes — PipedOutputStream connects TO PipedInputStream
+        PipedInputStream stdinIn = new PipedInputStream();
+        PipedOutputStream stdinOut = new PipedOutputStream(stdinIn);
         // We'll capture stdout+stderr merged; use ProcessBuilder redirectErrorStream(true)
         ProcessBuilder pb = new ProcessBuilder();
         pb.command("sh", "-c", prootCmd);
@@ -322,7 +319,7 @@ public class GIATerminalService extends Service {
         TerminalSession session = new TerminalSession(
                 sessionId, command, process,
                 stdinOut, stdinIn,
-                process.getInputStream(), process.getErrorStream()
+                process.getInputStream());
         );
 
         sessions.put(sessionId, session);
