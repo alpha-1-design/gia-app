@@ -88,7 +88,6 @@ public class GIASMSPlugin extends Plugin {
         }
     }
 
-    @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions,
                                            int[] grantResults) {
         if (requestCode == 9003) {
