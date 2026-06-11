@@ -9,6 +9,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.util.ArrayList;
+
 @CapacitorPlugin(name = "GIAIntent")
 public class GIAIntentPlugin extends Plugin {
 

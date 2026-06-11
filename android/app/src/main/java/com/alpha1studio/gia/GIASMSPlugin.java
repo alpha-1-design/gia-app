@@ -46,7 +46,7 @@ public class GIASMSPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.SEND_SMS)
                     != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionForAlias("sms", call, SMS_PERMISSION_REQUEST);
+                requestPermissionForAlias("sms", call, "9003");
                 return;
             }
         }
@@ -89,11 +89,10 @@ public class GIASMSPlugin extends Plugin {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == SMS_PERMISSION_REQUEST) {
-            PluginCall savedCall = getSavedCall(SMS_PERMISSION_REQUEST);
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        if (requestCode == 9003) {
+            PluginCall savedCall = getSavedCall();
             if (savedCall != null) {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     String phone = savedCall.getString("phone", "");
@@ -102,7 +101,7 @@ public class GIASMSPlugin extends Plugin {
                 } else {
                     savedCall.reject("SMS permission denied by user");
                 }
-                freeSavedCall(SMS_PERMISSION_REQUEST);
+                freeSavedCall();
             }
         }
     }

@@ -48,7 +48,7 @@ public class GIAAlarmPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionForAlias("notifications", call, 9004);
+                requestPermissionForAlias("notifications", call, "9004");
                 return;
             }
         }
