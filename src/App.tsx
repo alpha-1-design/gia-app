@@ -514,7 +514,7 @@ const App: React.FC = () => {
       />
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 relative z-10">
+      <header className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 relative z-50">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
             <h1
