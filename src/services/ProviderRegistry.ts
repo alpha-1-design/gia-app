@@ -7,7 +7,7 @@ export interface ProviderDef {
   baseUrl: string;
   defaultModel: string;
   needsApiKey: boolean;
-  listingType: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'huggingface' | 'none';
+  listingType: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'huggingface' | 'local' | 'none';
   imageModel?: string;
   headers?: Record<string, string>;
   aliases?: string[];
