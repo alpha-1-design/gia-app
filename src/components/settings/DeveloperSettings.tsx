@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Terminal, Bug, Wifi, Trash2, RefreshCw, Database, ToggleLeft, AlertTriangle, Eye, ShieldAlert, ScrollText, Cpu, Binary, HardDrive, Globe, Webhook } from 'lucide-react';
+import { Terminal, Bug, Wifi, Trash2, RefreshCw, Database, Eye, ShieldAlert, ScrollText, Cpu, Binary, HardDrive } from 'lucide-react';
 import { Switch } from '../ui/Switch';
 import { useGiaStore } from '../../store/useGiaStore';
-import { useProviderStore } from '../../store/useProviderStore';
 import { logger } from '../../utils/logger';
 
 export const DeveloperSettings: React.FC = () => {
