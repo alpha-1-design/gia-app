@@ -132,6 +132,43 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+---
+
+## 2026-06-12
+
+### Added: GitHub Actions CI Pipeline
+**Files:**
+- `.github/workflows/ci.yml` (new)
+
+**Status:** Configured two CI jobs:
+- **gia-app** — runs `npm ci`, `lint`, `vitest run`, and `build` on Node 22
+- **gia-core** — runs `cargo check` and `cargo test` via dtolnay/rust-toolchain
+
+### Test Results — 225 passing, 0 failing
+**Test suite health:** All 17 test files pass (225 tests total):
+
+| Area | Tests | Status |
+|------|-------|--------|
+| `src/hooks/__tests__/useVoiceInput.test.ts` | — | ✅ |
+| `src/hooks/__tests__/useFileAttachments.test.ts` | — | ✅ |
+| `src/store/__tests__/useProtocolStore.test.ts` | — | ✅ |
+| `src/store/__tests__/useMemoryStore.test.ts` | — | ✅ |
+| `src/services/__tests__/ProviderMonitor.test.ts` | — | ✅ |
+| `src/services/__tests__/GiaTools.test.ts` | — | ✅ |
+| `src/services/__tests__/OutputValidator.test.ts` | — | ✅ |
+| `src/services/__tests__/ResponseCache.test.ts` | — | ✅ |
+| `src/services/__tests__/PlatformServices.test.ts` | — | ✅ |
+| `src/services/__tests__/ToolboxService.test.ts` | — | ✅ |
+| `src/services/__tests__/buildGiaSystem.test.ts` | — | ✅ |
+| `src/services/__tests__/InputGuardrails.test.ts` | — | ✅ |
+| `src/utils/__tests__/streamParser.test.ts` | — | ✅ |
+| `src/utils/__tests__/logger.test.ts` | — | ✅ |
+| `src/utils/__tests__/id.test.ts` | — | ✅ |
+| `src/utils/__tests__/helpers.test.ts` | — | ✅ |
+| `src/components/__tests__/ThinkingStatus.test.tsx` | — | ✅ |
+
+**Duration:** 21.5s (transform 1.5s, setup 0.9s, import 2.5s, tests 1.3s, environment 13.8s)
+
 ## Next Up (Priority Order)
 
 1. ✅ **Conversation Branching** — Session tree structure + UI (implemented: `forkSession`, `addBranch`, `switchBranch`, `BranchView` component, GitBranch button)

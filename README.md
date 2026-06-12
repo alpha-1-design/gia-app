@@ -2,6 +2,7 @@
 
 <div align="center">
 
+[![CI](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml/badge.svg)](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.3.1.0-emerald.svg)](package.json)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web-blue.svg)](capacitor.config.ts)
@@ -52,13 +53,13 @@ GIA uses **Porcupine** by Picovoice — an on-device deep neural network wake wo
 - **Foreground Service** — on Android, GIA runs a persistent foreground service with a notification, keeping the wake word detector alive even when the app is backgrounded.
 - **Auto-restart** — after a device reboot, the wake word service automatically restarts via `BOOT_COMPLETED` receiver.
 - **Porcupine DNN** — trained on real-world environments with 97%+ accuracy. Adjustable sensitivity (0–1) to tune false positives vs. misses.
-- **Custom wake word** — the shipped fallback uses `HEY_GOOGLE` (a free built-in Porcupine keyword for testing). To use a custom "Hey GIA" model, train one at [Picovoice Console](https://console.picovoice.ai/) and place the `.ppn` file in `android/app/src/main/assets/`.
+- **Custom wake word** — the shipped fallback uses `JARVIS` (a free built-in Porcupine keyword for testing). To use a custom "Hey GIA" model, train one at [Picovoice Console](https://console.picovoice.ai/) and place the `.ppn` file in `android/app/src/main/assets/`.
 
-### Why `HEY_GOOGLE` appears in the code
+### Why `JARVIS` appears in the code
 
-Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`, etc.) for development/testing without training a custom model. The code uses `HEY_GOOGLE` as the default keyword. The JS configuration on the settings page still shows "hey gia" — the two are independent:
+Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`, etc.) for development/testing without training a custom model. The code uses `JARVIS` as the default keyword. The JS configuration on the settings page still shows "hey gia" — the two are independent:
 - The **JS-side** wake word ("hey gia") is used by the browser-based fallback (regex on STT transcript)
-- The **native** Porcupine keyword (`HEY_GOOGLE`) is used by the Android foreground service
+- The **native** Porcupine keyword (`JARVIS`) is used by the Android foreground service
 - Once a custom "Hey GIA" `.ppn` model is trained and deployed, Porcupine switches to it automatically
 
 ### UX Flow — What happens when you say "Hey GIA"
@@ -109,6 +110,18 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Output Validation** | Auto-repair malformed JSON, missing fences, repeated text patterns |
 | **Smart Fallback** | Automatic provider failover based on latency/error tracking |
 | **Response Caching** | Cache identical requests to reduce API costs |
+| **Notes System** | Full sticky notes with colors, tags, pinning, search, and AI-manageable CRUD |
+| **On-Device Local AI** | Text classification, summarization, translation, embeddings, and QA — all in-browser, no API call needed |
+| **On-Device Python (Pyodide)** | Run Python code locally via Pyodide WASM — no server required |
+| **On-Device Vision** | Local image captioning, OCR, object detection, and classification + automatic provider fallback |
+| **Voice Overlay** | Animated full-screen voice UI with waveform visualization and ripple rings |
+| **Setup Wizard** | First-run onboarding with step-by-step provider setup, API key entry, and connection testing |
+| **Native Device Integration** | Make calls, send SMS/WhatsApp/email, share content, read/write clipboard, trigger vibration |
+| **Auto-Summarization** | Automatic conversation history compression when approaching context limits |
+| **Offline Queue** | Persistent tool call queue — queues requests when offline, auto-replays on reconnect |
+| **GitHub Integration** | Fetch GitHub user profiles, repos, files, and metadata directly from chat |
+| **Screen Capture** | Multi-strategy screenshot capture (native Capacitor, html2canvas, getDisplayMedia) |
+| **Biometric Lock** | Optional fingerprint / face unlock via native biometric API |
 
 ### Interactive Visual Blocks
 
