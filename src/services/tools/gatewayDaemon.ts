@@ -23,7 +23,7 @@ const gatewayDaemonStart: Tool = {
       if (result.exitCode === 0) {
         return {
           success: true,
-          content: '## Gateway Daemon Started\n\nThe GIA gateway daemon is now running 24/7 in your proot+Alpine terminal.\n\nIt listens for messages on Telegram and routes them through GIA.\n\n**Manage it:**\n- Status: `ps aux | grep node`\n- Stop: `kill \$(pgrep -f "gia-app/daemon")`\n- Logs: `cat ~/.gia/gateway-daemon.log`',
+          content: '## Gateway Daemon Started\n\nThe GIA gateway daemon is now running 24/7 in your proot+Alpine terminal.\n\nIt listens for messages on Telegram and routes them through GIA.\n\n**Manage it:**\n- Status: `ps aux | grep node`\n- Stop: `kill $(pgrep -f "gia-app/daemon")`\n- Logs: `cat ~/.gia/gateway-daemon.log`',
         };
       }
       return { success: false, content: '', error: result.output || 'Failed to start daemon' };

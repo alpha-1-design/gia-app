@@ -7,7 +7,6 @@
  * Usage:
  *   cd daemon && npm start
  */
-/* eslint-env node */
 import fs from 'node:fs';
 import { TelegramPoller } from './telegram.js';
 import { ConfigManager } from './config.js';
