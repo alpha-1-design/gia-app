@@ -211,7 +211,7 @@ class PersistenceManager {
 
       // 4. Try to capture terminal/filesystem info
       try {
-        const { TerminalService } = await import('./TerminalService');
+        await import('./TerminalService');
         exportData.terminalFS = {
           sessionInfo: 'exported',
         };
@@ -292,7 +292,7 @@ class PersistenceManager {
       try {
         const { useCustomProviderStore } = await import('./providers/customProviders');
         for (const cp of data.customProviders) {
-          useCustomProviderStore.getState().addCustomProvider(cp);
+          useCustomProviderStore.getState().addCustomProvider(cp as Omit<import('./providers/customProviders').CustomProvider, 'id'>);
         }
       } catch (e) {
         errors.push(`Failed to restore custom providers: ${e instanceof Error ? e.message : 'Unknown error'}`);

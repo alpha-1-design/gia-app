@@ -279,8 +279,8 @@ export const VisionSection: React.FC = () => {
           router.stats.providerErrors = 0;
           router.stats.avgLocalLatency = 0;
           router.stats.avgProviderLatency = 0;
-          (router as any)._localLatencyTotal = 0;
-          (router as any)._providerLatencyTotal = 0;
+          (router as unknown as { _localLatencyTotal: number; _providerLatencyTotal: number })._localLatencyTotal = 0;
+          (router as unknown as { _localLatencyTotal: number; _providerLatencyTotal: number })._providerLatencyTotal = 0;
           refresh();
         }}
         className="text-[9px] font-medium px-2 py-1 rounded self-start"

@@ -2,37 +2,12 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GraduationCap, Clock } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
-import { extractJSON } from '../utils/helpers';
 import { genId } from '../utils/id';
 import ExamSetup from './exam/ExamSetup';
 import ExamQuiz from './exam/ExamQuiz';
 import ExamResult from './exam/ExamResult';
 import type { ExamSystem, ExamMode, Difficulty, Question, QuizResult, Subject } from './exam/types';
-import { logger } from '../utils/logger';
-
-async function generateWithJsonRetry<T>(
-  generateFn: () => Promise<{ text: string }>,
-  maxRetries = 2
-): Promise<T> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await generateFn();
-      const parsed = extractJSON<T>(res.text);
-      return parsed;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      logger.warn(`[ExamModule] JSON parse attempt ${attempt + 1} failed:`, lastError.message);
-      
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-      }
-    }
-  }
-  
-  throw lastError || new Error('Failed to parse JSON after retries');
-}
+import { generateWithRetry } from '../utils/generateWithRetry';
 
 const TIMER_SECONDS_PER_QUESTION = 60;
 
@@ -61,7 +36,7 @@ const ExamModule: React.FC = () => {
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
-      const parsed = await generateWithJsonRetry<{ subjects: Subject[] }>(
+      const { data: parsed } = await generateWithRetry<{ subjects: Subject[] }>(
         () => GiaBrain.generate({
           prompt: `List the main subjects for ${examSystem} exams in West Africa.`,
           systemPrompt: `You are an expert in West African education. Respond with valid JSON only:
@@ -72,7 +47,7 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
           temperature: 0.3,
           maxTokens: 2000,
         }),
-        2
+        { moduleName: 'ExamModule' }
       );
       setSubjects(parsed.subjects ?? []);
     } catch {
@@ -112,7 +87,7 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
 
     try {
       const topicContext = topic ? ` focusing on ${topic}` : '';
-      const parsed = await generateWithJsonRetry<{ questions: Question[] }>(
+      const { data: parsed } = await generateWithRetry<{ questions: Question[] }>(
         () => GiaBrain.generate({
           signal: AbortSignal.timeout(30_000),
           prompt: `Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.`,
@@ -124,7 +99,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
           temperature: 0.4,
           maxTokens: 3000,
         }),
-        2
+        { moduleName: 'ExamModule' }
       );
       if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
         throw new Error('AI returned an invalid response format. Please try again.');

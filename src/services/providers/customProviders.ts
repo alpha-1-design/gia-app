@@ -127,7 +127,8 @@ export function mergeIntoRegistry(): void {
     // Instead, we leverage the fact that providers are added in init().
     // For dynamic runtime addition, we inject via the registry's internal map.
     // This is a pragmatic approach — we patch the registry at runtime.
-    const def: ProviderDef = {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const __def: ProviderDef = {
       id: cp.id,
       label: cp.name,
       baseUrl: cp.baseUrl,

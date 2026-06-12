@@ -43,8 +43,9 @@ export interface StatusInfo {
  * Resolve the GIATerminal plugin from Capacitor's plugin registry.
  * Returns null on web or if the plugin is not registered.
  */
-function getPlugin(): any {
+function getPlugin(): unknown {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Capacitor } = require('@capacitor/core');
     if (Capacitor.isPluginAvailable('GIATerminal')) {
       return Capacitor.Plugins.GIATerminal;
@@ -61,11 +62,23 @@ function getPlugin(): any {
 // TerminalService
 // ---------------------------------------------------------------------------
 
+interface GiaTerminalPlugin {
+  exec(opts: { command: string; workdir: string; env: Record<string, string>; timeout: number }): Promise<{ output: string; exitCode: number; sessionId: string }>;
+  kill(opts: { sessionId: string }): Promise<void>;
+  listSessions(): Promise<{ sessions: SessionInfo[] }>;
+  getFSInfo(): Promise<{ totalBytes: number; freeBytes: number; usedBytes: number }>;
+  getStatus(): Promise<{ running: boolean; sessionCount: number }>;
+}
+
 class TerminalService {
-  private plugin: any;
+  private plugin: unknown;
 
   constructor() {
     this.plugin = getPlugin();
+  }
+
+  private get p(): GiaTerminalPlugin {
+    return this.plugin as GiaTerminalPlugin;
   }
 
   /**
@@ -97,7 +110,7 @@ class TerminalService {
     }
 
     try {
-      const result = await this.plugin.exec({
+      const result = await this.p.exec({
         command,
         workdir: workdir || '',
         env: env || {},
@@ -108,9 +121,9 @@ class TerminalService {
         exitCode: result.exitCode ?? -1,
         sessionId: result.sessionId ?? '',
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('[TerminalService] exec() failed:', error);
-      throw new Error(`Terminal exec failed: ${error.message ?? error}`);
+      throw new Error(`Terminal exec failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -126,10 +139,10 @@ class TerminalService {
     }
 
     try {
-      await this.plugin.kill({ sessionId });
-    } catch (error: any) {
+      await this.p.kill({ sessionId });
+    } catch (error) {
       console.error('[TerminalService] kill() failed:', error);
-      throw new Error(`Terminal kill failed: ${error.message ?? error}`);
+      throw new Error(`Terminal kill failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -145,11 +158,11 @@ class TerminalService {
     }
 
     try {
-      const result = await this.plugin.listSessions();
+      const result = await this.p.listSessions();
       return (result.sessions ?? []) as SessionInfo[];
-    } catch (error: any) {
+    } catch (error) {
       console.error('[TerminalService] listSessions() failed:', error);
-      throw new Error(`Terminal listSessions failed: ${error.message ?? error}`);
+      throw new Error(`Terminal listSessions failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -165,15 +178,15 @@ class TerminalService {
     }
 
     try {
-      const result = await this.plugin.getFSInfo();
+      const result = await this.p.getFSInfo();
       return {
         totalBytes: result.totalBytes ?? 0,
         freeBytes: result.freeBytes ?? 0,
         usedBytes: result.usedBytes ?? 0,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('[TerminalService] getFSInfo() failed:', error);
-      throw new Error(`Terminal getFSInfo failed: ${error.message ?? error}`);
+      throw new Error(`Terminal getFSInfo failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -189,14 +202,14 @@ class TerminalService {
     }
 
     try {
-      const result = await this.plugin.getStatus();
+      const result = await this.p.getStatus();
       return {
         running: result.running ?? false,
         sessionCount: result.sessionCount ?? 0,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('[TerminalService] getStatus() failed:', error);
-      throw new Error(`Terminal getStatus failed: ${error.message ?? error}`);
+      throw new Error(`Terminal getStatus failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

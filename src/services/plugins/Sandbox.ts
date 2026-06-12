@@ -7,7 +7,7 @@
  */
 
 interface SandboxResult {
-  result: any;
+  result: unknown;
   error: string | null;
   logs: string[];
   executionMs: number;
@@ -137,7 +137,7 @@ export class Sandbox {
    */
   async execute(
     code: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
     timeoutMs: number = 5000,
   ): Promise<SandboxResult> {
     if (!this.checkEnvironment()) {

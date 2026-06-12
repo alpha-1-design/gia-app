@@ -23,12 +23,18 @@ const USER_AGENTS = [
 
 const UA = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
-function withTimeout(ms: number): AbortSignal {
-  if (typeof AbortSignal !== 'undefined' && withTimeout) {
-    return withTimeout(ms);
+function withTimeout(ms: number, parent?: AbortController): AbortSignal {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
   }
   const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), ms);
+  const id = setTimeout(() => ctrl.abort(), ms);
+  if (parent) {
+    parent.signal.addEventListener('abort', () => {
+      clearTimeout(id);
+      ctrl.abort();
+    }, { once: true });
+  }
   return ctrl.signal;
 }
 
@@ -120,44 +126,49 @@ class FallbackWebSearch {
     const cached = this.searchCache.get(query);
     if (cached && Date.now() - cached.ts < this.cacheTTL) return cached.results;
 
-    // Try the configured search provider first (Exa, Browserless, etc.)
+    // Global search timeout: 30s max for any search
+    const globalAbort = new AbortController();
+    const globalTimeout = setTimeout(() => globalAbort.abort(new Error('Global search timeout')), 30000);
+
     try {
-      const { default: searchRouter } = await import('./SearchRouter');
-      const providerResults = await searchRouter.search(query);
-      if (providerResults.length > 0) {
-        // Sanitize search results
-        const sanitized = providerResults.map(r => {
-          return { ...r, title: sanitizeTitle(r.title) };
-        });
-        const final = sanitized.slice(0, maxResults);
-        this.searchCache.set(query, { results: final, ts: Date.now() });
-        return final;
-      }
-    } catch {
-      // Fall through to scraping strategies
-    }
-
-    const allResults: SearchResult[] = [];
-    const strategies = [
-      () => this.searchDuckDuckGo(query),
-      () => this.searchGoogle(query),
-      () => this.searchBing(query),
-      () => this.searchWikipedia(query),
-    ];
-
-    for (const strategy of strategies) {
-      if (allResults.length >= maxResults) break;
+      // Try the configured search provider first (Exa, Browserless, etc.)
       try {
-        const results = await strategy();
-        for (const r of results) {
-          if (!allResults.find(x => x.url === r.url)) {
-            allResults.push(r);
-          }
+        const { default: searchRouter } = await import('./SearchRouter');
+        const providerResults = await searchRouter.search(query);
+        if (providerResults.length > 0) {
+          const sanitized = providerResults.map(r => ({ ...r, title: sanitizeTitle(r.title) }));
+          const final = sanitized.slice(0, maxResults);
+          this.searchCache.set(query, { results: final, ts: Date.now() });
+          return final;
         }
-      } catch (e) {
-        logger.warn('[FallbackWebSearch] Strategy failed:', e);
+      } catch {
+        // Fall through to scraping strategies
       }
-    }
+
+      if (globalAbort.signal.aborted) return [];
+
+      const allResults: SearchResult[] = [];
+      const strategies = [
+        () => this.searchDuckDuckGo(query, globalAbort),
+        () => this.searchGoogle(query, globalAbort),
+        () => this.searchBing(query, globalAbort),
+        () => this.searchWikipedia(query, globalAbort),
+      ];
+
+      for (const strategy of strategies) {
+        if (allResults.length >= maxResults) break;
+        if (globalAbort.signal.aborted) break;
+        try {
+          const results = await strategy();
+          for (const r of results) {
+            if (!allResults.find(x => x.url === r.url)) {
+              allResults.push(r);
+            }
+          }
+        } catch (e) {
+          logger.warn('[FallbackWebSearch] Strategy failed:', e);
+        }
+      }
 
     const validated = validateAndDeduplicateSources(allResults, maxResults);
     const final = validated.map(v => ({
@@ -168,9 +179,12 @@ class FallbackWebSearch {
     }));
     this.searchCache.set(query, { results: final, ts: Date.now() });
     return final;
+    } finally {
+      clearTimeout(globalTimeout);
+    }
   }
 
-  private async searchDuckDuckGo(query: string): Promise<SearchResult[]> {
+  private async searchDuckDuckGo(query: string, parentAbort?: AbortController): Promise<SearchResult[]> {
     try {
       const { default: searchService } = await import('./SearchService');
       const results = await searchService.search(query);
@@ -182,7 +196,8 @@ class FallbackWebSearch {
       ];
       for (const url of urls) {
         try {
-          const res = await fetch(url, { headers: { 'User-Agent': UA() }, signal: withTimeout(8000) });
+          if (parentAbort?.signal.aborted) return [];
+          const res = await fetch(url, { headers: { 'User-Agent': UA() }, signal: withTimeout(8000, parentAbort) });
           if (!res.ok) continue;
           const html = await res.text();
           const results = extractDuckDuckGoResults(html);
@@ -193,16 +208,17 @@ class FallbackWebSearch {
     }
   }
 
-  private async searchGoogle(query: string): Promise<SearchResult[]> {
+  private async searchGoogle(query: string, parentAbort?: AbortController): Promise<SearchResult[]> {
     const urls = [
       `https://www.google.com/search?q=${encodeURIComponent(query)}&sourceid=chrome&ie=UTF-8`,
       ...CORS_PROXIES.map(fn => fn(`https://www.google.com/search?q=${encodeURIComponent(query)}&sourceid=chrome&ie=UTF-8`)),
     ];
     for (const url of urls) {
       try {
+        if (parentAbort?.signal.aborted) return [];
         const res = await fetch(url, {
           headers: { 'User-Agent': UA(), 'Accept': 'text/html,*/*' },
-          signal: withTimeout(8000),
+          signal: withTimeout(8000, parentAbort),
         });
         if (!res.ok) continue;
         const html = await res.text();
@@ -213,16 +229,17 @@ class FallbackWebSearch {
     return [];
   }
 
-  private async searchBing(query: string): Promise<SearchResult[]> {
+  private async searchBing(query: string, parentAbort?: AbortController): Promise<SearchResult[]> {
     const urls = [
       `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
       ...CORS_PROXIES.map(fn => fn(`https://www.bing.com/search?q=${encodeURIComponent(query)}`)),
     ];
     for (const url of urls) {
       try {
+        if (parentAbort?.signal.aborted) return [];
         const res = await fetch(url, {
           headers: { 'User-Agent': UA(), 'Accept': 'text/html,*/*' },
-          signal: withTimeout(8000),
+          signal: withTimeout(8000, parentAbort),
         });
         if (!res.ok) continue;
         const html = await res.text();
@@ -233,11 +250,12 @@ class FallbackWebSearch {
     return [];
   }
 
-  private async searchWikipedia(query: string): Promise<SearchResult[]> {
+  private async searchWikipedia(query: string, parentAbort?: AbortController): Promise<SearchResult[]> {
     try {
+      if (parentAbort?.signal.aborted) return [];
       const res = await fetch(
         `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5`,
-        { headers: { 'User-Agent': 'GIA/2.3.1' }, signal: withTimeout(5000) },
+        { headers: { 'User-Agent': 'GIA/2.3.1' }, signal: withTimeout(5000, parentAbort) },
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -255,59 +273,70 @@ class FallbackWebSearch {
     const cached = this.scrapeCache.get(url);
     if (cached && Date.now() - cached.ts < this.cacheTTL) return cached.result;
 
-    // Try configured search provider first (Exa Contents API or Browserless)
+    // Global scrape timeout: 45s max
+    const globalAbort = new AbortController();
+    const globalTimeout = setTimeout(() => globalAbort.abort(new Error('Global scrape timeout')), 45000);
+
     try {
-      const { default: searchRouter } = await import('./SearchRouter');
-      const providerResult = await searchRouter.fetch(url);
-      if (providerResult && providerResult.content.length > 50) {
-        this.scrapeCache.set(url, { result: providerResult, ts: Date.now() });
-        return providerResult;
-      }
-    } catch {
-      // Fall through to scraping strategies
-    }
-
-    const strategies = [
-      () => this.scrapeViaWebFetch(url, maxChars),
-      () => this.scrapeViaJina(url, maxChars),
-      () => this.scrapeDirect(url, maxChars),
-      () => this.scrapeViaProxy(url, maxChars),
-      () => this.scrapeViaScreenshot(url),
-    ];
-
-    let lastError = '';
-    for (const strategy of strategies) {
+      // Try configured search provider first (Exa Contents API or Browserless)
       try {
-        const result = await strategy();
-        if (result.content.length > 50) {
-          // Sanitize scraped content before caching/returning
-          const sanitized = await sanitizeResult(result.content, url);
-          if (!sanitized.isSafe) {
-            logger.warn(`[FallbackWebSearch] Unsafe content from ${url}: ${sanitized.warning}`);
-            // Still return but with sanitized content + appended warning
-            result.content = sanitized.content +
-              '\n\n[⚠️ Safety Notice: The above content was flagged for potential manipulation. Proceed with caution.]';
-          } else {
-            result.content = sanitized.content;
-          }
-          this.scrapeCache.set(url, { result, ts: Date.now() });
-          return result;
+        const { default: searchRouter } = await import('./SearchRouter');
+        const providerResult = await searchRouter.fetch(url);
+        if (providerResult && providerResult.content.length > 50) {
+          this.scrapeCache.set(url, { result: providerResult, ts: Date.now() });
+          return providerResult;
         }
-      } catch (e) {
-        lastError = e instanceof Error ? e.message : 'Failed';
+      } catch {
+        // Fall through to scraping strategies
       }
-    }
 
-    throw new Error(`All scraping strategies failed for ${url}. Last: ${lastError}`);
+      if (globalAbort.signal.aborted) throw new Error('Scrape aborted before strategies');
+
+      const strategies = [
+        () => this.scrapeViaWebFetch(url, maxChars, globalAbort),
+        () => this.scrapeViaJina(url, maxChars, globalAbort),
+        () => this.scrapeDirect(url, maxChars, globalAbort),
+        () => this.scrapeViaProxy(url, maxChars, globalAbort),
+        () => this.scrapeViaScreenshot(url),
+      ];
+
+      let lastError = '';
+      for (const strategy of strategies) {
+        if (globalAbort.signal.aborted) break;
+        try {
+          const result = await strategy();
+          if (result.content.length > 50) {
+            const sanitized = await sanitizeResult(result.content, url);
+            if (!sanitized.isSafe) {
+              logger.warn(`[FallbackWebSearch] Unsafe content from ${url}: ${sanitized.warning}`);
+              result.content = sanitized.content +
+                '\n\n[⚠️ Safety Notice: The above content was flagged for potential manipulation. Proceed with caution.]';
+            } else {
+              result.content = sanitized.content;
+            }
+            this.scrapeCache.set(url, { result, ts: Date.now() });
+            return result;
+          }
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : 'Failed';
+        }
+      }
+
+      throw new Error(`All scraping strategies failed for ${url}. Last: ${lastError}`);
+    } finally {
+      clearTimeout(globalTimeout);
+    }
   }
 
-  private async scrapeViaWebFetch(url: string, maxChars: number): Promise<ScrapeResult> {
+  private async scrapeViaWebFetch(url: string, maxChars: number, _parentAbort?: AbortController): Promise<ScrapeResult> {
+    void _parentAbort;
     const { default: wf } = await import('./WebFetchService');
     const page = await wf.fetch(url, { format: 'markdown', maxChars });
     return { url, title: page.title, content: page.content, source: 'webfetch' };
   }
 
-  private async scrapeViaJina(url: string, maxChars: number): Promise<ScrapeResult> {
+  private async scrapeViaJina(url: string, maxChars: number, parentAbort?: AbortController): Promise<ScrapeResult> {
+    if (parentAbort?.signal.aborted) throw new Error('Aborted');
     const res = await fetch(`https://r.jina.ai/${url}`, {
       headers: {
         'User-Agent': UA(),
@@ -315,7 +344,7 @@ class FallbackWebSearch {
         'X-Return-Format': 'text',
         'X-With-Generated-Alt': 'true',
       },
-      signal: withTimeout(20000),
+      signal: withTimeout(20000, parentAbort),
     });
     if (!res.ok) throw new Error(`Jina returned ${res.status}`);
     const text = await res.text();
@@ -323,10 +352,11 @@ class FallbackWebSearch {
     return { url, title: url, content, source: 'jina' };
   }
 
-  private async scrapeDirect(url: string, maxChars: number): Promise<ScrapeResult> {
+  private async scrapeDirect(url: string, maxChars: number, parentAbort?: AbortController): Promise<ScrapeResult> {
+    if (parentAbort?.signal.aborted) throw new Error('Aborted');
     const res = await fetch(url, {
       headers: { 'User-Agent': UA(), 'Accept': 'text/html,*/*' },
-      signal: withTimeout(10000),
+      signal: withTimeout(10000, parentAbort),
     });
     if (!res.ok) throw new Error(`Direct fetch returned ${res.status}`);
     const html = await res.text();
@@ -341,13 +371,14 @@ class FallbackWebSearch {
     return { url, title, content, source: 'direct' };
   }
 
-  private async scrapeViaProxy(url: string, maxChars: number): Promise<ScrapeResult> {
+  private async scrapeViaProxy(url: string, maxChars: number, parentAbort?: AbortController): Promise<ScrapeResult> {
     for (const buildProxy of CORS_PROXIES) {
       try {
+        if (parentAbort?.signal.aborted) throw new Error('Aborted');
         const proxyUrl = buildProxy(url);
         const res = await fetch(proxyUrl, {
           headers: { 'User-Agent': UA(), 'Accept': 'text/html,*/*' },
-          signal: withTimeout(15000),
+          signal: withTimeout(15000, parentAbort),
         });
         if (!res.ok) continue;
         const html = await res.text();

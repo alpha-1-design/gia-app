@@ -164,6 +164,7 @@ export class PermissionManager {
       return { level: 'none', ...LEVEL_PRESETS.none };
     }
     const { pluginId: _id, grantedAt: _ga, session: _s, ...rest } = grant;
+    void _id; void _ga; void _s;
     return rest;
   }
 

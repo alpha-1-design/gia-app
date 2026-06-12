@@ -68,7 +68,25 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `read_url` | Extract clean markdown from any web page |
 | `browser_navigate` | Full JS-rendered page navigation (iframe sandbox) |
 | `page_info` | Lightweight page metadata without full fetch |
-| `terminal_run` | Execute code via Piston API (Python, JS, C++, more) |
+| `terminal_run` | Execute shell commands in proot+Alpine Linux environment (Android) |
+| `code_execute` | Run code via Piston API (Python, JS, C++, more) |
+| `http_request` | Make arbitrary HTTP requests (GET, POST, PUT, DELETE) |
+| `web_scrape` | Fetch and extract readable content from any URL |
+| `data_analysis` | Analyze structured data (CSV, JSON, TSV) with stats and samples |
+| `math` | Evaluate mathematical expressions safely |
+| `encode_decode` | Base64, URL, and JSON encode/decode |
+| `generate_qr` | Generate QR code images from text or URLs |
+| `classify_text` | Classify text into categories using on-device local AI |
+| `list_available_apis` | List free public APIs available for use |
+| `screenshot` | Capture screenshot of any public webpage |
+| `local_search` | Search GIA's internal knowledge — notes and memories |
+| `send_whatsapp` | Send WhatsApp message with pre-filled text |
+| `send_email` | Compose email via device email client |
+| `send_sms` | Send SMS directly (Android) or via SMS app |
+| `make_phone_call` | Initiate phone call via dialer |
+| `share` | Share content to any app via native share sheet |
+| `clipboard` | Read from or write to system clipboard |
+| `vibrate` | Trigger device vibration/haptic feedback |
 | `filesystem_read` | Read files from device storage |
 | `filesystem_write` | Write files to device storage |
 | `list_files` | List directory contents (mobile) |
@@ -99,6 +117,85 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `goal_progress` | Get goal progress report |
 | `pause_goal` | Pause/resume/cancel a goal |
 | `set_autonomy_config` | Configure autonomy settings |
+
+---
+
+## 🐚 Terminal Environment
+
+GIA includes a native **proot + Alpine Linux** terminal environment on Android:
+
+- **Full shell access**: Execute any shell command (bash, sh, etc.) inside a lightweight Alpine Linux container
+- **Persistence**: Sessions can be kept alive across multiple tool calls — use `persist: true` to maintain state
+- **File system**: Access container file system with disk usage info available
+- **Lifecycle**: Sessions auto-terminate after command completion unless persisted
+- **Contrast with Piston**: `code_execute` runs code snippets on a remote Piston API server. `terminal_run` gives you a full Linux shell on your device with proot.
+
+## 🧪 Local AI (On-Device)
+
+GIA can run AI models directly in your browser with no API call needed:
+
+- **Text Classification**: Categorize text into user-defined labels with confidence scores
+- **Summarization**: Compress long texts locally
+- **Translation**: Translate between languages without any cloud service
+- **Embeddings**: Generate text embeddings for semantic search
+- **QA**: Answer questions based on provided context
+- **On-Device Vision**: Caption images, extract text (OCR), detect objects, and classify scenes — routes between local models and provider APIs automatically
+
+These run via HuggingFace Transformers (WASM) or similar browser-based inference engines. No data leaves your device.
+
+## 🐍 Local Python Execution (Pyodide)
+
+In addition to the remote Piston API, GIA can run Python code **directly in your browser** via Pyodide WASM:
+
+- **Full Python 3.11 stdlib**: `math`, `json`, `re`, `collections`, `random`, `datetime`, etc.
+- **Scientific packages**: `numpy`, `pandas`, `matplotlib` (loaded on demand)
+- **No server needed**: Everything runs in-browser — zero latency, works offline
+- **Use case**: Quick calculations, data transformations, visualizations without API calls
+
+Trigger via the `code_execute` tool — GIA automatically tries local Pyodide when available.
+
+## 📝 Notes Panel
+
+GIA includes a full sticky notes system:
+
+- **Create notes**: Rich text with custom colors
+- **Organize**: Tag and pin notes for quick access
+- **Search**: Full-text search across all notes
+- **AI-managed**: GIA can create, read, update, and delete notes via tool calls (`note_create`, `note_read`, `note_update`, `note_delete`)
+- **Access**: Open the Notes Panel from the chat toolbar or via command palette
+
+## 📱 Native Device Integration
+
+GIA can interact with your device directly:
+
+| Action | Tool | Description |
+|--------|------|-------------|
+| **Make calls** | `make_phone_call` | Opens dialer with number pre-filled |
+| **Send SMS** | `send_sms` | Direct SMS on Android (with permission), falls back to SMS app |
+| **WhatsApp** | `send_whatsapp` | Opens WhatsApp with pre-filled message |
+| **Email** | `send_email` | Opens email client with recipient, subject, and body |
+| **Share** | `share` | Native share sheet to any app |
+| **Clipboard** | `clipboard` | Read from or write to system clipboard |
+| **Vibrate** | `vibrate` | Haptic feedback (light/medium/heavy pulse) |
+
+## 🔊 Voice Overlay
+
+When voice input is active, GIA shows a full-screen **animated voice overlay**:
+
+- **Waveform visualization**: Live audio-reactive bars
+- **Ripple rings**: Expanding concentric rings around the microphone icon
+- **State indicators**: Visual feedback for listening → processing → done states
+- **Triggered by**: Wake word detection or push-to-talk
+
+## 🔄 Offline Queue
+
+GIA handles network interruptions gracefully:
+
+- **Automatic queuing**: Tool calls are queued locally when the network is unavailable
+- **FIFO replay**: Queued calls replay in order when connectivity is restored
+- **Retry logic**: Each queued call has configurable max retries with error tracking
+- **Persistence**: Queue survives app restarts (stored in localStorage)
+- **Transparent**: GIA continues working — you won't notice the interruption
 
 ---
 
@@ -156,9 +253,9 @@ Go to **Settings → Voice Control**:
 - **Stay Listening** — keep listening after each wake word (vs. one-shot)
 - **Voice Response (TTS)** — GIA reads responses out loud
 
-#### About "Hey Google" in the code
+#### About "JARVIS" in the code
 
-Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`) for testing without training a custom model. The default fallback uses `HEY_GOOGLE`. To use "Hey GIA" as a native keyword:
+Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`) for testing without training a custom model. The default fallback uses `JARVIS` (a built-in Porcupine keyword). To use "Hey GIA" as a native keyword:
 
 1. Sign up at [Picovoice Console](https://console.picovoice.ai/) (free tier available)
 2. Train a custom "Hey GIA" wake word model

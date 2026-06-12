@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Redirecting...</title></head>
+<body>
+<script>
+try {
+  var params = new URLSearchParams(window.location.search);
+  var code = params.get('code');
+  var state = params.get('state');
+  var error = params.get('error');
+  window.opener.postMessage(
+    { type: 'oauth-callback', code: code, state: state, error: error },
+    window.location.origin
+  );
+} catch (e) {
+  console.error('OAuth callback error:', e);
+}
+window.close();
+</script>
+<p>Redirecting... You can close this window.</p>
+</body>
+</html>

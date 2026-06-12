@@ -77,16 +77,6 @@ async function checkProviderHealth(provider: string, apiKey: string, model: stri
   } catch (e) { logger.warn('[App] Provider health check failed:', e); return false; }
 }
 
-const MODULE_GLOW: Record<Module, string> = {
-  chat:     'var(--mod-chat)',
-  exam:     'var(--mod-exam)',
-  analyst:  'var(--mod-analyst)',
-  writer:   'var(--mod-writer)',
-  planner:  'var(--mod-planner)',
-  settings: 'var(--mod-settings)',
-  autonomy: 'var(--mod-autonomy)',
-};
-
 const ModuleView: React.FC = () => {
   const { currentModule } = useGiaStore();
   const Fallback = () => (
@@ -444,8 +434,6 @@ const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [moduleOpen]);
 
-  const activeColor = MODULE_GLOW[currentModule];
-
   if (locked) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 bg-zinc-950 px-8 text-center">
@@ -510,17 +498,6 @@ const App: React.FC = () => {
           })}
         </AnimatePresence>
       </div>
-
-      {/* Ambient background glow that shifts per module */}
-      <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full pointer-events-none"
-        style={{
-          background: `radial-gradient(ellipse at center, rgba(${activeColor}, 0.06) 0%, transparent 70%)`,
-          filter: 'blur(60px)',
-          transition: 'background 0.6s ease',
-          top: '-40px',
-        }}
-      />
 
       {/* Header */}
       <header className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 relative z-50">

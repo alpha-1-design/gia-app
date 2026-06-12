@@ -50,6 +50,11 @@ const PARALLEL_SAFE_TOOLS = new Set([
   'get_environment_info', 'get_user_location', 'search_places',
   'task_read', 'note_read',
   'wikipedia', 'weather', 'define',
+  'social_list_platforms', 'social_list_posts', 'social_analytics',
+  'social_connect', 'social_disconnect',
+  'connector_list', 'connector_test',
+  'gateway_list', 'gateway_stats', 'gateway_logs',
+  'telegram_status', 'telegram_channel_info', 'telegram_stats',
 ]);
 
 function getIndependentGroups(toolCalls: ToolCall[]): ToolCall[][] {

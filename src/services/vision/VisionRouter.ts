@@ -257,19 +257,20 @@ class VisionRouter {
       case 'caption':
         // Trigger loading by calling describe on a minimal dummy;
         // the pipeline will be cached internally.
-        return (visionService as any).loadPipeline?.('image-to-text', 'Xenova/vit-gpt2-image-captioning');
+        return (visionService as unknown as { loadPipeline?: (task: string, model: string) => unknown }).loadPipeline?.('image-to-text', 'Xenova/vit-gpt2-image-captioning');
       case 'ocr':
-        return (visionService as any).loadPipeline?.('image-to-text', 'Xenova/trocr-base-printed');
+        return (visionService as unknown as { loadPipeline?: (task: string, model: string) => unknown }).loadPipeline?.('image-to-text', 'Xenova/trocr-base-printed');
       case 'detect':
-        return (visionService as any).loadPipeline?.('object-detection', 'Xenova/detr-resnet-50');
+        return (visionService as unknown as { loadPipeline?: (task: string, model: string) => unknown }).loadPipeline?.('object-detection', 'Xenova/detr-resnet-50');
       case 'classify':
-        return (visionService as any).loadPipeline?.('image-classification', 'Xenova/resnet-50');
+        return (visionService as unknown as { loadPipeline?: (task: string, model: string) => unknown }).loadPipeline?.('image-classification', 'Xenova/resnet-50');
     }
   }
 
   private async _runLocal(
     imageUrl: string,
     task: VisionTask,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     model: ModelMeta,
   ): Promise<ProcessedImageResult> {
     const start = performance.now();

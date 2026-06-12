@@ -9,7 +9,6 @@
  */
 
 import terminalService from '../TerminalService';
-import type { ExecResult } from '../TerminalService';
 
 // ---------------------------------------------------------------------------
 // Types

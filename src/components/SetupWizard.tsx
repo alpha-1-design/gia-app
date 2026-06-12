@@ -104,7 +104,7 @@ interface SetupWizardProps {
 const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
   const wizard = useWizardStore();
   const { setProviderKey, setProviderModel, setActiveProvider, fetchModels } = useProviderStore();
-  const { customProviders, addCustomProvider } = useCustomProviderStore();
+  const { addCustomProvider } = useCustomProviderStore();
   const { setShowTerminal } = useGiaStore();
   const [testing, setTesting] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -133,6 +133,83 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     resetWizard();
     onClose?.();
   }, [resetWizard, onClose]);
+
+  const runTest = useCallback(async () => {
+    if (wizard.step !== 'test-connection') return;
+    setTesting(true);
+    wizard.setTestResult(null);
+
+    try {
+      const start = performance.now();
+      const def = providerRegistry.getProvider(wizard.provider);
+
+      if (!def) {
+        const cp = useCustomProviderStore.getState().customProviders.find(
+          (c) => c.id === wizard.provider
+        );
+        if (cp) {
+          const result = await validateCustomProvider(cp);
+          const elapsed = Math.round(performance.now() - start);
+          if (result.valid) {
+            wizard.setTestResult({
+              success: true,
+              latencyMs: elapsed,
+              models: result.models,
+            });
+          } else {
+            wizard.setTestResult({
+              success: false,
+              error: result.error || 'Connection failed',
+            });
+          }
+        } else {
+          wizard.setTestResult({ success: false, error: 'Provider not found' });
+        }
+      } else {
+        const baseUrl = def.baseUrl;
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (wizard.apiKey) {
+          headers['Authorization'] = `Bearer ${wizard.apiKey}`;
+        }
+        if (def.headers) Object.assign(headers, def.headers);
+
+        const isLocal = !def.needsApiKey;
+        const fetchFn = isLocal ? fetch : corsProxy.fetch;
+
+        const res = await fetchFn(`${baseUrl}/models`, {
+          headers,
+          signal: AbortSignal.timeout(10000),
+        });
+
+        const elapsed = Math.round(performance.now() - start);
+
+        if (res.ok) {
+          const json = await res.json();
+          const modelList = json.data ?? json.models ?? [];
+          const modelNames = modelList.map((m: { id?: string; name?: string }) => m.id || m.name || '');
+          wizard.setTestResult({ success: true, latencyMs: elapsed, models: modelNames });
+        } else {
+          wizard.setTestResult({
+            success: false,
+            error: `HTTP ${res.status}: ${res.statusText}`,
+          });
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      wizard.setTestResult({ success: false, error: msg });
+    } finally {
+      setTesting(false);
+    }
+  }, [wizard, testing]);
+
+  useEffect(() => {
+    if (wizard.step === 'test-connection' && !wizard.testResult && !testing) {
+      runTest();
+    }
+  }, [wizard.step, wizard.testResult, testing, runTest]);
 
   // ── Welcome Step ──────────────────────────────────────────────────
   if (wizard.step === 'welcome') {
@@ -401,86 +478,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     );
   }
 
-  // ── Test Connection Step ─────────────────────────────────────────
   if (wizard.step === 'test-connection') {
-    const runTest = async () => {
-      setTesting(true);
-      wizard.setTestResult(null);
-
-      try {
-        const start = performance.now();
-        const def = providerRegistry.getProvider(wizard.provider);
-
-        if (!def) {
-          // Custom provider test
-          const cp = useCustomProviderStore.getState().customProviders.find(
-            (c) => c.id === wizard.provider
-          );
-          if (cp) {
-            const result = await validateCustomProvider(cp);
-            const elapsed = Math.round(performance.now() - start);
-            if (result.valid) {
-              wizard.setTestResult({
-                success: true,
-                latencyMs: elapsed,
-                models: result.models,
-              });
-            } else {
-              wizard.setTestResult({
-                success: false,
-                error: result.error || 'Connection failed',
-              });
-            }
-          } else {
-            wizard.setTestResult({ success: false, error: 'Provider not found' });
-          }
-        } else {
-          // Built-in provider test — try to fetch models
-          const baseUrl = def.baseUrl;
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-          };
-          if (wizard.apiKey) {
-            headers['Authorization'] = `Bearer ${wizard.apiKey}`;
-          }
-          if (def.headers) Object.assign(headers, def.headers);
-
-          const isLocal = !def.needsApiKey;
-          const fetchFn = isLocal ? fetch : corsProxy.fetch;
-
-          const res = await fetchFn(`${baseUrl}/models`, {
-            headers,
-            signal: AbortSignal.timeout(10000),
-          });
-
-          const elapsed = Math.round(performance.now() - start);
-
-          if (res.ok) {
-            const json = await res.json();
-            const modelList = json.data ?? json.models ?? [];
-            const modelNames = modelList.map((m: { id?: string; name?: string }) => m.id || m.name || '');
-            wizard.setTestResult({ success: true, latencyMs: elapsed, models: modelNames });
-          } else {
-            wizard.setTestResult({
-              success: false,
-              error: `HTTP ${res.status}: ${res.statusText}`,
-            });
-          }
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Unknown error';
-        wizard.setTestResult({ success: false, error: msg });
-      } finally {
-        setTesting(false);
-      }
-    };
-
-    useEffect(() => {
-      if (!wizard.testResult && !testing) {
-        runTest();
-      }
-    }, []);
-
     return (
       <div className="flex flex-col h-full px-6 py-4">
         <div className="flex items-center justify-between mb-4">
@@ -676,7 +674,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
         <div className="w-full max-w-sm bg-zinc-900 rounded-lg border border-zinc-800 p-4 mb-8 space-y-3 text-left">
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500">Provider</span>
-            <span className="text-zinc-200 font-medium">{('label' in def ? def.label : def.id)}</span>
+            <span className="text-zinc-200 font-medium">{def.label}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500">Model</span>

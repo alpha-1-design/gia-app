@@ -3,12 +3,12 @@ import { ProtocolType, ProtocolImpact } from '../../types/protocol';
 
 export const toolSchemas: Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string; items?: { type: string } }> }> = {
   web_search: {
-    description: 'Search the web for real-time information using DuckDuckGo.',
+    description: 'Search the web for real-time information. Uses Exa/Browserless when configured; falls back to search engines.',
     required: ['query'],
     properties: { query: { type: 'string', description: 'Search query text' } }
   },
   read_url: {
-    description: 'Fetch and read the text content of a URL. Returns up to 25,000 characters.',
+    description: 'Fetch and read the text content of a URL. Uses Exa/Browserless or CORS proxies. Returns up to 25,000 characters.',
     required: ['url'],
     properties: { url: { type: 'string', description: 'Full URL to fetch' } }
   },

@@ -1,11 +1,23 @@
 import { z } from 'zod';
 import type { Tool, ToolContext } from './types';
+import { useSearchStore } from '../../store/useSearchStore';
 import { useGiaStore } from '../../store/useGiaStore';
+
+function getSearchDescription(): string {
+  const store = useSearchStore.getState();
+  const configured: string[] = [];
+  if (store.providers.exa.enabled && store.providers.exa.apiKey) configured.push('Exa');
+  if (store.providers.browserless.enabled && store.providers.browserless.apiKey) configured.push('Browserless');
+  if (configured.length > 0) {
+    return `Search the web using ${configured.join(' & ')} (your configured provider). Fast, accurate results. Falls back to DuckDuckGo/Google/Bing if needed.`;
+  }
+  return 'Search the web for real-time information using DuckDuckGo, Google, Bing, and Wikipedia. Falls back automatically if one engine fails.';
+}
 
 const webSearchTool: Tool = {
   id: 'web_search',
   name: 'web_search',
-  description: 'Search the web for real-time information using multiple search engines (DuckDuckGo, Google, Bing, Wikipedia). Falls back automatically if one engine fails.',
+  description: getSearchDescription(),
   schema: {
     type: 'object',
     properties: {
@@ -51,7 +63,7 @@ const webSearchTool: Tool = {
 
 const readUrlTool: Tool = {
   id: 'read_url', name: 'read_url',
-  description: 'Extract clean text/markdown from any web page. Uses multiple CORS proxies and content extraction strategies. Converts HTML to readable markdown with links, headings, code blocks preserved. Best for reading articles, docs, and web content.',
+  description: 'Extract clean text/markdown from any web page. Uses Exa/Browserless (if configured) or multiple CORS proxies and content extraction strategies. Converts HTML to readable markdown with links, headings, code blocks preserved. Best for reading articles, docs, and web content.',
   schema: {
     type: 'object',
     properties: {

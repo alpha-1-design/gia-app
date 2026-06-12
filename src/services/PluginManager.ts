@@ -29,7 +29,8 @@ export class PluginManager {
   }
 
   /** Build a PluginAPI scoped to a specific plugin. */
-  private getPluginAPI(pluginId: string): PluginAPI {
+  private getPluginAPI(_pluginId: string): PluginAPI {
+    void _pluginId;
     return {
       ...this.createAPI(),
       // Future: add plugin-scoped overrides here
@@ -43,10 +44,10 @@ export class PluginManager {
    * is unavailable or the hook is a no-permission-required hook.
    */
   private async executeHookInSandbox<T>(
-    hookFn: Function | undefined,
+    hookFn: ((...args: unknown[]) => unknown) | undefined,
     pluginId: string,
     hookName: string,
-    payload?: any,
+    payload?: unknown,
     timeoutMs?: number,
   ): Promise<T | undefined> {
     if (!hookFn) return undefined;
@@ -55,7 +56,7 @@ export class PluginManager {
     const permManager = PermissionManager.getInstance();
 
     // Ensure the plugin has at least the default permission for this hook
-    const defaultLevel = permManager.getDefaultLevelForHook(hookName);
+    permManager.getDefaultLevelForHook(hookName);
     if (!permManager.hasPermission(pluginId, `hook:${hookName}`)) {
       permManager.requestPermission(pluginId, {
         hooks: [hookName],
@@ -75,9 +76,9 @@ export class PluginManager {
         pluginApi: this.getPluginAPI(pluginId),
         payload,
         console: {
-          log: (...args: any[]) => logs.push(`[LOG] ${args.join(' ')}`),
-          warn: (...args: any[]) => logs.push(`[WARN] ${args.join(' ')}`),
-          error: (...args: any[]) => logs.push(`[ERROR] ${args.join(' ')}`),
+          log: (...args: unknown[]) => logs.push(`[LOG] ${args.join(' ')}`),
+          warn: (...args: unknown[]) => logs.push(`[WARN] ${args.join(' ')}`),
+          error: (...args: unknown[]) => logs.push(`[ERROR] ${args.join(' ')}`),
         },
       },
       effTimeout,

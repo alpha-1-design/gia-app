@@ -5,7 +5,7 @@ import { providerRegistry } from '../services/ProviderRegistry';
 import { useGiaStore } from '../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getProviderCapabilities, CAPABILITY_LABELS, type ProviderCapabilities } from '../services/providers/capabilities';
-import { providerMonitor, type ProviderHealthRecord } from '../services/ProviderMonitor';
+import { providerMonitor } from '../services/ProviderMonitor';
 import { persistenceManager } from '../services/PersistenceManager';
 
 type LineType = 'cmd' | 'res' | 'err' | 'info' | 'prompt' | 'success';
@@ -51,7 +51,7 @@ const EngineRoom: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [importBuffer, setImportBuffer] = useState('');
+  const [, setImportBuffer] = useState('');
   const importingRef = useRef(false);
   const importBufferRef = useRef('');
 
@@ -119,6 +119,31 @@ const EngineRoom: React.FC = () => {
       }
 
       if (currentWizard.flow === 'enter-key') {
+        // Handle retry when previous model fetch failed
+        if (cmd === 'retry') {
+          push(mk('success', 'Retrying model fetch...'));
+          setBusy(true);
+          try {
+            const models = await fetchModels(currentWizard.provider);
+            if (models.length === 0) {
+              push(mk('err', 'No models found. Using defaults.'));
+              const defaults = providerRegistry.getModels(currentWizard.provider);
+              setWizard({ flow: 'select-model', provider: currentWizard.provider, models: defaults });
+              push(...showModels(defaults, currentWizard.provider), mk('prompt', 'Enter model number:'));
+            } else {
+              setWizard({ flow: 'select-model', provider: currentWizard.provider, models });
+              push(...showModels(models, currentWizard.provider), mk('prompt', 'Enter model number:'));
+            }
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Unknown error';
+            push(mk('err', `Fetch failed: ${msg}`));
+            push(mk('info', 'Type "retry" to try again, or "cancel" to go back.'));
+          } finally {
+            setBusy(false);
+          }
+          return;
+        }
+
         if (trimmed.length < 8) { push(mk('err', 'Key too short.')); return; }
         setProviderKey(currentWizard.provider, trimmed);
         push(mk('success', '✓ Key saved. Fetching models...'));
@@ -134,41 +159,15 @@ const EngineRoom: React.FC = () => {
             setWizard({ flow: 'select-model', provider: currentWizard.provider, models });
             push(...showModels(models, currentWizard.provider), mk('prompt', 'Enter model number:'));
           }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Unknown error';
-        push(mk('err', `Fetch failed: ${msg}`));
-        push(mk('info', 'Type "retry" to try again, or "cancel" to go back.'));
-        // Stay in enter-key flow so user can retry
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-
-    // Retry fetch models from enter-key flow
-    if (currentWizard && currentWizard.flow === 'enter-key' && cmd === 'retry') {
-      push(mk('success', 'Retrying model fetch...'));
-      setBusy(true);
-      try {
-        const models = await fetchModels(currentWizard.provider);
-        if (models.length === 0) {
-          push(mk('err', 'No models found. Using defaults.'));
-          const defaults = providerRegistry.getModels(currentWizard.provider);
-          setWizard({ flow: 'select-model', provider: currentWizard.provider, models: defaults });
-          push(...showModels(defaults, currentWizard.provider), mk('prompt', 'Enter model number:'));
-        } else {
-          setWizard({ flow: 'select-model', provider: currentWizard.provider, models });
-          push(...showModels(models, currentWizard.provider), mk('prompt', 'Enter model number:'));
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Unknown error';
+          push(mk('err', `Fetch failed: ${msg}`));
+          push(mk('info', 'Type "retry" to try again, or "cancel" to go back.'));
+        } finally {
+          setBusy(false);
         }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Unknown error';
-        push(mk('err', `Fetch failed: ${msg}`));
-        push(mk('info', 'Type "retry" to try again, or "cancel" to go back.'));
-      } finally {
-        setBusy(false);
+        return;
       }
-      return;
-    }
 
     if (currentWizard.flow === 'select-model') {
         const idx = parseInt(trimmed) - 1;
@@ -295,7 +294,7 @@ const EngineRoom: React.FC = () => {
         const active = p === activeProvider ? ' ← ACTIVE' : '';
         const model = cfg?.model || 'off';
         const status = cfg?.enabled ? '●' : '○';
-        const health = providerMonitor.getRecord(p);
+        const health = providerMonitor.getHealth(p, cfg?.model ?? "");
         const latency = health.latencyMs !== null ? ` ${health.latencyMs}ms` : '';
         const errs = health.failedCalls > 0 ? ` ⚠${health.failedCalls}` : '';
         push(mk(cfg?.enabled ? 'success' : 'err', `  ${status} ${def.label.padEnd(12)} ${model}${latency}${errs}${active}`));

@@ -42,7 +42,7 @@ npx cap sync android   # sync Capacitor Android after build
 
 ## Android
 - App ID: `com.alpha1studio.gia`
-- Wake word uses Porcupine (on-device DNN) with `HEY_GOOGLE` as dev fallback
+- Wake word uses Porcupine (on-device DNN) with `JARVIS` as default keyword
 - Foreground service with `FOREGROUND_SERVICE_MICROPHONE` (Android 14+)
 - `network_security_config.xml` restricts API domains
 - ProGuard/R8 minification enabled

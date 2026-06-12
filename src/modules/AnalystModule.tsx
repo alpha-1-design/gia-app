@@ -10,31 +10,8 @@ import {
   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { extractJSON, isNativePlatform } from '../utils/helpers';
-
-async function generateWithJsonRetry<T>(
-  generateFn: () => Promise<{ text: string }>,
-  maxRetries = 2
-): Promise<T> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await generateFn();
-      const parsed = extractJSON<T>(res.text);
-      return parsed;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      logger.warn(`[AnalystModule] JSON parse attempt ${attempt + 1} failed:`, lastError.message);
-      
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-      }
-    }
-  }
-  
-  throw lastError || new Error('Failed to parse JSON after retries');
-}
+import { isNativePlatform } from '../utils/helpers';
+import { generateWithRetry } from '../utils/generateWithRetry';
 
 interface DataPoint { label: string; value: number | string; color?: string; [key: string]: unknown }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
@@ -78,7 +55,7 @@ const AnalystModule: React.FC = () => {
     try {
       const prompt = fileData ? `Analyze this data:\n\n${fileData.slice(0,8000)}\n\nUser: ${text}` : text;
       
-      const parsed = await generateWithJsonRetry<{ data: DataPoint[]; summary?: string; narrative?: string; columns?: string[] }>(
+      const { data: parsed } = await generateWithRetry<{ data: DataPoint[]; summary?: string; narrative?: string; columns?: string[] }>(
         () => GiaBrain.generate({
           signal: AbortSignal.timeout(30_000),
           prompt,
@@ -90,7 +67,7 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
           temperature: 0.25,
           maxTokens: 1500,
         }),
-        2
+        { moduleName: 'AnalystModule' }
       );
       
       if (!parsed.data || !Array.isArray(parsed.data) || parsed.data.length === 0) {

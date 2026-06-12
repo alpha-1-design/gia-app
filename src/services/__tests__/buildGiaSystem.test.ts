@@ -189,7 +189,7 @@ describe('buildGiaSystem', () => {
       },
     };
     const result = buildGiaSystem();
-    expect(result).toContain('No tool support');
+    expect(result).toContain('Limited tool support');
     expect(result).not.toContain('## Tools you can use');
   });
 

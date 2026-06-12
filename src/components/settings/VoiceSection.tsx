@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Headphones, Radio, Mic, MicOff, Activity, Beaker, Play, Square, AlertTriangle } from 'lucide-react';
+import { Headphones, Radio, Mic, MicOff, Activity, Play, Square, AlertTriangle } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import TTSService from '../../services/TTSService';
 import { LANGUAGES } from '../../config/constants';
@@ -44,9 +44,9 @@ export const VoiceSection: React.FC = () => {
   const checkService = useCallback(async () => {
     try {
       // Check if native module is available
-      const hasModule = typeof (window as any).GIAWakeWord !== 'undefined';
+      const hasModule = typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined';
       if (hasModule) {
-        const status = await (window as any).GIAWakeWord.getStatus();
+        const status = await (window as unknown as { GIAWakeWord: { getStatus: () => unknown } }).GIAWakeWord.getStatus();
         setServiceStatus(status);
       } else {
         setServiceStatus({
@@ -65,9 +65,9 @@ export const VoiceSection: React.FC = () => {
     setTesting(true);
     setDetectionLog([]);
     try {
-      const hasModule = typeof (window as any).GIAWakeWord !== 'undefined';
+      const hasModule = typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined';
       if (hasModule) {
-        await (window as any).GIAWakeWord.startTest(detectionLog.length);
+        await (window as unknown as { GIAWakeWord: { startTest: (n: number) => Promise<void> } }).GIAWakeWord.startTest(detectionLog.length);
       } else {
         // Simulate detection events for preview
         const simPatterns = ['JARVIS', 'HEY GIA', 'ALEXA', 'OK GOOGLE'];

@@ -10,6 +10,10 @@ import { noteTools } from './tools/notes';
 import { autonomyTools } from './tools/autonomy';
 import { powerTools } from './tools/powerTools';
 import { deviceIntegrationTools } from './tools/deviceIntegration';
+import { socialMediaTools } from './tools/socialMedia';
+import { connectorTools } from './tools/connectors';
+import { gatewayTools } from './tools/gateway';
+import { telegramTools } from './tools/telegram';
 
 export type { ToolResult };
 export type { Tool };
@@ -34,6 +38,10 @@ class GiaTools {
       ...autonomyTools,
       ...powerTools,
       ...deviceIntegrationTools,
+      ...socialMediaTools,
+      ...connectorTools,
+      ...gatewayTools,
+      ...telegramTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

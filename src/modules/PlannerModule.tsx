@@ -5,32 +5,9 @@ import GiaBrain from '../services/GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { extractJSON, getIntervalMs, formatNextRun } from '../utils/helpers';
+import { getIntervalMs, formatNextRun } from '../utils/helpers';
 import { genId } from '../utils/id';
-
-async function generateWithJsonRetry<T>(
-  generateFn: () => Promise<{ text: string }>,
-  maxRetries = 2
-): Promise<T> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await generateFn();
-      const parsed = extractJSON<T>(res.text);
-      return parsed;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      logger.warn(`[PlannerModule] JSON parse attempt ${attempt + 1} failed:`, lastError.message);
-      
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-      }
-    }
-  }
-  
-  throw lastError || new Error('Failed to parse JSON after retries');
-}
+import { generateWithRetry } from '../utils/generateWithRetry';
 
 interface PlanStep { id: string; title: string; description: string; done: boolean; priority: 'high'|'medium'|'low'; eta?: string }
 const PRIORITY_COLORS = {
@@ -85,7 +62,7 @@ const PlannerModule: React.FC = () => {
     const text = prompt.trim(); if (!text || loading) return;
     setLoading(true); setError(''); setIntentState('thinking');
     try {
-      const parsed = await generateWithJsonRetry<{ steps: Omit<PlanStep, 'done'>[]; title: string }>(
+      const { data: parsed, wasRepaired } = await generateWithRetry<{ steps: Omit<PlanStep, 'done'>[]; title: string }>(
         () => GiaBrain.generate({
           signal: AbortSignal.timeout(30_000),
           prompt: text,
@@ -97,8 +74,11 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
           temperature: 0.45,
           maxTokens: 1500,
         }),
-        2
+        { moduleName: 'PlannerModule' }
       );
+      if (wasRepaired) {
+        logger.warn('[PlannerModule] AI response was repaired by OutputValidator');
+      }
       if (!parsed.steps || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
         throw new Error('AI returned an invalid response format. Please try again.');
       }
