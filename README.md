@@ -117,6 +117,12 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Voice Overlay** | Animated full-screen voice UI with waveform visualization and ripple rings |
 | **Setup Wizard** | First-run onboarding with step-by-step provider setup, API key entry, and connection testing |
 | **Native Device Integration** | Make calls, send SMS/WhatsApp/email, share content, read/write clipboard, trigger vibration |
+| **Social Media Manager** | Post, schedule, and analyze across 7 platforms (X, Instagram, Facebook, LinkedIn, TikTok, Telegram, WhatsApp) with OAuth |
+| **API Gateway** | Configurable HTTP proxy with route management, logging, rate limiting, and caching |
+| **Connector System** | 11 pre-built API connectors (OpenWeatherMap, GitHub, Twilio, Supabase, etc.) with key management |
+| **Telegram Channel Integration** | Full Telegram bot channel management — post text, photos, fetch stats |
+| **Provider Health Monitoring** | Per-model latency, success rate, degradation detection with live Engine Room status |
+| **JSON Retry System** | Exponential backoff + output validation for LLM JSON parsing failures |
 | **Auto-Summarization** | Automatic conversation history compression when approaching context limits |
 | **Offline Queue** | Persistent tool call queue — queues requests when offline, auto-replays on reconnect |
 | **GitHub Integration** | Fetch GitHub user profiles, repos, files, and metadata directly from chat |
@@ -277,6 +283,85 @@ Every tool execution follows an approval workflow:
 4. **Completed/Failed**: Result displayed with observation note
 
 Low-risk tools (web_search, read_url, environment_info, show_map, file_read, clarification) are auto-approved. High-risk tools (terminal_run, filesystem_write, etc.) require explicit user confirmation.
+
+## 🌐 API Gateway
+
+GIA includes a built-in API gateway for proxying, routing, and monitoring HTTP requests:
+
+- **Route Management**: Create named routes with configurable method, path, target URL, rate limiting, and cache TTL
+- **Proxy**: Forward requests through the gateway with automatic logging and monitoring
+- **Logging**: Complete request/response log with status codes, duration, and error tracking
+- **Stats**: Per-route call counts, success rates, average duration, method breakdown
+- **Transform**: JSON and GraphQL body transformation support
+
+Tools: `gateway_add_route`, `gateway_list`, `gateway_call`, `gateway_proxy`, `gateway_remove_route`, `gateway_toggle`, `gateway_stats`, `gateway_logs`
+
+## 🔌 Connector System
+
+Pre-configured API connectors with one-command setup and key management:
+
+| Connector | Service | Type |
+|-----------|---------|------|
+| OpenWeatherMap | Weather data | API |
+| NewsAPI | News headlines | API |
+| GitHub API | Repos & user data | API |
+| SERP API | Search results | API |
+| SendGrid | Email delivery | Messaging |
+| Supabase | PostgreSQL + realtime | Database |
+| Firebase | Google Firebase backend | Cloud |
+| AWS S3 | Cloud storage | Storage |
+| Twilio | SMS & communication | Messaging |
+| Notion API | Workspaces & databases | API |
+| Telegram Bot | Bot messaging | Messaging |
+
+Tools: `connector_list`, `connector_configure`, `connector_call`, `connector_test`, `connector_raw`, `connector_remove`
+
+## 📱 Social Media Manager
+
+Full social media management from within GIA — post, schedule, and analyze across 7 platforms:
+
+- **Platforms**: X (Twitter), Instagram, Facebook, LinkedIn, TikTok, Telegram, WhatsApp
+- **OAuth Login**: Browser-based OAuth flow for authenticated API access (X, Instagram, FB, LinkedIn, TikTok)
+- **Manual Connect**: Link accounts with API tokens for real posting capability
+- **Post Lifecycle**: Create drafts, schedule for later, publish, delete
+- **Analytics**: Per-platform follower counts, engagement rates, impressions
+- **Scheduling**: Unix timestamp-based scheduling for future posts
+
+Tools: `social_list_platforms`, `social_connect`, `social_disconnect`, `social_oauth`, `social_create_post`, `social_publish`, `social_schedule`, `social_list_posts`, `social_delete_post`, `social_analytics`
+
+## ✉️ Telegram Channel Integration
+
+Dedicated Telegram channel management via Bot API:
+
+- **Setup**: Configure bot token and channel ID (from @BotFather)
+- **Posting**: Send formatted text (HTML/Markdown) and photos
+- **Channel Info**: Fetch title, description, member count
+- **Stats**: Member count, admin count
+- **Status**: Check connection health at any time
+
+Tools: `telegram_setup`, `telegram_channel_info`, `telegram_post`, `telegram_post_photo`, `telegram_stats`, `telegram_status`, `telegram_disconnect`
+
+## 🔁 JSON Retry System
+
+Unified retry utility for LLM JSON parsing failures across Analyst, Planner, and Exam modules:
+
+- **Exponential backoff**: 500ms → 1.5s → 3s → 6s delays (4 max retries)
+- **Progressive prompts**: Each retry uses increasingly strict instructions
+- **OutputValidator integration**: Auto-repairs malformed JSON before retry
+- **Module-aware**: Logs with module prefix for debugging
+
+Used by: `AnalystModule`, `PlannerModule`, `ExamModule` via `src/utils/generateWithRetry.ts`
+
+## 🩺 Provider Health Monitoring
+
+Real-time per-model provider health tracking with degradation detection:
+
+- **Per-model tracking**: Health stats keyed by `(providerId, modelId)` pair
+- **Success Rate**: Running success/failure ratio for the last 100 calls
+- **Latency Tracking**: Average response time per provider+model combination
+- **Status Classification**: `healthy` (≥80% success), `degraded` (≥50%), `down` (<50%)
+- **Consecutive Failure Detection**: Flags providers with rapid consecutive failures
+- **Engine Room Integration**: `status` command shows live latency + error counts
 
 ## 🛡️ Security & Enterprise Hardening
 
