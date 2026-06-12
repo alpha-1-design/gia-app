@@ -5,5 +5,5 @@
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
-    android:description="GIA Circle-to-Search"
+    android:description="@string/accessibility_service_description"
     android:notificationTimeout="100" />

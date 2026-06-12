@@ -4,4 +4,5 @@
     <string name="title_activity_main">GIA</string>
     <string name="package_name">com.alpha1studio.gia</string>
     <string name="custom_url_scheme">com.alpha1studio.gia</string>
+    <string name="accessibility_service_description">GIA Circle-to-Search</string>
 </resources>
