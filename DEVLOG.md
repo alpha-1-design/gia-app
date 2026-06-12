@@ -169,6 +169,19 @@ Chronological record of changes, rationale, and decisions.
 
 **Duration:** 21.5s (transform 1.5s, setup 0.9s, import 2.5s, tests 1.3s, environment 13.8s)
 
+### Added: README documentation for 5 undocumented feature areas
+**Files:** `README.md` (+85 lines)
+
+**New sections documented:**
+- **Social Media Manager** — 7 platforms, OAuth, post lifecycle, analytics (9 tools)
+- **API Gateway** — route management, proxying, logging, stats (8 tools)
+- **Connector System** — 11 pre-configured API connectors with key management (6 tools)
+- **Telegram Channel Integration** — bot setup, text/photo posting, stats (7 tools)
+- **JSON Retry System** — exponential backoff for LLM JSON failures
+- **Provider Health Monitoring** — per-model latency/success rate/degradation detection
+
+Previously these features existed only in source code with no README documentation.
+
 ## Next Up (Priority Order)
 
 1. ✅ **Conversation Branching** — Session tree structure + UI (implemented: `forkSession`, `addBranch`, `switchBranch`, `BranchView` component, GitBranch button)
