@@ -105,7 +105,10 @@ export const stripToolBlocks = (text: string): string => {
 };
 
 export const processStreamForDisplay = (accumulated: string): string => {
-  return stripToolBlocks(accumulated) || '…';
+  const stripped = stripToolBlocks(accumulated);
+  // If stripping leaves nothing but the original had content (tool blocks only),
+  // return an empty string — the caller handles this gracefully
+  return stripped;
 };
 
 export const flushThinkBlock = (state: StreamParserState): string => {

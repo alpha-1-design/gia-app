@@ -1,4 +1,5 @@
 export function repairJson(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
   let s = raw.trim();
 
   // Handle common cases where model wraps JSON in markdown code fences

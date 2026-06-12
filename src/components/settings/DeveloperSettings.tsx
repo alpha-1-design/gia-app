@@ -200,6 +200,35 @@ export const DeveloperSettings: React.FC = () => {
         </div>
       </div>
 
+      {/* ── HuggingFace Access Token ─────────────────────────────── */}
+      <div>
+        <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-medium mb-2" style={{ color: 'var(--gia-muted)' }}>
+          <Database size={11} />
+          HuggingFace Access Token
+        </label>
+        <div className="relative">
+          <input
+            type="password"
+            defaultValue={localStorage.getItem('gia:vision:hfToken') || ''}
+            onBlur={(e) => {
+              const val = e.target.value.trim();
+              localStorage.setItem('gia:vision:hfToken', val);
+            }}
+            placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono"
+            style={{
+              background: 'var(--gia-bg-2)',
+              color: 'var(--gia-text)',
+              border: '1px solid var(--gia-border)',
+            }}
+          />
+        </div>
+        <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+          Required for gated/private HuggingFace models. Get yours at huggingface.co/settings/tokens.
+          The token is stored locally and only sent to HuggingFace when loading models.
+        </p>
+      </div>
+
       {/* ── Network Capture ────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-2">

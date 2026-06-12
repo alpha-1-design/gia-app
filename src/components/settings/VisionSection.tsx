@@ -41,6 +41,48 @@ export const VisionSection: React.FC = () => {
   }, [refresh, refreshKey]);
 
   // ── Handlers ──────────────────────────────────────────────────
+  const [selectedModels, setSelectedModels] = useState<Record<string, boolean>>({});
+  const [downloadingModels, setDownloadingModels] = useState<Record<string, boolean>>({});
+
+  const handleDownloadModel = useCallback(async (modelId: string) => {
+    if (downloadingModels[modelId]) return;
+    setDownloadingModels(prev => ({ ...prev, [modelId]: true }));
+    try {
+      await router.downloadModel(modelId);
+    } catch {
+      // error already logged by router
+    } finally {
+      setDownloadingModels(prev => ({ ...prev, [modelId]: false }));
+      refresh();
+    }
+  }, [router, refresh]);
+
+  const handleDownloadSelected = useCallback(async () => {
+    const toDownload = Object.entries(selectedModels)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (toDownload.length === 0) return;
+    setDownloadingModels(prev => {
+      const next = { ...prev };
+      for (const id of toDownload) next[id] = true;
+      return next;
+    });
+    try {
+      for (const modelId of toDownload) {
+        await router.downloadModel(modelId);
+      }
+    } catch {
+      // error already logged by router
+    } finally {
+      setDownloadingModels(prev => {
+        const next = { ...prev };
+        for (const id of toDownload) delete next[id];
+        return next;
+      });
+      refresh();
+    }
+  }, [router, refresh, selectedModels]);
+
   const handleDownloadAll = useCallback(async () => {
     setDownloading(true);
     try {
@@ -116,18 +158,40 @@ export const VisionSection: React.FC = () => {
         <table className="w-full text-[11px]">
           <thead>
             <tr>
+              <th className="text-left py-1.5 pr-1 font-medium" style={{ color: 'var(--gia-muted)', width: '14px' }}>
+                <input
+                  type="checkbox"
+                  checked={Object.values(selectedModels).filter(Boolean).length === Object.keys(modelStatuses).length && Object.keys(modelStatuses).length > 0}
+                  onChange={(e) => {
+                    const all = e.target.checked;
+                    const next: Record<string, boolean> = {};
+                    for (const key of Object.keys(modelStatuses)) next[key] = all;
+                    setSelectedModels(next);
+                  }}
+                  style={{ accentColor: '#a855f7' }}
+                />
+              </th>
               <th className="text-left py-1.5 pr-2 font-medium" style={{ color: 'var(--gia-muted)' }}>Model</th>
               <th className="text-left py-1.5 px-2 font-medium" style={{ color: 'var(--gia-muted)' }}>Status</th>
               <th className="text-right py-1.5 pl-2 font-medium" style={{ color: 'var(--gia-muted)' }}>Size</th>
+              <th className="text-right py-1.5 pl-2 font-medium" style={{ color: 'var(--gia-muted)' }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {Object.entries(modelStatuses).map(([modelId, entry]) => {
               const cfg = STATUS_CONFIG[entry.status as ModelStatusKey] || STATUS_CONFIG.not_loaded;
-              // Short model name for display
               const shortName = modelId.replace('Xenova/', '').replace(/-/g, ' ');
+              const isDownloading = downloadingModels[modelId];
               return (
                 <tr key={modelId} className="border-t" style={{ borderColor: 'var(--gia-border)' }}>
+                  <td className="py-1.5 pr-1">
+                    <input
+                      type="checkbox"
+                      checked={!!selectedModels[modelId]}
+                      onChange={(e) => setSelectedModels(prev => ({ ...prev, [modelId]: e.target.checked }))}
+                      style={{ accentColor: '#a855f7' }}
+                    />
+                  </td>
                   <td className="py-1.5 pr-2" style={{ color: 'var(--gia-text)' }}>
                     <span className="capitalize">{shortName}</span>
                   </td>
@@ -150,6 +214,22 @@ export const VisionSection: React.FC = () => {
                   <td className="py-1.5 pl-2 text-right" style={{ color: 'var(--gia-muted-2)' }}>
                     {entry.downloadSizeEstimate}
                   </td>
+                  <td className="py-1.5 pl-2 text-right">
+                    {entry.status !== 'ready' && (
+                      <button
+                        onClick={() => handleDownloadModel(modelId)}
+                        disabled={isDownloading}
+                        className="px-2 py-1 rounded text-[9px] font-medium transition-all"
+                        style={{
+                          background: isDownloading ? 'var(--gia-bg-2)' : 'rgba(168,85,247,0.1)',
+                          color: isDownloading ? 'var(--gia-muted)' : '#a855f7',
+                          border: `1px solid ${isDownloading ? 'var(--gia-border)' : 'rgba(168,85,247,0.2)'}`,
+                        }}
+                      >
+                        {isDownloading ? '...' : 'Download'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -157,29 +237,35 @@ export const VisionSection: React.FC = () => {
         </table>
       </div>
 
-      {/* ── Download All Models Button ─────────────────────────── */}
-      <button
-        onClick={handleDownloadAll}
-        disabled={downloading}
-        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium transition-all"
-        style={{
-          background: downloading ? 'var(--gia-bg-2)' : 'rgba(168,85,247,0.1)',
-          color: downloading ? 'var(--gia-muted)' : '#a855f7',
-          border: `1px solid ${downloading ? 'var(--gia-border)' : 'rgba(168,85,247,0.2)'}`,
-        }}
-      >
-        {downloading ? (
-          <>
-            <RefreshCw size={13} className="animate-spin" />
-            Downloading Models...
-          </>
-        ) : (
-          <>
-            <Download size={13} />
-            Download All Models
-          </>
-        )}
-      </button>
+      {/* ── Download Buttons ────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleDownloadSelected}
+          disabled={Object.values(selectedModels).filter(Boolean).length === 0}
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium transition-all flex-1"
+          style={{
+            background: Object.values(selectedModels).filter(Boolean).length === 0 ? 'var(--gia-bg-2)' : 'rgba(168,85,247,0.1)',
+            color: Object.values(selectedModels).filter(Boolean).length === 0 ? 'var(--gia-muted)' : '#a855f7',
+            border: `1px solid ${Object.values(selectedModels).filter(Boolean).length === 0 ? 'var(--gia-border)' : 'rgba(168,85,247,0.2)'}`,
+          }}
+        >
+          <Download size={13} />
+          Download Selected ({Object.values(selectedModels).filter(Boolean).length})
+        </button>
+        <button
+          onClick={handleDownloadAll}
+          disabled={downloading}
+          className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[10px] font-medium transition-all"
+          style={{
+            background: 'var(--gia-bg-2)',
+            color: 'var(--gia-muted-2)',
+            border: '1px solid var(--gia-border)',
+          }}
+        >
+          {downloading ? <RefreshCw size={11} className="animate-spin" /> : <Download size={11} />}
+          All
+        </button>
+      </div>
 
       {/* ── Confidence Threshold ───────────────────────────────── */}
       <div>

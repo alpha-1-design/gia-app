@@ -228,6 +228,28 @@ class VisionRouter {
     logger.log(`[VisionRouter] Download models: ${loaded} loaded, ${failed} failed`);
   }
 
+  /**
+   * Download / warm-up a single vision model by its model ID.
+   */
+  async downloadModel(modelId: string): Promise<void> {
+    const model = LOCAL_MODELS.find(m => m.id === modelId);
+    if (!model) {
+      logger.error(`[VisionRouter] Unknown model: ${modelId}`);
+      return;
+    }
+    this.modelStatus[modelId] = { ...this.modelStatus[modelId], status: 'loading' };
+    try {
+      const pipe = await this._getPipeline(model.task);
+      this.modelStatus[modelId] = { ...this.modelStatus[modelId], status: pipe ? 'ready' : 'error' };
+    } catch (err) {
+      this.modelStatus[modelId] = {
+        ...this.modelStatus[modelId],
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Load failed',
+      };
+    }
+  }
+
   // ── Private helpers ──────────────────────────────────────────────
 
   private _syncStatus(): void {

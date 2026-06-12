@@ -26,6 +26,9 @@ import { ReliabilitySection } from '../components/settings/ReliabilitySection';
 import { VisionSection } from '../components/settings/VisionSection';
 import { LocalModelsSection } from '../components/settings/LocalModelsSection';
 import { DeveloperSettings } from '../components/settings/DeveloperSettings';
+import { ConnectorsSection } from '../components/settings/ConnectorsSection';
+import { SocialSection } from '../components/settings/SocialSection';
+import { GatewaySection } from '../components/settings/GatewaySection';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
@@ -318,6 +321,9 @@ const SettingsModule: React.FC = () => {
       <VisionSection />
       <SecuritySection />
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
+      <ConnectorsSection />
+      <SocialSection />
+      <GatewaySection />
       <BrowserSection />
       <SearchSection />
       <CodeHistorySection />

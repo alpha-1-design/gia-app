@@ -113,6 +113,7 @@ const EngineRoom: React.FC = () => {
         const allProviders = providerRegistry.getAllProviders();
         if (!isNaN(idx) && allProviders[idx]) {
           const p = allProviders[idx].id;
+          setWizard({ flow: 'enter-key', provider: p });
           push(mk('res', `Provider: ${providerRegistry.getLabel(p)}`), mk('prompt', 'Paste your API key (or type "cancel"):'));
         } else push(mk('err', `Enter 1–${allProviders.length}.`));
         return;

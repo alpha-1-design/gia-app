@@ -1,0 +1,13 @@
+{
+  "name": "gia-gateway-daemon",
+  "version": "1.0.0",
+  "description": "24/7 gateway daemon for GIA — runs in proot+Alpine to listen on Telegram, Discord, and other platforms",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}

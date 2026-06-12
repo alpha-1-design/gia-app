@@ -14,6 +14,8 @@ import { socialMediaTools } from './tools/socialMedia';
 import { connectorTools } from './tools/connectors';
 import { gatewayTools } from './tools/gateway';
 import { telegramTools } from './tools/telegram';
+import { terminalTools } from './tools/terminal';
+import { gatewayDaemonTools } from './tools/gatewayDaemon';
 
 export type { ToolResult };
 export type { Tool };
@@ -42,6 +44,8 @@ class GiaTools {
       ...connectorTools,
       ...gatewayTools,
       ...telegramTools,
+      ...terminalTools,
+      ...gatewayDaemonTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

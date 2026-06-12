@@ -207,15 +207,20 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
 
       const rawContent = processStreamForDisplay(parserState.accumulated);
-      const finalText = rawContent || (() => {
-        const t = (res.text || '').replace(/```tool[\s\S]*?```/g, '').trim();
-        const m = t.match(/<think>([\s\S]*?)<\/think>/);
-        if (m) {
-          parserState.thoughtsAccumulated = m[1].trim();
-          return t.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-        }
-        return t;
-      })();
+      const finalText = rawContent ||
+        // If stream parser stripped everything (all tool blocks), use res.text with tool blocks removed
+        (() => {
+          const t = (res.text || '').replace(/```tool[\s\S]*?```/g, '').trim();
+          const m = t.match(/<think>([\s\S]*?)<\/think>/);
+          if (m) {
+            parserState.thoughtsAccumulated = (parserState.thoughtsAccumulated || '') + '\n' + m[1].trim();
+            return t.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+          }
+          return t;
+        })() ||
+        // Last resort: if everything is tool blocks, show raw to avoid blank message
+        (res.text || '').trim().slice(0, 200) ||
+        '🤖 _Taking action..._';
       state.updateMessage(sessionId, asstId, finalText, parserState.thoughtsAccumulated || undefined);
       if (res.sources?.length) {
         useGiaStore.setState({

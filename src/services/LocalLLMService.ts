@@ -147,9 +147,11 @@ class LocalLLMService {
     this._loadPromise = (async () => {
       try {
         const mod = await import('@huggingface/transformers');
+        const hfToken = typeof window !== 'undefined' ? localStorage.getItem('gia:vision:hfToken') || undefined : undefined;
         const pipe = await mod.pipeline('text-generation', modelId, {
           dtype: 'q4', // 4-bit quantized for mobile
-        });
+          ...(hfToken ? { access_token: hfToken } : {}),
+        } as never);
         this._pipeline = pipe as typeof this._pipeline;
         this._loadedModel = modelId;
         this._setStatus(modelId, 'ready');
@@ -197,6 +199,13 @@ class LocalLLMService {
 
     if (options.signal) {
       generateOpts.signal = options.signal;
+    }
+
+    // ── HuggingFace Access Token (for gated / private models) ──────
+    const hfToken = localStorage.getItem('gia:vision:hfToken') || '';
+    if (hfToken) {
+      // @ts-expect-error: transformers.js accepts `access_token` in pipeline options
+      opts.access_token = hfToken;
     }
 
     try {
