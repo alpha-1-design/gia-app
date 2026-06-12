@@ -172,9 +172,9 @@ describe('processStreamForDisplay', () => {
     expect(result).toBe('hello\n\nworld');
   });
 
-  it('returns ellipsis when nothing remains', () => {
+  it('returns empty string when only tool blocks remain', () => {
     const result = processStreamForDisplay('```tool\n{"id":"x"}\n```');
-    expect(result).toBe('…');
+    expect(result).toBe('');
   });
 });
 
