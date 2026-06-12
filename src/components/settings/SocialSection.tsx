@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, Link2, Link2Off, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
+import { Share2, Link2, Link2Off, CheckCircle2 } from 'lucide-react';
 import socialManager from '../../services/social/SocialManager';
 
 // ── Brand SVGs ──────────────────────────────────────────────────────

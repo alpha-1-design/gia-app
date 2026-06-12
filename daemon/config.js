@@ -2,6 +2,7 @@
  * Config manager for the GIA gateway daemon.
  * Reads from ~/.gia/gateway.json — the same file the GIA app syncs to.
  */
+/* eslint-env node */
 import fs from 'node:fs';
 
 export class ConfigManager {

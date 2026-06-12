@@ -6,13 +6,9 @@
  * 
  * Usage:
  *   cd daemon && npm start
- * 
- * Or start it from GIA's terminal:
- *   node ~/gia-app/daemon/index.js
  */
-
+/* eslint-env node */
 import fs from 'node:fs';
-import path from 'node:path';
 import { TelegramPoller } from './telegram.js';
 import { ConfigManager } from './config.js';
 

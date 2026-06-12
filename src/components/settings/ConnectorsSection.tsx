@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plug, PlugZap, Key, RefreshCw, Power, PowerOff, CheckCircle2, XCircle } from 'lucide-react';
+import { Plug, PlugZap, Key, RefreshCw, Power, PowerOff } from 'lucide-react';
 import connectorManager from '../../services/connectors/ConnectorManager';
 
 export const ConnectorsSection: React.FC = () => {

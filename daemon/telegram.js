@@ -2,6 +2,7 @@
  * Telegram Bot API poller for the GIA gateway daemon.
  * Uses long polling to receive messages in real-time.
  */
+/* eslint-env node */
 import fetch from 'node-fetch';
 
 export class TelegramPoller {

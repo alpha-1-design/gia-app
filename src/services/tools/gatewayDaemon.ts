@@ -1,17 +1,5 @@
-import { z } from 'zod';
 import terminalService from '../TerminalService';
 import type { Tool } from './types';
-
-function formatZodError(issues: z.ZodIssue[]): string {
-  return issues.map(i => {
-    const path = i.path.length > 0 ? '"' + i.path.join('.') + '"' : 'value';
-    if (i.code === 'invalid_type') {
-      const info = i as unknown as { expected: string; received: string };
-      return path + ': expected ' + info.expected + ', got ' + (info.received === 'undefined' ? 'nothing' : info.received);
-    }
-    return i.message;
-  }).join('; ');
-}
 
 const gatewayDaemonStart: Tool = {
   id: 'gateway_daemon_start',
@@ -35,7 +23,7 @@ const gatewayDaemonStart: Tool = {
       if (result.exitCode === 0) {
         return {
           success: true,
-          content: '## Gateway Daemon Started\n\nThe GIA gateway daemon is now running 24/7 in your proot+Alpine terminal.\n\nIt listens for messages on Telegram and routes them through GIA.\n\n**Manage it:**\n- Status: `ps aux | grep node`\n- Stop: `kill \\$(pgrep -f \"gia-app/daemon\")`\n- Logs: `cat ~/.gia/gateway-daemon.log`',
+          content: '## Gateway Daemon Started\n\nThe GIA gateway daemon is now running 24/7 in your proot+Alpine terminal.\n\nIt listens for messages on Telegram and routes them through GIA.\n\n**Manage it:**\n- Status: `ps aux | grep node`\n- Stop: `kill \$(pgrep -f "gia-app/daemon")`\n- Logs: `cat ~/.gia/gateway-daemon.log`',
         };
       }
       return { success: false, content: '', error: result.output || 'Failed to start daemon' };
