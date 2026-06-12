@@ -44,7 +44,7 @@ export class PluginManager {
    * is unavailable or the hook is a no-permission-required hook.
    */
   private async executeHookInSandbox<T>(
-    hookFn: ((...args: unknown[]) => unknown) | undefined,
+    hookFn: ((...args: unknown[]) => unknown) | ((prompt: string) => string | Promise<string>) | ((response: { text: string; provider: string; model: string }) => { text: string; provider: string; model: string } | Promise<{ text: string; provider: string; model: string }>) | undefined,
     pluginId: string,
     hookName: string,
     payload?: unknown,

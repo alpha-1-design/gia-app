@@ -46,7 +46,7 @@ export const VoiceSection: React.FC = () => {
       // Check if native module is available
       const hasModule = typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined';
       if (hasModule) {
-        const status = await (window as unknown as { GIAWakeWord: { getStatus: () => unknown } }).GIAWakeWord.getStatus();
+        const status = await (window as unknown as { GIAWakeWord: { getStatus: () => ServiceStatus } }).GIAWakeWord.getStatus();
         setServiceStatus(status);
       } else {
         setServiceStatus({
