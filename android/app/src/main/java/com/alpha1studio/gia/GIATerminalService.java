@@ -320,7 +320,6 @@ public class GIATerminalService extends Service {
                 sessionId, command, process,
                 stdinOut, stdinIn,
                 process.getInputStream());
-        );
 
         sessions.put(sessionId, session);
         return session;
