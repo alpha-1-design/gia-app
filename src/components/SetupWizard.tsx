@@ -203,7 +203,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     } finally {
       setTesting(false);
     }
-  }, [wizard, testing]);
+  }, [wizard]);
 
   useEffect(() => {
     if (wizard.step === 'test-connection' && !wizard.testResult && !testing) {
