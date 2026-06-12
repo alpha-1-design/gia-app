@@ -29,11 +29,14 @@ export default defineConfig([
     },
   },
   {
-    files: ['server/**/*.js'],
+    files: ['server/**/*.js', 'daemon/**/*.js'],
     languageOptions: {
       globals: {
         ...globals.node,
       },
+    },
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
 ])
