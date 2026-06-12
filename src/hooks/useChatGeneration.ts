@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
 import { useGiaStore } from '../store/useGiaStore';
+import { useProtocolStore } from '../store/useProtocolStore';
 import AnalyticsService from '../services/AnalyticsService';
 import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
@@ -98,6 +99,8 @@ export function useChatGeneration() {
     setAttachments([]);
     lastUserMsgRef.current = text || fileNames;
     responseStartRef.current = Date.now();
+    // Clear old tool execution results from previous turns
+    useProtocolStore.getState().clearConsoleProtocols();
     setLoading(true);
     state.setIntentState('thinking');
     state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');

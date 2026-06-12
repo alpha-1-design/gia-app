@@ -24,6 +24,8 @@ import { BrowserSection } from '../components/settings/BrowserSection';
 import { SearchSection } from '../components/settings/SearchSection';
 import { ReliabilitySection } from '../components/settings/ReliabilitySection';
 import { VisionSection } from '../components/settings/VisionSection';
+import { LocalModelsSection } from '../components/settings/LocalModelsSection';
+import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
@@ -312,6 +314,7 @@ const SettingsModule: React.FC = () => {
       </div>
 
       <VoiceSection />
+      <LocalModelsSection />
       <VisionSection />
       <SecuritySection />
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
@@ -322,6 +325,7 @@ const SettingsModule: React.FC = () => {
       <PluginSection />
       <PluginInstallSection />
       <InstallSection />
+      <DeveloperSettings />
 
       {/* Danger zone */}
       <div className="gia-card p-4" style={{ borderColor: 'rgba(239,68,68,0.15)' }}>

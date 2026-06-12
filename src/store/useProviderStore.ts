@@ -127,7 +127,7 @@ export const useProviderStore = create<GiaProviderState>()(
 
         try {
           // Providers without dynamic listing
-          if (listingType === 'anthropic' || listingType === 'huggingface') {
+          if (listingType === 'anthropic' || listingType === 'huggingface' || listingType === 'local') {
             set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
             return providerRegistry.getModels(p);
           }

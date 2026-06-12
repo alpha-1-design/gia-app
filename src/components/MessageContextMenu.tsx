@@ -35,6 +35,8 @@ const MessageContextMenu: React.FC<Props> = ({
   const touchStartRef = useRef({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
+  // Store where the touch actually happened for accurate positioning
+  const touchPointRef = useRef({ x: 0, y: 0 });
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -54,8 +56,8 @@ const MessageContextMenu: React.FC<Props> = ({
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    touchPointRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     longPressRef.current = setTimeout(() => {
-      setPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
       setOpen(true);
     }, 500);
   };
@@ -83,6 +85,22 @@ const MessageContextMenu: React.FC<Props> = ({
     const menuHeight = isUser ? 120 : onContinue ? 200 : 160;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    // For touch events, position menu near the actual touch point, not the message edge
+    const touchPt = touchPointRef.current;
+    if (touchPt.x > 0 || touchPt.y > 0) {
+      const spaceBelow = vh - touchPt.y - 16;
+      const spaceAbove = touchPt.y - 16;
+      let y: number;
+      if (spaceBelow >= menuHeight) {
+        y = touchPt.y + 8;
+      } else if (spaceAbove >= menuHeight) {
+        y = touchPt.y - menuHeight - 8;
+      } else {
+        y = spaceBelow > spaceAbove ? touchPt.y + 8 : Math.max(16, touchPt.y - menuHeight - 8);
+      }
+      const x = Math.min(touchPt.x, vw - menuWidth - 16);
+      return { x: Math.max(16, x), y };
+    }
     const triggerRect = triggerRef.current?.getBoundingClientRect();
     if (triggerRect) {
       const spaceBelow = vh - triggerRect.bottom - 16;
@@ -95,7 +113,8 @@ const MessageContextMenu: React.FC<Props> = ({
       } else {
         y = spaceBelow > spaceAbove ? triggerRect.bottom : Math.max(16, triggerRect.top - menuHeight);
       }
-      const x = Math.min(triggerRect.left, vw - menuWidth - 16);
+      // Position near the right edge of trigger for mouse — more natural for desktop
+      const x = Math.min(triggerRect.right - menuWidth, vw - menuWidth - 16);
       return { x: Math.max(16, x), y };
     }
     return {

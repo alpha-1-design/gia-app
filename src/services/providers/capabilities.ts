@@ -85,6 +85,16 @@ export function getProviderCapabilities(
         imageGeneration: false,
       };
 
+    case 'local':
+      return {
+        tools: true,
+        thinking: false,
+        streaming: true,
+        vision: false,
+        jsonMode: false,
+        imageGeneration: false,
+      };
+
     default:
       return {
         tools: staticTools ?? true,
@@ -104,6 +114,7 @@ export function getProviderDisplayName(listingType: string): string {
     gemini: 'Google Gemini',
     ollama: 'Ollama (Local)',
     huggingface: 'HuggingFace',
+    local: 'Local On-Device',
     none: 'Custom',
   };
   return map[listingType.toLowerCase()] || listingType;

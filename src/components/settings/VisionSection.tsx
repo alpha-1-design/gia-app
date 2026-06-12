@@ -97,8 +97,13 @@ export const VisionSection: React.FC = () => {
           className="ml-auto p-1 rounded hover:bg-zinc-800 transition-colors"
           title="Refresh status"
         >
-          <RefreshCw size={11} style={{ color: 'var(--gia-muted-2)' }} />
+          <RefreshCw size={12} />
         </button>
+      </div>
+      {/* Clear explanation that these models run on-device (downloaded locally) */}
+      <div className="px-3 py-2 rounded-xl text-[11px] leading-relaxed" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
+        <p className="font-medium mb-1">📱 On-Device Vision Models</p>
+        <p>These models run <strong>locally on your device</strong> (no data sent externally). When you enable a model, it will be downloaded to your device storage the first time it's used. Models marked "Ready" are already cached and available.</p>
       </div>
 
       <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>

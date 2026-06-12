@@ -11,7 +11,7 @@ import { useGiaStore } from '../store/useGiaStore';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
-import { ThinkingOverlay } from '../components/ThinkingStatus';
+import { ThinkingStatus } from '../components/ThinkingStatus';
 import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
@@ -263,8 +263,18 @@ const ChatModule: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Inline thinking indicator — compact, doesn't block the chat */}
       {loading && (
-        <ThinkingOverlay phase={thinkingPhase} toolName={currentTool} onStop={handleStop} />
+        <div className="px-4 pb-2">
+          <div className="flex items-center justify-between">
+            <ThinkingStatus phase={thinkingPhase} toolName={currentTool} />
+            {handleStop && (
+              <button onClick={handleStop} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors" title="Stop" style={{ color: 'var(--gia-muted-2)' }}>
+                <svg width="10" height="10" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       <AnimatePresence>
@@ -355,7 +365,6 @@ const ChatModule: React.FC = () => {
                   { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
                   { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
                   { label: 'Vision', feature: 'vision' as const, icon: Eye, active: localVision, color: '#22c55e' },
-                  { label: 'Circle', feature: 'circle' as const, icon: Scan, active: false, color: '#a855f7', action: true },
                 ].map((tool: { label: string; feature: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string; action?: boolean }) => (
                   <button type="button" key={tool.label} onClick={() => tool.action ? useGiaStore.getState().setShowCircleSearch(true) : toggleFeature(tool.feature as 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision')} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
                     <tool.icon size={11} />

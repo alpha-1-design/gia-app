@@ -5,6 +5,7 @@ import type { BrainRequest, BrainResponse } from './providers/types';
 import { callOpenAICompat } from './providers/openai';
 import { callAnthropic } from './providers/anthropic';
 import { callGeminiNative } from './providers/gemini';
+import { callLocalLLM } from './providers/local';
 import { buildGiaSystem, setSystemContext } from './buildGiaSystem';
 import { buildMessages, selectBestModel } from './brain/modelUtils';
 import { buildOpenAITools, buildAnthropicTools, buildGeminiTools } from './brain/toolSchemas';
@@ -48,13 +49,16 @@ class GiaBrain {
     if (activeProvider === 'gemini') {
       return callGeminiNative(req, ctx);
     }
+    if (activeProvider === 'local-llm') {
+      return callLocalLLM(req, ctx);
+    }
     return callOpenAICompat(req, ctx);
   }
 
   async generate(req: BrainRequest): Promise<BrainResponse> {
     const { activeProvider, providers } = useProviderStore.getState();
     const config = providers[activeProvider];
-    if (!config.enabled || !config.apiKey) {
+    if (activeProvider !== 'local-llm' && (!config.enabled || !config.apiKey)) {
       throw new Error('No provider connected. Go to Settings → Engine Room and type: connect');
     }
 

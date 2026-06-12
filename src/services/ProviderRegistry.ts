@@ -28,6 +28,7 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   { id: 'ollama',     label: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1',         defaultModel: 'llama3.2',        needsApiKey: false, listingType: 'ollama', aliases: ['ol'] },
   { id: 'lmstudio',   label: 'LM Studio (Local)', baseUrl: 'http://localhost:1234/v1',       defaultModel: 'local-model',     needsApiKey: false, listingType: 'openai', aliases: ['lms'] },
   { id: 'openai',     label: 'OpenAI',     baseUrl: 'https://api.openai.com/v1',             defaultModel: 'gpt-4o-mini',     needsApiKey: true,  listingType: 'openai', aliases: ['oai'] },
+  { id: 'local-llm',  label: 'Local LLM (On-Device)', baseUrl: '', defaultModel: 'Xenova/Qwen2.5-1.5B-Instruct', needsApiKey: false, listingType: 'local', aliases: ['local', 'ondevice'] },
 ];
 
 const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
@@ -50,6 +51,11 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
   openai: [
     { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',  free: false, context: '128k', tools: true, vision: true  },
     { id: 'gpt-4o',       label: 'GPT-4o',        free: false, context: '128k', tools: true, vision: true  },
+  ],
+  'local-llm': [
+    { id: 'Xenova/Qwen2.5-0.5B-Instruct',  label: 'Qwen2.5 0.5B (Lightning)', free: true, context: '32k',  tools: true, vision: false },
+    { id: 'Xenova/Qwen2.5-1.5B-Instruct',  label: 'Qwen2.5 1.5B (Balanced)',  free: true, context: '32k',  tools: true, vision: false },
+    { id: 'Xenova/Qwen2.5-3B-Instruct',    label: 'Qwen2.5 3B (Ultra)',       free: true, context: '32k',  tools: true, vision: false },
   ],
 };
 

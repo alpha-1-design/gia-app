@@ -234,8 +234,10 @@ const App: React.FC = () => {
 
     // Show Setup Wizard if no provider is configured on first launch
     const { providers } = useProviderStore.getState();
-    const hasAnyProvider = Object.values(providers).some(p => p.enabled && p.apiKey);
-    if (!hasAnyProvider) {
+    const hasAnyProvider = Object.values(providers).some(p => (p.enabled && p.apiKey) || (!p.enabled && p.apiKey && p.apiKey.length > 0));
+    // Also check a localStorage flag as backup — the wizard stores 'gia-wizard-completed'
+    const wizardCompleted = localStorage.getItem('gia-wizard-completed') === 'true';
+    if (!hasAnyProvider && !wizardCompleted) {
       setShowSetup(true);
     }
   }, []);
@@ -720,7 +722,7 @@ const App: React.FC = () => {
       />
 
       <AnimatePresence>
-        {showSetup && <SetupWizard onComplete={() => setShowSetup(false)} />}
+        {showSetup && <SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} />}
       </AnimatePresence>
 
       <AnimatePresence>

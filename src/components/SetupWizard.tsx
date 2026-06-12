@@ -130,6 +130,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
   }, [wizard]);
 
   const handleClose = useCallback(() => {
+    localStorage.setItem('gia-wizard-completed', 'true');
     resetWizard();
     onClose?.();
   }, [resetWizard, onClose]);
