@@ -50,7 +50,7 @@ public class CorePlugin extends Plugin {
         intent.putExtra("startWakeWord", call.getBoolean("startWakeWord", false));
         intent.putExtra("accessKey", call.getString("accessKey", ""));
         intent.putExtra("keyword", call.getString("keyword", "JARVIS"));
-        intent.putExtra("sensitivity", (float) call.getDouble("sensitivity", 0.7));
+        intent.putExtra("sensitivity", call.getDouble("sensitivity", 0.7).floatValue());
         intent.putExtra("customModelPath", call.getString("customModelPath", ""));
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

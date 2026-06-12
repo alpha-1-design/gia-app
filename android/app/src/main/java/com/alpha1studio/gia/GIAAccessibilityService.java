@@ -28,7 +28,6 @@ import android.view.accessibility.AccessibilityEvent;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -93,7 +92,7 @@ public class GIAAccessibilityService extends AccessibilityService {
         createNotificationChannel();
 
         // Listen for capture requests from the app
-        LocalBroadcastManager.getInstance(this).registerReceiver(
+        registerReceiver(
                 captureReceiver,
                 new IntentFilter(ACTION_CAPTURE_SCREEN)
         );
@@ -112,7 +111,7 @@ public class GIAAccessibilityService extends AccessibilityService {
     @Override
     public void onDestroy() {
         instance = null;
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(captureReceiver);
+        unregisterReceiver(captureReceiver);
         releaseMediaProjection();
         super.onDestroy();
     }
@@ -161,9 +160,8 @@ public class GIAAccessibilityService extends AccessibilityService {
         if (path != null) {
             Intent intent = new Intent(ACTION_SCREEN_CAPTURED);
             intent.putExtra(EXTRA_IMAGE_PATH, path);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-
-            // Also send as a global broadcast for plugins
+            // Send broadcast for plugins (originally used LocalBroadcastManager + global;
+            // modern AndroidX doesn't ship LocalBroadcastManager, so just use global)
             sendBroadcast(intent);
         }
     }
