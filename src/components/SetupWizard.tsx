@@ -15,6 +15,7 @@ import {
   Wifi,
   WifiOff,
   Plus,
+  Cpu,
 } from 'lucide-react';
 import { idbStorage } from '../store/idb-storage';
 import { providerRegistry } from '../services/ProviderRegistry';
@@ -229,7 +230,13 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
             onClick={() => wizard.setStep('select-provider')}
             className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
           >
-            Let's get started <ArrowRight size={16} />
+            Connect Cloud AI <ArrowRight size={16} />
+          </button>
+          <button
+            onClick={() => { handleClose(); }}
+            className="flex items-center justify-center gap-2 px-6 py-3 border border-violet-500/30 text-violet-300 hover:bg-violet-500/10 rounded-lg font-medium transition-colors"
+          >
+            <Cpu size={16} /> Start Offline (Local AI)
           </button>
           <button
             onClick={handleClose}

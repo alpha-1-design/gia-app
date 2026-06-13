@@ -11,6 +11,7 @@ import { useGiaStore } from '../store/useGiaStore';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
+import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import { ThinkingStatus } from '../components/ThinkingStatus';
 import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
@@ -61,6 +62,8 @@ const ChatModule: React.FC = () => {
     setShowSkillPicker, setShowTools, setShowConsole,
     showBranchView, setShowBranchView,
   } = useChatState();
+
+  const { greeting, tip } = useProactiveMessage();
 
   if (showHistory) {
     return (
@@ -177,12 +180,44 @@ const ChatModule: React.FC = () => {
               <Bot size={26} style={{ color: '#a855f7' }} />
             </div>
             <div>
-              <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{useGiaStore.getState().userProfile.name ? `Hey ${useGiaStore.getState().userProfile.name} ✦` : 'Hey, I\'m GIA'}</p>
-              <p className="text-xs mt-1 max-w-[240px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{providerConnected ? 'Your personal AI workspace. Ask anything, attach files, or pick a quick start below.' : 'Connect a provider in Settings → Engine Room to get started.'}</p>
+              <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{useGiaStore.getState().userProfile.name ? `Hey ${useGiaStore.getState().userProfile.name}` : greeting.emoji + ' ' + greeting.text}</p>
+              <p className="text-xs mt-1 max-w-[240px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{providerConnected ? 'Your personal AI workspace. Ask anything, attach files, or pick a quick start below.' : 'No AI provider connected. Use the on-device local LLM or connect a provider in Settings.'}</p>
+              {!messages.length && (
+                <p className="text-[10px] mt-2 animate-fade-in" style={{ color: 'var(--gia-muted-2)' }}>
+                  {tip.emoji} {tip.text}
+                </p>
+              )}
             </div>
+            {!providerConnected && (
+            <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
+              <button onClick={() => { setInput('Start with your local AI model. '); }} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.2)' }}><Zap size={14} style={{ color: '#a855f7' }} /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Use Local AI (Free)</p>
+                  <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>GIA works offline with on-device intelligence</p>
+                </div>
+              </button>
+              <button onClick={() => useGiaStore.getState().setModule('settings')} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600/50">
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(113,113,122,0.2)' }}><Bot size={14} style={{ color: '#a1a1aa' }} /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Connect AI Provider</p>
+                  <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>OpenRouter, Anthropic, Gemini, or any API</p>
+                </div>
+              </button>
+              {QUICK_STARTS.slice(0, 1).map((qs) => (
+                <button key={qs.label} onClick={() => setInput(qs.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/30 border border-zinc-800 hover:border-violet-500/30">
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20` }}><qs.icon size={14} style={{ color: qs.color }} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
+                    <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{qs.prompt}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            )}
             {providerConnected && (
-              <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
-                {QUICK_STARTS.map((qs) => (
+            <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
+              {QUICK_STARTS.map((qs) => (
                   <button key={qs.label} onClick={() => setInput(qs.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-900/50 border border-zinc-800 hover:border-violet-500/30">
                     <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20` }}><qs.icon size={14} style={{ color: qs.color }} /></div>
                     <div className="flex-1 min-w-0">
