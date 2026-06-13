@@ -15,6 +15,8 @@ describe('createStreamParser', () => {
       thoughtsAccumulated: '',
       inThinkBlock: false,
       inToolBlock: false,
+      inJsonBlock: false,
+      jsonBlockBuffer: '',
       pendingBacktickCount: 0,
     });
   });
