@@ -19,7 +19,8 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "downlevelIteration": true
+    "downlevelIteration": true,
+    "types": []
   },
   "include": ["src"]
 }
