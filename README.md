@@ -112,6 +112,7 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Response Caching** | Cache identical requests to reduce API costs |
 | **Notes System** | Full sticky notes with colors, tags, pinning, search, and AI-manageable CRUD |
 | **On-Device Local AI** | Text classification, summarization, translation, embeddings, and QA — all in-browser, no API call needed |
+| **On-Device LLM** | Run Qwen2.5 generative LLMs (0.5B–3B) locally via Transformers WASM — full text generation offline |
 | **On-Device Python (Pyodide)** | Run Python code locally via Pyodide WASM — no server required |
 | **On-Device Vision** | Local image captioning, OCR, object detection, and classification + automatic provider fallback |
 | **Voice Overlay** | Animated full-screen voice UI with waveform visualization and ripple rings |
@@ -128,6 +129,21 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **GitHub Integration** | Fetch GitHub user profiles, repos, files, and metadata directly from chat |
 | **Screen Capture** | Multi-strategy screenshot capture (native Capacitor, html2canvas, getDisplayMedia) |
 | **Biometric Lock** | Optional fingerprint / face unlock via native biometric API |
+| **Device Health** | Storage, battery, memory monitoring with risk alerts |
+| **Directions & Maps** | Turn-by-turn routing (OSRM) with interactive map rendering |
+| **Memory CRUD Tools** | `save_memory`, `forget_memory` with category filtering |
+| **Build Project** | Scaffold, build, and package code projects into download-ready ZIP |
+| **Install Skill** | Dynamically install skill definitions from URL or built-in registry |
+| **Module Resilience** | Exam/Planner/Analyst modules auto-save state to localStorage — survive navigation, use cached/fallback data when offline |
+| **Network-Aware Retry** | `generateWithRetry` detects offline state, waits for reconnection, provides clearer error messages with provider-switch hints |
+| **Scheduled Post Auto-Publish** | SchedulerService checks and publishes due social posts automatically |
+| **Autonomy Hanging Detection** | ProactiveEngine marks steps stuck >5min as failed, reduces check interval to 30s |
+| **CI Signed APK Builds** | Keystore generated during CI — release APK is ready to sideload |
+| **Granular Notifications** | Schedule, cancel, list, and check permissions for native push notifications |
+| **Geolocation Tools** | Watch position, clear watch, check/request permissions |
+| **Haptic Patterns** | Impact, notification, and vibration haptic feedback types |
+| **Gateway Daemon** | Background daemon for continuous gateway operations |
+| **Terminal Management** | Check status and kill proot terminal sessions |
 
 ### Interactive Visual Blocks
 
@@ -194,9 +210,12 @@ MCP tools appear in GIA's tool registry with an `mcp__` prefix and are callable 
 GIA includes a full autonomous goal execution engine:
 
 - **Goal Creation**: Accept high-level goals, automatically decompose into actionable steps
+- **Immediate Execution**: First step begins immediately on goal creation (no idle wait)
 - **Step Execution**: Each step executed with tool access, LLM reasoning, and result evaluation
+- **Hanging Step Detection**: Steps stuck `in_progress` for >5 minutes auto-marked as failed with notification — engine moves to next step
 - **Reflection Engine**: Post-execution self-evaluation (success/partial/failure) with lessons learned
-- **Proactive Mode**: Background execution during user idle time (configurable threshold)
+- **Proactive Mode**: Background execution during user idle time (configurable 60s threshold)
+- **Rapid Polling**: ProactiveEngine checks every 30s for pending work
 - **Progress Tracking**: Visual progress bars, step-by-step status, reflection history
 - **Priority System**: Low/Medium/High/Critical with automatic ordering
 - **Management UI**: Dedicated Autonomy module with create/edit/pause/resume/delete controls
@@ -229,6 +248,7 @@ Schedule periodic AI tasks that run automatically:
 - **Execution**: Runs via GIA Brain with full tool access
 - **Notifications**: Local push notifications on task completion
 - **Persistence**: Scheduled tasks stored and survive app restarts
+- **Social Post Auto-Publish**: Automatically publishes due social media posts (status `scheduled` with `scheduledAt ≤ now`) synchronously with brain-prompt task checking
 
 ## 🖥 Desktop File System Access
 
@@ -345,12 +365,22 @@ Tools: `telegram_setup`, `telegram_channel_info`, `telegram_post`, `telegram_pos
 
 Unified retry utility for LLM JSON parsing failures across Analyst, Planner, and Exam modules:
 
-- **Exponential backoff**: 500ms → 1.5s → 3s → 6s delays (4 max retries)
-- **Progressive prompts**: Each retry uses increasingly strict instructions
+- **Exponential backoff**: 1s → 3s → 6s → 10s delays (4 max retries)
+- **Network awareness**: Detects `navigator.onLine` offline state — waits up to 15s for reconnection before failing with a clear network error
+- **Empty response detection**: Fails fast on empty/whitespace-only responses
 - **OutputValidator integration**: Auto-repairs malformed JSON before retry
 - **Module-aware**: Logs with module prefix for debugging
+- **Provider-switch hints**: Error messages suggest switching providers when appropriate
 
 Used by: `AnalystModule`, `PlannerModule`, `ExamModule` via `src/utils/generateWithRetry.ts`
+
+### Module Resilience
+
+| Module | Offline/Cache Behavior |
+|--------|----------------------|
+| **Exam** | Questions saved to localStorage, restored on revisit. Hardcoded fallback question bank (Mathematics, English, Science) when AI unavailable. Yellow banner indicates cached/fallback questions. `beforeunload` protection during active quizzes. |
+| **Planner** | Plans saved to localStorage. Scheduled task timers restored on mount; overdue tasks auto-fire. Fallback 7-step plan generated when offline. |
+| **Analyst** | Last analysis saved to localStorage, restored on mount. Fallback sample data when AI fails. |
 
 ## 🩺 Provider Health Monitoring
 

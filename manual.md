@@ -2,7 +2,7 @@
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
-## 🧠 What's New in v2.3.1.0
+## 🧠 What's New in v2.3.1.2
 
 | Feature | Description |
 |---------|-------------|
@@ -45,6 +45,15 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **PWA Share Target** | Receive content shared from other apps |
 | **Deep Link Support** | `gia://` and `web+gia://` protocol handling |
 | **Clipboard Monitor** | Detects copied text with "Ask GIA" button |
+| **Device Health Monitoring** | Storage (>75% warn, >90% critical), battery (<30% low, <15% critical), memory pressure alerts — proactive assistant checks |
+| **Directions & Maps** | Turn-by-turn OSRM routing with interactive map rendering via `get_directions` + `show_map` |
+| **Build & Install Tools** | `build_project` scaffolds, builds, and packages; `install_skill` adds new skills from URL |
+| **Memory Tools** | `save_memory` and `forget_memory` with category filtering |
+| **Module Resilience** | Exam/Planner/Analyst modules auto-save to localStorage, use cached/fallback data when offline |
+| **Network-Aware Retry** | `generateWithRetry` detects offline state, waits for reconnection, gives provider-switch hints |
+| **Scheduled Post Auto-Publish** | Due social media posts publish automatically |
+| **Hanging Step Detection** | Autonomous steps stuck >5min auto-fail — engine moves to next step |
+| **CI Signed APKs** | Release keystore generated during CI — signed release APK ready to sideload |
 
 ## 🛠 Core Modules
 
@@ -100,6 +109,13 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `show_notification` | Display a global toast notification |
 | `get_environment_info` | Full introspection of GIA identity, capabilities, environment |
 | `get_user_location` | GPS location (mobile + browser) |
+| `device_info` | Device info: OS, battery, network, display, locale |
+| `device_health` | Check storage, battery, memory — call proactively to monitor risks |
+| `screen_brightness` | Get/set screen brightness (Android native) |
+| `get_contacts` | Search device contacts |
+| `open_url` | Open any URL in browser |
+| `set_alarm` | Set Android alarm via AlarmManager |
+| `get_directions` | Turn-by-turn directions (OSRM) with interactive map |
 | `search_places` | OpenStreetMap place search |
 | `show_map` | Render interactive OpenStreetMap with markers |
 | `wikipedia` | Wikipedia article summaries |
@@ -117,6 +133,25 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `goal_progress` | Get goal progress report |
 | `pause_goal` | Pause/resume/cancel a goal |
 | `set_autonomy_config` | Configure autonomy settings |
+| `save_memory` | Save a fact, preference, or detail to memory |
+| `forget_memory` | Delete memories (by key, category, or all) |
+| `build_project` | Scaffold, build, and package code projects into downloadable ZIP |
+| `install_skill` | Install a new skill from URL or built-in registry |
+| `telegram_setup` | Connect Telegram bot + channel |
+| `telegram_status` | Check Telegram config status |
+| `telegram_channel_info` | Get channel info (title, members, description) |
+| `telegram_post` | Post text to Telegram channel |
+| `telegram_post_photo` | Post photo to Telegram channel with caption |
+| `telegram_stats` | Channel member + admin count |
+| `telegram_disconnect` | Remove Telegram config |
+| `gateway_add_route` | Add gateway route |
+| `gateway_list` | List all gateway routes |
+| `gateway_call` | Call API through gateway route |
+| `gateway_proxy` | Direct proxy HTTP request |
+| `gateway_remove_route` | Delete a gateway route |
+| `gateway_toggle` | Enable/disable a route |
+| `gateway_stats` | Calls, success rate, avg duration |
+| `gateway_logs` | Recent call history per route |
 
 ---
 
@@ -142,6 +177,20 @@ GIA can run AI models directly in your browser with no API call needed:
 - **On-Device Vision**: Caption images, extract text (OCR), detect objects, and classify scenes — routes between local models and provider APIs automatically
 
 These run via HuggingFace Transformers (WASM) or similar browser-based inference engines. No data leaves your device.
+
+## 🧠 On-Device Generative LLM
+
+Beyond classifiers and embeddings, GIA can run **full generative LLMs locally** on your device:
+
+- **Models**: Qwen2.5 (0.5B, 1.5B, 3B) downloaded through Settings → Local Models
+- **Inference Engine**: HuggingFace Transformers WASM — runs entirely in-browser
+- **Features**: Streaming text generation, abort support, progress tracking
+- **Privacy**: 100% on-device — no API call, no data leaves your phone
+- **Use Cases**: Chat, text generation, analysis — all offline
+
+Download models directly through GIA: connect your HuggingFace token in Dev Settings, then tap any model to download.
+
+---
 
 ## 🐍 Local Python Execution (Pyodide)
 
@@ -187,15 +236,24 @@ When voice input is active, GIA shows a full-screen **animated voice overlay**:
 - **State indicators**: Visual feedback for listening → processing → done states
 - **Triggered by**: Wake word detection or push-to-talk
 
-## 🔄 Offline Queue
+## 🔄 Network-Aware Retry & Offline Handling
 
-GIA handles network interruptions gracefully:
+GIA handles network interruptions gracefully across all modules:
 
 - **Automatic queuing**: Tool calls are queued locally when the network is unavailable
 - **FIFO replay**: Queued calls replay in order when connectivity is restored
 - **Retry logic**: Each queued call has configurable max retries with error tracking
 - **Persistence**: Queue survives app restarts (stored in localStorage)
 - **Transparent**: GIA continues working — you won't notice the interruption
+- **Network-aware retry**: `generateWithRetry` detects offline state (`navigator.onLine`), waits up to 15s for reconnection, provides clear error messages with provider-switch suggestions
+
+### Module Resilience
+
+| Module | Behavior When Offline / AI Fails |
+|--------|----------------------------------|
+| **Exam** | Questions saved to localStorage — restored on revisit. Hardcoded fallback question bank (Mathematics, English, Science, 10 Qs each) when AI unavailable. Yellow banner indicates cached/offline questions. |
+| **Planner** | Plans saved to localStorage across navigation. Scheduled task timers restored on mount; overdue tasks auto-fire. Fallback 7-step plan generated when offline. |
+| **Analyst** | Last analysis saved to localStorage, restored on mount. Fallback sample data when AI fails. |
 
 ---
 
@@ -353,11 +411,13 @@ GIA can work autonomously on complex goals. Access via the **Autonomy** module:
 
 1. **Create a Goal**: Set a title, description, and priority (Low/Medium/High/Critical)
 2. **Auto-Decomposition**: GIA breaks the goal into actionable steps
-3. **Execution**: Each step is executed with full tool access and LLM reasoning
-4. **Reflection**: After each step, GIA evaluates success and learns lessons
-5. **Progress Tracking**: Visual progress bar, step status indicators, reflection history
+3. **Immediate Execution**: First step begins right away (no idle wait)
+4. **Execution**: Each step is executed with full tool access and LLM reasoning
+5. **Hanging Step Detection**: Steps stuck >5 minutes are auto-marked as failed — GIA moves on
+6. **Reflection**: After each step, GIA evaluates success and learns lessons
+7. **Progress Tracking**: Visual progress bar, step status indicators, reflection history
 
-Enable **Autonomy Mode** (toggle in Autonomy module) to allow GIA to work on goals during idle time. Adjust **Proactiveness** slider to control how aggressively GIA pursues goals.
+Enable **Autonomy Mode** (toggle in Autonomy module) to allow GIA to work on goals during idle time. Adjust **Proactiveness** slider to control how aggressively GIA pursues goals. Idle threshold is 60 seconds — GIA checks for pending work every 30 seconds.
 
 ## 🔍 Circle-to-Search
 
@@ -376,7 +436,9 @@ Schedule recurring AI operations:
 2. Choose interval: Hourly, Daily, or Weekly
 3. GIA executes the prompt on schedule and notifies you with results
 
-Configure and manage scheduled tasks in Settings.
+Scheduled **social media posts** are auto-published when their due time arrives — no manual action needed.
+
+Configure and manage scheduled tasks in Settings or via the Planner module.
 
 ## 📦 Brain Export/Import
 
@@ -411,6 +473,34 @@ Every tool execution follows a transparent approval workflow:
 - **Protocol Panel**: `Ctrl+Shift+O` or tap the ⚡ button to see pending/active/completed tool executions
 - **Modify**: You can edit tool arguments before approving
 - **Reject**: Decline tool execution — GIA will try an alternative approach
+
+## 🩺 Device Health Monitoring
+
+GIA proactively monitors your device's health and alerts you to risks:
+
+- **Storage**: Warning at >75%, critical alert at >90% full
+- **Battery**: Low at <30%, critical at <15% — with charging status
+- **Memory**: Pressure level detection and alerts
+- **Trigger**: Automatic periodic checks by the proactive assistant, or manual via `device_health` tool
+- **Notification**: Alerts delivered as system notifications with actionable advice
+
+## 🏗 Build & Install Tools
+
+GIA can extend itself dynamically:
+
+- **`build_project`**: Scaffolds files, runs build commands, and packages the result into a downloadable ZIP. Supports multiple languages and frameworks.
+- **`install_skill`**: Fetches skill definitions from a URL, built-in registry (developer/researcher/tutor/creative/security), or `data:` URI — instantly expanding GIA's behavior and tool access.
+
+## 💾 Memory Management Tools
+
+GIA can persist and manage what it knows about you:
+
+- **`save_memory`**: Proactively save facts, preferences, goals, and context. Upserts by key.
+- **`forget_memory`**: Delete memories by exact key, by `category` filter, or clear all.
+
+GIA uses these automatically — when you share something worth remembering, it saves it without being asked.
+
+---
 
 ## 📋 Keyboard Shortcuts
 
