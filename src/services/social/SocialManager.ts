@@ -114,7 +114,7 @@ class SocialManager {
     if (!platform) return false;
     platform.connected = true;
     platform.accountName = config.accountName || config.accessToken || config.botToken || config.clientId || platformId;
-    platform.tokens = { ...(platform.tokens || {}), ...config };
+    platform.tokens = { ...(platform.tokens || {}), ...config } as OAuthTokens;
     this.saveTokens();
     return true;
   }

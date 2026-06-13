@@ -61,7 +61,7 @@ const socialConnect: Tool = {
       return { success: true, content: `## 🔑 Connected with Token\n\n**${platform}** linked as \`${accountName}\` with an API token. GIA can now make real API calls.` };
     }
 
-    const ok = socialManager.connectPlatform(platform, accountName);
+    const ok = socialManager.connectPlatform(platform, { accountName });
     if (!ok) return { success: false, content: '', error: `Unknown platform: ${platform}` };
     return { success: true, content: `## ✅ Connected to **${platform}**\n\nAccount: \`${accountName}\`\n\nFor real API posting, provide an \`accessToken\` or use \`social_oauth\`.` };
   },

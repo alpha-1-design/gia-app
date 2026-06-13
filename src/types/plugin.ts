@@ -1,4 +1,5 @@
 import type { Tool } from '../services/tools/types';
+import { useGiaStore } from '../store/useGiaStore';
 
 export interface PluginManifest {
   id: string;
@@ -25,7 +26,7 @@ export interface PluginAPI {
   getTool: (id: string) => Tool | undefined;
   getAllTools: () => Tool[];
   addNotification: (msg: string) => void;
-  getStore: () => ReturnType<typeof import('../store/useGiaStore').useGiaStore.getState>;
+  getStore: () => ReturnType<typeof useGiaStore.getState>;
 }
 
 export interface Plugin {
