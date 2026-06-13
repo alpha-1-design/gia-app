@@ -3,6 +3,8 @@ export interface StreamParserState {
   thoughtsAccumulated: string;
   inThinkBlock: boolean;
   inToolBlock: boolean;
+  inJsonBlock: boolean;
+  jsonBlockBuffer: string;
   pendingBacktickCount: number;
 }
 
@@ -11,8 +13,15 @@ export const createStreamParser = (): StreamParserState => ({
   thoughtsAccumulated: '',
   inThinkBlock: false,
   inToolBlock: false,
+  inJsonBlock: false,
+  jsonBlockBuffer: '',
   pendingBacktickCount: 0,
 });
+
+/** Check if the given string (body of a json block) looks like a tool call JSON */
+function isToolCallJson(body: string): boolean {
+  return /"(?:id|tool|function|name)"\s*:/.test(body);
+}
 
 export const processStreamChunk = (
   chunk: string,
@@ -21,9 +30,9 @@ export const processStreamChunk = (
   if (state.pendingBacktickCount > 0) {
     const needed = 3 - state.pendingBacktickCount;
     const chunkAfter = chunk.startsWith('`') ? chunk.slice(needed) : chunk;
-    if (chunk.startsWith('tool') && needed <= 3) {
+    if ((chunk.startsWith('tool') || chunk.startsWith('json')) && needed <= 3) {
       chunk = '`'.repeat(state.pendingBacktickCount) + chunk;
-    } else if (chunkAfter.startsWith('tool') && needed <= 3) {
+    } else if ((chunkAfter.startsWith('tool') || chunkAfter.startsWith('json')) && needed <= 3) {
       chunk = chunk.slice(needed);
     }
     state.pendingBacktickCount = 0;
@@ -54,16 +63,52 @@ export const processStreamChunk = (
       } else {
         remaining = '';
       }
+    } else if (state.inJsonBlock) {
+      // We're inside a ```json block — buffer content, look for closing fence
+      const endIdx = remaining.indexOf('\n```');
+      if (endIdx >= 0) {
+        state.jsonBlockBuffer += remaining.slice(0, endIdx);
+        // Block complete — check if it's a tool call
+        if (!isToolCallJson(state.jsonBlockBuffer)) {
+          // Not a tool call — release the buffered content to display
+          displayChunk += '```json' + state.jsonBlockBuffer + '\n```';
+        }
+        state.inJsonBlock = false;
+        state.jsonBlockBuffer = '';
+        remaining = remaining.slice(endIdx + 4);
+      } else if (remaining.startsWith('```')) {
+        state.inJsonBlock = false;
+        state.jsonBlockBuffer = '';
+        remaining = remaining.slice(3);
+      } else {
+        state.jsonBlockBuffer += remaining;
+        remaining = '';
+      }
     } else {
       const thinkStart = remaining.indexOf('<think>');
       let toolStart = remaining.indexOf('```tool');
       if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
       if (toolStart === 0) toolStart = 0; // Allow at chunk start (boundary case)
 
-      if (toolStart >= 0 && (thinkStart === -1 || toolStart < thinkStart)) {
-        const before = remaining.slice(0, toolStart);
+      // Also detect ```json blocks that may contain tool calls
+      let jsonStart = remaining.indexOf('```json');
+      if (jsonStart > 0 && remaining[jsonStart - 1] !== '\n') jsonStart = -1;
+      if (jsonStart === 0) jsonStart = 0;
+
+      // Pick the earliest marker
+      const firstMarker = (() => {
+        const candidates: { idx: number; type: string }[] = [];
+        if (toolStart >= 0) candidates.push({ idx: toolStart, type: 'tool' });
+        if (thinkStart >= 0) candidates.push({ idx: thinkStart, type: 'think' });
+        if (jsonStart >= 0) candidates.push({ idx: jsonStart, type: 'json' });
+        candidates.sort((a, b) => a.idx - b.idx);
+        return candidates.length > 0 ? candidates[0] : null;
+      })();
+
+      if (firstMarker && firstMarker.type === 'tool') {
+        const before = remaining.slice(0, firstMarker.idx);
         displayChunk += before;
-        const afterFence = remaining.slice(toolStart + 7);
+        const afterFence = remaining.slice(firstMarker.idx + 7);
         const closeIdx = afterFence.indexOf('\n```');
         if (closeIdx >= 0) {
           remaining = afterFence.slice(closeIdx + 4);
@@ -71,6 +116,28 @@ export const processStreamChunk = (
           remaining = afterFence.slice(3);
         } else {
           state.inToolBlock = true;
+          remaining = '';
+        }
+      } else if (firstMarker && firstMarker.type === 'json') {
+        const before = remaining.slice(0, firstMarker.idx);
+        displayChunk += before;
+        const afterFence = remaining.slice(firstMarker.idx + 7); // skip ```json
+        const closeIdx = afterFence.indexOf('\n```');
+        if (closeIdx >= 0) {
+          // Complete block in this chunk
+          const body = afterFence.slice(0, closeIdx);
+          if (!isToolCallJson(body)) {
+            // Not a tool call — show it
+            displayChunk += '```json' + body + '\n```';
+          }
+          remaining = afterFence.slice(closeIdx + 4);
+        } else if (afterFence.startsWith('```')) {
+          // Empty json block
+          remaining = afterFence.slice(3);
+        } else {
+          // Block continues in next chunk
+          state.inJsonBlock = true;
+          state.jsonBlockBuffer = afterFence;
           remaining = '';
         }
       } else if (thinkStart >= 0) {
@@ -96,11 +163,15 @@ export const processStreamChunk = (
 };
 
 export const stripToolBlocks = (text: string): string => {
+  // Remove standard ```tool blocks
   let result = text.replace(/```tool[\s\S]*?```/g, '');
+  // Remove incomplete trailing ```tool blocks
   result = result.replace(/```tool[\s\S]*$/gm, '');
-  result = result.replace(/```[\s\S]*?"(?:tool|function|name)"[\s\S]*?```/g, '');
-  result = result.replace(/^\s*\{(?:[^{}]|"(?:[^"\\]|\\.)*")*"(?:tool|function|name)"\s*:[\s\S]*?\}\s*$/gm, '');
-  result = result.replace(/(?:^|\n)\s*```[\s\S]*?(?:$|\n```)/g, '');
+  // Remove ```json or ``` blocks containing tool call indicators (id, tool, function, name)
+  // Uses a specific pattern that respects fence boundaries
+  result = result.replace(/```(?:json)?\s*\n?[\s\S]*?"(?:id|tool|function|name)"\s*:[\s\S]*?```/g, '');
+  // Remove bare JSON objects with tool call indicators (not inside fences)
+  result = result.replace(/^\s*\{(?:[^{}]|"(?:[^"\\]|\\.)*")*"(?:id|tool|function|name)"\s*:[\s\S]*?\}\s*$/gm, '');
   return result.trim();
 };
 

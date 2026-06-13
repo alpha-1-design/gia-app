@@ -53,27 +53,77 @@ const platformBrandColors: Record<string, string> = {
   whatsapp: '#25D366',
 };
 
+type AuthField = { key: string; label: string; placeholder: string; type?: string; required?: boolean; url?: string };
+
+const PLATFORM_AUTH_FIELDS: Record<string, AuthField[]> = {
+  twitter: [
+    { key: 'clientId', label: 'Client ID', placeholder: 'OAuth 2.0 Client ID from Twitter Developer Portal', required: true, url: 'https://developer.twitter.com/en/portal/dashboard' },
+    { key: 'clientSecret', label: 'Client Secret', placeholder: 'OAuth 2.0 Client Secret', type: 'password', required: true },
+    { key: 'bearerToken', label: 'Bearer Token', placeholder: 'API Bearer Token (optional)', type: 'password' },
+    { key: 'accountName', label: 'Account Username', placeholder: '@yourhandle' },
+  ],
+  instagram: [
+    { key: 'clientId', label: 'App ID', placeholder: 'Instagram App ID from Meta Developers', required: true, url: 'https://developers.facebook.com/docs/instagram-basic-display-api/getting-started' },
+    { key: 'clientSecret', label: 'App Secret', placeholder: 'Instagram App Secret', type: 'password', required: true },
+    { key: 'accessToken', label: 'Access Token', placeholder: 'Long-lived access token (optional)', type: 'password' },
+    { key: 'accountName', label: 'Account Username', placeholder: '@yourhandle' },
+  ],
+  facebook: [
+    { key: 'appId', label: 'App ID', placeholder: 'Facebook App ID', required: true, url: 'https://developers.facebook.com/apps' },
+    { key: 'appSecret', label: 'App Secret', placeholder: 'Facebook App Secret', type: 'password', required: true },
+    { key: 'pageId', label: 'Page ID', placeholder: 'Facebook Page ID (optional)' },
+    { key: 'accessToken', label: 'Page Access Token', placeholder: 'Long-lived page token (optional)', type: 'password' },
+    { key: 'accountName', label: 'Page Name', placeholder: 'Your Facebook page name' },
+  ],
+  linkedin: [
+    { key: 'clientId', label: 'Client ID', placeholder: 'LinkedIn OAuth Client ID', required: true, url: 'https://www.linkedin.com/developers/apps' },
+    { key: 'clientSecret', label: 'Client Secret', placeholder: 'LinkedIn OAuth Client Secret', type: 'password', required: true },
+    { key: 'redirectUri', label: 'Redirect URI', placeholder: window.location.origin + '/oauth-callback.html' },
+    { key: 'accessToken', label: 'Access Token', placeholder: 'OAuth access token (optional)', type: 'password' },
+    { key: 'accountName', label: 'Account Name', placeholder: 'Your LinkedIn name' },
+  ],
+  tiktok: [
+    { key: 'clientKey', label: 'Client Key', placeholder: 'TikTok Developer Client Key', required: true, url: 'https://developers.tiktok.com/apps' },
+    { key: 'clientSecret', label: 'Client Secret', placeholder: 'TikTok Client Secret', type: 'password', required: true },
+    { key: 'accountName', label: 'Account Name', placeholder: '@yourhandle' },
+  ],
+  telegram: [
+    { key: 'botToken', label: 'Bot Token', placeholder: 'Token from @BotFather', type: 'password', required: true, url: 'https://t.me/BotFather' },
+    { key: 'channelId', label: 'Channel ID', placeholder: 'e.g. @yourchannel or -1001234567890' },
+    { key: 'accountName', label: 'Bot Name', placeholder: 'Your bot display name' },
+  ],
+  whatsapp: [
+    { key: 'businessAccountId', label: 'Business Account ID', placeholder: 'WhatsApp Business Account ID (WABA)', required: true, url: 'https://developers.facebook.com/docs/whatsapp/cloud-api' },
+    { key: 'phoneNumberId', label: 'Phone Number ID', placeholder: 'WhatsApp Phone Number ID', required: true },
+    { key: 'apiToken', label: 'API Token', placeholder: 'Permanent access token from Meta', type: 'password', required: true },
+    { key: 'accountName', label: 'Business Name', placeholder: 'Your business display name' },
+  ],
+};
+
 export const SocialSection: React.FC = () => {
   const [platforms, setPlatforms] = useState(socialManager.getPlatforms());
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [tokenInput, setTokenInput] = useState('');
-  const [nameInput, setNameInput] = useState('');
+  const [formData, setFormData] = useState<Record<string, string>>({});
 
   const refresh = () => setPlatforms(socialManager.getPlatforms());
 
   useEffect(() => { const iv = setInterval(refresh, 5000); return () => clearInterval(iv); }, []);
 
   const handleConnectWithToken = (id: string) => {
-    socialManager.connectWithToken(id, tokenInput, nameInput || undefined);
-    setTokenInput('');
-    setNameInput('');
+    const fields = PLATFORM_AUTH_FIELDS[id] || [];
+    const config: Record<string, string> = {};
+    for (const f of fields) {
+      if (formData[f.key]) config[f.key] = formData[f.key];
+    }
+    socialManager.connectPlatform(id, config);
+    setFormData({});
     setExpanded(null);
     refresh();
   };
 
   const handleConnectSimple = (id: string) => {
-    socialManager.connectPlatform(id, nameInput || id);
-    setNameInput('');
+    socialManager.connectPlatform(id, { accountName: formData.accountName || id });
+    setFormData({});
     setExpanded(null);
     refresh();
   };
@@ -81,6 +131,10 @@ export const SocialSection: React.FC = () => {
   const handleDisconnect = (id: string) => {
     socialManager.disconnectPlatform(id);
     refresh();
+  };
+
+  const setField = (key: string, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -134,36 +188,42 @@ export const SocialSection: React.FC = () => {
 
             {expanded === p.id && !p.connected && (
               <div className="mt-3 space-y-2">
-                <input
-                  value={nameInput}
-                  onChange={e => setNameInput(e.target.value)}
-                  placeholder="Account name / username"
-                  className="w-full text-[10px] px-2.5 py-1.5 rounded-lg outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
-                />
-                <input
-                  value={tokenInput}
-                  onChange={e => setTokenInput(e.target.value)}
-                  placeholder="OAuth or API token (leave blank to connect manually)"
-                  className="w-full text-[10px] px-2.5 py-1.5 rounded-lg outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
-                />
-                <div className="flex gap-2">
-                  <button onClick={() => tokenInput ? handleConnectWithToken(p.id) : handleConnectSimple(p.id)}
+                {(PLATFORM_AUTH_FIELDS[p.id] || []).map(field => (
+                  <div key={field.key}>
+                    {field.url ? (
+                      <div className="flex items-center justify-between">
+                        <label className="text-[9px] font-medium" style={{ color: 'var(--gia-muted)' }}>{field.label}</label>
+                        <a href={field.url} target="_blank" rel="noopener noreferrer"
+                          className="text-[9px] text-blue-400 hover:text-blue-300 transition-colors">
+                          Get from developer portal →
+                        </a>
+                      </div>
+                    ) : (
+                      <label className="text-[9px] font-medium" style={{ color: 'var(--gia-muted)' }}>{field.label}</label>
+                    )}
+                    <input
+                      value={formData[field.key] || ''}
+                      onChange={e => setField(field.key, e.target.value)}
+                      placeholder={field.placeholder}
+                      type={field.type || 'text'}
+                      className="w-full text-[10px] px-2.5 py-1.5 rounded-lg outline-none mt-0.5"
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
+                    />
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => handleConnectWithToken(p.id)}
                     className="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg transition-all"
                     style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>
                     <Link2 size={11} />
-                    {tokenInput ? 'Connect with Token' : 'Connect (Manual)'}
+                    Connect
                   </button>
-                  <button onClick={() => setExpanded(null)}
+                  <button onClick={() => { setExpanded(null); setFormData({}); }}
                     className="text-[10px] px-2.5 py-1.5 rounded-lg"
                     style={{ color: 'var(--gia-muted)' }}>
                     Cancel
                   </button>
                 </div>
-                <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted)' }}>
-                  Manual connection saves the account name. Token/OAuth enables real posting.
-                </p>
               </div>
             )}
           </div>

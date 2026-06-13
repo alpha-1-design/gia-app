@@ -16,6 +16,12 @@ import { gatewayTools } from './tools/gateway';
 import { telegramTools } from './tools/telegram';
 import { terminalTools } from './tools/terminal';
 import { gatewayDaemonTools } from './tools/gatewayDaemon';
+import { clipboardTools } from './tools/clipboard';
+import { hapticsTools } from './tools/haptics';
+import { shareTools } from './tools/share';
+import { geolocationTools } from './tools/geolocation';
+import { notificationTools } from './tools/notifications';
+import { deviceTools } from './tools/device';
 
 export type { ToolResult };
 export type { Tool };
@@ -46,6 +52,12 @@ class GiaTools {
       ...telegramTools,
       ...terminalTools,
       ...gatewayDaemonTools,
+      ...clipboardTools,
+      ...hapticsTools,
+      ...shareTools,
+      ...geolocationTools,
+      ...notificationTools,
+      ...deviceTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

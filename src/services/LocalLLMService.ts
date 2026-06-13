@@ -106,6 +106,14 @@ class LocalLLMService {
     return this.instance;
   }
 
+  /** Unload the current model and free memory. */
+  async unloadModel(): Promise<void> {
+    if (this._loading && this._loadPromise) {
+      await this._loadPromise;
+    }
+    this._unload();
+  }
+
   // ── Public API ──────────────────────────────────────────────────
 
   getStatus(): Record<string, LocalLLMState> {

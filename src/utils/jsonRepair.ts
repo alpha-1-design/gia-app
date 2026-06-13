@@ -70,9 +70,12 @@ export interface ToolCall {
 }
 
 export function extractToolCalls(text: string): ToolCall[] {
-  const blocks = Array.from(text.matchAll(/```tool\s*\n?([\s\S]*?)```/g));
+  // Match standard ```tool blocks
+  const toolBlocks = Array.from(text.matchAll(/```tool\s*\n?([\s\S]*?)```/g));
+  // Also match ```json blocks that may contain tool call JSON
+  const jsonBlocks = Array.from(text.matchAll(/```json\s*\n?([\s\S]*?)```/g));
   const calls: ToolCall[] = [];
-  for (const m of blocks) {
+  for (const m of [...toolBlocks, ...jsonBlocks]) {
     const parsed = parseJsonSafely<ToolCall>(m[1]);
     if (parsed && parsed.id && typeof parsed.args === 'object') {
       calls.push(parsed);
