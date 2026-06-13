@@ -27,16 +27,16 @@ function loadSavedPlan(): { title: string; steps: PlanStep[] } | null {
         return parsed;
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
   return null;
 }
 
 function savePlan(title: string, steps: PlanStep[]): void {
-  try { localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ title, steps })); } catch {}
+  try { localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ title, steps })); } catch { /* ignore */ }
 }
 
 function clearSavedPlan(): void {
-  try { localStorage.removeItem(PLAN_STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(PLAN_STORAGE_KEY); } catch { /* ignore */ }
 }
 
 const PlannerModule: React.FC = () => {
@@ -107,7 +107,6 @@ const PlannerModule: React.FC = () => {
 
   const generateFallbackPlan = useCallback((goal: string) => {
     const title = goal.length > 40 ? goal.slice(0, 40) + '…' : goal;
-    const priorities: ('high'|'medium'|'low')[] = ['high', 'high', 'medium', 'medium', 'low'];
     const fallback: PlanStep[] = [
       { id: genId(), title: 'Research & Understand', description: `Research and fully understand the requirements for: ${goal}`, priority: 'high', done: false, eta: 'Day 1' },
       { id: genId(), title: 'Plan & Prepare', description: 'Create a detailed plan with timelines, resources, and milestones.', priority: 'high', done: false, eta: 'Day 1-2' },

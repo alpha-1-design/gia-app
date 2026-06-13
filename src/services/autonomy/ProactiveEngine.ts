@@ -35,7 +35,6 @@ export class ProactiveEngine {
         if (step.status === 'in_progress') {
           const goal = store.goals.find(g => g.id === plan.goalId);
           if (!goal) continue;
-          const stepIdx = plan.steps.indexOf(step);
           const stepAge = now - goal.updated;
           if (stepAge > this.hangingTimeoutMs) {
             logger.warn(`[ProactiveEngine] Step "${step.description}" hanging for ${Math.round(stepAge / 1000)}s — marking as failed`);

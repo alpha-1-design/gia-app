@@ -77,7 +77,6 @@ const buildProject: Tool = {
     let buildSuccess = true;
 
     if (build_command) {
-      const modeLabel = language === 'sh' ? 'terminal' : language;
       ctx?.onProgress?.(0.15, `Running build: ${build_command.slice(0, 80)}...`);
       useGiaStore.getState().addNotification(`Running build: ${build_command.slice(0, 60)}...`);
 

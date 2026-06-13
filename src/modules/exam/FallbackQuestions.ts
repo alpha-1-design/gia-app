@@ -89,7 +89,7 @@ export function loadCachedQuestions(subject: string): Question[] | null {
         return parsed;
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -101,7 +101,7 @@ export function saveQuestionsToCache(subject: string, questions: Question[]): vo
       localStorage.setItem('gia-exam-cache-list', JSON.stringify(existing));
     }
     localStorage.setItem(`gia-exam-questions-${subject}`, JSON.stringify(questions));
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 export function getCachedSubjects(): string[] {
@@ -117,5 +117,5 @@ export function clearQuestionCache(): void {
       localStorage.removeItem(`gia-exam-questions-${s}`);
     }
     localStorage.removeItem('gia-exam-cache-list');
-  } catch {}
+  } catch { /* ignore */ }
 }

@@ -101,11 +101,9 @@ class SchedulerService {
 
     // Auto-publish due scheduled social posts
     try {
-      const duePosts = socialManager.getPosts().filter(
-        p => p.status === 'scheduled' && p.scheduledAt && p.scheduledAt <= now
-      );
-      for (let i = 0; i < socialManager.getPosts().length; i++) {
-        const post = socialManager.getPosts()[i];
+      const posts = socialManager.getPosts();
+      for (let i = 0; i < posts.length; i++) {
+        const post = posts[i];
         if (post.status === 'scheduled' && post.scheduledAt && post.scheduledAt <= now) {
           logger.log(`[SchedulerService] Publishing scheduled post #${i} to ${post.platform}`);
           try {

@@ -28,12 +28,12 @@ function loadSavedAnalysis(): { data: DataPoint[]; summary: string; narrative: s
         return parsed;
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
   return null;
 }
 
 function saveAnalysis(query: string, data: DataPoint[], summary: string, narrative: string): void {
-  try { localStorage.setItem(ANALYST_STORAGE_KEY, JSON.stringify({ query: query.slice(0, 100), data, summary, narrative })); } catch {}
+  try { localStorage.setItem(ANALYST_STORAGE_KEY, JSON.stringify({ query: query.slice(0, 100), data, summary, narrative })); } catch { /* ignore */ }
 }
 
 const FALLBACK_DATA: Record<string, { data: DataPoint[]; summary: string; narrative: string }> = {
