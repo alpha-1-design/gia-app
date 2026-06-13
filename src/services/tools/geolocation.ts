@@ -98,7 +98,7 @@ const geolocationWatchPosition: Tool = {
     try {
       const watchId = await Geolocation.watchPosition(
         { enableHighAccuracy: parsed.data.enableHighAccuracy },
-        (position, err) => {
+        () => {
           // Callback handled internally; we just need the initial position
         },
       );

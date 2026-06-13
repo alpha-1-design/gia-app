@@ -32,8 +32,8 @@ const devicePluginInfo: Tool = {
         '**Hardware**',
         `- **Is Virtual:** ${info.isVirtual ? 'Yes' : 'No'}`,
         `- **Mem Used (est.):** ${info.memUsed ? `${(info.memUsed / 1024 / 1024).toFixed(0)} MB` : 'Unknown'}`,
-        `- **Disk Free (est.):** ${info.diskFree ? `${(info.diskFree / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
-        `- **Disk Total (est.):** ${info.diskTotal ? `${(info.diskTotal / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
+        `- **Disk Free (est.):** ${(info as any).diskFree ? `${((info as any).diskFree / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
+        `- **Disk Total (est.):** ${(info as any).diskTotal ? `${((info as any).diskTotal / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
         '',
         '**Power**',
         `- **Battery Level:** ${batteryInfo.batteryLevel !== null && batteryInfo.batteryLevel !== undefined ? `${Math.round(batteryInfo.batteryLevel * 100)}%` : 'Unknown'}`,
@@ -44,7 +44,7 @@ const devicePluginInfo: Tool = {
         `- **Language Tag:** ${languageTag.value || 'Unknown'}`,
         '',
         '**Identity**',
-        `- **Device ID (UUID):** ${idInfo.uuid || 'Unknown'}`,
+        `- **Device ID (UUID):** ${(idInfo as any).uuid || 'Unknown'}`,
         `- **Device ID (Identifier):** ${idInfo.identifier || 'Unknown'}`,
       ];
 
@@ -97,7 +97,7 @@ const devicePluginId: Tool = {
       const idInfo = await Device.getId();
       return {
         success: true,
-        content: `## 🆔 Device Identifiers\n\n**UUID:** \`${idInfo.uuid || 'Unknown'}\`\n**Identifier:** \`${idInfo.identifier || 'Unknown'}\``,
+        content: `## 🆔 Device Identifiers\n\n**UUID:** \`${(idInfo as any).uuid || 'Unknown'}\`\n**Identifier:** \`${idInfo.identifier || 'Unknown'}\``,
       };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };

@@ -117,15 +117,8 @@ export const SocialSection: React.FC = () => {
     }
     socialManager.connectPlatform(id, config);
     setFormData({});
-    setExpanded(null);
     refresh();
-  };
-
-  const handleConnectSimple = (id: string) => {
-    socialManager.connectPlatform(id, { accountName: formData.accountName || id });
-    setFormData({});
-    setExpanded(null);
-    refresh();
+    return;
   };
 
   const handleDisconnect = (id: string) => {

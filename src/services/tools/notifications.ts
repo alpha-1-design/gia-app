@@ -43,7 +43,7 @@ const sendLocalNotification: Tool = {
       smallIcon: z.string().max(100).optional(),
       largeIcon: z.string().max(500).optional(),
       actionTypeId: z.string().max(100).optional(),
-      extra: z.record(z.unknown()).optional(),
+      extra: z.any().optional(),
     });
     const parsed = schema.safeParse(args);
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
@@ -102,7 +102,7 @@ const scheduleNotification: Tool = {
       id: z.number().int().positive().optional(),
       repeats: z.boolean().default(false),
       smallIcon: z.string().max(100).optional(),
-      extra: z.record(z.unknown()).optional(),
+      extra: z.any().optional(),
     });
     const parsed = schema.safeParse(args);
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };

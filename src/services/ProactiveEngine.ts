@@ -54,7 +54,6 @@ const SUGGESTIONS = [
 
 class ProactiveEngine {
   private lastGreeting = 0;
-  private lastTip = 0;
   private statusInterval?: ReturnType<typeof setInterval>;
 
   /** Get a time-appropriate greeting */
