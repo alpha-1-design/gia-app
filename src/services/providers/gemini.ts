@@ -43,6 +43,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey };
 
     let finishReason = '';
+    let streamTokenUsage: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | undefined;
 
     return new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -72,6 +73,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
       xhr.open('POST', url);
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
+      xhr.timeout = 120000;
 
       const drain = () => {
         if (processing) return;
@@ -87,6 +89,9 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
             if (!jsonStr || jsonStr === '[DONE]') continue;
             try {
               const parsed = JSON.parse(jsonStr);
+              if (parsed.usageMetadata) {
+                streamTokenUsage = parsed.usageMetadata;
+              }
               const candidate = parsed.candidates?.[0];
               if (candidate?.finishReason) {
                 finishReason = candidate.finishReason;
@@ -119,6 +124,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
           }
         }
         processing = false;
+        if (pendingBuffer) drain();
       };
 
       const onData = () => {
@@ -137,11 +143,13 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
         if (!fullText.trim()) reject(new Error('Gemini returned empty response'));
         else {
           const wasTruncated = finishReason === 'MAX_TOKENS';
-          resolve({ text: fullText, provider: 'gemini', model: config.model, finishReason, wasTruncated });
+          const tokenUsage = streamTokenUsage ? { input: streamTokenUsage.promptTokenCount || 0, output: streamTokenUsage.candidatesTokenCount || 0, total: streamTokenUsage.totalTokenCount || 0 } : undefined;
+          resolve({ text: fullText, provider: 'gemini', model: config.model, finishReason, wasTruncated, tokenUsage });
         }
       };
 
       xhr.onerror = () => reject(new Error('Gemini network error'));
+      xhr.ontimeout = () => reject(new Error('Gemini timed out after 120s'));
       xhr.onabort = () => {
         const e = new Error('Request aborted');
         e.name = 'AbortError';
@@ -187,6 +195,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
     throw new Error(ctx.friendlyError('Gemini', e?.error?.message || `Gemini error ${res.status}`));
   }
   const data = await res.json();
+  const tokenUsage = data.usageMetadata ? { input: data.usageMetadata.promptTokenCount || 0, output: data.usageMetadata.candidatesTokenCount || 0, total: data.usageMetadata.totalTokenCount || 0 } : undefined;
   const candidate = data.candidates?.[0];
   const parts = candidate?.content?.parts || [];
   let text = parts.find((p: { text?: string }) => p.text)?.text || '';
@@ -197,5 +206,5 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
   if (!text.trim()) throw new Error(ctx.friendlyError('Gemini', 'Gemini returned empty response'));
   const finishReason = candidate?.finishReason || 'STOP';
   const wasTruncated = finishReason === 'MAX_TOKENS';
-  return { text, provider: 'gemini', model: config.model, finishReason, wasTruncated };
+  return { text, provider: 'gemini', model: config.model, finishReason, wasTruncated, tokenUsage };
 }

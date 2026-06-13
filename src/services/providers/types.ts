@@ -17,6 +17,12 @@ export interface BrainRequest {
   forceJson?: boolean;
 }
 
+export interface TokenUsage {
+  input: number;
+  output: number;
+  total: number;
+}
+
 export interface BrainResponse {
   text: string;
   provider: string;
@@ -27,6 +33,7 @@ export interface BrainResponse {
   switchReason?: string;
   finishReason?: string;
   wasTruncated?: boolean;
+  tokenUsage?: TokenUsage;
 }
 
 export interface BrainContext {

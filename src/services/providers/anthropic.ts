@@ -56,6 +56,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
     if (req.signal?.aborted) return { text: '', provider: 'anthropic', model: config.model };
 
     let finishReason = '';
+    let streamTokenUsage: { input_tokens: number; output_tokens: number } | undefined;
 
     return new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -79,6 +80,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
       xhr.open('POST', 'https://api.anthropic.com/v1/messages');
       Object.entries(anthropicHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
+      xhr.timeout = 120000;
 
       const drain = () => {
         if (processing) return;
@@ -124,6 +126,12 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
                   }
                 }
               }
+              if (parsed.type === 'message_start' && parsed.message?.usage) {
+                streamTokenUsage = { ...parsed.message.usage };
+              }
+              if (parsed.type === 'message_delta' && parsed.usage) {
+                streamTokenUsage = { ...streamTokenUsage, ...parsed.usage };
+              }
               if (parsed.type === 'message_stop' && parsed.stop_reason) {
                 finishReason = parsed.stop_reason;
               }
@@ -131,6 +139,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
           }
         }
         processing = false;
+        if (pendingBuffer) drain();
       };
 
       const onData = () => {
@@ -148,11 +157,13 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
         if (!fullText.trim()) reject(new Error('Anthropic returned empty response'));
         else {
           const wasTruncated = finishReason === 'max_tokens';
-          resolve({ text: fullText, provider: 'anthropic', model: config.model, finishReason, wasTruncated });
+          const tokenUsage = streamTokenUsage ? { input: streamTokenUsage.input_tokens || 0, output: streamTokenUsage.output_tokens || 0, total: (streamTokenUsage.input_tokens || 0) + (streamTokenUsage.output_tokens || 0) } : undefined;
+          resolve({ text: fullText, provider: 'anthropic', model: config.model, finishReason, wasTruncated, tokenUsage });
         }
       };
 
       xhr.onerror = () => reject(new Error('Anthropic network error'));
+      xhr.ontimeout = () => reject(new Error('Anthropic timed out after 120s'));
       xhr.onabort = () => {
         const e = new Error('Request aborted');
         e.name = 'AbortError';
@@ -196,7 +207,8 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
     const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
     throw new Error(ctx.friendlyError('Anthropic', e?.error?.message || `Anthropic error ${res.status}`));
   }
-  const data: { content?: { type: string; text?: string; name?: string; input?: unknown }[]; stop_reason?: string } = await res.json();
+  const data: { content?: { type: string; text?: string; name?: string; input?: unknown }[]; stop_reason?: string; usage?: { input_tokens: number; output_tokens: number } } = await res.json();
+  const tokenUsage = data.usage ? { input: data.usage.input_tokens || 0, output: data.usage.output_tokens || 0, total: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0) } : undefined;
   const blocks = data.content || [];
   let text = blocks.find(b => b.type === 'text')?.text ?? '';
   const toolUses = blocks.filter(b => b.type === 'tool_use');
@@ -206,5 +218,5 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   if (!text.trim()) throw new Error(ctx.friendlyError('Anthropic', 'Anthropic returned empty response'));
   const finishReason = data.stop_reason || 'stop';
   const wasTruncated = finishReason === 'max_tokens';
-  return { text, provider: 'anthropic', model: config.model, finishReason, wasTruncated };
+  return { text, provider: 'anthropic', model: config.model, finishReason, wasTruncated, tokenUsage };
 }

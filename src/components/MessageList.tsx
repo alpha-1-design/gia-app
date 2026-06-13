@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Bot, User, AlertCircle, RotateCcw, Paperclip } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
@@ -38,6 +38,16 @@ const formatTimeAgo = (ts: number) => {
 
 const LONG_MSG_CHARS = 3000;
 
+function useShowTokenUsage(): boolean {
+  const [show, setShow] = useState(() => localStorage.getItem('gia-show-token-usage') === 'true');
+  useEffect(() => {
+    const handler = () => setShow(localStorage.getItem('gia-show-token-usage') === 'true');
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+  return show;
+}
+
 const MessageList: React.FC<MessageListProps> = ({
   messages, loading, streamingMsgId,
   expandedMsgs, setExpandedMsgs,
@@ -47,6 +57,7 @@ const MessageList: React.FC<MessageListProps> = ({
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
   onFork, onRetry, onEditResend,
 }) => {
+  const showTokenUsage = useShowTokenUsage();
   return (
     <>
       {messages.map((msg) => (
@@ -135,6 +146,11 @@ const MessageList: React.FC<MessageListProps> = ({
                             {(responseTimesRef.current[msg.id] / 1000).toFixed(1)}s
                           </span>
                         ) : null}
+                        {showTokenUsage && msg.tokenUsage && !msg.thinking && (
+                          <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+                            {msg.tokenUsage.total} tok
+                          </span>
+                        )}
                       </div>
                     )}
                     {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (

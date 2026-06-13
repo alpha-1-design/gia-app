@@ -191,6 +191,7 @@ class GiaBrain {
       let text = res!.text;
       const finishReason = res!.finishReason || 'stop';
       const wasTruncated = res!.wasTruncated || finishReason === 'length' || finishReason === 'max_tokens' || finishReason === 'MAX_TOKENS';
+      const tokenUsage = res!.tokenUsage;
 
       if (!text || text.trim().length === 0) {
         logger.warn('[GiaBrain] Empty response from provider, retrying...');
@@ -226,7 +227,7 @@ class GiaBrain {
         }
 
         const finalResponse = await PluginManager.runAfterGenerate({ text, provider: activeProvider, model: config.model });
-        return { ...finalResponse, sources: sourcesAcc.length > 0 ? sourcesAcc : undefined, finishReason, wasTruncated };
+        return { ...finalResponse, sources: sourcesAcc.length > 0 ? sourcesAcc : undefined, finishReason, wasTruncated, tokenUsage };
       }
 
       if (toolResult.result === '__CLARIFICATION__') {

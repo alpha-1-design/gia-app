@@ -4,6 +4,7 @@ import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
+import socialManager from './social/SocialManager';
 
 class SchedulerService {
   private static instance: SchedulerService;
@@ -86,13 +87,41 @@ class SchedulerService {
 
   private async checkForDueTasks() {
     const { scheduledTasks } = useGiaStore.getState();
-    if (scheduledTasks.length === 0) { this.stop(); return; }
+    const hasTasks = scheduledTasks.length > 0;
     const now = Date.now();
-    for (const task of scheduledTasks) {
-      if (task.status === 'pending' && task.nextRun <= now) {
-        await this.runTask(task);
+
+    // Run due brain-prompt tasks
+    if (hasTasks) {
+      for (const task of scheduledTasks) {
+        if (task.status === 'pending' && task.nextRun <= now) {
+          await this.runTask(task);
+        }
       }
     }
+
+    // Auto-publish due scheduled social posts
+    try {
+      const duePosts = socialManager.getPosts().filter(
+        p => p.status === 'scheduled' && p.scheduledAt && p.scheduledAt <= now
+      );
+      for (let i = 0; i < socialManager.getPosts().length; i++) {
+        const post = socialManager.getPosts()[i];
+        if (post.status === 'scheduled' && post.scheduledAt && post.scheduledAt <= now) {
+          logger.log(`[SchedulerService] Publishing scheduled post #${i} to ${post.platform}`);
+          try {
+            await socialManager.publishPost(i);
+            useGiaStore.getState().addNotification(`📢 Published scheduled post to ${post.platform}`);
+          } catch (e) {
+            logger.error(`[SchedulerService] Failed to publish post #${i}:`, e);
+            useGiaStore.getState().addNotification(`❌ Scheduled post to ${post.platform} failed`);
+          }
+        }
+      }
+    } catch (e) {
+      logger.error('[SchedulerService] Social post check failed:', e);
+    }
+
+    if (!hasTasks) { this.stop(); return; }
   }
 
   public start() {

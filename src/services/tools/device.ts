@@ -136,9 +136,81 @@ const devicePluginLocale: Tool = {
   },
 };
 
+const deviceHealth: Tool = {
+  id: 'device_health',
+  name: 'device_health',
+  description: 'Check device health: storage usage, battery level, memory pressure. GIA can call this proactively to monitor the device and alert the user about risks.',
+  execute: async () => {
+    try {
+      const issues: string[] = [];
+      const healthy: string[] = [];
+
+      const [info, batteryInfo] = await Promise.all([
+        Device.getInfo(),
+        Device.getBatteryInfo(),
+      ]);
+
+      const infoAny = info as unknown as Record<string, unknown>;
+
+      const diskFree = typeof infoAny.diskFree === 'number' ? infoAny.diskFree : null;
+      const diskTotal = typeof infoAny.diskTotal === 'number' ? infoAny.diskTotal : null;
+      const memUsed = typeof infoAny.memUsed === 'number' ? infoAny.memUsed : null;
+
+      if (diskFree !== null && diskTotal !== null && diskTotal > 0) {
+        const freeGB = diskFree / 1024 / 1024 / 1024;
+        const totalGB = diskTotal / 1024 / 1024 / 1024;
+        const usedPct = ((totalGB - freeGB) / totalGB) * 100;
+        if (usedPct > 90) {
+          issues.push(`STORAGE CRITICAL: ${usedPct.toFixed(0)}% full — only ${freeGB.toFixed(1)} GB free of ${totalGB.toFixed(1)} GB`);
+        } else if (usedPct > 75) {
+          issues.push(`Storage warning: ${usedPct.toFixed(0)}% full (${freeGB.toFixed(1)} GB free)`);
+        } else {
+          healthy.push(`Storage: ${usedPct.toFixed(0)}% used, ${freeGB.toFixed(1)} GB free`);
+        }
+      }
+
+      if (batteryInfo.batteryLevel !== null && batteryInfo.batteryLevel !== undefined) {
+        const pct = Math.round(batteryInfo.batteryLevel * 100);
+        if (pct < 15) {
+          issues.push(`BATTERY CRITICAL: ${pct}% — connect charger soon`);
+        } else if (pct < 30) {
+          issues.push(`Battery low: ${pct}% — consider charging`);
+        } else {
+          healthy.push(`Battery: ${pct}%${batteryInfo.isCharging ? ' (charging)' : ''}`);
+        }
+      }
+
+      if (memUsed !== null) {
+        const memGB = memUsed / 1024 / 1024 / 1024;
+        healthy.push(`Memory in use: ${memGB.toFixed(1)} GB`);
+      }
+
+      const platform = info.platform || 'unknown';
+
+      let content = '## Device Health Report\n\n';
+      if (issues.length > 0) {
+        content += '### Issues Found\n';
+        content += issues.map(i => `- ⚠️ ${i}`).join('\n');
+        content += '\n\n### Healthy\n';
+        content += healthy.map(i => `- ✅ ${i}`).join('\n');
+        content += `\n\n**Platform:** ${platform}`;
+      } else {
+        content += 'Everything looks good!\n';
+        content += healthy.map(i => `- ✅ ${i}`).join('\n');
+        content += `\n\n**Platform:** ${platform}`;
+      }
+
+      return { success: true, content };
+    } catch (e: unknown) {
+      return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
+    }
+  },
+};
+
 export const deviceTools: Tool[] = [
   devicePluginInfo,
   devicePluginBattery,
   devicePluginId,
   devicePluginLocale,
+  deviceHealth,
 ];

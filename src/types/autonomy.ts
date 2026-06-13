@@ -66,5 +66,5 @@ export const DEFAULT_AUTONOMOUS_STATE: AutonomousState = {
   proactivenessLevel: 0.5,
   maxConcurrentGoals: 3,
   reflectionRequired: true,
-  idleThresholdMs: 5 * 60 * 1000,
+  idleThresholdMs: 60 * 1000,
 };

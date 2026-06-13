@@ -47,6 +47,28 @@ export const toolSchemas: Record<string, { description: string; required: string
       paths: { type: 'array', description: 'Array of file paths to read from device', items: { type: 'string' } }
     }
   },
+  build_project: {
+    description: 'Generate project files, run a build command, and package into a downloadable ZIP.',
+    required: ['files'],
+    properties: {
+      files: { type: 'array', description: 'Array of {path, content} project files', items: { type: 'object' } },
+      build_command: { type: 'string', description: 'Optional build command (npm install, pip install, gcc, etc.)' },
+      language: { type: 'string', description: 'Execution mode: sh/python/js/cpp (default: sh)' },
+      output_filename: { type: 'string', description: 'Output ZIP filename (default: project.zip)' },
+      entry: { type: 'string', description: 'Main entry point file path' },
+    }
+  },
+  install_skill: {
+    description: 'Install a new skill from a URL, package name, or inline definition. Expands GIA capabilities.',
+    required: [],
+    properties: {
+      source: { type: 'string', description: 'URL to skill JSON, package name (developer/researcher/tutor/creative/security), or data: URI' },
+      url: { type: 'string', description: 'Direct URL to a skill JSON definition' },
+      name: { type: 'string', description: 'Override the skill name' },
+      id: { type: 'string', description: 'Override the skill ID' },
+      systemPrompt: { type: 'string', description: 'Override the skill system prompt' },
+    }
+  },
   image_generation: {
     description: 'Generate an AI image from a text description.',
     required: ['prompt'],
@@ -75,12 +97,24 @@ export const toolSchemas: Record<string, { description: string; required: string
     required: ['messages'],
     properties: { messages: { type: 'array', description: 'Array of {role, content} message objects', items: { type: 'object' } } }
   },
+  save_memory: {
+    description: 'Save a fact, preference, detail, or anything worth remembering to GIA memory.',
+    required: ['key', 'value'],
+    properties: {
+      key: { type: 'string', description: 'Memory key (e.g. "user_favorite_food")' },
+      value: { type: 'string', description: 'Memory value (what to remember)' },
+      category: { type: 'string', description: 'Category: profile/fact/preference/goal/project/correction/emotion/subject/score/weak_area/session_summary' },
+      tier: { type: 'string', description: 'Tier: working/semantic/episodic (default: semantic)' },
+      confidence: { type: 'number', description: 'Confidence 0-1 (default: 0.9)' },
+    }
+  },
   forget_memory: {
-    description: 'Delete stored memories matching a topic.',
+    description: 'Delete stored memories matching a topic or category.',
     required: [],
     properties: {
       key: { type: 'string', description: 'Topic to forget' },
-      all: { type: 'boolean', description: 'Set true to clear all memories' }
+      all: { type: 'boolean', description: 'Set true to clear all memories' },
+      category: { type: 'string', description: 'Category filter: profile/fact/preference/goal/project/emotion/etc.' }
     }
   },
   request_clarification: {
@@ -110,14 +144,23 @@ export const toolSchemas: Record<string, { description: string; required: string
     }
   },
   show_map: {
-    description: 'Render an interactive OpenStreetMap centered on coordinates with optional markers.',
+    description: 'Render an interactive OpenStreetMap centered on coordinates with optional markers and route.',
     required: ['center'],
     properties: {
       center: { type: 'object', description: '{lat, lng} map center' },
       markers: { type: 'array', description: '[{lat, lng, label, color}] markers', items: { type: 'object' } },
-      route: { type: 'array', description: '[{lat, lng}] polyline points', items: { type: 'object' } },
+      route: { type: 'array', description: '[{lat, lng}] polyline points from get_directions', items: { type: 'object' } },
       zoom: { type: 'number', description: 'Zoom level 1-19 (default 13)' },
       title: { type: 'string', description: 'Optional map title' }
+    }
+  },
+  get_directions: {
+    description: 'Get turn-by-turn directions and route between two locations. Returns distance, duration, instructions, and a map-ready route.',
+    required: ['origin', 'destination'],
+    properties: {
+      origin: { type: 'string', description: 'Starting place name or {lat, lng} object' },
+      destination: { type: 'string', description: 'Destination place name or {lat, lng} object' },
+      mode: { type: 'string', description: 'Travel mode: driving/walking/cycling (default: driving)' },
     }
   },
   export_brain: {
@@ -321,6 +364,11 @@ export const toolSchemas: Record<string, { description: string; required: string
     required: [],
     properties: {}
   },
+  device_health: {
+    description: 'Check device health: storage usage, battery level, memory pressure. Alerts on risks.',
+    required: [],
+    properties: {}
+  },
   get_contacts: {
     description: 'Search or list contacts from the device address book.',
     required: [],
@@ -471,7 +519,7 @@ export function toolToProtocolType(id: string): ProtocolType {
     get_user_location: 'location_access', search_places: 'location_access',
     show_notification: 'notification', image_generation: 'image_generation',
     export_brain: 'brain_export', import_brain: 'brain_import',
-    zip_project: 'zip_project', forget_memory: 'memory_modification',
+    zip_project: 'zip_project', build_project: 'zip_project', install_skill: 'settings_change', forget_memory: 'memory_modification',
     toggle_feature: 'settings_change', request_clarification: 'clarification',
     get_environment_info: 'environment_info', show_map: 'show_map',
     list_files: 'file_read', summarize_conversation: 'environment_info',
@@ -485,22 +533,23 @@ export function toolToProtocolType(id: string): ProtocolType {
     send_email: 'device_action', make_phone_call: 'device_action',
     share: 'device_action', clipboard: 'device_action',
     vibrate: 'device_action', screen_brightness: 'device_action',
-    device_info: 'device_action', get_contacts: 'device_action',
+    device_info: 'device_action', device_health: 'device_action', get_contacts: 'device_action',
     open_url: 'device_action', set_alarm: 'device_action',
+    save_memory: 'memory_modification', get_directions: 'location_access',
   };
   return map[id] || 'custom';
 }
 
 export function toolToImpact(id: string): ProtocolImpact {
   const readTools = ['web_search', 'read_url', 'filesystem_read', 'list_files', 'get_environment_info',
-    'get_user_location', 'search_places', 'device_info', 'get_contacts'];
-  const writeTools = ['filesystem_write', 'export_brain', 'import_brain', 'zip_project', 'forget_memory',
+    'get_user_location', 'search_places', 'device_info', 'device_health', 'get_contacts'];
+  const writeTools = ['filesystem_write', 'export_brain', 'import_brain', 'zip_project', 'build_project', 'install_skill', 'forget_memory', 'save_memory',
     'toggle_feature', 'show_notification', 'summarize_conversation',
     'send_sms', 'send_whatsapp', 'send_email', 'make_phone_call',
     'share', 'clipboard', 'vibrate', 'screen_brightness', 'open_url', 'set_alarm'];
   const destructiveTools = ['forget_memory'];
-  const networkTools = ['web_search', 'read_url', 'terminal_run', 'image_generation', 'search_places', 'show_map'];
-  const locationTools = ['get_user_location', 'search_places', 'show_map'];
+  const networkTools = ['web_search', 'read_url', 'terminal_run', 'image_generation', 'search_places', 'show_map', 'get_directions'];
+  const locationTools = ['get_user_location', 'search_places', 'show_map', 'get_directions'];
   if (destructiveTools.includes(id)) return 'destructive';
   if (locationTools.includes(id)) return 'location';
   if (networkTools.includes(id)) return 'network';

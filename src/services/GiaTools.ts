@@ -22,6 +22,7 @@ import { shareTools } from './tools/share';
 import { geolocationTools } from './tools/geolocation';
 import { notificationTools } from './tools/notifications';
 import { deviceTools } from './tools/device';
+import { buildTools } from './tools/build';
 
 export type { ToolResult };
 export type { Tool };
@@ -58,6 +59,7 @@ class GiaTools {
       ...geolocationTools,
       ...notificationTools,
       ...deviceTools,
+      ...buildTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

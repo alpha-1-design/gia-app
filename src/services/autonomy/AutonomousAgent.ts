@@ -33,6 +33,16 @@ export class AutonomousAgent {
     useGiaStore.getState().addNotification(`🎯 Goal created: ${title}`);
 
     logger.log(`[AutonomousAgent] Goal "${title}" created with ${decomposition.steps.length} steps`);
+
+    // Kick off first step immediately if autonomy is enabled and not already working
+    if (store.config.enabled && !this.working) {
+      const next = store.getNextActionableStep();
+      if (next) {
+        logger.log(`[AutonomousAgent] Auto-starting first step for "${title}"`);
+        this.executeStep(next.goal, next.plan, next.step);
+      }
+    }
+
     return goalId;
   }
 

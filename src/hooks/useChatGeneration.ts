@@ -8,7 +8,35 @@ import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
 import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock } from '../utils/streamParser';
 import InputGuardrails from '../services/InputGuardrails';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import type { Message } from '../store/useGiaStore';
+import { isNativePlatform } from '../utils/helpers';
+
+const BACKGROUND_NOTIF_ID = 42;
+
+async function notifyIfBackground(sessionId: string, asstId: string): Promise<void> {
+  const state = useGiaStore.getState();
+  if (state.currentModule === 'chat') return;
+  if (!isNativePlatform()) return;
+  const session = state.sessions.find(s => s.id === sessionId);
+  if (!session) return;
+  const msg = session.messages.find(m => m.message.id === asstId)?.message;
+  if (!msg?.content) return;
+  const preview = msg.content.replace(/```[\s\S]*?```/g, '').trim().slice(0, 120);
+  try {
+    await LocalNotifications.schedule({
+      notifications: [{
+        id: BACKGROUND_NOTIF_ID,
+        title: 'GIA Response Ready',
+        body: preview || 'Your response has been generated.',
+        smallIcon: 'ic_stat_icon',
+        extra: { sessionId, msgId: asstId },
+      }],
+    });
+  } catch {
+    // Not critical if notification fails
+  }
+}
 
 export function useChatGeneration() {
   const [loading, setLoading] = useState(false);
@@ -164,6 +192,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 - Local Vision: ${localVision ? 'ON' : 'OFF'}]\n\n`;
 
       const parserState = createStreamParser();
+      let displayAccumulated = '';
       const res = await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: stateContext + handsOffPrefix + prompt, history,
@@ -174,9 +203,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         temperature: extThinking ? undefined : 0.7,
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
-          sharedProcessStreamChunk(chunk, parserState);
-          const displayText = processStreamForDisplay(parserState.accumulated);
-          state.updateMessage(sessionId, asstId, displayText, parserState.thoughtsAccumulated || undefined);
+          const newDisplay = sharedProcessStreamChunk(chunk, parserState);
+          if (newDisplay) displayAccumulated += newDisplay;
+          state.updateMessage(sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined);
           const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -185,7 +214,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-          state.updateMessage(sessionId, asstId, processStreamForDisplay(parserState.accumulated), parserState.thoughtsAccumulated);
+          state.updateMessage(sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
         }
       });
@@ -200,13 +229,14 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           useGiaStore.setState({
             clarification: { ...stored, sessionId, assistantMsgId: asstId },
           });
-          state.updateMessage(sessionId, asstId, processStreamForDisplay(parserState.accumulated), parserState.thoughtsAccumulated || undefined);
+          state.updateMessage(sessionId, asstId, displayAccumulated || processStreamForDisplay(parserState.accumulated), parserState.thoughtsAccumulated || undefined);
         }
+        notifyIfBackground(sessionId, asstId);
         state.setIntentState('idle');
         return;
       }
 
-      const rawContent = processStreamForDisplay(parserState.accumulated);
+      const rawContent = processStreamForDisplay(parserState.accumulated) || displayAccumulated;
       const finalText = rawContent ||
         // If stream parser stripped everything (all tool blocks), use res.text with tool blocks removed
         (() => {
@@ -231,11 +261,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           ),
         });
       }
-      if (res.model) {
+      if (res.model || res.tokenUsage) {
         useGiaStore.setState({
           sessions: useGiaStore.getState().sessions.map(s =>
             s.id === sessionId
-              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: res.model } } : m) }
+              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: res.model || m.message.model, tokenUsage: res.tokenUsage || m.message.tokenUsage } } : m) }
               : s
           ),
         });
@@ -243,6 +273,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       if (res.modelSwitched && res.switchReason) {
         state.addNotification(res.switchReason);
       }
+      notifyIfBackground(sessionId, asstId);
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
@@ -303,6 +334,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
 
       const contParserState = createStreamParser();
+      let contDisplayAccumulated = '';
       state.setIntentState('responding');
       state.setThinkingPhase('writing');
       const contRes = await GiaBrain.generate({
@@ -311,9 +343,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         history: [...history, { role: 'assistant', content: lastContent }],
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
-          sharedProcessStreamChunk(chunk, contParserState);
-          const displayText = processStreamForDisplay(contParserState.accumulated);
-          state.updateMessage(state.activeSessionId!, asstId, displayText, contParserState.thoughtsAccumulated || undefined);
+          const newDisplay = sharedProcessStreamChunk(chunk, contParserState);
+          if (newDisplay) contDisplayAccumulated += newDisplay;
+          state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated || undefined);
           const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -322,21 +354,22 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           contParserState.thoughtsAccumulated += (contParserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
-          state.updateMessage(state.activeSessionId!, asstId, processStreamForDisplay(contParserState.accumulated), contParserState.thoughtsAccumulated);
+          state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated);
         },
       });
       if (!ctrl.signal.aborted) {
         flushThinkBlock(contParserState);
-        state.updateMessage(state.activeSessionId!, asstId, processStreamForDisplay(contParserState.accumulated) || contParserState.accumulated, contParserState.thoughtsAccumulated || undefined);
-        if (contRes.model) {
+        state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated || processStreamForDisplay(contParserState.accumulated), contParserState.thoughtsAccumulated || undefined);
+        if (contRes.model || contRes.tokenUsage) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
               s.id === state.activeSessionId
-                ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: contRes.model } } : m) }
+                ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: contRes.model || m.message.model, tokenUsage: contRes.tokenUsage || m.message.tokenUsage } } : m) }
                 : s
             ),
           });
         }
+        notifyIfBackground(state.activeSessionId!, asstId);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -390,6 +423,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
 
       const clarParserState = createStreamParser();
+      let clarDisplayAccumulated = '';
       await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: answer, history,
@@ -398,9 +432,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         temperature: state.extThinking ? undefined : 0.7,
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
-          sharedProcessStreamChunk(chunk, clarParserState);
-          const displayText = processStreamForDisplay(clarParserState.accumulated);
-          state.updateMessage(sessionId, asstId, displayText, clarParserState.thoughtsAccumulated || undefined);
+          const newDisplay = sharedProcessStreamChunk(chunk, clarParserState);
+          if (newDisplay) clarDisplayAccumulated += newDisplay;
+          state.updateMessage(sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated || undefined);
           const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -409,14 +443,15 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           clarParserState.thoughtsAccumulated += (clarParserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
-          state.updateMessage(sessionId, asstId, processStreamForDisplay(clarParserState.accumulated), clarParserState.thoughtsAccumulated);
+          state.updateMessage(sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           useGiaStore.setState({ showConsole: true });
         }
       });
       if (!ctrl.signal.aborted) {
         flushThinkBlock(clarParserState);
-        state.updateMessage(sessionId, asstId, processStreamForDisplay(clarParserState.accumulated) || clarParserState.accumulated, clarParserState.thoughtsAccumulated || undefined);
+        state.updateMessage(sessionId, asstId, clarDisplayAccumulated || processStreamForDisplay(clarParserState.accumulated), clarParserState.thoughtsAccumulated || undefined);
+        notifyIfBackground(sessionId, asstId);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -469,6 +504,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
 
       const retryParserState = createStreamParser();
+      let retryDisplayAccumulated = '';
       state.setIntentState('responding');
       const genRes = await GiaBrain.generate({
         signal: ctrl.signal,
@@ -477,17 +513,18 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         useExtendedThinking: extThinking,
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
-          sharedProcessStreamChunk(chunk, retryParserState);
-          state.updateMessage(state.activeSessionId!, id, processStreamForDisplay(retryParserState.accumulated));
+          const newDisplay = sharedProcessStreamChunk(chunk, retryParserState);
+          if (newDisplay) retryDisplayAccumulated += newDisplay;
+          state.updateMessage(state.activeSessionId!, id, retryDisplayAccumulated);
         },
       });
       if (!ctrl.signal.aborted) {
-        state.updateMessage(state.activeSessionId!, id, processStreamForDisplay(retryParserState.accumulated) || retryParserState.accumulated);
-        if (genRes.model) {
+        state.updateMessage(state.activeSessionId!, id, retryDisplayAccumulated || processStreamForDisplay(retryParserState.accumulated));
+        if (genRes.model || genRes.tokenUsage) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
               s.id === state.activeSessionId
-                ? { ...s, messages: s.messages.map(m => m.message.id === id ? { ...m, message: { ...m.message, model: genRes.model } } : m) }
+                ? { ...s, messages: s.messages.map(m => m.message.id === id ? { ...m, message: { ...m.message, model: genRes.model || m.message.model, tokenUsage: genRes.tokenUsage || m.message.tokenUsage } } : m) }
                 : s
             ),
           });
@@ -496,6 +533,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           state.addNotification(`Model switched: ${genRes.switchReason}`);
         }
         TTSService.speak(retryParserState.accumulated);
+        notifyIfBackground(state.activeSessionId!, id);
       }
     } catch (e: unknown) {
       if (!ctrl.signal.aborted) {

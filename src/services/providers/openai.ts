@@ -62,8 +62,10 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       xhr.open('POST', `${baseUrl}/chat/completions`);
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
+      xhr.timeout = 120000;
 
       let finishReason = '';
+      let streamTokenUsage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
 
       const flushToolCalls = () => {
         if (toolCallAccum.size === 0) return;
@@ -139,7 +141,11 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
                   continue;
                 }
 
-                const textDelta = delta?.content || '';
+                  if (json.usage) {
+                    streamTokenUsage = json.usage;
+                  }
+
+                  const textDelta = delta?.content || '';
                 if (textDelta) {
                   fullText += textDelta;
                   const displayText = processStreamChunk(textDelta, streamState);
@@ -158,6 +164,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
           }
         }
         processing = false;
+        if (pendingBuffer) drain();
       };
 
       const onData = () => {
@@ -177,11 +184,13 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
           reject(new Error(`⚠️ ${label} returned empty response. The model may be overloaded. Try again or switch providers.`));
         } else {
           const wasTruncated = finishReason === 'length';
-          resolve({ text: fullText, provider: activeProvider, model: config.model, finishReason, wasTruncated });
+          const tokenUsage = streamTokenUsage ? { input: streamTokenUsage.prompt_tokens || 0, output: streamTokenUsage.completion_tokens || 0, total: streamTokenUsage.total_tokens || 0 } : undefined;
+          resolve({ text: fullText, provider: activeProvider, model: config.model, finishReason, wasTruncated, tokenUsage });
         }
       };
 
       xhr.onerror = () => reject(new Error(ctx.friendlyError(label, `${label} network error`)));
+      xhr.ontimeout = () => reject(new Error(ctx.friendlyError(label, `${label} timed out after 120s`)));
       xhr.onabort = () => {
         const e = new Error('Request aborted');
         e.name = 'AbortError';
@@ -232,6 +241,11 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     throw new Error(ctx.friendlyError(label, e?.error?.message || `${label} error ${res.status}`));
   }
   const data = await res.json();
+  const tokenUsage = data.usage ? {
+    input: data.usage.prompt_tokens || 0,
+    output: data.usage.completion_tokens || 0,
+    total: data.usage.total_tokens || 0,
+  } : undefined;
   const choice = data.choices?.[0];
   let content = choice?.message?.content || '';
   const toolCalls = choice?.message?.tool_calls;
@@ -248,5 +262,5 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   if (!content?.trim()) throw new Error(ctx.friendlyError(label, `${label} returned empty response`));
   const finishReason = choice?.finish_reason || 'stop';
   const wasTruncated = finishReason === 'length';
-  return { text: content, provider: activeProvider, model: config.model, finishReason, wasTruncated };
+  return { text: content, provider: activeProvider, model: config.model, finishReason, wasTruncated, tokenUsage };
 }

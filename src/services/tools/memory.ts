@@ -1,23 +1,49 @@
 import { useGiaStore } from '../../store/useGiaStore';
 import { providerRegistry } from '../ProviderRegistry';
 import type { Tool } from './types';
+import type { MemoryCategory, MemoryTier } from '../../store/useMemoryStore';
 export const memoryTools: Tool[] = [
   {
+    id: 'save_memory', name: 'save_memory',
+    description: 'Save something to memory — facts, preferences, goals, user details, anything GIA should remember. Call this proactively whenever the user shares something worth remembering.',
+    execute: async ({ key, value, category = 'fact', tier = 'semantic', confidence = 0.9 }) => {
+      const store = (await import('../../store/useMemoryStore')).useMemoryStore.getState();
+      store.addMemory({
+        key: key as string,
+        value: value as string,
+        category: category as MemoryCategory,
+        tier: tier as MemoryTier,
+        confidence: confidence as number,
+      });
+      return {
+        success: true,
+        content: `Saved to memory: ${key}`
+      };
+    }
+  },
+  {
     id: 'forget_memory', name: 'forget_memory',
-    description: 'Delete a specific memory or all memories matching a topic.',
-    execute: async ({ key, all = false }) => {
+    description: 'Delete a specific memory or all memories matching a topic or category. Be precise when the user asks you to forget something.',
+    execute: async ({ key, all = false, category }) => {
       const store = (await import('../../store/useMemoryStore')).useMemoryStore.getState();
       if (all) {
         store.clearMemories();
         return { success: true, content: 'All memories cleared.' };
       }
-      const matches = store.queryMemories(key as string);
+      let matches;
+      if (category) {
+        matches = store.getMemories(category as MemoryCategory);
+      } else if (key) {
+        matches = store.queryMemories(key as string);
+      } else {
+        return { success: false, content: '', error: 'Provide a key, category, or set all=true to clear.' };
+      }
       matches.forEach(m => store.deleteMemory(m.id));
       return {
         success: true,
         content: matches.length > 0
-          ? `Forgot ${matches.length} memor${matches.length === 1 ? 'y' : 'ies'} about "${key}".`
-          : `No memories found matching "${key}".`
+          ? `Forgot ${matches.length} memor${matches.length === 1 ? 'y' : 'ies'}${key ? ` about "${key}"` : ''}${category ? ` in category "${category}"` : ''}.`
+          : `No memories found${key ? ` matching "${key}"` : ''}${category ? ` in category "${category}"` : ''}.`
       };
     }
   },

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { GraduationCap, Clock } from 'lucide-react';
+import { GraduationCap, Clock, WifiOff } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
@@ -8,6 +8,7 @@ import ExamQuiz from './exam/ExamQuiz';
 import ExamResult from './exam/ExamResult';
 import type { ExamSystem, ExamMode, Difficulty, Question, QuizResult, Subject } from './exam/types';
 import { generateWithRetry } from '../utils/generateWithRetry';
+import { getFallbackQuestions, loadCachedQuestions, saveQuestionsToCache } from './exam/FallbackQuestions';
 
 const TIMER_SECONDS_PER_QUESTION = 60;
 
@@ -31,7 +32,16 @@ const ExamModule: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [startTime, setStartTime] = useState(0);
+  const [usedFallback, setUsedFallback] = useState(false);
   const submitQuizRef = useRef<() => void>(() => {});
+
+  // Warn before leaving during a quiz
+  useEffect(() => {
+    if (tab !== 'quiz' || questions.length === 0) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [tab, questions.length]);
 
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
@@ -51,6 +61,7 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
       );
       setSubjects(parsed.subjects ?? []);
     } catch {
+      // Always available offline fallback
       setSubjects([
         { name: 'Mathematics', topics: ['Algebra', 'Geometry', 'Trigonometry', 'Statistics', 'Calculus'] },
         { name: 'English Language', topics: ['Comprehension', 'Grammar', 'Essay Writing', 'Oral English', 'Literature'] },
@@ -89,7 +100,6 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
       const topicContext = topic ? ` focusing on ${topic}` : '';
       const { data: parsed } = await generateWithRetry<{ questions: Question[] }>(
         () => GiaBrain.generate({
-          signal: AbortSignal.timeout(30_000),
           prompt: `Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.`,
           systemPrompt: `You are a ${examSystem} exam expert. Generate accurate, exam-standard questions. Respond with valid JSON:
 {"questions":[{"id":"1","question":"Question text?","options":["A. Option","B. Option","C. Option","D. Option"],"correctAnswer":0,"explanation":"Why this is correct","topic":"Topic name"}]}
@@ -106,6 +116,8 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
       }
       const qs = parsed.questions.map((q) => ({ ...q, id: genId() }));
       setQuestions(qs);
+      saveQuestionsToCache(subject, qs);
+      setUsedFallback(false);
 
       if (examMode === 'timed') {
         setTimeLeft(qs.length * TIMER_SECONDS_PER_QUESTION);
@@ -113,8 +125,34 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
       }
       setStartTime(Date.now());
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not generate questions. Try again.');
-      setTab('setup');
+      const errMsg = err instanceof Error ? err.message : '';
+      const shouldFallback = errMsg.includes('No internet') || errMsg.includes('offline') || errMsg.includes('network');
+
+      if (!shouldFallback) {
+        const cached = loadCachedQuestions(subject);
+        if (cached && cached.length > 0) {
+          setQuestions(cached);
+          setUsedFallback(true);
+          setError('');
+          if (examMode === 'timed') {
+            setTimeLeft(cached.length * TIMER_SECONDS_PER_QUESTION);
+            setTimerActive(true);
+          }
+          setStartTime(Date.now());
+          return;
+        }
+      }
+
+      const fallback = getFallbackQuestions(subject, questionCount);
+      setQuestions(fallback);
+      setUsedFallback(true);
+      setError('');
+
+      if (examMode === 'timed') {
+        setTimeLeft(fallback.length * TIMER_SECONDS_PER_QUESTION);
+        setTimerActive(true);
+      }
+      setStartTime(Date.now());
     } finally {
       setLoading(false);
     }
@@ -244,17 +282,29 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
       )}
 
       {tab === 'quiz' && (
-        <ExamQuiz
-          questions={questions}
-          currentIndex={currentIndex}
-          onNavigateTo={(idx) => { setCurrentIndex(idx); setShowExplanation(false); }}
-          selectedAnswers={selectedAnswers}
-          handleAnswer={handleAnswer}
-          submittedQuestions={submittedQuestions}
-          handleSubmitAnswer={handleSubmitAnswer}
-          showExplanation={showExplanation}
-          handleSubmitQuiz={handleSubmitQuiz}
-        />
+        <>
+          {usedFallback && (
+            <div className="flex items-center gap-2 px-4 py-2 text-xs" style={{
+              background: 'rgba(234,179,8,0.1)',
+              color: '#eab308',
+              borderBottom: '1px solid rgba(234,179,8,0.2)',
+            }}>
+              <WifiOff size={12} />
+              Using cached or sample questions. AI-generated questions may not be available — check your internet connection or AI provider settings.
+            </div>
+          )}
+          <ExamQuiz
+            questions={questions}
+            currentIndex={currentIndex}
+            onNavigateTo={(idx) => { setCurrentIndex(idx); setShowExplanation(false); }}
+            selectedAnswers={selectedAnswers}
+            handleAnswer={handleAnswer}
+            submittedQuestions={submittedQuestions}
+            handleSubmitAnswer={handleSubmitAnswer}
+            showExplanation={showExplanation}
+            handleSubmitQuiz={handleSubmitQuiz}
+          />
+        </>
       )}
 
       {tab === 'result' && result && (

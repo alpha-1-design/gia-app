@@ -16,10 +16,34 @@ const PRIORITY_COLORS = {
   low: 'text-emerald-500 bg-emerald-50 border-emerald-100',
 };
 
+const PLAN_STORAGE_KEY = 'gia-planner-current-plan';
+
+function loadSavedPlan(): { title: string; steps: PlanStep[] } | null {
+  try {
+    const raw = localStorage.getItem(PLAN_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.steps && Array.isArray(parsed.steps) && parsed.steps.length > 0 && parsed.steps[0].title) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function savePlan(title: string, steps: PlanStep[]): void {
+  try { localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ title, steps })); } catch {}
+}
+
+function clearSavedPlan(): void {
+  try { localStorage.removeItem(PLAN_STORAGE_KEY); } catch {}
+}
+
 const PlannerModule: React.FC = () => {
+  const savedPlan = React.useMemo(() => loadSavedPlan(), []);
   const [prompt, setPrompt] = useState('');
-  const [steps, setSteps] = useState<PlanStep[]>([]);
-  const [planTitle, setPlanTitle] = useState('');
+  const [steps, setSteps] = useState<PlanStep[]>(savedPlan?.steps || []);
+  const [planTitle, setPlanTitle] = useState(savedPlan?.title || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'plan'|'schedule'>('plan');
@@ -37,6 +61,29 @@ const PlannerModule: React.FC = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  // Save plan to localStorage whenever it changes
+  useEffect(() => {
+    if (steps.length > 0) {
+      savePlan(planTitle, steps);
+    } else {
+      clearSavedPlan();
+    }
+  }, [planTitle, steps]);
+
+  // Restore scheduled task timers on mount (survives navigation)
+  useEffect(() => {
+    const pending = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun > Date.now());
+    for (const task of pending) {
+      const delay = task.nextRun - Date.now();
+      mountTimeoutRef.current = setTimeout(() => runTask(task), Math.min(delay, 86400000)); // cap at 24h
+    }
+    // also check for overdue tasks
+    const overdue = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun <= Date.now());
+    for (const task of overdue) {
+      runTask(task);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTask = useCallback(async (task: ScheduledTask) => {
     if (task.status === 'running') return;
@@ -58,13 +105,27 @@ const PlannerModule: React.FC = () => {
     }
   }, [updateTaskStatus, addNotification]);
 
+  const generateFallbackPlan = useCallback((goal: string) => {
+    const title = goal.length > 40 ? goal.slice(0, 40) + '…' : goal;
+    const priorities: ('high'|'medium'|'low')[] = ['high', 'high', 'medium', 'medium', 'low'];
+    const fallback: PlanStep[] = [
+      { id: genId(), title: 'Research & Understand', description: `Research and fully understand the requirements for: ${goal}`, priority: 'high', done: false, eta: 'Day 1' },
+      { id: genId(), title: 'Plan & Prepare', description: 'Create a detailed plan with timelines, resources, and milestones.', priority: 'high', done: false, eta: 'Day 1-2' },
+      { id: genId(), title: 'Gather Resources', description: 'Identify and gather all necessary tools, materials, and information.', priority: 'medium', done: false, eta: 'Day 2-3' },
+      { id: genId(), title: 'Execute Phase 1', description: 'Begin execution of the first major phase of the plan.', priority: 'high', done: false, eta: 'Day 3-5' },
+      { id: genId(), title: 'Review & Adjust', description: 'Review progress, identify obstacles, and adjust the plan as needed.', priority: 'medium', done: false, eta: 'Day 5-6' },
+      { id: genId(), title: 'Execute Phase 2', description: 'Continue with remaining tasks, applying lessons learned.', priority: 'medium', done: false, eta: 'Day 6-8' },
+      { id: genId(), title: 'Final Review & Complete', description: 'Final review, quality check, and completion of all tasks.', priority: 'low', done: false, eta: 'Day 8-10' },
+    ];
+    return { title, steps: fallback };
+  }, []);
+
   const handlePlan = useCallback(async () => {
     const text = prompt.trim(); if (!text || loading) return;
     setLoading(true); setError(''); setIntentState('thinking');
     try {
       const { data: parsed, wasRepaired } = await generateWithRetry<{ steps: Omit<PlanStep, 'done'>[]; title: string }>(
         () => GiaBrain.generate({
-          signal: AbortSignal.timeout(30_000),
           prompt: text,
           systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
 {"title":"Concise plan title","steps":[{"id":"1","title":"Step title","description":"Specific actionable description","priority":"high|medium|low","eta":"e.g. Day 1, Week 2"}]}
@@ -87,10 +148,21 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
       setIntentState('responding');
       timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not build plan. Be more specific.');
-      setIntentState('idle');
+      const errMsg = err instanceof Error ? err.message : '';
+      const isNetwork = errMsg.includes('No internet') || errMsg.includes('offline');
+      if (isNetwork) {
+        const fallback = generateFallbackPlan(text);
+        setPlanTitle(fallback.title);
+        setSteps(fallback.steps.map(s => ({ ...s, done: false })));
+        setError('');
+        setIntentState('responding');
+        timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
+      } else {
+        setError(errMsg || 'Could not build plan. Be more specific.');
+        setIntentState('idle');
+      }
     } finally { setLoading(false); }
-  }, [prompt, loading, setIntentState]);
+  }, [prompt, loading, setIntentState, generateFallbackPlan]);
 
   const handleSchedule = useCallback(async () => {
     const text = schedPrompt.trim(); if (!text || schedLoading) return;

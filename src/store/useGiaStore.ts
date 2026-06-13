@@ -18,6 +18,7 @@ export interface Message {
   model?: string;
   thinking?: boolean;
   thoughts?: string;
+  tokenUsage?: { input: number; output: number; total: number };
   parentId?: string;
   branchId?: string;
 }

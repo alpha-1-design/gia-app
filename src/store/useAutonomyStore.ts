@@ -50,7 +50,7 @@ export const useAutonomyStore = create<AutonomyStore>()(
         proactivenessLevel: 0.5,
         maxConcurrentGoals: 3,
         reflectionRequired: true,
-        idleThresholdMs: 5 * 60 * 1000,
+        idleThresholdMs: 60 * 1000,
       },
       lastUserActivity: Date.now(),
       activeGoalId: null,

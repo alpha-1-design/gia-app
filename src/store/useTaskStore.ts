@@ -56,16 +56,16 @@ export const useTaskStore = create<TaskState>()(
       deleteTask: (id) =>
         set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
 
-      moveTask: (taskId, newStatus) =>
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
+      moveTask: (taskId: string, newStatus: GiaTask['status']) =>
+        set((s: TaskState) => ({
+          tasks: s.tasks.map((t: GiaTask) =>
             t.id === taskId ? { ...t, status: newStatus, updatedAt: Date.now() } : t
           ),
         })),
 
-      reorderColumns: (columns) => set({ columns }),
+      reorderColumns: (columns: { id: string; title: string }[]) => set({ columns }),
 
-      getTasksByStatus: (status) => get().tasks.filter((t) => t.status === status),
+      getTasksByStatus: (status: GiaTask['status']) => get().tasks.filter((t: GiaTask) => t.status === status),
     }),
     {
       name: 'gia-tasks-v1',
