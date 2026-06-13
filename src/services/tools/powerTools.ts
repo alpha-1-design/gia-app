@@ -35,7 +35,7 @@ const httpRequest: Tool = {
       const timer = setTimeout(() => controller.abort(), timeout);
       const res = await fetch(url, {
         method,
-        headers: { 'User-Agent': 'GIA/2.3.1', ...headers },
+        headers: { 'User-Agent': 'GIA/2.3.1.2', ...headers },
         body: method === 'GET' || method === 'DELETE' ? undefined : body,
         signal: controller.signal,
       });

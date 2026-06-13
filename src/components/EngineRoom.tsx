@@ -23,7 +23,7 @@ let lastExport: string | null = null;
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
-  mk('info', '║        GIA ENGINE ROOM  v2.3.1           ║'),
+  mk('info', '║        GIA ENGINE ROOM  v2.3.1.2         ║'),
   mk('info', '║  10 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),

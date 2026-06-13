@@ -117,7 +117,7 @@ class GatewayManager {
     const start = performance.now();
     try {
       const headers: Record<string, string> = {
-        'User-Agent': 'GIA-Gateway/2.3.1',
+        'User-Agent': 'GIA-Gateway/2.3.1.2',
         ...route.headers,
       };
       if (body) headers['Content-Type'] = 'application/json';
@@ -181,7 +181,7 @@ class GatewayManager {
     const start = performance.now();
     const res = await fetch(url, {
       method,
-      headers: { 'User-Agent': 'GIA-Gateway/2.3.1', ...headers },
+      headers: { 'User-Agent': 'GIA-Gateway/2.3.1.2', ...headers },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(30000),
     });

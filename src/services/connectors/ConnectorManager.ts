@@ -127,7 +127,7 @@ class ConnectorManager {
     }
 
     const headers: Record<string, string> = {
-      'User-Agent': 'GIA/2.3.1',
+      'User-Agent': 'GIA/2.3.1.2',
       ...request.headers,
     };
     if (connector.apiKey) {
@@ -159,7 +159,7 @@ class ConnectorManager {
     const start = performance.now();
     const res = await fetch(url, {
       method,
-      headers: { 'User-Agent': 'GIA/2.3.1', ...headers },
+      headers: { 'User-Agent': 'GIA/2.3.1.2', ...headers },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000),
     });
