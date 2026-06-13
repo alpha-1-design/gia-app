@@ -109,11 +109,13 @@ class SocialManager {
     return getPlatformDef(id);
   }
 
-  connectPlatform(platformId: string, accountName: string): boolean {
+  connectPlatform(platformId: string, config: Record<string, string>): boolean {
     const platform = this.platforms.get(platformId);
     if (!platform) return false;
     platform.connected = true;
-    platform.accountName = accountName;
+    platform.accountName = config.accountName || config.accessToken || config.botToken || config.clientId || platformId;
+    platform.tokens = { ...(platform.tokens || {}), ...config };
+    this.saveTokens();
     return true;
   }
 

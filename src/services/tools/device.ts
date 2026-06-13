@@ -2,6 +2,14 @@ import { Device } from '@capacitor/device';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
 
+// Capacitor DeviceInfo may carry extra fields at runtime
+interface DeviceInfoExtended {
+  diskFree?: number;
+  diskTotal?: number;
+  uuid?: string;
+  [key: string]: unknown;
+}
+
 const devicePluginInfo: Tool = {
   id: 'device_plugin_info',
   name: 'device_plugin_info',
@@ -32,8 +40,8 @@ const devicePluginInfo: Tool = {
         '**Hardware**',
         `- **Is Virtual:** ${info.isVirtual ? 'Yes' : 'No'}`,
         `- **Mem Used (est.):** ${info.memUsed ? `${(info.memUsed / 1024 / 1024).toFixed(0)} MB` : 'Unknown'}`,
-        `- **Disk Free (est.):** ${(info as any).diskFree ? `${((info as any).diskFree / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
-        `- **Disk Total (est.):** ${(info as any).diskTotal ? `${((info as any).diskTotal / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
+        `- **Disk Free (est.):** ${(info as unknown as DeviceInfoExtended).diskFree ? `${((info as unknown as DeviceInfoExtended).diskFree / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
+        `- **Disk Total (est.):** ${(info as unknown as DeviceInfoExtended).diskTotal ? `${((info as unknown as DeviceInfoExtended).diskTotal / 1024 / 1024 / 1024).toFixed(1)} GB` : 'Unknown'}`,
         '',
         '**Power**',
         `- **Battery Level:** ${batteryInfo.batteryLevel !== null && batteryInfo.batteryLevel !== undefined ? `${Math.round(batteryInfo.batteryLevel * 100)}%` : 'Unknown'}`,
@@ -44,7 +52,7 @@ const devicePluginInfo: Tool = {
         `- **Language Tag:** ${languageTag.value || 'Unknown'}`,
         '',
         '**Identity**',
-        `- **Device ID (UUID):** ${(idInfo as any).uuid || 'Unknown'}`,
+        `- **Device ID (UUID):** ${(idInfo as unknown as DeviceInfoExtended).uuid || 'Unknown'}`,
         `- **Device ID (Identifier):** ${idInfo.identifier || 'Unknown'}`,
       ];
 
@@ -97,7 +105,7 @@ const devicePluginId: Tool = {
       const idInfo = await Device.getId();
       return {
         success: true,
-        content: `## 🆔 Device Identifiers\n\n**UUID:** \`${(idInfo as any).uuid || 'Unknown'}\`\n**Identifier:** \`${idInfo.identifier || 'Unknown'}\``,
+        content: `## 🆔 Device Identifiers\n\n**UUID:** \`${(idInfo as unknown as DeviceInfoExtended).uuid || 'Unknown'}\`\n**Identifier:** \`${idInfo.identifier || 'Unknown'}\``,
       };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
