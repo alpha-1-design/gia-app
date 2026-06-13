@@ -45,10 +45,6 @@ jobs:
         run: cd android && ./gradlew assembleDebug --no-daemon
 
       - name: Build signed release APK
-        env:
-          KEYSTORE_PATH: android/app/release.keystore
-          KEYSTORE_PASSWORD: android
-          KEYSTORE_ALIAS: gia
         run: cd android && ./gradlew assembleRelease --no-daemon
 
       - uses: actions/upload-artifact@v4
