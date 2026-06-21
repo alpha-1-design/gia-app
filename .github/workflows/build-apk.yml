@@ -30,6 +30,9 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Install Android SDK platform 36
+        run: yes | sdkmanager "platforms;android-36" || true
+
       - run: npx cap sync android
 
       - run: chmod +x android/gradlew
@@ -42,7 +45,7 @@ jobs:
             -dname "CN=GIA App, OU=GIA, O=alpha1studio, L=Kumasi, ST=Ashanti, C=GH"
 
       - name: Build debug APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Build signed release APK
         run: cd android && ./gradlew assembleRelease --no-daemon
