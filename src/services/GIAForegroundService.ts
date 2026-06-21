@@ -9,7 +9,8 @@ export interface GIACorePlugin {
   setKeepAlive(options: { enable: boolean }): Promise<{ keepAlive: boolean }>;
   getKeepAlive(): Promise<{ keepAlive: boolean; running: boolean }>;
   requestBatteryOptimizationExemption(): Promise<void>;
-  addListener(eventName: 'networkChanged' | 'keepAliveChanged', handler: (data: Record<string, unknown>) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'networkChanged', handler: (state: { online: boolean; type: string; metered: boolean }) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'keepAliveChanged', handler: (state: { keepAlive: boolean }) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }
 
@@ -86,11 +87,11 @@ class GIAForegroundService {
   }
 
   addNetworkListener(handler: (state: { online: boolean; type: string; metered: boolean }) => void): Promise<PluginListenerHandle> {
-    return GIACore.addListener('networkChanged', handler);
+    return GIACore.addListener('networkChanged', handler as (state: { online: boolean; type: string; metered: boolean }) => void);
   }
 
   addKeepAliveListener(handler: (state: { keepAlive: boolean }) => void): Promise<PluginListenerHandle> {
-    return GIACore.addListener('keepAliveChanged', handler);
+    return GIACore.addListener('keepAliveChanged', handler as (state: { keepAlive: boolean }) => void);
   }
 
   isRunning(): boolean {

@@ -38,8 +38,14 @@ function decodeBase64(str: string): string {
   }
 }
 
-function parseMessagePayload(payload: Record<string, unknown>): string {
-  if (payload.body?.size > 0 && payload.body?.data) {
+interface GmailPayloadPart {
+  mimeType?: string;
+  body?: { size?: number; data?: string };
+  parts?: GmailPayloadPart[];
+}
+
+function parseMessagePayload(payload: GmailPayloadPart): string {
+  if (payload.body?.size && payload.body?.data) {
     return decodeBase64(payload.body.data);
   }
   if (payload.parts) {
