@@ -32,7 +32,7 @@ describe('useChatMessages', () => {
       addNotification: mockAddNotification,
       forkSession: vi.fn(),
       addBranch: vi.fn(),
-      getActiveSession: vi.fn(() => storeState.sessions[0]),
+      getActiveSession: vi.fn(() => (storeState.sessions as Array<{ id: string; messages: Array<{ id: string; role: string; content: string }> }>)[0]),
     };
   });
 

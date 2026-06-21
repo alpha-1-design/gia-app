@@ -50,7 +50,7 @@ const browse_web: Tool = {
 
       let content = '';
       if (parsed.text) content = parsed.text;
-      else if (parsed.results) content = parsed.results.map(r => `${r.title}: ${r.url}\n${r.snippet}`).join('\n\n');
+      else if (parsed.results) content = parsed.results.map((r: { title: string; url: string; snippet: string }) => `${r.title}: ${r.url}\n${r.snippet}`).join('\n\n');
       else if (parsed.elements) content = parsed.elements.join('\n---\n');
 
       return { success: true, content: content || JSON.stringify(parsed, null, 2) };

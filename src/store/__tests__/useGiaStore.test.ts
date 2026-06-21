@@ -53,7 +53,6 @@ describe('useGiaStore', () => {
       clarification: null,
       wakeWord: 'hey gia',
       keepListening: false,
-      voiceEnabled: true,
       autoStartWakeWord: false,
       voiceLanguage: 'en-US',
       customInstructions: '',
@@ -116,14 +115,6 @@ describe('useGiaStore', () => {
       expect(useGiaStore.getState().clarification).toEqual(c);
       useGiaStore.getState().setClarification(null);
       expect(useGiaStore.getState().clarification).toBeNull();
-    });
-  });
-
-  describe('voice settings', () => {
-    it('setVoiceEnabled disables keepListening too', () => {
-      useGiaStore.getState().setVoiceEnabled(false);
-      expect(useGiaStore.getState().voiceEnabled).toBe(false);
-      expect(useGiaStore.getState().keepListening).toBe(false);
     });
   });
 

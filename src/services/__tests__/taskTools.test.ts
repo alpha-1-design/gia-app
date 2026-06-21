@@ -10,7 +10,7 @@ vi.mock('../../store/useTaskStore', () => ({
         tasks: mockTasks,
         addTask: vi.fn((task: { title: string; status: string }) => {
           const id = 'task-' + mockTasks.length;
-          mockTasks.push({ id, ...task, createdAt: Date.now(), updatedAt: Date.now() });
+          mockTasks.push({ id, ...task, priority: 'medium', tags: [], dueDate: null, createdAt: Date.now(), updatedAt: Date.now() });
           return id;
         }),
         updateTask: vi.fn((id: string, updates: Record<string, unknown>) => {
