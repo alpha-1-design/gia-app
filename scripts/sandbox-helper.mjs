@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync } from 'fs';
 const BASE = 'http://localhost:3081';
 
 async function main() {
