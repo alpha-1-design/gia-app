@@ -55,7 +55,7 @@ class MessagingBridge {
           }
         }
       }
-    } catch {}
+    } catch { /* noop */ }
   }
 
   private save() {
@@ -65,7 +65,7 @@ class MessagingBridge {
     }
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(data));
-    } catch {}
+    } catch { /* noop */ }
   }
 
   getChannels(): MessagingChannel[] {
@@ -235,7 +235,8 @@ class MessagingBridge {
     const data = await res.json();
     if (!data.ok) return;
 
-    for (const update of (data.result || []) as any[]) {
+    interface TelegramUpdate { update_id: number; message?: { message_id: number; text?: string; from?: { is_bot?: boolean; first_name?: string; username?: string }; chat: { id: number; type: string; title?: string }; date: number } }
+    for (const update of (data.result || []) as TelegramUpdate[]) {
       this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id + 1);
 
       const msg = update.message;

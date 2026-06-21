@@ -38,7 +38,7 @@ function decodeBase64(str: string): string {
   }
 }
 
-function parseMessagePayload(payload: any): string {
+function parseMessagePayload(payload: Record<string, unknown>): string {
   if (payload.body?.size > 0 && payload.body?.data) {
     return decodeBase64(payload.body.data);
   }
@@ -56,8 +56,8 @@ function parseMessagePayload(payload: any): string {
   return '';
 }
 
-function extractHeader(headers: any[], name: string): string {
-  return headers?.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+function extractHeader(headers: { name?: string; value?: string }[], name: string): string {
+  return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
 
 class EmailService {
@@ -103,7 +103,7 @@ class EmailService {
 
     const messages = data.messages || [];
     const detailed = await Promise.all(
-      messages.slice(0, maxResults).map((m: any) => this.get(m.id))
+      messages.slice(0, maxResults).map((m: { id: string }) => this.get(m.id))
     );
     return detailed;
   }

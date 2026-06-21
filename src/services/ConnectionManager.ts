@@ -49,7 +49,7 @@ class ConnectionManager {
           }
         }
       }
-    } catch {}
+    } catch { /* noop */ }
   }
 
   private save() {
@@ -59,7 +59,7 @@ class ConnectionManager {
     }
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(data));
-    } catch {}
+    } catch { /* noop */ }
   }
 
   isConnected(service: ServiceType): boolean {
@@ -103,7 +103,7 @@ class ConnectionManager {
       try {
         const config = getOAuthConfig(service, '');
         await oauthManager.revokeToken(config, conn.tokens.accessToken);
-      } catch {}
+      } catch { /* noop */ }
     }
     this.connections.delete(service);
     this.save();

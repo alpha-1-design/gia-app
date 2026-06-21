@@ -39,7 +39,7 @@ class KeepaliveService {
           if (!this.active) return;
           try {
             performance.now();
-          } catch {}
+          } catch { /* noop */ }
         }, this.intervalMs);
         break;
 
@@ -71,12 +71,12 @@ class KeepaliveService {
     }
 
     if (this.audioCtx) {
-      try { await this.audioCtx.close(); } catch {}
+      try { await this.audioCtx.close(); } catch { /* noop */ }
       this.audioCtx = null;
     }
 
     if (this.worker) {
-      try { this.worker.terminate(); } catch {}
+      try { this.worker.terminate(); } catch { /* noop */ }
       this.worker = null;
     }
 

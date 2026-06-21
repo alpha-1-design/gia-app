@@ -9,7 +9,7 @@ export interface GIACorePlugin {
   setKeepAlive(options: { enable: boolean }): Promise<{ keepAlive: boolean }>;
   getKeepAlive(): Promise<{ keepAlive: boolean; running: boolean }>;
   requestBatteryOptimizationExemption(): Promise<void>;
-  addListener(eventName: 'networkChanged' | 'keepAliveChanged', handler: (data: any) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'networkChanged' | 'keepAliveChanged', handler: (data: Record<string, unknown>) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }
 

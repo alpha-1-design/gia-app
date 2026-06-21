@@ -55,7 +55,7 @@ export const VisionSection: React.FC = () => {
       setDownloadingModels(prev => ({ ...prev, [modelId]: false }));
       refresh();
     }
-  }, [router, refresh]);
+  }, [router, refresh, downloadingModels]);
 
   const handleDownloadSelected = useCallback(async () => {
     const toDownload = Object.entries(selectedModels)

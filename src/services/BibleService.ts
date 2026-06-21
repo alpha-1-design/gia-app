@@ -1,5 +1,3 @@
-import { logger } from '../utils/logger';
-
 export interface BibleVerse {
   reference: string;
   text: string;
@@ -50,7 +48,7 @@ class BibleService {
     }
     const data = await res.json();
     if (!data.verses) return [];
-    return data.verses.map((v: any) => ({
+    return data.verses.map((v: { reference: string; text: string }) => ({
       reference: v.reference,
       text: v.text,
       translation: data.translation || translation,
@@ -63,7 +61,7 @@ class BibleService {
     });
     const data = await res.json();
     if (!data.verses) return [];
-    return data.verses.map((v: any) => ({
+    return data.verses.map((v: { reference: string; text: string }) => ({
       reference: v.reference,
       text: v.text,
       translation: data.translation || translation,

@@ -377,12 +377,12 @@ const App: React.FC = () => {
             autoCancel: false,
           }],
         });
-      } catch {}
+      } catch { /* noop */ }
     };
     const dismissPersistentNotification = async () => {
       try {
         await LocalNotifications.cancel({ notifications: [{ id: LONGRUNNING_NOTIF_ID }] });
-      } catch {}
+      } catch { /* noop */ }
     };
 
     // Long-running mode: wake lock + keepalive + idle model unload + messaging polling + fast autonomy
@@ -409,11 +409,11 @@ const App: React.FC = () => {
     const unsubUnload = idleManager.onIdleTimeout(async () => {
       if (!useGiaStore.getState().autoModelUnload) return;
       logger.log('[IdleManager] Unloading idle models…');
-      try { await LocalLLMService.unloadModel(); } catch {}
+      try { await LocalLLMService.unloadModel(); } catch { /* noop */ }
       try {
         const { default: whisper } = await import('./services/WhisperService');
         whisper.unload();
-      } catch {}
+      } catch { /* noop */ }
     });
     const unsubActive = idleManager.onActiveAgain(() => {
       logger.log('[IdleManager] User active — models will reload on next use');

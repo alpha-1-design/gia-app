@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { VisualCard } from './common';
 import { useCopy } from './useCopy';
 

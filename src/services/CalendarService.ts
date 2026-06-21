@@ -55,7 +55,7 @@ class CalendarService {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'Failed to list events');
 
-    return (data.items || []).map((item: any) => ({
+    return (data.items || []).map((item: { id: string; summary?: string; description?: string; location?: string; start?: unknown; end?: unknown }) => ({
       id: item.id,
       summary: item.summary || '(No title)',
       description: item.description,

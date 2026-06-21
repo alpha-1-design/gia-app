@@ -46,7 +46,7 @@ class WakeLockService {
       if (this.releaseHandler) {
         this.wakeLock.removeEventListener('release', this.releaseHandler);
       }
-      try { await this.wakeLock.release(); } catch {}
+      try { await this.wakeLock.release(); } catch { /* noop */ }
       this.wakeLock = null;
       this.releaseHandler = null;
     }

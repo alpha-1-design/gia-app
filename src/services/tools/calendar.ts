@@ -192,7 +192,7 @@ const calendarUpdateEvent: Tool = {
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
 
     try {
-      const updates: Record<string, any> = {};
+      const updates: Record<string, unknown> = {};
       if (parsed.data.summary) updates.summary = parsed.data.summary;
       if (parsed.data.description !== undefined) updates.description = parsed.data.description;
       if (parsed.data.location !== undefined) updates.location = parsed.data.location;
