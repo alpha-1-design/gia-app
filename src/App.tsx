@@ -31,6 +31,13 @@ import { useProviderStore } from './store/useProviderStore';
 import { providerRegistry } from './services/ProviderRegistry';
 import { setSystemContext } from './services/GiaBrain';
 import { logger } from './utils/logger';
+import wakeLockService from './services/WakeLockService';
+import keepaliveService from './services/KeepaliveService';
+import idleManager from './services/IdleManager';
+import LocalLLMService from './services/LocalLLMService';
+import messagingBridge from './services/MessagingBridge';
+import GiaBrain from './services/GiaBrain';
+import giaForegroundService from './services/GIAForegroundService';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
@@ -131,6 +138,7 @@ const App: React.FC = () => {
   const [moduleOpen, setModuleOpen] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const moduleRef = useRef<HTMLDivElement>(null);
+  const offsetSyncRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const showCircleSearch = useGiaStore(s => s.showCircleSearch);
   const setShowCircleSearch = useGiaStore(s => s.setShowCircleSearch);
@@ -192,8 +200,38 @@ const App: React.FC = () => {
     const init = async () => {
       if ('serviceWorker' in navigator) {
         try {
-          await navigator.serviceWorker.register('/sw.js');
+          const registration = await navigator.serviceWorker.register('/sw.js');
           logger.log('[SW] Registered');
+
+          // Listen for service worker messages (Telegram, share, etc.)
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            const msg = event.data;
+            if (!msg?.type) return;
+
+            if (msg.type === 'gia-tg-status' && msg.lastUpdateId > 0) {
+              // Sync app's offset to SW's (happens after configure)
+              messagingBridge.syncOffset(Number(msg.lastUpdateId));
+            }
+
+            if (msg.type === 'gia-tg-missed-messages' && msg.messages?.length > 0) {
+              logger.log(`[SW] Received ${msg.messages.length} missed Telegram messages`);
+              for (const incoming of msg.messages) {
+                const ctx = incoming.isGroup ? `group "${incoming.chatTitle}"` : 'DM';
+                logger.log(`[Messaging] Missed ${ctx} from ${incoming.from}: ${incoming.text.slice(0, 80)}`);
+                messagingBridge.handleIncomingFromSW(incoming);
+              }
+            }
+          });
+
+          // Check for missed Telegram messages cached by SW while we were away
+          (async () => {
+            try {
+              const sw = registration.active || (await navigator.serviceWorker.ready).active;
+              if (sw) sw.postMessage({ type: 'gia-tg-get-missed' });
+            } catch (e) {
+              logger.warn('[SW] Failed to request missed messages:', e);
+            }
+          })();
         } catch (e) {
           logger.warn('[SW] Registration failed:', e);
         }
@@ -274,8 +312,11 @@ const App: React.FC = () => {
     MCPManager.init();
     proactiveEngine.start();
 
-    // Track user activity for autonomy engine
-    const trackActivity = () => useAutonomyStore.getState().setLastUserActivity();
+    // Track user activity for autonomy engine + idle manager
+    const trackActivity = () => {
+      useAutonomyStore.getState().setLastUserActivity();
+      idleManager.ping();
+    };
     window.addEventListener('mousedown', trackActivity);
     window.addEventListener('keydown', trackActivity);
     window.addEventListener('touchstart', trackActivity);
@@ -319,6 +360,109 @@ const App: React.FC = () => {
 
     const t1 = setTimeout(() => useMemoryStore.getState().compactMemories(), 1000);
     const t2 = setTimeout(() => useGiaStore.getState().hibernateSessions(), 2000);
+
+    // Persistent notification — shows in Android notification tray while GIA is running
+    const LONGRUNNING_NOTIF_ID = 9999;
+    const showPersistentNotification = async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+        const telegramLabel = messagingBridge.isConnected('telegram') ? ' • Telegram active' : '';
+        await LocalNotifications.schedule({
+          notifications: [{
+            id: LONGRUNNING_NOTIF_ID,
+            title: 'GIA is running',
+            body: `Long-running mode${telegramLabel}`,
+            ongoing: true,
+            autoCancel: false,
+          }],
+        });
+      } catch {}
+    };
+    const dismissPersistentNotification = async () => {
+      try {
+        await LocalNotifications.cancel({ notifications: [{ id: LONGRUNNING_NOTIF_ID }] });
+      } catch {}
+    };
+
+    // Long-running mode: wake lock + keepalive + idle model unload + messaging polling + fast autonomy
+    const startLongRunning = async () => {
+      if (!useGiaStore.getState().longRunningMode) return;
+      await wakeLockService.start();
+      await keepaliveService.start();
+      idleManager.start(useGiaStore.getState().autoModelUnload ? 10 * 60 * 1000 : 30 * 60 * 1000);
+      proactiveEngine.restartWithFastInterval();
+      if (messagingBridge.isConnected('telegram')) {
+        messagingBridge.startPolling();
+      }
+      // Start native foreground service (keeps WebView alive on Android)
+      await giaForegroundService.start(true);
+      await showPersistentNotification();
+    };
+    const stopLongRunning = async () => {
+      await giaForegroundService.stop();
+      await wakeLockService.stop();
+      await keepaliveService.stop();
+      idleManager.stop();
+      await dismissPersistentNotification();
+    };
+    const unsubUnload = idleManager.onIdleTimeout(async () => {
+      if (!useGiaStore.getState().autoModelUnload) return;
+      logger.log('[IdleManager] Unloading idle models…');
+      try { await LocalLLMService.unloadModel(); } catch {}
+      try {
+        const { default: whisper } = await import('./services/WhisperService');
+        whisper.unload();
+      } catch {}
+    });
+    const unsubActive = idleManager.onActiveAgain(() => {
+      logger.log('[IdleManager] User active — models will reload on next use');
+    });
+    startLongRunning();
+    const unsubLongRunning = useGiaStore.subscribe((s) => {
+      if (s.longRunningMode) startLongRunning();
+      else stopLongRunning();
+    });
+
+    // Configure SW polling for Telegram (runs regardless of long-running mode)
+    // SW only polls when no clients are open, so it's safe to always configure
+    if (messagingBridge.isConnected('telegram')) {
+      messagingBridge.configureSWPolling();
+      // Periodic offset sync to SW so it can continue seamlessly
+      offsetSyncRef.current = setInterval(() => {
+        messagingBridge.syncOffsetToSW();
+      }, 30000);
+    }
+
+    // Messaging bridge — process incoming Telegram messages via GiaBrain
+    const unsubMessage = messagingBridge.onMessage(async (incoming) => {
+      const ctx = incoming.isGroup ? `group "${incoming.chatTitle}"` : 'DM';
+      logger.log(`[Messaging] ${ctx} from ${incoming.from}: ${incoming.text.slice(0, 80)}`);
+      try {
+        const systemPrompt = incoming.isGroup
+          ? `You are GIA, an AI assistant in the Telegram group "${incoming.chatTitle}". ${incoming.from} is speaking to you. Be helpful, concise, and natural. Address the whole group unless the message is directed at you personally. Keep responses brief — this is a group chat.`
+          : `You are GIA, chatting with ${incoming.from} on Telegram. Be concise and natural. Respond conversationally.`;
+        const res = await GiaBrain.generate({
+          prompt: incoming.text,
+          systemPrompt,
+          onStream: undefined,
+        });
+        const reply = res.text;
+        await messagingBridge.sendMessage({
+          channel: incoming.channel,
+          to: incoming.chatId,
+          text: reply,
+        });
+        logger.log(`[Messaging] Replied to ${incoming.from} in ${ctx}`);
+      } catch (e) {
+        logger.error('[Messaging] Failed to process message:', e);
+        await messagingBridge.sendMessage({
+          channel: incoming.channel,
+          to: incoming.chatId,
+          text: 'Sorry, I hit an error. Try again in a moment.',
+        }).catch(() => {});
+      }
+    });
 
     // Auto-start wake word listening if enabled
     if (autoStartWakeWord) {
@@ -424,6 +568,14 @@ const App: React.FC = () => {
       appStateHandle.then(h => h.remove());
       MCPManager.shutdown(); SystemService.stopMonitoring();
       proactiveEngine.stop();
+      stopLongRunning();
+      unsubUnload();
+      unsubActive();
+      unsubLongRunning();
+      unsubMessage();
+      messagingBridge.stopPolling();
+      messagingBridge.stopSWPolling();
+      if (offsetSyncRef.current) clearInterval(offsetSyncRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

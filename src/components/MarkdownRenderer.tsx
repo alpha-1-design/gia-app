@@ -201,6 +201,23 @@ const parseTaskList = (line: string): React.ReactNode => {
   );
 };
 
+const VISUAL_TYPES = new Set(['chart', 'mindmap', 'mind_map', 'mind-map', 'diff', 'code_diff', 'code-diff', 'table', 'data_table', 'data-table', 'gallery', 'image_gallery', 'image-gallery', 'timeline', 'terminal', 'terminal_output', 'terminal-output', 'widget', 'metric', 'metrics', 'waveform', 'audio', 'outline', 'document_outline', 'toc', 'map', 'openstreetmap', 'slides', 'presentation', 'slide_deck', 'slide-deck', 'canvas', 'drawing', 'diagram']);
+
+const wrapBareVisualBlocks = (text: string): string => {
+  const blocks = text.split(/(\n\n+)/);
+  return blocks.map(block => {
+    const trimmed = block.trim();
+    if (!trimmed.startsWith('{')) return block;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && parsed.type && parsed.data && VISUAL_TYPES.has(parsed.type)) {
+        return `\`\`\`visual\n${trimmed}\n\`\`\``;
+      }
+    } catch { /* not JSON, leave as-is */ }
+    return block;
+  }).join('');
+};
+
 const tryParseVisualBlock = (text: string): React.ReactNode | null => {
   const trimmed = text.trim();
   try {
@@ -213,10 +230,11 @@ const tryParseVisualBlock = (text: string): React.ReactNode | null => {
 };
 
 const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
-  const visualFallback = useMemo(() => tryParseVisualBlock(content), [content]);
+  const processed = useMemo(() => wrapBareVisualBlocks(content), [content]);
+  const visualFallback = useMemo(() => tryParseVisualBlock(processed), [processed]);
   if (visualFallback) return <div className={`gia-markdown ${className}`}>{visualFallback}</div>;
 
-  const lines = content.split('\n');
+  const lines = processed.split('\n');
   const nodes: React.ReactNode[] = [];
   const footnotes = new Map<string, string>();
   let i = 0;

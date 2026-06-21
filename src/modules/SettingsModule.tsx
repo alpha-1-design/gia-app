@@ -23,12 +23,14 @@ import { InstallSection } from '../components/settings/InstallSection';
 import { BrowserSection } from '../components/settings/BrowserSection';
 import { SearchSection } from '../components/settings/SearchSection';
 import { ReliabilitySection } from '../components/settings/ReliabilitySection';
+import { PowerSection } from '../components/settings/PowerSection';
 import { VisionSection } from '../components/settings/VisionSection';
 import { LocalModelsSection } from '../components/settings/LocalModelsSection';
 import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 import { ConnectorsSection } from '../components/settings/ConnectorsSection';
 import { SocialSection } from '../components/settings/SocialSection';
 import { GatewaySection } from '../components/settings/GatewaySection';
+import { ProtocolsApprovalsSection } from '../components/settings/ProtocolsApprovalsSection';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
@@ -320,6 +322,7 @@ const SettingsModule: React.FC = () => {
       <LocalModelsSection />
       <VisionSection />
       <SecuritySection />
+      <ProtocolsApprovalsSection />
       <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
       <ConnectorsSection />
       <SocialSection />
@@ -327,6 +330,7 @@ const SettingsModule: React.FC = () => {
       <BrowserSection />
       <SearchSection />
       <CodeHistorySection />
+      <PowerSection />
       <ReliabilitySection />
       <PluginSection />
       <PluginInstallSection />

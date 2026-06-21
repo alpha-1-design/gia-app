@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMemoryStore, MemoryCategory, MemoryEntry } from '../store/useMemoryStore';
 import { useGiaStore } from '../store/useGiaStore';
-import { Search, Pin, PinOff, Plus, X, Download, Upload, Brain, BookOpen, Star, Target, AlertTriangle, Heart, Briefcase, FileText, RotateCcw } from 'lucide-react';
+import { Search, Pin, PinOff, Plus, X, Download, Upload, Brain, BookOpen, Star, Target, AlertTriangle, Heart, Briefcase, FileText, RotateCcw, Trash2, Database, File as FileIcon, Loader2 } from 'lucide-react';
+import RAGService from '../services/RAGService';
 
 const CATEGORY_META: Record<MemoryCategory, { label: string; icon: React.ReactNode; color: string }> = {
   profile: { label: 'Profile', icon: <Star size={11} />, color: '#a855f7' },
@@ -19,7 +20,6 @@ const CATEGORY_META: Record<MemoryCategory, { label: string; icon: React.ReactNo
 
 const KnowledgeCard: React.FC<{ entry: MemoryEntry; pinned: boolean; onTogglePin: (id: string) => void; onDelete: (id: string) => void }> = ({ entry, pinned, onTogglePin, onDelete }) => {
   const meta = CATEGORY_META[entry.category] || CATEGORY_META.fact;
-
   return (
     <div className="flex items-start gap-2 p-2.5 rounded-xl transition-all group" style={{ background: pinned ? 'rgba(168,85,247,0.06)' : 'var(--gia-surface-2)', border: `1px solid ${pinned ? 'rgba(168,85,247,0.2)' : 'var(--gia-border)'}` }}>
       <button onClick={() => onTogglePin(entry.id)} className="mt-0.5 shrink-0 p-0.5 rounded transition-colors" style={{ color: pinned ? '#a855f7' : 'var(--gia-muted-2)' }}>
@@ -44,7 +44,7 @@ const KnowledgeCard: React.FC<{ entry: MemoryEntry; pinned: boolean; onTogglePin
 export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { memories, addMemory, deleteMemory } = useMemoryStore();
   const { customInstructions, setCustomInstructions, pinnedMemories, togglePinnedMemory } = useGiaStore();
-  const [tab, setTab] = useState<'knowledge' | 'instructions'>('knowledge');
+  const [tab, setTab] = useState<'knowledge' | 'instructions' | 'documents'>('knowledge');
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<MemoryCategory | 'pinned' | 'all'>('all');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -52,6 +52,51 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
   const [newValue, setNewValue] = useState('');
   const [newCat, setNewCat] = useState<MemoryCategory>('fact');
   const [instText, setInstText] = useState(customInstructions);
+
+  const [ragDocs, setRagDocs] = useState<{ id: string; title: string; charCount: number; chunkCount: number; createdAt: number }[]>([]);
+  const [ragStats, setRagStats] = useState({ docCount: 0, chunkCount: 0 });
+  const [indexing, setIndexing] = useState(false);
+  const [indexStatus, setIndexStatus] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (tab === 'documents') {
+      RAGService.listDocuments().then(setRagDocs).catch(() => {});
+      RAGService.getStats().then(setRagStats).catch(() => {});
+    }
+  }, [tab]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIndexing(true);
+    setIndexStatus(`Reading ${file.name}…`);
+    try {
+      const text = await file.text();
+      const id = `rag-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const title = file.name.replace(/\.[^/.]+$/, '');
+      setIndexStatus(`Indexing ${title} (${(text.length / 1000).toFixed(0)}KB)…`);
+      await RAGService.indexDocument(id, title, text);
+      const docs = await RAGService.listDocuments();
+      setRagDocs(docs);
+      const stats = await RAGService.getStats();
+      setRagStats(stats);
+      setIndexStatus(`✓ Indexed "${title}"`);
+    } catch (err) {
+      setIndexStatus(`Error: ${err instanceof Error ? err.message : 'Failed to index'}`);
+    } finally {
+      setIndexing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    await RAGService.deleteDocument(id);
+    const docs = await RAGService.listDocuments();
+    setRagDocs(docs);
+    const stats = await RAGService.getStats();
+    setRagStats(stats);
+  };
 
   const filtered = useMemo(() => {
     let items = memories;
@@ -119,16 +164,20 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
             <span className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Knowledge</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={exportAll} className="flex items-center gap-1 text-[9px] px-2 py-1 rounded-lg transition-colors" style={{ color: 'var(--gia-muted)', background: 'var(--gia-surface-3)' }}><Download size={10} /> Export</button>
-            <button onClick={importAll} className="flex items-center gap-1 text-[9px] px-2 py-1 rounded-lg transition-colors" style={{ color: 'var(--gia-muted)', background: 'var(--gia-surface-3)' }}><Upload size={10} /> Import</button>
+            {tab !== 'documents' && (
+              <>
+                <button onClick={exportAll} className="flex items-center gap-1 text-[9px] px-2 py-1 rounded-lg transition-colors" style={{ color: 'var(--gia-muted)', background: 'var(--gia-surface-3)' }}><Download size={10} /> Export</button>
+                <button onClick={importAll} className="flex items-center gap-1 text-[9px] px-2 py-1 rounded-lg transition-colors" style={{ color: 'var(--gia-muted)', background: 'var(--gia-surface-3)' }}><Upload size={10} /> Import</button>
+              </>
+            )}
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/5 transition-colors" style={{ color: 'var(--gia-muted)' }}><X size={14} /></button>
           </div>
         </div>
 
         <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
-          {(['knowledge', 'instructions'] as const).map(t => (
+          {(['knowledge', 'documents', 'instructions'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="flex-1 py-2.5 text-[11px] font-medium transition-all relative" style={{ color: tab === t ? '#a855f7' : 'var(--gia-muted-2)' }}>
-              {t === 'knowledge' ? '💾 Memories' : '📝 Instructions'}
+              {t === 'knowledge' ? '💾 Memories' : t === 'documents' ? '📄 Documents' : '📝 Instructions'}
               {tab === t && <div className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full" style={{ background: '#a855f7' }} />}
             </button>
           ))}
@@ -148,6 +197,54 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
               <button onClick={() => { setInstText(''); setCustomInstructions(''); }} className="text-[10px] px-3 py-1.5 rounded-lg" style={{ color: 'var(--gia-muted)', background: 'var(--gia-surface-3)' }}>Clear</button>
               <button onClick={saveInstructions} className="text-[10px] px-3 py-1.5 rounded-lg font-medium" style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7' }}>Save Instructions</button>
             </div>
+          </div>
+        ) : tab === 'documents' ? (
+          <div className="flex-1 flex flex-col p-4 gap-3 overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database size={14} style={{ color: '#22c55e' }} />
+                <span className="text-[11px] font-semibold" style={{ color: 'var(--gia-text)' }}>Document Index</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>{ragStats.docCount} docs / {ragStats.chunkCount} chunks</span>
+              </div>
+              <div className="flex gap-2">
+                <input ref={fileInputRef} type="file" accept=".txt,.md,.json,.csv,.html" onChange={handleFileUpload} className="hidden" />
+                <button onClick={() => fileInputRef.current?.click()} disabled={indexing} className="flex items-center gap-1 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors" style={{ background: indexing ? 'var(--gia-bg-2)' : 'rgba(34,197,94,0.15)', color: indexing ? 'var(--gia-muted)' : '#22c55e' }}>
+                  {indexing ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                  {indexing ? 'Indexing…' : 'Upload & Index'}
+                </button>
+              </div>
+            </div>
+
+            {indexStatus && (
+              <div className="text-[10px] p-2 rounded-lg" style={{ background: 'var(--gia-surface-2)', color: indexStatus.startsWith('✓') ? '#22c55e' : indexStatus.startsWith('Error') ? '#ef4444' : 'var(--gia-muted)' }}>
+                {indexStatus}
+              </div>
+            )}
+
+            {ragDocs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <FileIcon size={28} style={{ color: 'var(--gia-muted-2)', opacity: 0.2 }} />
+                <p className="text-xs mt-3" style={{ color: 'var(--gia-muted-2)' }}>No documents indexed</p>
+                <p className="text-[10px] mt-1 max-w-[250px]" style={{ color: 'var(--gia-muted-2)', opacity: 0.6 }}>Upload TXT, MD, JSON, CSV, or HTML files. GIA will chunk and index them for semantic search.</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {ragDocs.map(doc => (
+                  <div key={doc.id} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+                    <FileIcon size={14} style={{ color: '#22c55e' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium truncate" style={{ color: 'var(--gia-text)' }}>{doc.title}</p>
+                      <p className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+                        {doc.chunkCount} chunks · {doc.charCount > 10000 ? `${(doc.charCount / 1000).toFixed(0)}KB` : `${doc.charCount} chars`} · {new Date(doc.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button onClick={() => handleDeleteDoc(doc.id)} className="p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 hover:bg-red-500/10" style={{ color: 'var(--gia-muted)' }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <>

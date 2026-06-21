@@ -2,7 +2,7 @@ import GiaTools, { ToolResult } from '../GiaTools';
 import { useProtocolStore } from '../../store/useProtocolStore';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useSearchActivity } from '../../store/useSearchActivity';
-import { ProtocolProposal, ProtocolType } from '../../types/protocol';
+import { ProtocolProposal } from '../../types/protocol';
 import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchemas';
 import { delegateTask } from './subAgent';
 import { extractToolCalls, ToolCall } from '../../utils/jsonRepair';
@@ -15,8 +15,6 @@ interface ExecutionState {
 }
 
 type ThoughtFn = (msg: string) => void;
-
-const AUTO_CONFIRM_TYPES: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map', 'file_read', 'clarification'];
 
 const FALLBACK_HINTS: Record<string, string> = {
   web_search: 'read_url',
@@ -55,6 +53,10 @@ const PARALLEL_SAFE_TOOLS = new Set([
   'connector_list', 'connector_test',
   'gateway_list', 'gateway_stats', 'gateway_logs',
   'telegram_status', 'telegram_channel_info', 'telegram_stats',
+  'email_list', 'email_read', 'email_search', 'email_status',
+  'calendar_list_events', 'calendar_status',
+  'messaging_status',
+  'bible_verse', 'daily_devotion',
 ]);
 
 function getIndependentGroups(toolCalls: ToolCall[]): ToolCall[][] {
@@ -143,7 +145,7 @@ async function executeSingleTool(
   }).join(', ');
   onThought?.(`🧠 ${tool.name} → ${argsStr}`);
 
-  const needsConfirm = !AUTO_CONFIRM_TYPES.includes(protocol.type);
+  const needsConfirm = !useProtocolStore.getState().isAutoConfirmed(protocol.type);
   if (needsConfirm) {
     const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 30_000);
     if (action.type === 'reject') {

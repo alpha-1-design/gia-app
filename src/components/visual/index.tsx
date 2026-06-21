@@ -12,6 +12,8 @@ import { MetricWidgetVisual } from './MetricWidgetVisual';
 import { WaveformVisual } from './WaveformVisual';
 import { DocumentOutlineVisual } from './DocumentOutlineVisual';
 import { MapVisual } from './MapVisual';
+import { SlidesVisual } from './SlidesVisual';
+import { CanvasVisual } from './CanvasVisual';
 
 const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
@@ -59,8 +61,17 @@ const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
     case 'map':
     case 'openstreetmap':
       return <MapVisual data={data} />;
+    case 'slides':
+    case 'presentation':
+    case 'slide_deck':
+    case 'slide-deck':
+      return <SlidesVisual data={data} />;
+    case 'canvas':
+    case 'drawing':
+    case 'diagram':
+      return <CanvasVisual data={data} />;
     default:
-      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map`} />;
+      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas`} />;
   }
 };
 

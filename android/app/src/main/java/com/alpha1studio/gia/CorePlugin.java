@@ -105,6 +105,29 @@ public class CorePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setKeepAlive(PluginCall call) {
+        boolean enable = call.getBoolean("enable", false);
+        GIACoreService svc = GIACoreService.getInstance();
+        if (svc != null) {
+            svc.setKeepAlive(enable);
+            JSObject obj = new JSObject();
+            obj.put("keepAlive", enable);
+            notifyListeners("keepAliveChanged", obj);
+            call.resolve(obj);
+        } else {
+            call.reject("GIACoreService not running");
+        }
+    }
+
+    @PluginMethod
+    public void getKeepAlive(PluginCall call) {
+        JSObject obj = new JSObject();
+        obj.put("keepAlive", GIACoreService.isKeepAlive());
+        obj.put("running", GIACoreService.isRunning());
+        call.resolve(obj);
+    }
+
+    @PluginMethod
     public void requestBatteryOptimizationExemption(PluginCall call) {
         Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         intent.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));

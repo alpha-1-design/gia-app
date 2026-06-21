@@ -146,6 +146,7 @@ export interface ScheduledTask {
   nextRun: number;
   lastResult?: string;
   status: 'pending' | 'running' | 'done' | 'error';
+  channel?: 'telegram' | 'whatsapp';
 }
 
 export interface SkillTool {
@@ -290,6 +291,10 @@ interface GiaState {
   setShowConsole: (show: boolean) => void;
   clearConsole: () => void;
   setShowProtocols: (show: boolean) => void;
+  longRunningMode: boolean;
+  autoModelUnload: boolean;
+  setLongRunningMode: (v: boolean) => void;
+  setAutoModelUnload: (v: boolean) => void;
   setTheme: (theme: 'dark' | 'light' | 'system') => void;
   setConnectionStatus: (status: 'online' | 'offline') => void;
   setProviderConnected: (connected: boolean) => void;
@@ -406,6 +411,8 @@ export const useGiaStore = create<GiaState>()(
       pendingFiles: [],
       pendingAction: null,
       deepLinkQueue: [],
+      longRunningMode: false,
+      autoModelUnload: true,
 
       setModule: (module) => set({ currentModule: module }),
       setCurrentTool: (tool) => set({ currentTool: tool }),
@@ -457,6 +464,8 @@ export const useGiaStore = create<GiaState>()(
       setPendingFiles: (v) => set({ pendingFiles: v }),
       setPendingAction: (v) => set({ pendingAction: v }),
       setDeepLinkQueue: (v) => set({ deepLinkQueue: v }),
+      setLongRunningMode: (v) => { localStorage.setItem('gia-long-running', String(v)); set({ longRunningMode: v }); },
+      setAutoModelUnload: (v) => { localStorage.setItem('gia-auto-model-unload', String(v)); set({ autoModelUnload: v }); },
       setCustomInstructions: (text) => {
         localStorage.setItem('gia-custom-instructions', text);
         set({ customInstructions: text });

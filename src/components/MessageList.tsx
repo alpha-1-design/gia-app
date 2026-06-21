@@ -173,6 +173,13 @@ const MessageList: React.FC<MessageListProps> = ({
                         )}
                       </div>
                     )}
+                    {msg.role === 'assistant' && !msg.thinking && !msg.error && (
+                      <div className="mt-1.5 text-[9px] text-right tracking-wider select-none" style={{ color: 'var(--gia-muted-3)' }}>
+                        <span className="opacity-40">— </span>
+                        <span style={{ color: '#a855f766' }}>✦</span>
+                        <span className="font-medium ml-0.5" style={{ color: '#a855f744' }}>GIA</span>
+                      </div>
+                    )}
                     {(liveThoughts[msg.id] || msg.thoughts) && (
                       <ThinkingPanel
                         thoughts={liveThoughts[msg.id] || msg.thoughts || ''}

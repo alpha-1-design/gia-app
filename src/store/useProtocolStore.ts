@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
-import { ProtocolProposal, ProtocolAction } from '../types/protocol';
+import { ProtocolProposal, ProtocolAction, ProtocolType } from '../types/protocol';
 
 interface PendingConfirm {
   protocolId: string;
@@ -9,10 +9,14 @@ interface PendingConfirm {
   timeout?: ReturnType<typeof setTimeout>;
 }
 
+const DEFAULT_AUTO_CONFIRM: ProtocolType[] = ['web_search', 'web_fetch', 'environment_info', 'show_map', 'file_read', 'clarification'];
+
 interface ProtocolStore {
   protocols: ProtocolProposal[];
   consoleProtocols: ProtocolProposal[];
   pendingConfirm: PendingConfirm | null;
+  autoConfirmTypes: ProtocolType[];
+  fullAutonomy: boolean;
 
   propose: (p: ProtocolProposal) => void;
   confirm: (protocolId: string) => void;
@@ -25,6 +29,10 @@ interface ProtocolStore {
   clearProtocols: () => void;
   clearConsoleProtocols: () => void;
 
+  setAutoConfirm: (type: ProtocolType, enabled: boolean) => void;
+  setFullAutonomy: (enabled: boolean) => void;
+  isAutoConfirmed: (type: ProtocolType) => boolean;
+
   waitForConfirmation: (protocolId: string, timeoutMs?: number) => Promise<ProtocolAction>;
   resolvePending: (action: ProtocolAction) => void;
 }
@@ -35,6 +43,8 @@ export const useProtocolStore = create<ProtocolStore>()(
       protocols: [],
       consoleProtocols: [],
       pendingConfirm: null,
+      autoConfirmTypes: [...DEFAULT_AUTO_CONFIRM],
+      fullAutonomy: false,
 
       propose: (p) => {
         set((s) => ({
@@ -126,6 +136,25 @@ export const useProtocolStore = create<ProtocolStore>()(
       clearProtocols: () => set({ protocols: [] }),
       clearConsoleProtocols: () => set({ consoleProtocols: [] }),
 
+      setAutoConfirm: (type, enabled) => {
+        set((s) => {
+          const current = s.autoConfirmTypes;
+          const updated = enabled
+            ? current.includes(type) ? current : [...current, type]
+            : current.filter((t) => t !== type);
+          return { autoConfirmTypes: updated };
+        });
+      },
+
+      setFullAutonomy: (enabled) => {
+        set({ fullAutonomy: enabled });
+      },
+
+      isAutoConfirmed: (type) => {
+        const s = get();
+        return s.fullAutonomy || s.autoConfirmTypes.includes(type);
+      },
+
       waitForConfirmation: (protocolId, timeoutMs) => {
         return new Promise((resolve) => {
           const existing = get().pendingConfirm;
@@ -154,7 +183,11 @@ export const useProtocolStore = create<ProtocolStore>()(
     {
       name: 'gia-protocols',
       storage: createJSONStorage(() => idbStorage),
-      partialize: (state) => ({ consoleProtocols: state.consoleProtocols }),
+      partialize: (state) => ({
+        consoleProtocols: state.consoleProtocols,
+        autoConfirmTypes: state.autoConfirmTypes,
+        fullAutonomy: state.fullAutonomy,
+      }),
     }
   )
 );

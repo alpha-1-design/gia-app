@@ -74,6 +74,140 @@ export const toolSchemas: Record<string, { description: string; required: string
     required: ['prompt'],
     properties: { prompt: { type: 'string', description: 'Image description' } }
   },
+  // Email tools
+  email_connect: { description: 'Connect Gmail for reading and sending emails.', required: [], properties: {} },
+  email_disconnect: { description: 'Disconnect Gmail.', required: [], properties: {} },
+  email_status: { description: 'Check if Gmail is connected.', required: [], properties: {} },
+  email_send: {
+    description: 'Send an email via Gmail.',
+    required: ['to', 'subject', 'body'],
+    properties: {
+      to: { type: 'string', description: 'Recipient email' },
+      subject: { type: 'string', description: 'Email subject' },
+      body: { type: 'string', description: 'Email body' },
+    }
+  },
+  email_list: {
+    description: 'List recent emails from Gmail inbox.',
+    required: [],
+    properties: { maxResults: { type: 'number', description: 'Max results (default 10)' } }
+  },
+  email_read: {
+    description: 'Read a specific email by ID.',
+    required: ['id'],
+    properties: { id: { type: 'string', description: 'Email ID' } }
+  },
+  email_search: {
+    description: 'Search emails by query.',
+    required: ['query'],
+    properties: { query: { type: 'string', description: 'Search query' }, maxResults: { type: 'number', description: 'Max results' } }
+  },
+
+  // Calendar tools
+  calendar_connect: { description: 'Connect Google Calendar.', required: [], properties: {} },
+  calendar_disconnect: { description: 'Disconnect Google Calendar.', required: [], properties: {} },
+  calendar_status: { description: 'Check if Google Calendar is connected.', required: [], properties: {} },
+  calendar_list_events: {
+    description: 'List calendar events within a time range.',
+    required: [],
+    properties: {
+      timeMin: { type: 'string', description: 'Start time ISO string' },
+      timeMax: { type: 'string', description: 'End time ISO string' },
+      maxResults: { type: 'number', description: 'Max results' },
+    }
+  },
+  calendar_create_event: {
+    description: 'Create a new calendar event.',
+    required: ['summary', 'start', 'end'],
+    properties: {
+      summary: { type: 'string', description: 'Event title' },
+      description: { type: 'string', description: 'Event description' },
+      start: { type: 'string', description: 'Start time ISO string' },
+      end: { type: 'string', description: 'End time ISO string' },
+    }
+  },
+  calendar_update_event: {
+    description: 'Update an existing calendar event.',
+    required: ['eventId'],
+    properties: {
+      eventId: { type: 'string', description: 'Event ID' },
+      summary: { type: 'string', description: 'New title' },
+      description: { type: 'string', description: 'New description' },
+      start: { type: 'string', description: 'New start time ISO string' },
+      end: { type: 'string', description: 'New end time ISO string' },
+    }
+  },
+  calendar_delete_event: {
+    description: 'Delete a calendar event.',
+    required: ['eventId'],
+    properties: { eventId: { type: 'string', description: 'Event ID' } }
+  },
+
+  // Messaging tools
+  messaging_setup_telegram: {
+    description: 'Connect Telegram bot for two-way chat.',
+    required: ['botToken'],
+    properties: { botToken: { type: 'string', description: 'Bot token from @BotFather' } }
+  },
+  messaging_setup_whatsapp: {
+    description: 'Connect WhatsApp via wa.me links (one-way notifications only).',
+    required: ['phoneNumber'],
+    properties: { phoneNumber: { type: 'string', description: 'Phone number with country code' } }
+  },
+  messaging_send: {
+    description: 'Send a message via Telegram or WhatsApp.',
+    required: ['text'],
+    properties: {
+      channel: { type: 'string', description: 'Channel: telegram or whatsapp' },
+      text: { type: 'string', description: 'Message text' },
+    }
+  },
+  messaging_status: { description: 'Check messaging connection status.', required: [], properties: {} },
+  messaging_disconnect: { description: 'Disconnect messaging channel.', required: [], properties: { channel: { type: 'string', description: 'Channel to disconnect' } } },
+  messaging_set_mention_only: {
+    description: 'Toggle whether GIA responds to all group messages or only when @mentioned.',
+    required: ['enabled'],
+    properties: { enabled: { type: 'boolean', description: 'true = @mention only, false = all messages' } }
+  },
+
+  // Personal assistant tools
+  bible_verse: {
+    description: 'Get a Bible verse — daily verse, search by keyword, or read a full chapter.',
+    required: [],
+    properties: {
+      type: { type: 'string', description: '"daily" for verse of the day, "search" for keyword search, "chapter" for full chapter' },
+      query: { type: 'string', description: 'Search keyword or "Book Chapter" (e.g. "John 3")' },
+    }
+  },
+  daily_devotion: { description: 'Get a daily devotional message with Bible verse and prayer.', required: [], properties: {} },
+  setup_morning_briefing: {
+    description: 'Schedule a daily morning briefing sent to Telegram.',
+    required: ['channel', 'time'],
+    properties: {
+      channel: { type: 'string', description: 'telegram or whatsapp' },
+      time: { type: 'string', description: 'Time in 24h format (e.g. "07:00")' },
+    }
+  },
+  set_reminder: {
+    description: 'Set a recurring reminder sent via app or messaging.',
+    required: ['title', 'interval'],
+    properties: {
+      title: { type: 'string', description: 'Reminder title' },
+      interval: { type: 'string', description: 'hourly/daily/weekly' },
+      time: { type: 'string', description: 'Time in 24h format' },
+      details: { type: 'string', description: 'Extra context' },
+      channel: { type: 'string', description: 'telegram or whatsapp' },
+    }
+  },
+  play_music: {
+    description: 'Play music via YouTube Music, Spotify, or direct audio URL.',
+    required: ['query'],
+    properties: {
+      query: { type: 'string', description: 'Song name or search query' },
+      platform: { type: 'string', description: 'youtube_music/spotify/youtube/audio' },
+    }
+  },
+
   switch_module: {
     description: 'Navigate to another module (chat/exam/analyst/writer/planner/settings).',
     required: ['module'],
@@ -536,17 +670,41 @@ export function toolToProtocolType(id: string): ProtocolType {
     device_info: 'device_action', device_health: 'device_action', get_contacts: 'device_action',
     open_url: 'device_action', set_alarm: 'device_action',
     save_memory: 'memory_modification', get_directions: 'location_access',
+    // Email tools
+    email_connect: 'settings_change', email_disconnect: 'settings_change',
+    email_status: 'environment_info', email_send: 'device_action',
+    email_list: 'file_read', email_read: 'file_read', email_search: 'web_search',
+    // Calendar tools
+    calendar_connect: 'settings_change', calendar_disconnect: 'settings_change',
+    calendar_status: 'environment_info', calendar_list_events: 'environment_info',
+    calendar_create_event: 'settings_change', calendar_update_event: 'settings_change',
+    calendar_delete_event: 'settings_change',
+    // Messaging tools
+    messaging_setup_telegram: 'settings_change', messaging_setup_whatsapp: 'settings_change',
+    messaging_send: 'device_action', messaging_status: 'environment_info',
+    messaging_disconnect: 'settings_change', messaging_set_mention_only: 'settings_change',
+    // Personal tools
+    bible_verse: 'web_search', daily_devotion: 'environment_info',
+    setup_morning_briefing: 'settings_change', set_reminder: 'settings_change',
+    play_music: 'device_action',
   };
   return map[id] || 'custom';
 }
 
 export function toolToImpact(id: string): ProtocolImpact {
   const readTools = ['web_search', 'read_url', 'filesystem_read', 'list_files', 'get_environment_info',
-    'get_user_location', 'search_places', 'device_info', 'device_health', 'get_contacts'];
+    'get_user_location', 'search_places', 'device_info', 'device_health', 'get_contacts',
+    'email_list', 'email_read', 'email_search', 'email_status',
+    'calendar_list_events', 'calendar_status',
+    'messaging_status', 'bible_verse', 'daily_devotion'];
   const writeTools = ['filesystem_write', 'export_brain', 'import_brain', 'zip_project', 'build_project', 'install_skill', 'forget_memory', 'save_memory',
     'toggle_feature', 'show_notification', 'summarize_conversation',
     'send_sms', 'send_whatsapp', 'send_email', 'make_phone_call',
-    'share', 'clipboard', 'vibrate', 'screen_brightness', 'open_url', 'set_alarm'];
+    'share', 'clipboard', 'vibrate', 'screen_brightness', 'open_url', 'set_alarm',
+    'email_connect', 'email_disconnect', 'email_send',
+    'calendar_connect', 'calendar_disconnect', 'calendar_create_event', 'calendar_update_event', 'calendar_delete_event',
+    'messaging_setup_telegram', 'messaging_setup_whatsapp', 'messaging_send', 'messaging_disconnect',
+    'setup_morning_briefing', 'set_reminder', 'play_music'];
   const destructiveTools = ['forget_memory'];
   const networkTools = ['web_search', 'read_url', 'terminal_run', 'image_generation', 'search_places', 'show_map', 'get_directions'];
   const locationTools = ['get_user_location', 'search_places', 'show_map', 'get_directions'];

@@ -5,6 +5,7 @@ import { useProviderStore } from '../store/useProviderStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
 import socialManager from './social/SocialManager';
+import messagingBridge from './MessagingBridge';
 
 class SchedulerService {
   private static instance: SchedulerService;
@@ -68,6 +69,15 @@ class SchedulerService {
       }
 
       addNotification(`✅ ${task.title.slice(0, 30)}`);
+
+      // Send result via messaging if channel configured
+      if (task.channel && messagingBridge.isConnected(task.channel)) {
+        messagingBridge.sendMessage({
+          channel: task.channel,
+          to: '',
+          text: res.text,
+        }).catch(e => logger.warn('[SchedulerService] Messaging delivery failed:', e));
+      }
 
       try {
         await LocalNotifications.schedule({

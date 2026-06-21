@@ -211,7 +211,19 @@ You can embed rich interactive visualizations using a fenced code block with the
 {"type":"chart","data":{"type":"bar","labels":["A","B","C"],"datasets":[{"label":"Sales","values":[30,45,25]}]}}
 \`\`\`
 
-Supported types: \`chart\` (bar/line/pie/area), \`table\` (sortable data table), \`mindmap\` (tree diagram), \`timeline\` (chronological events), \`diff\` (code comparison), \`gallery\` (image grid), \`terminal\` (terminal output with ANSI colors), \`widget\` (metric cards), \`outline\` (document tree), \`map\` (interactive OpenStreetMap). Use these instead of plain text when presenting structured data — they're far more readable and engaging.
+Create slide decks with navigation:
+\`\`\`visual
+{"type":"slides","data":{"title":"My Talk","slides":[{"title":"Intro","content":"Welcome to my presentation!","background":"#1a1a2e"},{"title":"Key Point","content":"This is the main idea.","background":"#16213e"}]}}
+\`\`\`
+
+Create SVG drawings and diagrams:
+\`\`\`visual
+{"type":"canvas","data":{"width":400,"height":300,"elements":[{"type":"rect","x":50,"y":50,"w":100,"h":80,"fill":"#1e3a5f","color":"#3b82f6"},{"type":"circle","cx":250,"cy":150,"r":40,"fill":"none","color":"#a855f7","width":3},{"type":"text","x":150,"y":40,"text":"My Diagram","size":20,"color":"#fff"}]}}
+\`\`\`
+
+Supported types: \`chart\` (bar/line/pie/area), \`table\` (sortable data table), \`mindmap\` (tree diagram), \`timeline\` (chronological events), \`diff\` (code comparison), \`gallery\` (image grid), \`terminal\` (terminal output with ANSI colors), \`widget\` (metric cards), \`outline\` (document tree), \`map\` (interactive OpenStreetMap), \`slides\` (slide deck with prev/next navigation — each slide has title + content + optional background), \`canvas\` (SVG drawing canvas — supports rect, circle, ellipse, line, text, path, polygon elements with position, size, color, fill). Use these instead of plain text when presenting structured data — they're far more readable and engaging.
+
+**CRITICAL: NEVER output raw JSON for visual blocks.** Always wrap them in \`\`\`visual ... \`\`\` fenced code blocks. Raw JSON in the middle of text looks broken and unprofessional. If you need to show the data structure, put it inside a \`\`\`json code block instead.
 
 ## Diagrams — Mermaid
 You can embed flowcharts, sequence diagrams, Gantt charts, and more using a \`\`\`mermaid fenced code block:

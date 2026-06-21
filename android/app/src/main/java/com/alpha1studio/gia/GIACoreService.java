@@ -34,8 +34,10 @@ public class GIACoreService extends Service {
     private static final int NOTIFICATION_ID = 2001;
 
     // Wake lock
-    private static final long WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L; // 10 min partial
+    private static final long WAKE_LOCK_WATCHDOG_MS = 5 * 60 * 1000L; // Re-acquire every 5 min
     private PowerManager.WakeLock wakeLock;
+    private android.os.Handler wakeLockWatchdog;
+    private Runnable wakeLockGuard;
 
     // Network monitor
     private ConnectivityManager connectivityManager;
@@ -46,12 +48,14 @@ public class GIACoreService extends Service {
 
     // Public state (read by CorePlugin)
     private static volatile boolean isRunning = false;
+    private static volatile boolean keepAlive = false;
     private static volatile GIACoreService instance;
 
     // Autonomy tick interval (ms)
     private static final long AUTONOMY_HEARTBEAT_MS = 60_000L;
 
     public static boolean isRunning() { return isRunning; }
+    public static boolean isKeepAlive() { return keepAlive; }
     public static GIACoreService getInstance() { return instance; }
 
     // ── Lifecycle ─────────────────────────────────────────────────────
@@ -60,9 +64,11 @@ public class GIACoreService extends Service {
     public void onCreate() {
         super.onCreate();
         instance = this;
+        keepAlive = false;
         createNotificationChannel();
         acquireWakeLock();
         registerNetworkMonitor();
+        startWakeLockWatchdog();
         Log.i(TAG, "GIACoreService created");
     }
 
@@ -87,7 +93,9 @@ public class GIACoreService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
+        keepAlive = false;
         instance = null;
+        stopWakeLockWatchdog();
         releaseWakeLock();
         unregisterNetworkMonitor();
         super.onDestroy();
@@ -107,8 +115,9 @@ public class GIACoreService extends Service {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "GIACoreService:WakeLock"
             );
-            wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS);
-            Log.d(TAG, "Wake lock acquired");
+            // Acquire indefinitely (watchdog re-acquires periodically)
+            wakeLock.acquire();
+            Log.d(TAG, "Wake lock acquired (indefinite)");
         }
     }
 
@@ -117,6 +126,46 @@ public class GIACoreService extends Service {
             wakeLock.release();
             wakeLock = null;
             Log.d(TAG, "Wake lock released");
+        }
+    }
+
+    private void startWakeLockWatchdog() {
+        wakeLockWatchdog = new android.os.Handler(getMainLooper());
+        wakeLockGuard = () -> {
+            if (!isRunning) return;
+            // Re-acquire wake lock to prevent OS from stripping it
+            if (wakeLock != null && !wakeLock.isHeld()) {
+                try {
+                    wakeLock.acquire();
+                    Log.d(TAG, "Wake lock re-acquired by watchdog");
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to re-acquire wake lock", e);
+                }
+            }
+            wakeLockWatchdog.postDelayed(wakeLockGuard, WAKE_LOCK_WATCHDOG_MS);
+        };
+        wakeLockWatchdog.postDelayed(wakeLockGuard, WAKE_LOCK_WATCHDOG_MS);
+    }
+
+    private void stopWakeLockWatchdog() {
+        if (wakeLockWatchdog != null && wakeLockGuard != null) {
+            wakeLockWatchdog.removeCallbacks(wakeLockGuard);
+        }
+    }
+
+    // ── Keep-Alive Mode ─────────────────────────────────────────────────
+
+    /** Enable indefinite background mode (keeps WebView timers alive). */
+    public void setKeepAlive(boolean enable) {
+        keepAlive = enable;
+        Log.i(TAG, "Keep-alive mode: " + (enable ? "ON" : "OFF"));
+        // Refresh notification to show keep-alive status
+        if (isRunning) {
+            Notification notification = buildNotification();
+            android.app.NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.notify(NOTIFICATION_ID, notification);
+            }
         }
     }
 
@@ -238,14 +287,25 @@ public class GIACoreService extends Service {
         Intent tapIntent = new Intent(this, MainActivity.class);
         tapIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
-        String contentText = isOnline ? "Online • " + networkType : "Offline";
+        StringBuilder sb = new StringBuilder();
+        sb.append(isOnline ? "Online" : "Offline");
+        if (!"none".equals(networkType)) {
+            sb.append(" • ").append(networkType);
+        }
+        if (keepAlive) {
+            sb.append(" • Background active");
+        }
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("GIA")
-            .setContentText(contentText)
+            .setContentText(sb.toString())
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSilent(true)
+            .setContentIntent(
+                android.app.PendingIntent.getActivity(this, 0, tapIntent,
+                    android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            )
             .build();
     }
 }

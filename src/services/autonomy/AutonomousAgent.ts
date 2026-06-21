@@ -5,10 +5,18 @@ import { useMemoryStore } from '../../store/useMemoryStore';
 import { goalPlanner } from './GoalPlanner';
 import { reflectionEngine } from './ReflectionEngine';
 import GiaBrain from '../GiaBrain';
+import messagingBridge from '../MessagingBridge';
 import type { Goal, Plan, PlanStep } from '../../types/autonomy';
 
+function formatDuration(ms: number): string {
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
 export class AutonomousAgent {
-  private working = false;
+  private activeSteps: Map<string, { startTime: number; heartbeat?: ReturnType<typeof setInterval> }> = new Map();
+  private maxConcurrent = 2;
 
   async createGoal(
     title: string,
@@ -34,8 +42,7 @@ export class AutonomousAgent {
 
     logger.log(`[AutonomousAgent] Goal "${title}" created with ${decomposition.steps.length} steps`);
 
-    // Kick off first step immediately if autonomy is enabled and not already working
-    if (store.config.enabled && !this.working) {
+    if (store.config.enabled && this.getActiveCount() < this.maxConcurrent) {
       const next = store.getNextActionableStep();
       if (next) {
         logger.log(`[AutonomousAgent] Auto-starting first step for "${title}"`);
@@ -47,31 +54,50 @@ export class AutonomousAgent {
   }
 
   async executeStep(goal: Goal, plan: Plan, step: PlanStep): Promise<void> {
-    if (this.working) {
-      logger.warn('[AutonomousAgent] Already executing a step, skipping');
+    if (this.getActiveCount() >= this.maxConcurrent) {
+      logger.warn('[AutonomousAgent] Max concurrent steps reached, queuing');
       return;
     }
-    this.working = true;
+
+    const stepKey = `${plan.id}-${step.id}`;
+    if (this.activeSteps.has(stepKey)) return;
+
+    const record: { startTime: number; heartbeat?: ReturnType<typeof setInterval> } = { startTime: Date.now() };
+    this.activeSteps.set(stepKey, record);
 
     try {
       const store = useAutonomyStore.getState();
       store.updateStepStatus(plan.id, step.id, 'in_progress');
 
-      const prompt = `You are executing step ${plan.steps.indexOf(step) + 1} of ${plan.steps.length} for the goal "${goal.title}".
+      // Heartbeat — log every 60s that the step is still running
+      record.heartbeat = setInterval(() => {
+        const elapsed = Date.now() - record.startTime;
+        logger.log(`[AutonomousAgent] Step "${step.description.slice(0, 40)}" still running (${formatDuration(elapsed)})`);
+        store.setGoalProgress(goal.id, Math.min(99, Math.round((elapsed / 600000) * 100)));
+      }, 60000);
+
+      const stepNum = plan.steps.indexOf(step) + 1;
+      const prompt = `You are executing step ${stepNum} of ${plan.steps.length} for the goal "${goal.title}".
 
 Step description: ${step.description}
 Action needed: ${step.action}
 Expected outcome: ${step.expectedOutcome}
 
-Use the tools available to you to complete this step. Be thorough and resourceful. Return a detailed summary of what you did and what the result was.`;
+This step may take a long time. Work through it methodically. Use the tools available to you.
+Report progress and results. If you need to wait (e.g. for data processing), do so and report when done.
+
+Return a detailed summary of what you did and what the result was.`;
 
       const res = await GiaBrain.generate({
         prompt,
-        maxTokens: 2000,
+        maxTokens: 4000,
         onThought: (thought) => {
           useGiaStore.getState().addNotification(`💭 ${thought.slice(0, 80)}...`);
         },
       });
+
+      const elapsed = Date.now() - record.startTime;
+      logger.log(`[AutonomousAgent] Step completed in ${formatDuration(elapsed)}`);
 
       const reflection = await reflectionEngine.evaluate(
         goal.id, step.description, step.action, res.text
@@ -87,6 +113,9 @@ Use the tools available to you to complete this step. Be thorough and resourcefu
       const progress = Math.round((completedSteps / totalSteps) * 100);
       store.setGoalProgress(goal.id, progress);
 
+      // Notify on completion via messaging if configured
+      const notifyChannels = messagingBridge.getChannels().filter(c => c.connected);
+
       if (progress >= 100) {
         store.setGoalStatus(goal.id, 'completed');
         useMemoryStore.getState().addMemory({
@@ -96,30 +125,65 @@ Use the tools available to you to complete this step. Be thorough and resourcefu
           tier: 'semantic',
           confidence: 0.95,
         });
-        useGiaStore.getState().addNotification(`✅ Goal completed: ${goal.title}`);
+        const msg = `✅ Goal completed: ${goal.title}`;
+        useGiaStore.getState().addNotification(msg);
+        for (const ch of notifyChannels) {
+          messagingBridge.sendMessage({ channel: ch.type, to: '', text: `✅ *Goal Completed!*\n\n${goal.title}\n\n${goal.description.slice(0, 200)}` });
+        }
+      } else if (reflection.outcome === 'failure') {
+        const msg = `⚠️ Step failed for "${goal.title}": ${step.description.slice(0, 60)}`;
+        useGiaStore.getState().addNotification(msg);
+        for (const ch of notifyChannels) {
+          messagingBridge.sendMessage({ channel: ch.type, to: '', text: `⚠️ *Step Failed*\n\nGoal: ${goal.title}\nStep: ${step.description.slice(0, 100)}\n\nCheck on me when you can.` });
+        }
+      }
+
+      // Auto-continue to next step if available
+      if (progress < 100 && reflection.outcome === 'success') {
+        const next = store.getNextActionableStep();
+        if (next && store.config.enabled) {
+          logger.log(`[AutonomousAgent] Auto-continuing to next step for "${goal.title}"`);
+          this.executeStep(next.goal, next.plan, next.step);
+        }
       }
     } catch (e) {
       logger.error('[AutonomousAgent] Step execution failed:', e);
       const store = useAutonomyStore.getState();
       store.updateStepStatus(plan.id, step.id, 'failed', e instanceof Error ? e.message : 'Unknown error');
+      for (const ch of messagingBridge.getChannels().filter(c => c.connected)) {
+        messagingBridge.sendMessage({ channel: ch.type, to: '', text: `❌ *Error on step*\n\nGoal: ${goal.title}\nError: ${e instanceof Error ? e.message.slice(0, 200) : 'Unknown error'}` });
+      }
     } finally {
-      this.working = false;
+      if (record.heartbeat) clearInterval(record.heartbeat);
+      this.activeSteps.delete(stepKey);
     }
   }
 
   async processNextActionableStep(): Promise<boolean> {
     const store = useAutonomyStore.getState();
+    if (!store.config.enabled) return false;
+
     const next = store.getNextActionableStep();
     if (!next) return false;
 
-    if (!store.config.enabled) return false;
+    if (this.getActiveCount() >= this.maxConcurrent) return false;
 
-    await this.executeStep(next.goal, next.plan, next.step);
+    this.executeStep(next.goal, next.plan, next.step).catch(e => {
+      logger.error('[AutonomousAgent] processNextActionableStep error:', e);
+    });
     return true;
   }
 
+  getActiveCount(): number {
+    return this.activeSteps.size;
+  }
+
   isWorking(): boolean {
-    return this.working;
+    return this.activeSteps.size > 0;
+  }
+
+  setMaxConcurrent(n: number): void {
+    this.maxConcurrent = Math.max(1, Math.min(5, n));
   }
 
   getGoalSummary(goalId: string): string {
@@ -127,7 +191,7 @@ Use the tools available to you to complete this step. Be thorough and resourcefu
     const goal = store.goals.find(g => g.id === goalId);
     if (!goal) return 'Goal not found';
 
-    const plan = store.plans.find(p => p.id === goal.planId);
+    const plan = store.plans.find(p => p.goalId === goalId);
     const reflections = store.getGoalReflections(goalId);
 
     let summary = `Goal: ${goal.title} (${goal.status}, ${goal.progress}%)\nPriority: ${goal.priority}\n`;

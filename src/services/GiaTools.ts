@@ -27,6 +27,11 @@ import { sandboxTools } from './tools/sandbox';
 import { cameraTools } from './tools/camera';
 import { filegenTools } from './tools/filegen';
 import { documentTools } from './tools/documents';
+import { ragTools } from './tools/rag';
+import { emailTools } from './tools/email';
+import { calendarTools } from './tools/calendar';
+import { messagingTools } from './tools/messaging';
+import { personalTools } from './tools/personal';
 
 export type { ToolResult };
 export type { Tool };
@@ -68,6 +73,11 @@ class GiaTools {
       ...cameraTools,
       ...filegenTools,
       ...documentTools,
+      ...ragTools,
+      ...emailTools,
+      ...calendarTools,
+      ...messagingTools,
+      ...personalTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);
