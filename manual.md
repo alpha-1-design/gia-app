@@ -152,6 +152,14 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `gateway_toggle` | Enable/disable a route |
 | `gateway_stats` | Calls, success rate, avg duration |
 | `gateway_logs` | Recent call history per route |
+| `sandbox_exec` | Execute commands in Alpine sandbox (Docker/proot) — install packages, run scripts |
+| `sandbox_read_file` | Read file from sandbox file system |
+| `sandbox_write_file` | Write file to sandbox file system |
+| `sandbox_download_url` | Get download URL for a sandbox file |
+| `sandbox_status` | Check sandbox health and resource usage |
+| `camera_capture` | Take a photo with the device camera |
+| `filegen` | Generate PDF, DOCX, PPTX, or ZIP files from content |
+| `document_read` | Extract text content from PDF, DOCX, PPTX files |
 
 ---
 
@@ -164,6 +172,52 @@ GIA includes a native **proot + Alpine Linux** terminal environment on Android:
 - **File system**: Access container file system with disk usage info available
 - **Lifecycle**: Sessions auto-terminate after command completion unless persisted
 - **Contrast with Piston**: `code_execute` runs code snippets on a remote Piston API server. `terminal_run` gives you a full Linux shell on your device with proot.
+
+## 🏖 Alpine Sandbox
+
+GIA includes a full Linux sandbox environment for running commands, installing packages, and executing scripts:
+
+- **Modes**: Docker (if available) or proot-based Alpine Linux
+- **Persistence**: Sessions maintain state across multiple tool calls
+- **Package management**: Install packages via `apk` (Alpine's package manager)
+- **File system**: Read/write files in the sandbox workspace
+- **Download**: Get download URLs for files generated in the sandbox
+- **Use cases**: Run Python scripts, compile code, install tools, process data — all in an isolated environment
+
+The sandbox replaces the need for remote code execution services — everything runs locally on your device.
+
+## 📷 Camera Capture
+
+GIA can take photos using your device's camera and analyze them with vision-capable AI models:
+
+- **Capture**: Opens the native camera UI via Capacitor — take a photo or select from gallery
+- **Vision analysis**: Captured images are sent to GIA's vision models (Claude, GPT-4o, Gemini, etc.) for description, analysis, OCR, or question answering
+- **Privacy**: Images are processed through your configured AI provider — no third-party uploads
+
+## 📄 File Generation
+
+GIA can generate professional documents from markdown content:
+
+| Format | Tool | Description |
+|--------|------|-------------|
+| **PDF** | `filegen` with format `pdf` | Renders markdown to PDF with formatting |
+| **DOCX** | `filegen` with format `docx` | Produces editable Word documents |
+| **PPTX** | `filegen` with format `pptx` | Generates slide decks with title/content slides |
+| **ZIP** | `filegen` with format `zip` | Bundles specified files into a ZIP archive |
+
+Generated files appear as downloadable links in chat with inline preview.
+
+## 📖 Document Reader
+
+GIA can extract and read content from existing documents:
+
+| Format | Tool | Description |
+|--------|------|-------------|
+| **PDF** | `document_read` | Extracts text from PDF files |
+| **DOCX** | `document_read` | Reads Word document content |
+| **PPTX** | `document_read` | Extracts text from PowerPoint slides |
+
+The extracted content appears in chat with format name, file path, and text size — GIA can then analyze, summarize, or respond based on the document contents.
 
 ## 🧪 Local AI (On-Device)
 
@@ -524,6 +578,7 @@ Configure provider API keys in Settings → Engine Room:
 - **Groq** — Ultra-fast inference
 - **OpenRouter** — 100+ models (DeepSeek, Llama, Gemma, etc.)
 - **OpenCode** — Specialized coding provider
+- **NVIDIA NIM** — NVIDIA's hosted inference (Llama, Mistral, Nemotron, etc.)
 - **Ollama (Local)** — Run models locally via Ollama
 - **LM Studio (Local)** — Run models locally via LM Studio
 

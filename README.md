@@ -42,6 +42,7 @@ GIA connects directly to provider APIs — no proxy, no middleman:
 - **Groq** — Ultra-fast Llama-3/Mistral inference
 - **OpenRouter** — 100+ models (DeepSeek, Llama, etc.)
 - **OpenCode** — Specialized coding provider
+- **NVIDIA NIM** — NVIDIA's hosted inference API (Llama, Mistral, Nemotron, etc.)
 
 ---
 
@@ -144,6 +145,11 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Haptic Patterns** | Impact, notification, and vibration haptic feedback types |
 | **Gateway Daemon** | Background daemon for continuous gateway operations |
 | **Terminal Management** | Check status and kill proot terminal sessions |
+| **Alpine Sandbox** | Full Linux sandbox environment via Docker/proot — install packages, run scripts, execute commands in isolated Alpine container |
+| **Camera Capture** | Take photos via device camera (Capacitor) and feed them to GIA's vision models |
+| **File Generation** | Generate PDF, DOCX, PPTX, and ZIP files from markdown/content — download or preview inline |
+| **Document Reader** | Extract text from PDF, DOCX, PPTX files using Python-based parsing — preview content in chat |
+| **Browse Web** | Full browser automation via Node.js server — navigate pages, extract content, interact with JS-rendered sites |
 
 ### Interactive Visual Blocks
 
@@ -463,6 +469,7 @@ GIA is architected for **zero-trust, no-backend security**. Every protection is 
         <domain includeSubdomains="true">openrouter.ai</domain>
         <domain includeSubdomains="true">duckduckgo.com</domain>
         <domain includeSubdomains="true">piston.api</domain>
+        <domain includeSubdomains="true">api.nvcf.nvidia.com</domain>
     </domain-config>
 </network-security-config>
 ```
