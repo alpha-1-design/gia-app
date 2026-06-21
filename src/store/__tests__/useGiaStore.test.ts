@@ -295,8 +295,8 @@ describe('useGiaStore', () => {
       expect(ids.length).toBeGreaterThan(0);
     });
 
-    it('returns [""] for missing session', () => {
-      expect(useGiaStore.getState().getAllBranchIds('nonexistent')).toEqual(['']);
+    it('returns [] for missing session', () => {
+      expect(useGiaStore.getState().getAllBranchIds('nonexistent')).toEqual([]);
     });
   });
 

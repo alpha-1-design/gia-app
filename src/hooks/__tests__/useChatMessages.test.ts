@@ -27,7 +27,7 @@ describe('useChatMessages', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storeState = {
-      sessions: [{ id: 'sess-1', messages: [{ id: 'm1', role: 'user', content: 'hi' }, { id: 'm2', role: 'assistant', content: 'hello' }] }],
+      sessions: [{ id: 'sess-1', title: 'Test', messages: [{ message: { id: 'm1', role: 'user', content: 'hi', timestamp: 1000 }, children: [] }, { message: { id: 'm2', role: 'assistant', content: 'hello', timestamp: 2000 }, children: [] }], createdAt: 100, updatedAt: 100 }],
       activeSessionId: 'sess-1',
       addNotification: mockAddNotification,
       forkSession: vi.fn(),

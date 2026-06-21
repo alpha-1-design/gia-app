@@ -17,7 +17,7 @@ export const CAPABILITY_LABELS: Record<keyof ProviderCapabilities, { label: stri
 };
 
 const VISION_MODEL_PATTERNS = [
-  'vision', 'gpt-4o', 'gpt-4.1', 'claude-3', 'claude-4', 'opus',
+  'vision', 'gpt-4o', 'gpt-4.1', 'claude-3', 'claude-4', 'claude-sonnet', 'opus', 'o1', 'o3',
   'gemini', 'gemma-3', 'pixtral', 'llava', '/vl', '-vl', 'vl-',
   'florence', 'cogvlm', 'qwen-vl', 'qwen2-vl',
   'llama-3.2', 'llama-4',

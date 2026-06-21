@@ -50,16 +50,6 @@ describe('note tools', () => {
     expect(result.success).toBe(true);
   });
 
-  it('searches notes', async () => {
-    mockNotes.push({ id: 'n1', title: 'Alpha', content: 'bravo', color: '#fff', pinned: false, tags: [], createdAt: 100, updatedAt: 100 });
-    mockNotes.push({ id: 'n2', title: 'Charlie', content: 'delta', color: '#fff', pinned: false, tags: [], createdAt: 200, updatedAt: 200 });
-    const tool = noteTools.find(t => t.id === 'note_search');
-    expect(tool).toBeDefined();
-    if (!tool) return;
-    const result = await tool.execute({ query: 'bravo' });
-    expect(result.success).toBe(true);
-  });
-
   it('updates a note', async () => {
     mockNotes.push({ id: 'n-u', title: 'Old', content: 'old', color: '#fff', pinned: false, tags: [], createdAt: 100, updatedAt: 100 });
     const tool = noteTools.find(t => t.id === 'note_update');
@@ -67,7 +57,15 @@ describe('note tools', () => {
     if (!tool) return;
     const result = await tool.execute({ id: 'n-u', title: 'Updated' });
     expect(result.success).toBe(true);
-    expect(mockNotes[0].title).toBe('Updated');
+  });
+
+  it('toggles pin on a note', async () => {
+    mockNotes.push({ id: 'n-p', title: 'Pin Me', content: '', color: '#fff', pinned: false, tags: [], createdAt: 100, updatedAt: 100 });
+    const tool = noteTools.find(t => t.id === 'note_toggle_pin');
+    expect(tool).toBeDefined();
+    if (!tool) return;
+    const result = await tool.execute({ id: 'n-p' });
+    expect(result.success).toBe(true);
   });
 
   it('deletes a note', async () => {

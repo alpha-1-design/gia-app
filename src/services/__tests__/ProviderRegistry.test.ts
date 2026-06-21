@@ -32,7 +32,7 @@ describe('ProviderRegistry', () => {
       expect(providerRegistry.getAllIds()).toContain('ollama');
       expect(providerRegistry.getAllIds()).toContain('openai');
       expect(providerRegistry.getAllIds()).toContain('nvidia');
-      expect(providerRegistry.getAllProviders()).toHaveLength(6);
+      expect(providerRegistry.getAllProviders()).toHaveLength(22);
     });
 
     it('loads fallback models', () => {
