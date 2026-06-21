@@ -30,9 +30,6 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK platform 36
-        run: yes | sdkmanager "platforms;android-36" || true
-
       - run: npx cap sync android
 
       - run: chmod +x android/gradlew
