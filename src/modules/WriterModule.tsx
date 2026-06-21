@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
@@ -20,7 +21,10 @@ const WriterModule: React.FC = () => {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState(true);
-  const { setIntentState, addNotification } = useGiaStore();
+  const { setIntentState, addNotification } = useGiaStore(useShallow(s => ({
+    setIntentState: s.setIntentState,
+    addNotification: s.addNotification,
+  })));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
 

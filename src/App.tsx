@@ -1,6 +1,6 @@
 import React, { useEffect, lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target } from 'lucide-react';
+import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target, Bot } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useMemoryStore } from './store/useMemoryStore';
@@ -47,6 +47,7 @@ import './styles/globals.css';
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
 const ExamModule = lazy(() => import('./modules/ExamModule'));
 const AutonomyModule = lazy(() => import('./modules/AutonomyModule'));
+const AgentsModule = lazy(() => import('./modules/AgentsModule'));
 
 const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string }[] = [
   { id: 'chat',     label: 'Chat',     icon: <MessageCircle size={18} />, color: 'var(--mod-chat)' },
@@ -54,6 +55,7 @@ const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string
   { id: 'analyst',  label: 'Analyst',  icon: <BarChart2 size={18} />,    color: 'var(--mod-analyst)' },
   { id: 'writer',   label: 'Writer',   icon: <PenLine size={18} />,      color: 'var(--mod-writer)' },
   { id: 'planner',  label: 'Planner',  icon: <ListTodo size={18} />,     color: 'var(--mod-planner)' },
+  { id: 'agents',   label: 'Agents',   icon: <Bot size={18} />,          color: 'var(--mod-agents)' },
   { id: 'settings', label: 'Settings', icon: <Settings size={18} />,     color: 'var(--mod-settings)' },
   { id: 'autonomy', label: 'Autonomy', icon: <Target size={18} />,       color: 'var(--mod-autonomy)' },
 ];
@@ -104,14 +106,15 @@ const ModuleView: React.FC = () => {
     planner:  <ErrorBoundary name="Planner"><PlannerModule /></ErrorBoundary>,
     settings: <ErrorBoundary name="Settings"><SettingsModule /></ErrorBoundary>,
     autonomy: <Suspense fallback={<Fallback />}><ErrorBoundary name="Autonomy"><AutonomyModule /></ErrorBoundary></Suspense>,
+    agents:   <Suspense fallback={<Fallback />}><ErrorBoundary name="Agents"><AgentsModule /></ErrorBoundary></Suspense>,
   };
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={currentModule}
-        initial={{ opacity: 0, y: 6, filter: 'blur(6px)' }}
-        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        exit={{ opacity: 0, filter: 'blur(4px)' }}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0 }}
         transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
         className="h-full w-full"
       >
@@ -690,7 +693,7 @@ const App: React.FC = () => {
                     style={{
                       background: 'var(--gia-surface-2)',
                       border: '1px solid var(--gia-border)',
-                      color: cur.id === 'chat' ? '#a855f7' : cur.id === 'exam' ? '#f59e0b' : cur.id === 'analyst' ? '#3b82f6' : cur.id === 'writer' ? '#ec4899' : cur.id === 'planner' ? '#10b981' : '#94a3b8',
+                      color: cur.id === 'chat' ? '#a855f7' : cur.id === 'exam' ? '#f59e0b' : cur.id === 'analyst' ? '#3b82f6' : cur.id === 'writer' ? '#ec4899' : cur.id === 'planner' ? '#10b981' : cur.id === 'agents' ? '#a855f7' : '#94a3b8',
                     }}
                   >
                     <span className="shrink-0">{cur.icon}</span>
@@ -724,7 +727,7 @@ const App: React.FC = () => {
                               background: active ? 'rgba(168,85,247,0.1)' : 'transparent',
                             }}
                           >
-                            <span style={{ color: mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : '#94a3b8' }}>
+                            <span style={{ color: mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : mod.id === 'agents' ? '#a855f7' : '#94a3b8' }}>
                               {mod.icon}
                             </span>
                             <span className="flex-1 text-left">{mod.label}</span>

@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { BarChart2 as BarChartIcon, Loader2, Paperclip, X, TrendingUp as LineChartIcon, Grid, Download, RefreshCw, PieChart as PieChartIcon } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
@@ -13,7 +14,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '../utils/helpers';
 import { generateWithRetry } from '../utils/generateWithRetry';
 
-interface DataPoint { label: string; value: number | string; color?: string; [key: string]: unknown }
+interface DataPoint { label: string; value: number | ; color?: string; [key: string]: unknown }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
 const COLORS = ['#7c3aed','#4f46e5','#059669','#dc2626','#d97706','#0891b2','#be185d','#65a30d','#9333ea','#0284c7'];
 
@@ -59,7 +60,10 @@ const AnalystModule: React.FC = () => {
   const [fileData, setFileData] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
-  const { setIntentState, addNotification } = useGiaStore();
+  const { setIntentState, addNotification } = useGiaStore(useShallow(s => ({
+    setIntentState: s.setIntentState,
+    addNotification: s.addNotification,
+  })));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
 

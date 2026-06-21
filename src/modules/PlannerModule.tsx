@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { ListTodo, CheckCircle2, Circle, Download, Trash2, Loader2, Calendar, Clock, X, Edit3 } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
@@ -51,7 +52,14 @@ const PlannerModule: React.FC = () => {
   const [schedInterval, setSchedInterval] = useState('daily');
   const [schedLoading, setSchedLoading] = useState(false);
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
-  const { setIntentState, scheduledTasks, addScheduledTask, updateTaskStatus, deleteTask, addNotification } = useGiaStore();
+  const { setIntentState, scheduledTasks, addScheduledTask, updateTaskStatus, deleteTask, addNotification } = useGiaStore(useShallow(s => ({
+    setIntentState: s.setIntentState,
+    scheduledTasks: s.scheduledTasks,
+    addScheduledTask: s.addScheduledTask,
+    updateTaskStatus: s.updateTaskStatus,
+    deleteTask: s.deleteTask,
+    addNotification: s.addNotification,
+  })));
   const mountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

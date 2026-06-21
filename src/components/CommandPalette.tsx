@@ -27,30 +27,28 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const store = useGiaStore();
-
   const iconStyle = { width: 15, height: 15 };
 
   const actions: Action[] = [
-    { id: 'new-chat', label: 'New Chat', description: 'Start a fresh conversation', icon: <MessageSquare {...iconStyle} />, category: 'Chat', execute: () => { store.createSession(); onClose(); } },
-    { id: 'module-chat', label: 'Switch to Chat', description: 'Go to Chat module', icon: <MessageCircle {...iconStyle} />, category: 'Navigation', execute: () => { store.setModule('chat'); onClose(); } },
-    { id: 'module-writer', label: 'Switch to Writer', description: 'Go to Writer module', icon: <PenLine {...iconStyle} />, category: 'Navigation', execute: () => { store.setModule('writer'); onClose(); } },
-    { id: 'module-analyst', label: 'Switch to Analyst', description: 'Go to Analyst module', icon: <BarChart3 {...iconStyle} />, category: 'Navigation', execute: () => { store.setModule('analyst'); onClose(); } },
-    { id: 'module-planner', label: 'Switch to Planner', description: 'Go to Planner module', icon: <ClipboardList {...iconStyle} />, category: 'Navigation', execute: () => { store.setModule('planner'); onClose(); } },
-    { id: 'module-settings', label: 'Open Settings', description: 'Go to Settings module', icon: <Settings {...iconStyle} />, category: 'Navigation', execute: () => { store.setModule('settings'); onClose(); } },
-    { id: 'toggle-websearch', label: 'Toggle Web Search', description: 'Enable or disable web search capability', icon: <Globe {...iconStyle} />, category: 'Tools', execute: () => { store.setWebSearch(!store.webSearch); store.addNotification(`Web search ${store.webSearch ? 'disabled' : 'enabled'}`); onClose(); } },
-    { id: 'toggle-thinking', label: 'Toggle Extended Thinking', description: 'Show GIA\'s internal reasoning process', icon: <Brain {...iconStyle} />, category: 'Tools', execute: () => { store.setExtThinking(!store.extThinking); store.addNotification(`Extended thinking ${store.extThinking ? 'disabled' : 'enabled'}`); onClose(); } },
-    { id: 'toggle-hands-off', label: 'Toggle Hands-Off Mode', description: 'Let GIA execute tools without asking', icon: <Hand {...iconStyle} />, category: 'Tools', execute: () => { store.setHandsOff(!store.handsOff); store.addNotification(`Hands-off ${store.handsOff ? 'disabled' : 'enabled'}`); onClose(); } },
-    { id: 'toggle-tools', label: 'Toggle Tools Panel', description: 'Show or hide the tools observation panel', icon: <Eye {...iconStyle} />, category: 'Tools', execute: () => { store.setShowProtocols(!store.showProtocols); onClose(); } },
-    { id: 'terminal', label: 'Open Engine Room', description: 'Access the provider management terminal', icon: <Terminal {...iconStyle} />, category: 'System', execute: () => { store.setShowTerminal(true); onClose(); } },
-    { id: 'pick-folder', label: 'Pick Project Folder', description: 'Select a local folder for file access', icon: <FolderOpen {...iconStyle} />, category: 'Files', execute: () => { import('../services/DesktopFS').then(m => m.default.pickDirectory().then(r => { if (r) store.addNotification(`Project folder: ${r.name}`); })); onClose(); } },
-    { id: 'export-brain', label: 'Export Brain', description: 'Download GIA memories as JSON', icon: <Download {...iconStyle} />, category: 'Files', execute: () => { import('../services/BrainExport').then(m => { m.exportBrainToFile(); store.addNotification('Brain exported'); }); onClose(); } },
-    { id: 'import-brain', label: 'Import Brain', description: 'Restore GIA from a brain export file', icon: <Upload {...iconStyle} />, category: 'Files', execute: () => { store.addNotification('Go to Settings > Brain Export to import'); onClose(); } },
-    { id: 'clear-session', label: 'Clear Current Chat', description: 'Remove all messages from current session', icon: <Eraser {...iconStyle} />, category: 'Chat', execute: () => { const sid = store.activeSessionId; if (sid) { store.clearSession(sid); store.addNotification('Session cleared'); } onClose(); } },
-    { id: 'mcp-servers', label: 'Manage MCP Servers', description: 'Configure and connect to MCP servers', icon: <Wifi {...iconStyle} />, category: 'System', execute: () => { store.setModule('settings'); onClose(); } },
+    { id: 'new-chat', label: 'New Chat', description: 'Start a fresh conversation', icon: <MessageSquare {...iconStyle} />, category: 'Chat', execute: () => { useGiaStore.getState().createSession(); onClose(); } },
+    { id: 'module-chat', label: 'Switch to Chat', description: 'Go to Chat module', icon: <MessageCircle {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('chat'); onClose(); } },
+    { id: 'module-writer', label: 'Switch to Writer', description: 'Go to Writer module', icon: <PenLine {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('writer'); onClose(); } },
+    { id: 'module-analyst', label: 'Switch to Analyst', description: 'Go to Analyst module', icon: <BarChart3 {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('analyst'); onClose(); } },
+    { id: 'module-planner', label: 'Switch to Planner', description: 'Go to Planner module', icon: <ClipboardList {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('planner'); onClose(); } },
+    { id: 'module-settings', label: 'Open Settings', description: 'Go to Settings module', icon: <Settings {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('settings'); onClose(); } },
+    { id: 'toggle-websearch', label: 'Toggle Web Search', description: 'Enable or disable web search capability', icon: <Globe {...iconStyle} />, category: 'Tools', execute: () => { const s = useGiaStore.getState(); s.setWebSearch(!s.webSearch); s.addNotification(`Web search ${s.webSearch ? 'disabled' : 'enabled'}`); onClose(); } },
+    { id: 'toggle-thinking', label: 'Toggle Extended Thinking', description: 'Show GIA\'s internal reasoning process', icon: <Brain {...iconStyle} />, category: 'Tools', execute: () => { const s = useGiaStore.getState(); s.setExtThinking(!s.extThinking); s.addNotification(`Extended thinking ${s.extThinking ? 'disabled' : 'enabled'}`); onClose(); } },
+    { id: 'toggle-hands-off', label: 'Toggle Hands-Off Mode', description: 'Let GIA execute tools without asking', icon: <Hand {...iconStyle} />, category: 'Tools', execute: () => { const s = useGiaStore.getState(); s.setHandsOff(!s.handsOff); s.addNotification(`Hands-off ${s.handsOff ? 'disabled' : 'enabled'}`); onClose(); } },
+    { id: 'toggle-tools', label: 'Toggle Tools Panel', description: 'Show or hide the tools observation panel', icon: <Eye {...iconStyle} />, category: 'Tools', execute: () => { useGiaStore.getState().setShowProtocols(!useGiaStore.getState().showProtocols); onClose(); } },
+    { id: 'terminal', label: 'Open Engine Room', description: 'Access the provider management terminal', icon: <Terminal {...iconStyle} />, category: 'System', execute: () => { useGiaStore.getState().setShowTerminal(true); onClose(); } },
+    { id: 'pick-folder', label: 'Pick Project Folder', description: 'Select a local folder for file access', icon: <FolderOpen {...iconStyle} />, category: 'Files', execute: () => { import('../services/DesktopFS').then(m => m.default.pickDirectory().then(r => { if (r) useGiaStore.getState().addNotification(`Project folder: ${r.name}`); })); onClose(); } },
+    { id: 'export-brain', label: 'Export Brain', description: 'Download GIA memories as JSON', icon: <Download {...iconStyle} />, category: 'Files', execute: () => { import('../services/BrainExport').then(m => { m.exportBrainToFile(); useGiaStore.getState().addNotification('Brain exported'); }); onClose(); } },
+    { id: 'import-brain', label: 'Import Brain', description: 'Restore GIA from a brain export file', icon: <Upload {...iconStyle} />, category: 'Files', execute: () => { useGiaStore.getState().addNotification('Go to Settings > Brain Export to import'); onClose(); } },
+    { id: 'clear-session', label: 'Clear Current Chat', description: 'Remove all messages from current session', icon: <Eraser {...iconStyle} />, category: 'Chat', execute: () => { const s = useGiaStore.getState(); const sid = s.activeSessionId; if (sid) { s.clearSession(sid); s.addNotification('Session cleared'); } onClose(); } },
+    { id: 'mcp-servers', label: 'Manage MCP Servers', description: 'Configure and connect to MCP servers', icon: <Wifi {...iconStyle} />, category: 'System', execute: () => { useGiaStore.getState().setModule('settings'); onClose(); } },
     { id: 'task-board', label: 'Open Task Board', description: 'View and manage your tasks', icon: <ClipboardList {...iconStyle} />, category: 'Co-Work', execute: () => { void onNavigate?.('task-board'); onClose(); } },
     { id: 'notes-panel', label: 'Open Notes', description: 'View and manage your notes', icon: <StickyNote {...iconStyle} />, category: 'Co-Work', execute: () => { void onNavigate?.('notes-panel'); onClose(); } },
-];
+  ];
 
   const filtered = query.trim()
     ? actions.filter(a => {

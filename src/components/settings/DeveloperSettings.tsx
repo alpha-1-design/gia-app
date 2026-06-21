@@ -6,20 +6,14 @@ import { logger } from '../../utils/logger';
 
 export const DeveloperSettings: React.FC = () => {
   const addNotification = useGiaStore(s => s.addNotification);
+  const smartFallback = useGiaStore(s => s.smartFallback);
+  const setSmartFallback = useGiaStore(s => s.setSmartFallback);
+  const outputValidation = useGiaStore(s => s.outputValidation);
+  const setOutputValidation = useGiaStore(s => s.setOutputValidation);
+  const responseCache = useGiaStore(s => s.responseCache);
+  const setResponseCache = useGiaStore(s => s.setResponseCache);
 
-  // ── Toggles from global store ──────────────────────────────────
-  const [smartFallback, setSmartFallback] = useState(() => {
-    const v = useGiaStore.getState().smartFallback;
-    return v !== undefined ? v : true;
-  });
-  const [outputValidation, setOutputValidation] = useState(() => {
-    const v = useGiaStore.getState().outputValidation;
-    return v !== undefined ? v : true;
-  });
-  const [responseCache, setResponseCache] = useState(() => {
-    const v = useGiaStore.getState().responseCache;
-    return v !== undefined ? v : true;
-  });
+  // ── Token usage toggle (localStorage) ──────────────────────────
   const [showTokenUsage, setShowTokenUsage] = useState(() =>
     localStorage.getItem('gia-show-token-usage') === 'true'
   );
@@ -91,15 +85,6 @@ export const DeveloperSettings: React.FC = () => {
   }, [addNotification, refreshCacheInfo]);
 
   // ── Persist toggles ────────────────────────────────────────────
-  useEffect(() => {
-    useGiaStore.getState().setSmartFallback?.(smartFallback);
-  }, [smartFallback]);
-  useEffect(() => {
-    useGiaStore.getState().setOutputValidation?.(outputValidation);
-  }, [outputValidation]);
-  useEffect(() => {
-    useGiaStore.getState().setResponseCache?.(responseCache);
-  }, [responseCache]);
   useEffect(() => {
     localStorage.setItem('gia-show-token-usage', String(showTokenUsage));
   }, [showTokenUsage]);

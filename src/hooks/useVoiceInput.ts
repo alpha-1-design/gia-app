@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { useVoiceControl } from './useVoiceControl';
@@ -40,14 +41,16 @@ export function useVoiceInput(
 ) {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
-  const wakeWord = useGiaStore(s => s.wakeWord);
-  const keepListening = useGiaStore(s => s.keepListening);
-  const keepListeningRef = useRef(keepListening);
-  keepListeningRef.current = keepListening;
-  const voiceLanguage = useGiaStore(s => s.voiceLanguage);
-  const nativeWakeWord = useGiaStore(s => s.nativeWakeWord);
-  const nativeSensitivity = useGiaStore(s => s.nativeSensitivity);
-  const wakeWordAccessKey = useGiaStore(s => s.wakeWordAccessKey);
+  const voiceSettings = useGiaStore(useShallow(s => ({
+    wakeWord: s.wakeWord,
+    keepListening: s.keepListening,
+    voiceLanguage: s.voiceLanguage,
+    nativeWakeWord: s.nativeWakeWord,
+    nativeSensitivity: s.nativeSensitivity,
+    wakeWordAccessKey: s.wakeWordAccessKey,
+  })));
+  const keepListeningRef = useRef(voiceSettings.keepListening);
+  keepListeningRef.current = voiceSettings.keepListening;
 
   const playBeep = useCallback(() => {
     try {
@@ -150,19 +153,19 @@ export function useVoiceInput(
   }, [handleWakeWord]);
 
   const voiceControl = useVoiceControl({
-    wakeWord,
+    wakeWord: voiceSettings.wakeWord,
     onWakeWord,
     onTranscript: (transcript: string) => {
       const setInput = (useGiaStore.getState() as unknown as Record<string, unknown>).setInput as ((v: string) => void) | undefined;
       if (setInput) handleVoiceTranscript(transcript, setInput, (text) => onAutoSend?.(text));
     },
-    keepListening,
+    keepListening: voiceSettings.keepListening,
     autoStopAfter: 120000,
     confidenceThreshold: 0.3,
-    language: voiceLanguage,
-    nativeWakeWord,
-    nativeSensitivity,
-    wakeWordAccessKey,
+    language: voiceSettings.voiceLanguage,
+    nativeWakeWord: voiceSettings.nativeWakeWord,
+    nativeSensitivity: voiceSettings.nativeSensitivity,
+    wakeWordAccessKey: voiceSettings.wakeWordAccessKey,
   });
 
   const voiceRef = useRef(voiceControl);
@@ -177,7 +180,7 @@ export function useVoiceInput(
     voiceControl,
     voiceRef,
     keepListeningRef,
-    voiceLanguage,
-    wakeWord,
+    voiceLanguage: voiceSettings.voiceLanguage,
+    wakeWord: voiceSettings.wakeWord,
   };
 }

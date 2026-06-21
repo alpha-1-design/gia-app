@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, Pencil, RotateCcw, Trash2, GitFork, Play } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 interface MenuAction {
   id: string;
@@ -76,6 +77,7 @@ const MessageContextMenu: React.FC<Props> = ({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    touchPointRef.current = { x: 0, y: 0 };
     setPos({ x: e.clientX, y: e.clientY });
     setOpen(true);
   };
@@ -123,6 +125,8 @@ const MessageContextMenu: React.FC<Props> = ({
     };
   };
 
+  const adjustedPos = useMemo(() => open ? getAdjustedPos() : { x: 0, y: 0 }, [open, pos.x, pos.y, isUser, onContinue]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const actions: MenuAction[] = [
     { id: 'copy', label: 'Copy', icon: <Copy size={13} />, action: () => { onCopy(messageId, content); close(); } },
   ];
@@ -154,47 +158,46 @@ const MessageContextMenu: React.FC<Props> = ({
         {children}
       </div>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={close} />
-            <motion.div
-              ref={menuRef}
-              initial={{ opacity: 0, scale: 0.9, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -4 }}
-              transition={{ duration: 0.12 }}
-              className="fixed z-50 w-40 rounded-xl overflow-hidden shadow-2xl"
-              style={{
-                left: getAdjustedPos().x,
-                top: getAdjustedPos().y,
-                background: '#1a1a24',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-              }}
-            >
-              <div className="py-1">
-                {actions.map((a, i) => (
-                  <React.Fragment key={a.id}>
-                    {i > 0 && i === actions.length - 1 && <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '2px 8px' }} />}
-                    <button
-                      onClick={a.action}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors tap-feedback"
-                      style={{ color: a.color || 'var(--gia-muted)' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      {a.icon}
-                      {a.label}
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {open && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} />
+          <motion.div
+            ref={menuRef}
+            initial={{ opacity: 0, scale: 0.9, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="fixed z-50 w-40 rounded-xl overflow-hidden shadow-2xl"
+            style={{
+              left: adjustedPos.x,
+              top: adjustedPos.y,
+              background: '#1a1a24',
+              border: '1px solid rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+            }}
+          >
+            <div className="py-1">
+              {actions.map((a, i) => (
+                <React.Fragment key={a.id}>
+                  {i > 0 && i === actions.length - 1 && <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '2px 8px' }} />}
+                  <button
+                    onClick={a.action}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors tap-feedback"
+                    style={{ color: a.color || 'var(--gia-muted)' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {a.icon}
+                    {a.label}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          </motion.div>
+        </>,
+        document.body
+      )}
     </>
   );
 };

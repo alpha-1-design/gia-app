@@ -189,7 +189,7 @@ Rules: you can call multiple independent tools in a single message by putting ea
 })()}
 
 ## Modules you can navigate to
-chat | exam | analyst | writer | planner | settings | autonomy
+chat | exam | analyst | writer | planner | agents | settings | autonomy
 
 ## Autonomous capabilities
 You have the ability to work autonomously on goals. You can:

@@ -34,7 +34,10 @@ export function useChatState() {
   const audioRecorderRef = useRef(new AudioRecorder());
 
   const gen = useChatGeneration();
+  const genRef = useRef(gen);
+  genRef.current = gen;
   const msgOps = useChatMessages();
+  const editingAssistIdRef = useRef<string | null>(null);
 
   const {
     sessions,
@@ -75,7 +78,8 @@ export function useChatState() {
     providers: s.providers,
     activeProvider: s.activeProvider,
   })));
-  const activeProtocols = useProtocolStore(useShallow(s => s.protocols.filter(p => p.state !== 'confirmed' && p.state !== 'modified')));
+  const protocols = useProtocolStore(s => s.protocols);
+  const activeProtocols = useMemo(() => protocols.filter(p => p.state !== 'confirmed' && p.state !== 'modified'), [protocols]);
   const providerLabel = providerRegistry.getLabel(activeProvider);
   const providerConnected = providers[activeProvider]?.enabled ?? false;
   const activeModel = providers[activeProvider]?.model ?? '';
@@ -92,6 +96,10 @@ export function useChatState() {
     handleDragEnter, handleDragLeave, handleDragOver, handleDrop,
     removeAttachment,
   } = useFileAttachments();
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  const setAttachmentsRef = useRef(setAttachments);
+  setAttachmentsRef.current = setAttachments;
 
   const {
     voiceEnabled, setVoiceEnabled, voiceRef, keepListeningRef,
@@ -99,8 +107,8 @@ export function useChatState() {
   } = useVoiceInput(
     gen.abortTimeoutRef,
     useCallback((text: string) => {
-      gen.handleSend(text, attachments, setInput, v => setAttachments(v as Attachment[]));
-    }, [gen, attachments, setInput, setAttachments]),
+      genRef.current.handleSend(text, attachmentsRef.current, setInput, v => setAttachmentsRef.current(v as Attachment[]));
+    }, [setInput]),
   );
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
@@ -129,7 +137,7 @@ export function useChatState() {
             addNotification('Transcribing…');
             const text = await WhisperService.transcribe(blob);
             if (text) {
-              gen.handleSend(text, attachments, setInput, v => setAttachments(v as Attachment[]));
+              genRef.current.handleSend(text, attachmentsRef.current, setInput, v => setAttachmentsRef.current(v as Attachment[]));
             }
           }).catch(() => {});
         }
@@ -162,8 +170,9 @@ export function useChatState() {
     }
   }, [gen.loading, gen.streamingMsgId, gen.responseStartRef, gen.responseTimesRef, gen.lastUserMsgRef]);
 
-  // Abort in-flight requests on unmount
-  useEffect(() => () => { gen.abortRef.current?.abort(); if (gen.abortTimeoutRef.current) clearTimeout(gen.abortTimeoutRef.current); }, [gen.abortRef, gen.abortTimeoutRef]);
+
+  // Module switch is handled by store-level generation tracking — request continues
+  // so responses don't hang when user navigates away.
 
   useEffect(() => {
     const el = inputContainerRef.current;
@@ -267,11 +276,9 @@ export function useChatState() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   };
 
-  const prevMsgCount = useRef(messages.length);
   useEffect(() => {
-    if (messages.length !== prevMsgCount.current || gen.loading) {
-      prevMsgCount.current = messages.length;
-      scrollToBottom();
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, gen.loading]);
 
@@ -303,11 +310,32 @@ export function useChatState() {
       setShowSkillPicker(true);
       return;
     }
+
+    const editAsstId = editingAssistIdRef.current;
+    if (editAsstId) {
+      editingAssistIdRef.current = null;
+      const state = useGiaStore.getState();
+      const msgs = state.getActiveSession()?.messages ?? [];
+      const asstIdx = msgs.findIndex(m => m.message.id === editAsstId);
+      if (asstIdx > 0) {
+        const userMsgId = msgs[asstIdx - 1].message.id;
+        const ids = [userMsgId, editAsstId];
+        useGiaStore.setState({
+          sessions: state.sessions.map(s =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: s.messages.filter(m => !ids.includes(m.message.id)), updatedAt: Date.now() }
+              : s
+          ),
+        });
+      }
+    }
+
     gen.handleSend(input, attachments, setInput, v => setAttachments(v as Attachment[]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, attachments, gen.handleSend, setAttachments]);
 
   const handleEditResend = useCallback((msgId: string) => {
+    editingAssistIdRef.current = msgId;
     msgOps.handleEditResend(msgId, setInput);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgOps.handleEditResend]);

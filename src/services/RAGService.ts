@@ -120,7 +120,7 @@ class RAGService {
     return doc;
   }
 
-  async search(query: string, topK: number = 5): Promise<RAGSearchResult[]> {
+  async search(query: string, topK: number = 5, namespace?: string): Promise<RAGSearchResult[]> {
     const db = await this.db();
     const queryEmbed = await LocalAI.embed(query);
     const vector = queryEmbed.embedding;
@@ -128,7 +128,11 @@ class RAGService {
     const chunks: RAGChunk[] = await new Promise((resolve, reject) => {
       const tx = db.transaction('chunks', 'readonly');
       const req = tx.objectStore('chunks').getAll();
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        let all = req.result as RAGChunk[];
+        if (namespace) all = all.filter(c => c.docId.startsWith(namespace));
+        resolve(all);
+      };
       req.onerror = () => reject(req.error);
     });
 
@@ -137,7 +141,9 @@ class RAGService {
       const req = tx.objectStore('docs').getAll();
       req.onsuccess = () => {
         const map = new Map<string, string>();
-        for (const d of req.result) map.set(d.id, d.title);
+        for (const d of req.result) {
+          if (!namespace || d.id.startsWith(namespace)) map.set(d.id, d.title);
+        }
         resolve(map);
       };
       req.onerror = () => reject(req.error);
@@ -158,12 +164,16 @@ class RAGService {
     }));
   }
 
-  async listDocuments(): Promise<RAGDocument[]> {
+  async listDocuments(namespace?: string): Promise<RAGDocument[]> {
     const db = await this.db();
     return new Promise((resolve, reject) => {
       const tx = db.transaction('docs', 'readonly');
       const req = tx.objectStore('docs').getAll();
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        let all = req.result as RAGDocument[];
+        if (namespace) all = all.filter(d => d.id.startsWith(namespace));
+        resolve(all);
+      };
       req.onerror = () => reject(req.error);
     });
   }

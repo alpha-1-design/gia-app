@@ -35,6 +35,7 @@ class MessagingBridge {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastUpdateId = 0;
   private active = false;
+  private polling = false;
   private processedUpdates: Set<number> = new Set();
   private botToken: string | null = null;
   private botUsername: string | null = null;
@@ -211,11 +212,14 @@ class MessagingBridge {
     logger.log('[MessagingBridge] Starting Telegram long polling for groups & DMs');
 
     this.pollTimer = setInterval(async () => {
-      if (!this.active) return;
+      if (!this.active || this.polling) return;
+      this.polling = true;
       try {
         await this.pollTelegram();
       } catch (e) {
         logger.warn('[MessagingBridge] Poll error:', e);
+      } finally {
+        this.polling = false;
       }
     }, 3000);
   }

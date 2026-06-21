@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 
-export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy';
+export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy' | 'agents';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 
@@ -222,6 +222,7 @@ interface GiaState {
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
+  generationState: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null };
   showCircleSearch: boolean;
   setShowCircleSearch: (v: boolean) => void;
   pendingCircleImage: string | null;
@@ -236,6 +237,7 @@ interface GiaState {
   setDeepLinkQueue: (v: string[]) => void;
 
   setModule: (module: Module) => void;
+  setGenerationState: (state: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null }) => void;
   setCurrentTool: (tool: string | null) => void;
   setClarification: (c: Clarification | null) => void;
   setIntentState: (state: IntentState) => void;
@@ -414,10 +416,16 @@ export const useGiaStore = create<GiaState>()(
       pendingFiles: [],
       pendingAction: null,
       deepLinkQueue: [],
+      generationState: { active: false, module: null, sessionId: null, messageId: null },
       longRunningMode: false,
       autoModelUnload: true,
 
-      setModule: (module) => set({ currentModule: module }),
+      setModule: (module) => set((s) => {
+        if (s.currentModule === module) return {};
+        // Show pending session indicator if generation is in progress on old module
+        return { currentModule: module };
+      }),
+      setGenerationState: (generationState) => set({ generationState }),
       setCurrentTool: (tool) => set({ currentTool: tool }),
       setClarification: (c) => set({ clarification: c }),
       setIntentState: (state) => set({ intentState: state }),
@@ -728,6 +736,13 @@ export const useGiaStore = create<GiaState>()(
         webSearch: s.webSearch,
         extThinking: s.extThinking,
         handsOff: s.handsOff,
+        localVision: s.localVision,
+        localSummarize: s.localSummarize,
+        responseCache: s.responseCache,
+        inputGuardrails: s.inputGuardrails,
+        outputValidation: s.outputValidation,
+        smartFallback: s.smartFallback,
+        customInstructions: s.customInstructions,
         theme: s.theme,
         wakeWord: s.wakeWord,
         keepListening: s.keepListening,

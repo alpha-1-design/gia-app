@@ -1,10 +1,291 @@
 import SandboxService from '../SandboxService';
+import { isPyodideAvailable, runPython } from '../PyodideRunner';
 import { triggerDownload } from './helpers';
 import type { Tool } from './types';
 
+let sandboxChecked = false;
 async function ensureSandbox() {
+  if (sandboxChecked) return;
   const ok = await SandboxService.ensureAvailable();
   if (!ok) throw new Error('Alpine sandbox not available. Start: node server/sandbox-server.cjs');
+  sandboxChecked = true;
+}
+
+const OFFICE_FORMATS = new Set(['docx', 'xlsx', 'pptx', 'odt', 'ods', 'epub']);
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'md', 'markdown', 'log', 'env', 'cfg', 'ini', 'conf',
+  'py', 'js', 'ts', 'jsx', 'tsx', 'css', 'scss', 'sh', 'bat', 'ps1', 'sql',
+  'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'rb', 'php', 'swift', 'kt',
+  'dart', 'lua', 'r', 'toml', 'dockerfile', 'gitignore', 'svg', 'tex',
+]);
+
+function ext(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
+}
+
+function detectFormat(filename: string): string {
+  const e = ext(filename);
+  if (TEXT_EXTENSIONS.has(e)) return 'text';
+  if (e === 'csv') return 'csv';
+  if (e === 'json') return 'json';
+  if (['xml', 'xsd', 'xslt'].includes(e)) return 'xml';
+  if (['html', 'htm'].includes(e)) return 'html';
+  if (['yaml', 'yml'].includes(e)) return 'yaml';
+  if (e === 'rtf') return 'rtf';
+  if (OFFICE_FORMATS.has(e)) return e;
+  if (e === 'pdf') return 'pdf';
+  return 'text';
+}
+
+function parseTextContent(content: string, format: string): string {
+  switch (format) {
+    case 'csv': {
+      const lines: string[] = [];
+      for (const row of content.split('\n')) {
+        const cells = row.split(',').map(c => c.trim());
+        lines.push(cells.join(', '));
+      }
+      return lines.join('\n');
+    }
+    case 'json': {
+      try { return JSON.stringify(JSON.parse(content), null, 2); } catch { return content; }
+    }
+    case 'xml': {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/xml');
+        const serializer = new XMLSerializer();
+        return serializer.serializeToString(doc.documentElement);
+      } catch { return content; }
+    }
+    case 'html': {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        for (const tag of doc.querySelectorAll('script, style, nav, footer, header')) {
+          tag.remove();
+        }
+        return (doc.body?.textContent || doc.documentElement.textContent || '').replace(/\s+/g, ' ').trim();
+      } catch { return content; }
+    }
+    case 'yaml':
+    case 'text':
+    default:
+      return content;
+  }
+}
+
+function parseRtf(content: string): string {
+  return content
+    .replace(/\\([a-z]+)[-0-9]*/g, ' ')
+    .replace(/[{}]/g, ' ')
+    .replace(/\\'[0-9a-f]{2}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const PYODIDE_OFFICE_SCRIPT = `
+import sys, json, base64, zipfile, xml.etree.ElementTree as ET, io, re
+
+NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+NS_S = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+NS_P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+NS_OFFICE = 'urn:oasis:names:tc:opendocument:xmlns:office:1.0'
+NS_TEXT = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
+NS_TABLE = 'urn:oasis:names:tc:opendocument:xmlns:table:1.0'
+
+def parse_docx(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    tree = ET.parse(z.open('word/document.xml'))
+    root = tree.getroot()
+    lines = []
+    for para in root.iter(f'{{{NS_W}}}p'):
+        texts = [t.text or '' for t in para.iter(f'{{{NS_W}}}t')]
+        lines.append(''.join(texts))
+    return '\\n'.join(lines)
+
+def parse_xlsx(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    ss = {}
+    if 'xl/sharedStrings.xml' in z.namelist():
+        stree = ET.parse(z.open('xl/sharedStrings.xml'))
+        for i, si in enumerate(stree.getroot().findall(f'.//{{{NS_S}}}si')):
+            texts = [t.text or '' for t in si.iter(f'{{{NS_S}}}t')]
+            ss[i] = ''.join(texts)
+    lines = []
+    for name in sorted(z.namelist()):
+        if name.startswith('xl/worksheets/sheet') and name.endswith('.xml'):
+            sheet_num = name.replace('xl/worksheets/sheet', '').replace('.xml', '')
+            lines.append(f'=== Sheet {sheet_num} ===')
+            tree = ET.parse(z.open(name))
+            root = tree.getroot()
+            for row in root.findall(f'.//{{{NS_S}}}row'):
+                cells = []
+                for c in row.findall(f'{{{NS_S}}}c'):
+                    v = c.find(f'{{{NS_S}}}v')
+                    t = c.get('t', '')
+                    val = v.text if v is not None else ''
+                    if t == 's' and val and val.isdigit():
+                        val = ss.get(int(val), val)
+                    cells.append(str(val))
+                lines.append('\\t'.join(cells))
+    return '\\n'.join(lines)
+
+def parse_pptx(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    lines = []
+    for name in sorted(z.namelist()):
+        if name.startswith('ppt/slides/slide') and name.endswith('.xml'):
+            slide_num = name.split('slide')[1].split('.')[0]
+            lines.append(f'--- Slide {slide_num} ---')
+            tree = ET.parse(z.open(name))
+            root = tree.getroot()
+            for t_elem in root.iter(f'{{{NS_A}}}t'):
+                if t_elem.text:
+                    lines.append(t_elem.text.strip())
+            for tbl in root.iter(f'{{{NS_P}}}tbl'):
+                for tr in tbl.iter(f'{{{NS_A}}}tr'):
+                    cells = []
+                    for tc in tr.iter(f'{{{NS_A}}}tc'):
+                        t = tc.find(f'.//{{{NS_A}}}t')
+                        cells.append(t.text.strip() if t is not None else '')
+                    lines.append(' | '.join(cells))
+    return '\\n'.join(lines)
+
+def parse_odt(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    tree = ET.parse(z.open('content.xml'))
+    root = tree.getroot()
+    lines = []
+    for p in root.iter(f'{{{NS_TEXT}}}p'):
+        t = ''.join(p.itertext()).strip()
+        if t:
+            lines.append(t)
+    return '\\n'.join(lines)
+
+def parse_ods(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    tree = ET.parse(z.open('content.xml'))
+    root = tree.getroot()
+    lines = []
+    for table in root.iter(f'{{{NS_TABLE}}}table'):
+        name = table.get(f'{{{NS_TABLE}}}name') or 'Sheet'
+        lines.append(f'=== {name} ===')
+        for row in table.iter(f'{{{NS_TABLE}}}table-row'):
+            cells = []
+            for cell in row.iter(f'{{{NS_TABLE}}}table-cell'):
+                p = cell.find(f'.//{{{NS_TEXT}}}p')
+                cells.append(''.join(p.itertext()).strip() if p is not None else '')
+            lines.append('\\t'.join(cells))
+    return '\\n'.join(lines)
+
+def parse_epub(data):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    import html.parser
+    class TextExtractor(html.parser.HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.lines = []
+            self._tag_stack = []
+        def handle_starttag(self, tag, attrs):
+            self._tag_stack.append(tag)
+            if tag in ('p', 'br', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'):
+                self.lines.append('')
+        def handle_endtag(self, tag):
+            if self._tag_stack and self._tag_stack[-1] == tag:
+                self._tag_stack.pop()
+            if tag in ('p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th'):
+                self.lines.append('')
+        def handle_data(self, data):
+            t = data.strip()
+            if t and not any(s in self._tag_stack for s in ('script', 'style', 'nav')):
+                if self.lines and self.lines[-1]:
+                    self.lines[-1] += ' ' + t
+                else:
+                    self.lines.append(t)
+    lines = []
+    for name in z.namelist():
+        if any(name.endswith(e) for e in ('.xhtml', '.html', '.htm')):
+            raw = z.read(name)
+            try: text = raw.decode('utf-8')
+            except: continue
+            ex = TextExtractor()
+            ex.feed(text)
+            lines.extend(ex.lines)
+    return '\\n'.join(line for line in lines if line.strip())
+
+def parse_rtf_py(data):
+    text = data.decode('utf-8', errors='replace')
+    text = re.sub(r'\\\\[a-z]+[-0-9]*', ' ', text)
+    text = re.sub(r'[{}]', ' ', text)
+    text = re.sub(r"\\\\'[0-9a-f]{2}", ' ', text)
+    text = re.sub(r'\\s+', ' ', text).strip()
+    return text
+
+FORMATS = {
+    'docx': ('docx', 'Microsoft Word Document', parse_docx),
+    'xlsx': ('xlsx', 'Microsoft Excel Spreadsheet', parse_xlsx),
+    'pptx': ('pptx', 'Microsoft PowerPoint Presentation', parse_pptx),
+    'odt': ('odt', 'OpenDocument Text', parse_odt),
+    'ods': ('ods', 'OpenDocument Spreadsheet', parse_ods),
+    'epub': ('epub', 'EPUB eBook', parse_epub),
+}
+
+def main():
+    input_data = json.loads(sys.argv[1])
+    fmt_id = input_data['format']
+    b64_data = input_data['data']
+    raw = base64.b64decode(b64_data)
+    
+    fmt = FORMATS.get(fmt_id)
+    if not fmt:
+        print(json.dumps({'error': f'Unsupported format: {fmt_id}'}))
+        return
+    
+    fmt_id, fmt_name, parser = fmt
+    try:
+        text = parser(raw)
+        print(json.dumps({'format': fmt_id, 'format_name': fmt_name, 'content': text, 'size': len(text)}, ensure_ascii=False))
+    except Exception as e:
+        print(json.dumps({'error': f'Error parsing {fmt_name}: {e}'}))
+
+main()
+`;
+
+async function parseWithPyodide(data: string, filename: string): Promise<{ success: boolean; content: string; format_name?: string; size?: number; error?: string }> {
+  const fmt = detectFormat(filename);
+  if (!OFFICE_FORMATS.has(fmt)) {
+    return { success: false, content: '', error: `Pyodide parser does not support ${fmt}` };
+  }
+
+  const available = await isPyodideAvailable();
+  if (!available) {
+    return { success: false, content: '', error: 'Pyodide not available' };
+  }
+
+  const payload = JSON.stringify({ format: fmt, data });
+  const result = await runPython(`import json; ${PYODIDE_OFFICE_SCRIPT}\nimport sys; sys.argv = ["py", ${JSON.stringify(payload)}]; main()`);
+
+  if (result.error) {
+    return { success: false, content: '', error: result.error };
+  }
+
+  try {
+    const parsed = JSON.parse(result.output);
+    if (parsed.error) {
+      return { success: false, content: '', error: parsed.error };
+    }
+    return {
+      success: true,
+      content: parsed.content || '',
+      format_name: parsed.format_name,
+      size: parsed.size,
+    };
+  } catch (e) {
+    return { success: false, content: '', error: `Failed to parse output: ${e}` };
+  }
 }
 
 const browse_web: Tool = {
@@ -28,6 +309,7 @@ const browse_web: Tool = {
     const url = String(args.url || '');
     if (!url) return { success: false, content: '', error: 'url required' };
 
+    sandboxChecked = false;
     await ensureSandbox();
 
     try {
@@ -71,54 +353,151 @@ const read_document: Tool = {
         type: 'string',
         description: 'Path to the document in the sandbox workspace (e.g. "report.docx", "data.xlsx", "book.epub")',
       },
+      data: {
+        type: 'string',
+        description: 'Base64-encoded file content. Use instead of path when the file data is available directly. Requires filename.',
+      },
+      filename: {
+        type: 'string',
+        description: 'Original filename with extension for format detection. Required when using data param.',
+      },
       passThrough: {
         type: 'boolean',
         description: 'If true, return the raw content as-is instead of JSON metadata. Useful when GIA needs to edit the file.',
       },
     },
-    required: ['path'],
   },
   execute: async (args) => {
     const filePath = String(args.path || '');
-    if (!filePath) return { success: false, content: '', error: 'path is required' };
+    const data = args.data ? String(args.data) : '';
+    const filename = args.filename ? String(args.filename) : (filePath.split('/').pop() || 'document.bin');
+    const passThrough = !!args.passThrough;
 
-    await ensureSandbox();
+    if (!filePath && !data) {
+      return { success: false, content: '', error: 'Either path or data is required' };
+    }
+
+    if (data && !args.filename && !filePath) {
+      return { success: false, content: '', error: 'filename is required when using data param' };
+    }
 
     try {
-      const scriptName = 'read_doc.py';
-      const remoteScriptPath = `/workspace/${scriptName}`;
+      // If data is provided, try native TS parsing first, then Pyodide
+      if (data) {
+        const fmt = detectFormat(filename);
 
-      await SandboxService.writeFile(remoteScriptPath, READ_DOC_SCRIPT);
+        // Native TypeScript path for text-based formats
+        if (fmt !== 'pdf' && !OFFICE_FORMATS.has(fmt)) {
+          const isRtf = fmt === 'rtf';
+          const decoded = isRtf
+            ? parseRtf(atob(data))
+            : parseTextContent(atob(data), fmt);
 
-      const execResult = await SandboxService.exec(`python3 ${remoteScriptPath} "${filePath}"`);
-      await SandboxService.delete(remoteScriptPath);
+          const preview = decoded.length > 10000
+            ? decoded.slice(0, 10000) + '\n\n... (truncated, full content available)'
+            : decoded;
 
-      if (execResult.exitCode !== 0) {
-        return { success: false, content: '', error: execResult.stderr || `Exit code ${execResult.exitCode}` };
+          const formatLabel = fmt.charAt(0).toUpperCase() + fmt.slice(1);
+          const sizeKb = (new Blob([decoded]).size / 1024).toFixed(1);
+
+          if (passThrough) return { success: true, content: decoded };
+
+          return {
+            success: true,
+            content: [
+              `**${formatLabel}:** \`${filename}\` (${sizeKb} KB text)`,
+              '',
+              '```',
+              preview,
+              '```',
+              '',
+              `The full document text is available. Tell me what changes you want and I'll edit it.`,
+            ].join('\n'),
+          };
+        }
+
+        // Office formats: try Pyodide (in-browser Python, no server)
+        if (OFFICE_FORMATS.has(fmt)) {
+          const pyodideResult = await parseWithPyodide(data, filename);
+          if (pyodideResult.success) {
+            const content = pyodideResult.content;
+            const formatName = pyodideResult.format_name || fmt.toUpperCase();
+            const sizeKb = ((pyodideResult.size || content.length) / 1024).toFixed(1);
+            const preview = content.length > 10000
+              ? content.slice(0, 10000) + '\n\n... (truncated, full content available)'
+              : content;
+
+            if (passThrough) return { success: true, content };
+
+            return {
+              success: true,
+              content: [
+                `**${formatName}:** \`${filename}\` (${sizeKb} KB text)`,
+                '',
+                '```',
+                preview,
+                '```',
+                '',
+                `The full document text is available. Tell me what changes you want and I'll edit it.`,
+              ].join('\n'),
+            };
+          }
+
+          // Pyodide failed, fall back to sandbox
+          if (data && filePath) {
+            sandboxChecked = false;
+            await ensureSandbox();
+            await SandboxService.writeFile(filePath, atob(data));
+          }
+        }
+
+        if (fmt === 'pdf') {
+          return { success: false, content: '', error: 'PDF files are not supported yet. Try converting to DOCX or text.' };
+        }
       }
 
-      const parsed = JSON.parse(execResult.stdout);
-      const formatName = parsed.format_name || 'Document';
-      const content = parsed.content || '';
+      // Sandbox path (file must be in workspace)
+      if (filePath) {
+        sandboxChecked = false;
+        await ensureSandbox();
 
-      if (args.passThrough) {
-        return { success: true, content };
+        const scriptName = 'read_doc.py';
+        const remoteScriptPath = `/workspace/${scriptName}`;
+
+        await SandboxService.writeFile(remoteScriptPath, READ_DOC_SCRIPT);
+
+        const execResult = await SandboxService.exec(`python3 ${remoteScriptPath} "${filePath}"`);
+        await SandboxService.delete(remoteScriptPath);
+
+        if (execResult.exitCode !== 0) {
+          return { success: false, content: '', error: execResult.stderr || `Exit code ${execResult.exitCode}` };
+        }
+
+        const parsed = JSON.parse(execResult.stdout);
+        const formatName = parsed.format_name || 'Document';
+        const content = parsed.content || '';
+
+        if (passThrough) {
+          return { success: true, content };
+        }
+
+        const preview = content.length > 10000 ? content.slice(0, 10000) + '\n\n... (truncated, full content available)' : content;
+
+        return {
+          success: true,
+          content: [
+            `**${formatName}:** \`${filePath}\` (${(parsed.size / 1024).toFixed(1)} KB text)`,
+            '',
+            '```',
+            preview,
+            '```',
+            '',
+            `The full document text is available. Tell me what changes you want and I'll edit it.`,
+          ].join('\n'),
+        };
       }
 
-      const preview = content.length > 10000 ? content.slice(0, 10000) + '\n\n... (truncated, full content available)' : content;
-
-      return {
-        success: true,
-        content: [
-          `**${formatName}:** \`${filePath}\` (${(parsed.size / 1024).toFixed(1)} KB text)`,
-          '',
-          '```',
-          preview,
-          '```',
-          '',
-          `The full document text is available. Tell me what changes you want and I'll edit it.`,
-        ].join('\n'),
-      };
+      return { success: false, content: '', error: 'Could not parse document with any available backend' };
     } catch (e) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
     }

@@ -36,7 +36,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   isLoading = false,
   multiline = false,
 }) => {
-  const { intentState } = useGiaStore();
+  const intentState = useGiaStore(s => s.intentState);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 

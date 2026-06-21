@@ -1,0 +1,10 @@
+Q1gHUEOCO0BMuO5FW96LBk1/byLOk= /bin /usr/bin /sbin /usr/sbin /lib/modules/* /usr/lib/modules/*
+Q1yZkmbR453vLrvjqsjiDRxO4161Q= /usr/share/ca-certificates /usr/local/share/ca-certificates /etc/ssl/certs /etc/ca-certificates/update.d
+Q1ZLoOhPAhruVBNmRUzImpF0cPiAM= /usr/share/fonts/*
+Q1HlC68R5dZQszbFh3aWRuUerRrdQ= /usr/share/glib-2.0/schemas /usr/lib/gio/modules /usr/lib/gtk-4.0
+Q1Gkufn0KIrk+zPdEkO92HOqIooyc= /usr/share/fonts/*
+Q1ujkas5aHQjAfo/Gv/T8SgXO4OAM= /usr/share/mime
+Q1piu+yXjbT6J1HCYt1gW/UecNujQ= /usr/lib/gdk-pixbuf-2.0/*/loaders
+Q1WKZPiQjEyz8bPk6zJ2Lw03bqaX8= /usr/share/icons/*
+Q1j1sA4LjdlPyX15uMR0VD8IytAVo= /usr/lib/pango/*/modules
+Q1NGhbf/oWAwGCvFBXwX6j2pnnFYQ= /usr/lib/gtk-3.0/immodules /usr/lib/gtk-3.0/*/immodules

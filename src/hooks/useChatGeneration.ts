@@ -14,27 +14,37 @@ import { isNativePlatform } from '../utils/helpers';
 
 const BACKGROUND_NOTIF_ID = 42;
 
-async function notifyIfBackground(sessionId: string, asstId: string): Promise<void> {
+async function notifyIfBackground(module: 'chat' | 'agents', sessionId: string, asstId: string): Promise<void> {
   const state = useGiaStore.getState();
-  if (state.currentModule === 'chat') return;
-  if (!isNativePlatform()) return;
+  if (state.currentModule === module) return;
   const session = state.sessions.find(s => s.id === sessionId);
   if (!session) return;
   const msg = session.messages.find(m => m.message.id === asstId)?.message;
   if (!msg?.content) return;
   const preview = msg.content.replace(/```[\s\S]*?```/g, '').trim().slice(0, 120);
+
+  // Web desktop notification (works in browser)
   try {
-    await LocalNotifications.schedule({
-      notifications: [{
-        id: BACKGROUND_NOTIF_ID,
-        title: 'GIA Response Ready',
-        body: preview || 'Your response has been generated.',
-        smallIcon: 'ic_stat_icon',
-        extra: { sessionId, msgId: asstId },
-      }],
+    const { default: DesktopNotifications } = await import('../services/DesktopNotifications');
+    DesktopNotifications.notify('GIA Response Ready', {
+      body: preview || 'Your response has been generated.',
+      tag: `gia-${module}-${asstId}`,
     });
-  } catch {
-    // Not critical if notification fails
+  } catch { /* not critical */ }
+
+  // Native Android notification (Capacitor)
+  if (isNativePlatform()) {
+    try {
+      await LocalNotifications.schedule({
+        notifications: [{
+          id: BACKGROUND_NOTIF_ID + (module === 'agents' ? 100 : 0),
+          title: 'GIA Response Ready',
+          body: preview || 'Your response has been generated.',
+          smallIcon: 'ic_stat_icon',
+          extra: { sessionId, msgId: asstId },
+        }],
+      });
+    } catch { /* not critical */ }
   }
 }
 
@@ -158,6 +168,7 @@ export function useChatGeneration() {
       id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
     });
     setStreamingMsgId(asstId);
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId });
 
     const ctrl = new AbortController();
     abortRef.current?.abort();
@@ -169,8 +180,8 @@ export function useChatGeneration() {
         .filter(m => !m.message.thinking && m.message.content)
         .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
 
-      // Auto-summarize if context window is large
-      if (sessionId && history.length > 15) {
+      // Auto-summarize if context window is large and setting is enabled
+      if (sessionId && history.length > 15 && useGiaStore.getState().localSummarize) {
         const branchId = state.getActiveSession()?.currentBranchId;
         if (branchId) {
           const result = await autoSummarizeIfNeeded(history, sessionId, branchId, (thought) => {
@@ -238,7 +249,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           });
           state.updateMessage(sessionId, asstId, displayAccumulated || processStreamForDisplay(parserState.accumulated), parserState.thoughtsAccumulated || undefined);
         }
-        notifyIfBackground(sessionId, asstId);
+        notifyIfBackground('chat', sessionId, asstId);
         state.setIntentState('idle');
         return;
       }
@@ -280,7 +291,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       if (res.modelSwitched && res.switchReason) {
         state.addNotification(res.switchReason);
       }
-      notifyIfBackground(sessionId, asstId);
+      notifyIfBackground('chat', sessionId, asstId);
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
@@ -297,6 +308,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
       setLoading(false);
       setStreamingMsgId(null);
+      useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
@@ -318,6 +330,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     });
     setStreamingMsgId(asstId);
     setLoading(true);
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId: state.activeSessionId, messageId: asstId });
     state.setIntentState('thinking');
     state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');
 
@@ -330,7 +343,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         .filter(m => !m.message.thinking && m.message.content)
         .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
 
-      if (state.activeSessionId && history.length > 15) {
+      if (state.activeSessionId && history.length > 15 && useGiaStore.getState().localSummarize) {
         const branchId = state.getActiveSession()?.currentBranchId;
         if (branchId) {
           const result = await autoSummarizeIfNeeded(history, state.activeSessionId, branchId, (thought) => {
@@ -376,7 +389,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             ),
           });
         }
-        notifyIfBackground(state.activeSessionId!, asstId);
+        notifyIfBackground('chat', state.activeSessionId!, asstId);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -393,6 +406,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     } finally {
       setLoading(false);
       setStreamingMsgId(null);
+      useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
@@ -421,6 +435,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     abortRef.current?.abort();
     abortRef.current = ctrl;
     setLoading(true);
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId });
     state.setIntentState('responding');
 
     try {
@@ -458,7 +473,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       if (!ctrl.signal.aborted) {
         flushThinkBlock(clarParserState);
         state.updateMessage(sessionId, asstId, clarDisplayAccumulated || processStreamForDisplay(clarParserState.accumulated), clarParserState.thoughtsAccumulated || undefined);
-        notifyIfBackground(sessionId, asstId);
+        notifyIfBackground('chat', sessionId, asstId);
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
@@ -475,6 +490,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     } finally {
       setLoading(false);
       setStreamingMsgId(null);
+      useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
@@ -503,6 +519,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     });
     setStreamingMsgId(id);
     setLoading(true);
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId: state.activeSessionId, messageId: id });
     state.setIntentState('thinking');
 
     try {
@@ -540,7 +557,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           state.addNotification(`Model switched: ${genRes.switchReason}`);
         }
         TTSService.speak(retryParserState.accumulated);
-        notifyIfBackground(state.activeSessionId!, id);
+        notifyIfBackground('chat', state.activeSessionId!, id);
       }
     } catch (e: unknown) {
       if (!ctrl.signal.aborted) {
@@ -555,6 +572,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     } finally {
       setLoading(false);
       setStreamingMsgId(null);
+      useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }

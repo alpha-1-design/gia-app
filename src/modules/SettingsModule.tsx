@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Terminal, Shield, User, Save, ChevronRight,
   Trash2, Zap, Sparkles, Download, Smartphone, Globe, Sun, Moon, BarChart3
@@ -40,9 +41,12 @@ const SettingsModule: React.FC = () => {
   const { 
     setShowTerminal, userProfile, setUserProfile, skills, addNotification,
     theme, setTheme,
-  } = useGiaStore();
+  } = useGiaStore(useShallow(s => ({
+    setShowTerminal: s.setShowTerminal, userProfile: s.userProfile, setUserProfile: s.setUserProfile,
+    skills: s.skills, addNotification: s.addNotification, theme: s.theme, setTheme: s.setTheme,
+  })));
   const identity = useGiaIdentity(s => s.identity);
-  const { providers } = useProviderStore();
+  const providers = useProviderStore(s => s.providers);
 
   const [settingsPage, setSettingsPage] = useState<'main' | 'skills' | 'identity' | 'brain-export'>('main');
   const [editProfile, setEditProfile] = useState(false);
