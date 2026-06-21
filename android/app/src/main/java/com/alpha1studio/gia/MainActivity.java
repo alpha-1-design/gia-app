@@ -21,7 +21,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
         // If GIACoreService is in keep-alive mode, resume WebView timers
         // so Telegram polling and background JS continue running.
