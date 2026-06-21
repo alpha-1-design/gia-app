@@ -29,7 +29,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['server/**/*.js', 'daemon/**/*.js'],
+    files: ['server/**/*.js', 'server/**/*.cjs', 'daemon/**/*.js'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -37,6 +37,8 @@ export default defineConfig([
     },
     rules: {
       'no-empty': ['error', { allowEmptyCatch: true }],
+      '@typescript-eslint/no-require-imports': 'off',
+      'no-undef': 'off',
     },
   },
   {

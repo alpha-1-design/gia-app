@@ -19,7 +19,7 @@
  */
 
 const http = require('http');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');

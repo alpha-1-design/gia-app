@@ -18,7 +18,7 @@ vi.mock('../../utils/id', () => ({
 }));
 
 const { useGiaStore } = await import('../useGiaStore');
-import type { Message, MessageNode } from '../useGiaStore';
+import type { Message } from '../useGiaStore';
 
 function userMsg(overrides: Partial<Message> = {}): Message {
   return { id: overrides.id ?? 'msg-1', role: 'user', content: overrides.content ?? 'hello', timestamp: overrides.timestamp ?? 1000, ...overrides };
@@ -130,7 +130,7 @@ describe('useGiaStore', () => {
 
     it('setActiveSession changes active session', () => {
       const id1 = useGiaStore.getState().createSession();
-      const id2 = useGiaStore.getState().createSession();
+      useGiaStore.getState().createSession();
       useGiaStore.getState().setActiveSession(id1);
       expect(useGiaStore.getState().activeSessionId).toBe(id1);
     });
@@ -256,7 +256,6 @@ describe('useGiaStore', () => {
       useGiaStore.getState().deleteBranch(sid, branchId);
       const session = useGiaStore.getState().sessions[0];
       // If only one branch existed, deleteBranch shouldn't change anything
-      const remaining = Object.keys(session.branches || {}).filter(k => k !== branchId);
       expect(session.currentBranchId).toBeTruthy();
     });
   });

@@ -1,6 +1,5 @@
 import { Camera, CameraResultType } from '@capacitor/camera';
 import { useGiaStore } from '../../store/useGiaStore';
-import { genId } from '../../utils/id';
 import type { Tool } from './types';
 
 // Hold the last captured photo data for the UI to pick up

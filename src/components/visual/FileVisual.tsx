@@ -15,16 +15,6 @@ function fileName(name?: string) {
   return name || 'file';
 }
 
-function fileIcon(format?: string) {
-  switch (format) {
-    case 'pdf': return <FileText size={16} />;
-    case 'pptx': return <FileText size={16} />;
-    case 'docx': return <FileText size={16} />;
-    case 'zip': return <FileArchive size={16} />;
-    default: return <File size={16} />;
-  }
-}
-
 function formatLabel(format?: string) {
   switch (format) {
     case 'pdf': return 'PDF Document';
@@ -36,8 +26,6 @@ function formatLabel(format?: string) {
 }
 
 const PdfViewer: React.FC<{ url: string }> = ({ url }) => {
-  const [pages, setPages] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 

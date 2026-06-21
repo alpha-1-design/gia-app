@@ -91,7 +91,7 @@ describe('useAutonomyStore', () => {
   describe('removeGoal', () => {
     it('removes goal and associated plans and reflections', () => {
       const gid = useAutonomyStore.getState().addGoal('G1', '');
-      const pid = useAutonomyStore.getState().createPlan(gid, [{ description: 'Step 1', action: 'do', expectedOutcome: 'done', status: 'pending' }]);
+      useAutonomyStore.getState().createPlan(gid, [{ description: 'Step 1', action: 'do', expectedOutcome: 'done', status: 'pending' }]);
       useAutonomyStore.getState().addReflection({ goalId: gid, outcome: 'success', assessment: 'good', lessonsLearned: [], confidence: 1 });
       useAutonomyStore.getState().removeGoal(gid);
       expect(useAutonomyStore.getState().goals).toHaveLength(0);

@@ -100,7 +100,6 @@ const read_document: Tool = {
       const parsed = JSON.parse(execResult.stdout);
       const formatName = parsed.format_name || 'Document';
       const content = parsed.content || '';
-      const format = parsed.format || 'text';
 
       if (args.passThrough) {
         return { success: true, content };

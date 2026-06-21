@@ -66,7 +66,7 @@ const generate_file: Tool = {
           return { success: false, content: '', error: 'files is required for zip format (space-separated file paths)' };
         }
         const files = filesArg.split(/\s+/).filter(Boolean);
-        const name = filename.replace(/\.zip$/i, '');
+        filename.replace(/\.zip$/i, '');
         const cmds = [`cd /workspace`, `zip -r "${filename}" ${files.map(f => `"${f}"`).join(' ')}`];
         const result = await SandboxService.exec(cmds.join(' && '));
         if (result.exitCode !== 0) {
