@@ -10,6 +10,8 @@ import type { Attachment } from './useFileAttachments';
 import { useChatGeneration } from './useChatGeneration';
 import { useChatMessages } from './useChatMessages';
 import AnalyticsService from '../services/AnalyticsService';
+import { AudioRecorder } from '../services/audioRecorder';
+import WhisperService from '../services/WhisperService';
 
 export function useChatState() {
   const [input, setInput] = useState('');
@@ -29,6 +31,7 @@ export function useChatState() {
   const imgRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
+  const audioRecorderRef = useRef(new AudioRecorder());
 
   const gen = useChatGeneration();
   const msgOps = useChatMessages();
@@ -105,11 +108,31 @@ export function useChatState() {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
       newFeatureState = newState;
-      if (newState) voiceRef.current.startListening(true);
-      else voiceRef.current.stopListening();
+
+      const useWhisper = useGiaStore.getState().useWhisper;
+
+      if (useWhisper) {
+        if (newState) {
+          audioRecorderRef.current.start().catch(() => setVoiceEnabled(false));
+        } else {
+          audioRecorderRef.current.stop().then(async (blob) => {
+            if (blob.size < 1000) return;
+            if (!WhisperService.isReady) {
+              addNotification('Loading Whisper model…');
+              await WhisperService.loadModel();
+            }
+            addNotification('Transcribing…');
+            const text = await WhisperService.transcribe(blob);
+            if (text) setInput(text);
+          }).catch(() => {});
+        }
+      } else {
+        if (newState) voiceRef.current.startListening(true);
+        else voiceRef.current.stopListening();
+      }
     }
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
-  }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, voiceEnabled, voiceRef]);
+  }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, voiceEnabled, voiceRef, setInput, addNotification]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
 

@@ -212,8 +212,7 @@ class LocalLLMService {
     // ── HuggingFace Access Token (for gated / private models) ──────
     const hfToken = localStorage.getItem('gia:vision:hfToken') || '';
     if (hfToken) {
-      // @ts-expect-error: transformers.js accepts `access_token` in pipeline options
-      opts.access_token = hfToken;
+      generateOpts.access_token = hfToken;
     }
 
     try {

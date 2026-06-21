@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Headphones, Radio, Mic, MicOff, Activity, Play, Square, AlertTriangle } from 'lucide-react';
+import { Headphones, Radio, Mic, MicOff, Activity, Play, Square, AlertTriangle, Download } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import TTSService from '../../services/TTSService';
+import WhisperService from '../../services/WhisperService';
 import { LANGUAGES } from '../../config/constants';
 import { Switch } from '../ui/Switch';
 
@@ -28,6 +29,10 @@ export const VoiceSection: React.FC = () => {
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
   const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
   const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
+
+  const [useWhisper, setUseWhisper] = useState(() => localStorage.getItem('gia-use-whisper') === 'true');
+  const [whisperStatus, setWhisperStatus] = useState(WhisperService.status);
+  const [whisperLoading, setWhisperLoading] = useState(false);
 
   // ── Diagnostics state ──────────────────────────────────────────────
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>({
@@ -220,6 +225,59 @@ export const VoiceSection: React.FC = () => {
         label="Voice Response (TTS)"
         description="GIA will read her responses out loud."
         accentColor="#ec4899"
+      />
+
+      <div className="border-t" style={{ borderColor: 'var(--gia-border)', margin: '4px 0' }} />
+
+      <div className="flex items-center gap-2">
+        <Download size={14} style={{ color: '#22c55e' }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+          On-Device Whisper
+        </span>
+      </div>
+      <p className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+        Uses Whisper ONNX model (tiny.en, ~50MB) for on-device speech-to-text. No data leaves your phone.
+      </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={async () => {
+            if (whisperLoading) return;
+            setWhisperLoading(true);
+            try {
+              if (WhisperService.isReady) {
+                await WhisperService.unload();
+                setWhisperStatus('unloaded');
+              } else {
+                await WhisperService.loadModel();
+                setWhisperStatus('ready');
+              }
+            } catch {
+              setWhisperStatus('error');
+            } finally {
+              setWhisperLoading(false);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-colors"
+          style={{
+            background: whisperStatus === 'ready' ? 'rgba(239,68,68,0.15)' : WhisperService.status === 'loading' ? 'var(--gia-bg-2)' : '#22c55e',
+            color: whisperStatus === 'ready' ? '#ef4444' : whisperLoading ? 'var(--gia-muted)' : 'white',
+          }}
+        >
+          {whisperLoading ? 'Downloading…' : whisperStatus === 'ready' ? 'Unload Model' : 'Download Whisper'}
+        </button>
+        <span className="text-[9px]" style={{ color: whisperStatus === 'ready' ? '#22c55e' : whisperStatus === 'error' ? '#ef4444' : 'var(--gia-muted-2)' }}>
+          {whisperStatus === 'ready' ? '✓ Loaded' : whisperStatus === 'error' ? 'Error' : whisperStatus === 'loading' ? 'Downloading ~50MB…' : 'Not loaded'}
+        </span>
+      </div>
+
+      <Switch
+        checked={useWhisper}
+        onChange={v => { setUseWhisper(v); useGiaStore.getState().setUseWhisper(v); }}
+        icon={<Download size={11} />}
+        label="Use On-Device Whisper"
+        description="When enabled, mic button records audio and transcribes via on-device Whisper (instead of browser STT)."
+        accentColor="#22c55e"
       />
 
       {/* ── Diagnostics Section ───────────────────────────────────── */}

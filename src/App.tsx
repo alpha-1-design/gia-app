@@ -15,7 +15,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
 import ProtocolPanel from './components/ProtocolPanel';
 import CommandPalette from './components/CommandPalette';
-import { VoiceOverlay } from './components/VoiceOverlay';
 import { SourcesPanel } from './components/SourcesPanel';
 import { RegionSelectorOverlay } from './components/RegionSelectorOverlay';
 import { ScreenCaptureService } from './services/ScreenCaptureService';
@@ -749,7 +748,6 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <VoiceOverlay />
       <SourcesPanel />
     </div>
   );

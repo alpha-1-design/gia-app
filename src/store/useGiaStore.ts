@@ -212,8 +212,8 @@ interface GiaState {
   voiceLanguage: string;
   nativeWakeWord: boolean;
   nativeSensitivity: number;
-  voiceOverlay: { visible: boolean; state: 'idle' | 'listening' | 'processing' | 'done'; transcript: string };
-  setVoiceOverlay: (overlay: { visible: boolean; state?: 'idle' | 'listening' | 'processing' | 'done'; transcript?: string }) => void;
+  useWhisper: boolean;
+  setUseWhisper: (v: boolean) => void;
   customInstructions: string;
   pinnedMemories: string[];
   theme: 'dark' | 'light' | 'system';
@@ -393,7 +393,7 @@ export const useGiaStore = create<GiaState>()(
       voiceLanguage: (() => { try { return localStorage.getItem('gia-voice-language') || 'en-US'; } catch { return 'en-US'; } })(),
       nativeWakeWord: (() => { try { return localStorage.getItem('gia-native-wake-word') !== 'false'; } catch { return true; } })(),
       nativeSensitivity: (() => { try { return parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'); } catch { return 0.7; } })(),
-      voiceOverlay: { visible: false, state: 'idle', transcript: '' },
+      useWhisper: localStorage.getItem('gia-use-whisper') === 'true',
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
       theme: 'dark',
@@ -447,13 +447,10 @@ export const useGiaStore = create<GiaState>()(
         localStorage.setItem('gia-native-sensitivity', String(val));
         set({ nativeSensitivity: val });
       },
-      setVoiceOverlay: (overlay) => set((s) => ({
-        voiceOverlay: {
-          visible: overlay.visible,
-          state: overlay.state ?? s.voiceOverlay.state,
-          transcript: overlay.transcript ?? s.voiceOverlay.transcript,
-        },
-      })),
+      setUseWhisper: (v) => {
+        localStorage.setItem('gia-use-whisper', String(v));
+        set({ useWhisper: v });
+      },
       setShowCircleSearch: (v) => set({ showCircleSearch: v }),
       setPendingCircleImage: (v) => set({ pendingCircleImage: v }),
       setPendingInput: (v) => set({ pendingInput: v }),
@@ -722,6 +719,7 @@ export const useGiaStore = create<GiaState>()(
         voiceLanguage: s.voiceLanguage,
         nativeWakeWord: s.nativeWakeWord,
         nativeSensitivity: s.nativeSensitivity,
+        useWhisper: s.useWhisper,
       }),
     }
   )
