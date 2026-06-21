@@ -54,6 +54,30 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Scheduled Post Auto-Publish** | Due social media posts publish automatically |
 | **Hanging Step Detection** | Autonomous steps stuck >5min auto-fail — engine moves to next step |
 | **CI Signed APKs** | Release keystore generated during CI — signed release APK ready to sideload |
+| **GIA Identity** | Configurable name, personality, tone, focus areas, and proactiveness — shapes every response |
+| **On-Device Whisper** | Download local Whisper ONNX model for fully offline speech-to-text |
+| **On-Device Vision Models** | Manage captioning, OCR, detection, classification models with confidence threshold and provider fallback |
+| **Long-Running Mode** | Screen wake lock + background heartbeat to prevent suspension during long tasks |
+| **Auto-Unload Idle Models** | Frees memory by unloading Whisper/Vision/LLM after 10min inactivity |
+| **Calendar Integration** | Google Calendar CRUD via OAuth — list, create, update, delete events |
+| **Email Integration** | Gmail read/send via OAuth — full inbox management |
+| **Bible & Devotion Tools** | Verse of the day, Bible search, daily devotionals, morning briefing |
+| **Messaging Platforms** | WhatsApp and Telegram bot messaging with mention-only mode |
+| **Gateway Daemon** | 24/7 background listener for Telegram and other gateway operations |
+| **Notifications System** | Send, schedule, cancel, and list native push notifications with permission management |
+| **Geolocation Tools** | Current position, continuous watching, permission checks — 5 granular tools |
+| **Haptic Patterns** | Impact (light/medium/heavy), notification (success/warning/error), and custom vibration — 3 separate tools |
+| **Granular Clipboard** | Separate `clipboard_read` and `clipboard_write` tools alongside combined `clipboard` |
+| **Granular Share** | `share_content` tool for native share sheet |
+| **Device Plugins** | Battery level, device ID, locale, and plugin info tools |
+| **RAG Document Listing** | `rag_list_docs` to list all indexed RAG documents |
+| **File Editing** | `edit_document` and `download_file` tools for modifying generated files |
+| **Sandbox Package Management** | `sandbox_install`, `sandbox_clone`, `sandbox_fs` for package install, git clone, filesystem ops |
+| **Full Autonomy Mode** | Executes all tools without approval — per-tool auto-approval configuration |
+| **Custom Skill Editor** | Create skills with custom name, system prompt, and tool assignment toggles |
+| **Plugin Management UI** | Install plugins from URL or file upload with enable/disable controls |
+| **Brain Cloud Backup** | Sync memory to WebDAV or S3-compatible endpoints |
+| **Developer Settings** | Token usage display, log level, HuggingFace token, network monitor, cache controls |
 
 ## 🛠 Core Modules
 
@@ -66,6 +90,7 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Exam** | Educational assessment, WASSCE-tuned testing |
 | **Settings** | API keys (Engine Room), skills, MCP, plugins, theme, export data |
 | **Autonomy** | Autonomous goal management — create, track, and manage AI-executed goals |
+| **Agents** | Custom AI personas with private knowledge files, per-agent tools, and self-contained chat |
 
 ## 🤖 Tools Available to GIA
 
@@ -127,7 +152,7 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `export_brain` | Download full brain backup as JSON |
 | `import_brain` | Restore brain from backup |
 | `task_create/read/update/delete/move` | Full task management |
-| `note_create/read/update/delete` | Sticky notes management |
+| `note_create/read/update/delete/toggle_pin` | Sticky notes management |
 | `create_goal` | Create autonomous goals |
 | `list_goals` | List all autonomous goals |
 | `goal_progress` | Get goal progress report |
@@ -158,8 +183,84 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `sandbox_download_url` | Get download URL for a sandbox file |
 | `sandbox_status` | Check sandbox health and resource usage |
 | `camera_capture` | Take a photo with the device camera |
-| `filegen` | Generate PDF, DOCX, PPTX, or ZIP files from content |
+| `generate_file` | Generate PDF, DOCX, PPTX, or ZIP files from content |
+| `edit_document` | Edit an existing generated document |
+| `download_file` | Download a generated file |
 | `document_read` | Extract text content from PDF, DOCX, PPTX files |
+| `rag_search` | Semantic vector search across indexed documents |
+| `rag_list_docs` | List all indexed RAG documents |
+| `terminal_status` | Check proot terminal session status |
+| `terminal_kill` | Kill a proot terminal session |
+| `note_toggle_pin` | Pin or unpin a sticky note |
+| `clipboard_read` | Read from system clipboard |
+| `clipboard_write` | Write to system clipboard |
+| `haptic_impact` | Trigger impact haptic feedback (light/medium/heavy) |
+| `haptic_notification` | Trigger notification haptic (success/warning/error) |
+| `haptic_vibrate` | Trigger custom vibration pattern |
+| `share_content` | Share content via native share sheet |
+| `geolocation_get_current_position` | Get current GPS position with accuracy/altitude/speed |
+| `geolocation_watch_position` | Continuously watch position changes |
+| `geolocation_clear_watch` | Stop position watching |
+| `geolocation_check_permissions` | Check location permission status |
+| `geolocation_request_permissions` | Request location permissions |
+| `notifications_send` | Send a local push notification |
+| `notifications_schedule` | Schedule a future notification |
+| `notifications_cancel` | Cancel a scheduled notification |
+| `notifications_pending` | List all pending notifications |
+| `notifications_check_permissions` | Check notification permission status |
+| `notifications_request_permissions` | Request notification permissions |
+| `device_plugin_info` | Get device plugin information |
+| `device_plugin_battery` | Get battery level and charging status |
+| `device_plugin_id` | Get unique device identifier |
+| `device_plugin_locale` | Get device locale and language |
+| `sandbox_install` | Install packages in Alpine sandbox via apk |
+| `sandbox_clone` | Clone a git repository into sandbox |
+| `sandbox_fs` | List files in sandbox filesystem |
+| `connector_list` | List all configured API connectors |
+| `connector_configure` | Configure an API connector with key |
+| `connector_call` | Call an API connector |
+| `connector_test` | Test an API connector connection |
+| `connector_raw` | Make a raw request via connector |
+| `connector_remove` | Remove an API connector |
+| `social_list_platforms` | List connected social media platforms |
+| `social_connect` | Connect a social media platform |
+| `social_disconnect` | Disconnect a social platform |
+| `social_oauth` | Start OAuth flow for a social platform |
+| `social_create_post` | Create a social media post draft |
+| `social_publish` | Publish a social media post immediately |
+| `social_schedule` | Schedule a social media post |
+| `social_list_posts` | List scheduled/published posts |
+| `social_delete_post` | Delete a social media post |
+| `social_analytics` | Get per-platform analytics (followers, engagement, impressions) |
+| `email_connect` | Connect Gmail via OAuth |
+| `email_disconnect` | Disconnect Gmail |
+| `email_status` | Check email connection status |
+| `email_send` | Send an email |
+| `email_list` | List inbox messages |
+| `email_read` | Read an email by ID |
+| `email_search` | Search through emails |
+| `calendar_connect` | Connect Google Calendar via OAuth |
+| `calendar_disconnect` | Disconnect Google Calendar |
+| `calendar_status` | Check calendar connection status |
+| `calendar_list_events` | List calendar events |
+| `calendar_create_event` | Create a calendar event |
+| `calendar_update_event` | Update a calendar event |
+| `calendar_delete_event` | Delete a calendar event |
+| `messaging_status` | Check messaging platform status |
+| `messaging_setup_telegram` | Set up Telegram messaging |
+| `messaging_setup_whatsapp` | Set up WhatsApp messaging |
+| `messaging_disconnect` | Disconnect a messaging platform |
+| `messaging_send` | Send a message via configured platform |
+| `messaging_set_mention_only` | Set mention-only mode for platform |
+| `bible_verse` | Get verse of the day or search Bible by reference |
+| `daily_devotion` | Fetch daily devotional content |
+| `setup_morning_briefing` | Configure daily morning briefing |
+| `set_reminder` | Set a personalized reminder |
+| `play_music` | Play audio tracks |
+| `gateway_daemon_start` | Start the background gateway daemon |
+| `gateway_daemon_stop` | Stop the gateway daemon |
+| `gateway_daemon_status` | Check gateway daemon status |
+| `gateway_daemon_logs` | View gateway daemon logs |
 
 ---
 
@@ -554,7 +655,204 @@ GIA can persist and manage what it knows about you:
 
 GIA uses these automatically — when you share something worth remembering, it saves it without being asked.
 
----
+## 🎭 GIA Identity
+
+Configure GIA's persona in Settings → Identity:
+
+- **Name**: What GIA should be called
+- **Personality**: Warm / Professional / Witty / Direct / Custom (with custom prompt)
+- **Tone**: casual, formal, technical, poetic, academic, playful
+- **Focus Areas**: Subjects GIA should prioritize (add/remove)
+- **Proactiveness**: Reserved ↔ Proactive slider controlling background goal pursuit
+- **Allow Memory**: Let GIA remember you across conversations
+
+## 🔌 Plugin Management
+
+Settings → Plugins provides a full management interface:
+
+- **Plugin List**: View installed plugins with enable/disable toggles
+- **Install from URL**: Fetch manifest.json + optional hooks/index.js from any URL
+- **Install from File**: Upload a `.json` manifest file
+- **Lifecycle Hooks**: Plugins can hook into `onInit`, `onActivate`, `onDeactivate`, `onBeforeGenerate`, `onAfterGenerate`, `onToolRegister`
+- **Tool Registration**: Plugins can register custom tools dynamically
+- **Manifest Reference**: Inline documentation of the plugin manifest format
+
+## 🎨 Custom Skill Editor
+
+Settings → Skills lets you create custom assistant personas:
+
+- **Name**: Editable skill name
+- **System Prompt**: Custom instructions textarea
+- **Tool Assignment**: Toggle buttons (web_search, terminal_run, filesystem_read/write, image_generation, location, etc.)
+- **Delete**: Remove custom skills
+- **Categories**: Core / User / Dev / Creative display
+
+## 🧪 Developer Settings
+
+Advanced configuration in Settings → Developer:
+
+- **Show Token Usage**: Display token counts after each response
+- **Console Log Level**: Debug / Log / Warn / Error selector
+- **HuggingFace Access Token**: For gated/private HuggingFace model downloads
+- **Network Monitor**: Start/stop capturing network requests with live log display
+- **Cache Management**: Browser cache info display with "Clear Caches" button
+- **Debug Info**: User agent, platform, screen, localStorage keys count
+
+## 🏠 Long-Running Mode
+
+Prevent the app from sleeping during extended tasks (Settings → Power):
+
+- **Screen Wake Lock**: Prevents screen dimming
+- **Background Heartbeat**: Prevents browser tab suspension
+- **Auto-Unload Idle Models**: Frees Whisper, Vision, and local LLM after 10min of inactivity
+
+## 🎙 Voice & Wake Word Settings
+
+Full configuration in Settings → Voice:
+
+- **Wake Word Access Key**: Picovoice Porcupine access key input
+- **Sensitivity Slider**: 0–1 sensitivity for native wake word detection
+- **Test Wake Word**: Button with detection event log (confidence %, timestamp)
+- **Service Status**: Badges showing running/idle/error state
+- **On-Device Whisper**: Download ~50MB ONNX model — toggle between local Whisper and browser STT
+- **Wake Word Diagnostics**: Mic permission indicator, model loaded status
+
+## 👁 On-Device Vision Management
+
+Settings → Vision provides model lifecycle management:
+
+- **Model Download**: List and download ONNX vision models (captioning, OCR, detection, classification)
+- **Confidence Threshold**: 0.1–1.0 slider — below threshold falls back to provider vision
+- **Provider Fallback**: Enable/disable automatic fallback to GPT-4o/Gemini/Claude
+- **Usage Dashboard**: Local vs provider call counts, average latencies, error stats
+- **Reset Statistics**: Clear all usage data
+
+## ⚡ Code Execution Configuration
+
+Settings → Code Execution:
+
+- **Custom Piston Endpoint**: Configure a self-hosted Piston API server URL
+- **Piston API Key**: Required since Feb 2026 for public Piston API
+- **Test Connection**: Verify endpoint with success/fail feedback
+- **Show Languages**: Fetch and display available runtimes
+- **Run History**: View full history with language, timestamp, exit code, code snippet — clear with confirmation
+
+## 🔍 Search Provider Configuration
+
+Settings → Search:
+
+- **Exa Search API Key**: AI-native search engine
+- **Browserless.io API Key**: Headless browser service
+- **Active Provider**: Switch between configured providers
+- **Fallback**: DuckDuckGo/Google/Bing via CORS proxies when no API key configured
+
+## 📅 Calendar Integration
+
+Connect Google Calendar via OAuth for full event management:
+
+- **Connect**: OAuth flow for Google Calendar access
+- **Events**: List, create, update, delete calendar events
+- **Status**: Connection health monitoring
+
+Tools: `calendar_connect`, `calendar_disconnect`, `calendar_status`, `calendar_list_events`, `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`
+
+## ✉️ Email Integration
+
+Connect Gmail via OAuth for email management:
+
+- **Connect**: OAuth flow for Gmail access
+- **Send**: Compose and send emails
+- **List**: Browse inbox messages
+- **Read**: View email content
+- **Search**: Search through messages
+
+Tools: `email_connect`, `email_disconnect`, `email_status`, `email_send`, `email_list`, `email_read`, `email_search`
+
+## 💬 Messaging Platforms
+
+Connect WhatsApp and Telegram for messaging automation:
+
+- **WhatsApp**: Send messages via WhatsApp
+- **Telegram**: Full bot integration with mention-only mode
+- **Status**: Per-platform connection monitoring
+- **Disconnect**: Remove platform configuration
+
+Tools: `messaging_status`, `messaging_setup_telegram`, `messaging_setup_whatsapp`, `messaging_disconnect`, `messaging_send`, `messaging_set_mention_only`
+
+## 📖 Bible & Devotion Tools
+
+Personal faith integration tools:
+
+- **Bible Verse**: Verse of the day, chapter reading, or search by reference
+- **Daily Devotion**: Fetch daily devotional content
+- **Morning Briefing**: Configurable daily morning summary
+- **Set Reminder**: Schedule personalized reminders
+- **Play Music**: Play audio tracks via tool command
+
+Tools: `bible_verse`, `daily_devotion`, `setup_morning_briefing`, `set_reminder`, `play_music`
+
+## 🔔 Notification Tools
+
+GIA can send, schedule, and manage native push notifications:
+
+- **Send**: Send instant local push notifications
+- **Schedule**: Schedule notifications for future delivery
+- **Cancel**: Cancel pending notifications
+- **List**: View all pending notifications
+- **Permissions**: Check and request notification permissions
+
+Tools: `notifications_send`, `notifications_schedule`, `notifications_cancel`, `notifications_pending`, `notifications_check_permissions`, `notifications_request_permissions`
+
+## 📍 Geolocation Tools
+
+Granular GPS location management:
+
+- **Current Position**: Get precise location with accuracy, altitude, and speed
+- **Watch Position**: Continuously monitor position changes
+- **Clear Watch**: Stop position monitoring
+- **Permissions**: Check and request location permissions
+
+Tools: `geolocation_get_current_position`, `geolocation_watch_position`, `geolocation_clear_watch`, `geolocation_check_permissions`, `geolocation_request_permissions`
+
+## 📳 Haptic Patterns
+
+Beyond simple vibration, GIA offers 3 dedicated haptic feedback tools:
+
+- **Impact**: Light, medium, or heavy impact feedback
+- **Notification**: Success, warning, or error notification patterns
+- **Custom Vibrate**: Custom vibration patterns
+
+Tools: `haptic_impact`, `haptic_notification`, `haptic_vibrate`
+
+## ⚙️ Gateway Daemon
+
+GIA includes a background daemon that runs 24/7 for continuous gateway operations:
+
+- **Start**: Launch the daemon in the proot+Alpine terminal
+- **Stop**: Gracefully stop the daemon
+- **Status**: Check daemon health and uptime
+- **Logs**: View recent daemon activity
+
+Tools: `gateway_daemon_start`, `gateway_daemon_stop`, `gateway_daemon_status`, `gateway_daemon_logs`
+
+## ☁️ Brain Cloud Backup
+
+Beyond local export/import, GIA can sync your brain to cloud storage (Settings → Brain Export → Cloud Backup):
+
+- **WebDAV**: Connect to any WebDAV endpoint
+- **S3-Compatible**: Connect to any S3-compatible object store
+- **Config**: Endpoint URL, username, password
+- **Upload Now**: One-click sync
+
+## 🔄 Proactive Background Engine
+
+Beyond autonomous goals, GIA runs a proactive engine during user idle time:
+
+- **Time-Aware Greetings**: Contextual salutations based on time of day
+- **Contextual Suggestions**: Proactive feature suggestions
+- **Tips & Tricks**: Usage tips based on current context
+- **Personality-Driven**: Messages match configured identity personality
+- **Full Autonomy Mode**: When enabled in Protocols settings, GIA executes all tools without asking for approval — per-tool auto-approval can be configured for granular control
 
 ## 📋 Keyboard Shortcuts
 

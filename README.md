@@ -150,6 +150,33 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **File Generation** | Generate PDF, DOCX, PPTX, and ZIP files from markdown/content — download or preview inline |
 | **Document Reader** | Extract text from PDF, DOCX, PPTX files using Python-based parsing — preview content in chat |
 | **Browse Web** | Full browser automation via Node.js server — navigate pages, extract content, interact with JS-rendered sites |
+| **GIA Identity** | Configurable name, personality (Warm/Professional/Witty/Direct/Custom), tone (casual/formal/technical/poetic/academic/playful), focus areas, and proactiveness slider |
+| **Long-Running Mode** | Prevents screen dimming and browser tab suspension with screen wake lock and background heartbeat |
+| **Auto-Unload Idle Models** | Automatically unloads Whisper, Vision, and local LLM models after 10 minutes of inactivity to free memory |
+| **On-Device Whisper** | Download local Whisper ONNX model (~50MB) for offline speech-to-text — toggle between local and browser STT |
+| **Wake Word Diagnostics** | Service status badges, mic permission indicator, model loaded indicator, test button with detection event log |
+| **Vision Model Management** | UI to list, download, manage ONNX vision models (captioning, OCR, detection, classification) with confidence threshold and provider fallback toggle |
+| **Code Execution Settings** | Custom Piston API endpoint and API key configuration with test connection and language listing |
+| **Code Run History** | View full history of code executions (language, timestamp, exit code, code snippet) with clear option |
+| **Search Provider Config** | Configure Exa Search and Browserless.io API keys with active provider switching |
+| **Brain Cloud Backup** | Sync brain to any WebDAV or S3-compatible endpoint with configurable URL and credentials |
+| **Calendar Integration** | Full Google Calendar CRUD via OAuth — list, create, update, delete events with 6 dedicated tools |
+| **Email Integration** | Full Gmail read/send via OAuth — connect, send, list, read, search with 7 dedicated tools |
+| **Messaging Platforms** | WhatsApp and Telegram messaging integration with mention-only mode and platform status monitoring |
+| **Bible & Devotion** | Verse of the day, Bible search, daily devotionals, and configurable morning briefing |
+| **Reminders & Music** | Set reminders and play music through tool commands |
+| **Plugin Management UI** | Install plugins from URL or file upload, enable/disable with manifest validation |
+| **Custom Skill Editor** | Create custom skills with editable name, system prompt, and tool assignment toggles |
+| **Memory Browser** | Inline memory viewer in settings with search, category color coding, and bulk delete |
+| **Install QR Code** | QR code generator for downloading latest APK from GitHub releases |
+| **Sandbox Package Management** | Install packages via apk, clone git repos, and manage sandbox filesystem |
+| **RAG Document Listing** | List all indexed RAG documents with `rag_list_docs` tool |
+| **File Editing** | Edit existing generated documents (PDF, DOCX, PPTX) |
+| **Proactive Background Engine** | Generates time-aware greetings, contextual suggestions, and personality-driven messages during idle time |
+| **Full Autonomy Mode** | When enabled, GIA executes all tools without requiring user approval — per-tool auto-approval configuration |
+| **Developer Settings** | Token usage display, console log level selector, HuggingFace token input, network monitor, cache management |
+| **Session Summarization** | Tracks session summarization history for efficient context window management |
+| **No-API-Key Banner** | Clickable banner redirects to Settings when no API keys are configured |
 
 ### Interactive Visual Blocks
 
@@ -398,6 +425,167 @@ Real-time per-model provider health tracking with degradation detection:
 - **Status Classification**: `healthy` (≥80% success), `degraded` (≥50%), `down` (<50%)
 - **Consecutive Failure Detection**: Flags providers with rapid consecutive failures
 - **Engine Room Integration**: `status` command shows live latency + error counts
+
+## 🧑 GIA Identity & Personality
+
+Configure GIA's persona beyond the system prompt:
+
+- **Name**: What GIA should be called
+- **Personality**: Warm / Professional / Witty / Direct / Custom (with custom prompt)
+- **Tone**: casual, formal, technical, poetic, academic, playful
+- **Focus Areas**: Subjects GIA should prioritize
+- **Proactiveness**: Reserved ↔ Proactive slider controlling background goal pursuit
+- **Allow Memory**: Let GIA remember you across conversations
+
+Configured in Settings → Identity. All fields are injected into GIA's system prompt for consistent behavior.
+
+## 🎙 Voice & Wake Word Settings
+
+Full wake word configuration UI in Settings → Voice:
+
+- **Wake Word Access Key**: Picovoice Porcupine access key input
+- **Sensitivity Slider**: 0–1 sensitivity for native wake word detection
+- **Test Wake Word**: Button with detection event log (confidence %, timestamp)
+- **Service Status**: Badges showing running/idle/error state
+- **On-Device Whisper**: Download ~50MB ONNX model — toggle between local Whisper and browser STT
+- **Wake Word Diagnostics**: Mic permission indicator, model loaded status
+
+## 👁 On-Device Vision Management
+
+Settings → Vision provides model lifecycle management:
+
+- **Model Download**: List and download ONNX vision models (captioning, OCR, detection, classification)
+- **Confidence Threshold**: 0.1–1.0 slider — below threshold falls back to provider vision
+- **Provider Fallback**: Enable/disable automatic fallback to GPT-4o/Gemini/Claude
+- **Usage Dashboard**: Local vs provider call counts, average latencies, error stats
+- **Reset Statistics**: Clear all usage data
+
+## ⚡ Code Execution Configuration
+
+Settings → Code Execution:
+
+- **Custom Piston Endpoint**: Configure a self-hosted Piston API server URL
+- **Piston API Key**: Required since Feb 2026 for public Piston API
+- **Test Connection**: Verify endpoint with success/fail feedback
+- **Show Languages**: Fetch and display available runtimes
+- **Self-Host Instructions**: Docker and Node.js setup guide
+- **Run History**: View full history with language, timestamp, exit code, code snippet — clear with confirmation
+
+## 🔍 Search Provider Configuration
+
+Settings → Search:
+
+- **Exa Search API Key**: AI-native search engine
+- **Browserless.io API Key**: Headless browser service
+- **Active Provider**: Switch between configured providers
+- **Fallback**: DuckDuckGo/Google/Bing via CORS proxies when no API key configured
+
+## 📅 Calendar Integration
+
+Connect Google Calendar via OAuth for full event management:
+
+- **Connect**: OAuth flow for Google Calendar access
+- **Events**: List, create, update, delete calendar events
+- **Status**: Connection health monitoring
+
+Tools: `calendar_connect`, `calendar_disconnect`, `calendar_status`, `calendar_list_events`, `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`
+
+## ✉️ Email Integration
+
+Connect Gmail via OAuth for email management:
+
+- **Connect**: OAuth flow for Gmail access
+- **Send**: Compose and send emails
+- **List**: Browse inbox messages
+- **Read**: View email content
+- **Search**: Search through messages
+
+Tools: `email_connect`, `email_disconnect`, `email_status`, `email_send`, `email_list`, `email_read`, `email_search`
+
+## 💬 Messaging Platform Integration
+
+Connect WhatsApp and Telegram for messaging automation:
+
+- **WhatsApp**: Send messages via WhatsApp
+- **Telegram**: Full bot integration with mention-only mode
+- **Status**: Per-platform connection monitoring
+- **Disconnect**: Remove platform configuration
+
+Tools: `messaging_status`, `messaging_setup_telegram`, `messaging_setup_whatsapp`, `messaging_disconnect`, `messaging_send`, `messaging_set_mention_only`
+
+## 📖 Bible & Devotion Tools
+
+Personal faith integration tools:
+
+- **Bible Verse**: Verse of the day, chapter reading, or search by reference
+- **Daily Devotion**: Fetch daily devotional content
+- **Morning Briefing**: Configurable daily morning summary
+- **Set Reminder**: Schedule personalized reminders
+- **Play Music**: Play audio tracks via tool command
+
+Tools: `bible_verse`, `daily_devotion`, `setup_morning_briefing`, `set_reminder`, `play_music`
+
+## 🧪 Developer Settings
+
+Advanced configuration in Settings → Developer:
+
+- **Show Token Usage**: Display token counts after each response
+- **Console Log Level**: Debug / Log / Warn / Error selector
+- **HuggingFace Access Token**: For gated/private model downloads
+- **Network Monitor**: Start/stop capturing network requests with live log display
+- **Cache Management**: Browser cache info display with "Clear Caches" button
+- **Debug Info**: User agent, platform, screen, localStorage keys count
+
+## 🏪 Plugin Management UI
+
+Settings → Plugins provides a full management interface:
+
+- **Plugin List**: View installed plugins with enable/disable toggles
+- **Install from URL**: Fetch manifest.json + optional hooks/index.js from any URL
+- **Install from File**: Upload `.json` manifest file
+- **Manifest Reference**: Inline documentation of the plugin manifest format
+
+## 🎨 Custom Skill Editor
+
+Settings → Skills lets you create custom assistant personas:
+
+- **Name**: Editable skill name
+- **System Prompt**: Custom instructions textarea
+- **Tool Assignment**: Toggle buttons for web_search, terminal_run, filesystem_read/write, image_generation, location, search_places, export_brain
+- **Delete**: Remove custom skills
+- **Categories**: Core / User / Dev / Creative display
+
+## 🏠 Long-Running Mode
+
+Prevent the app from sleeping during extended tasks:
+
+- **Screen Wake Lock**: Prevents screen dimming
+- **Background Heartbeat**: Prevents browser tab suspension
+- **Auto-Unload Idle Models**: Frees Whisper, Vision, and local LLM after 10min of inactivity
+
+Configured in Settings → Power.
+
+## ☁️ Brain Cloud Backup
+
+Beyond local export/import, GIA can sync your brain to cloud storage:
+
+- **WebDAV**: Connect to any WebDAV endpoint
+- **S3-Compatible**: Connect to any S3-compatible object store
+- **Config**: Endpoint URL, username, password
+- **Upload Now**: One-click sync
+
+Configured in Settings → Brain Export → Cloud Backup.
+
+## 🔄 Proactive Background Engine
+
+Beyond autonomous goals, GIA runs a proactive engine during user idle time:
+
+- **Time-Aware Greetings**: Contextual salutations based on time of day
+- **Contextual Suggestions**: Proactive feature suggestions
+- **Tips & Tricks**: Usage tips based on current context
+- **Personality-Driven**: Messages match configured identity personality
+- **Idle Detection**: IdleManager monitors user inactivity (configurable timeout, default 10min)
+- **Wake Lock**: WakeLockService prevents sleep during background tasks
 
 ## 🛡️ Security & Enterprise Hardening
 
