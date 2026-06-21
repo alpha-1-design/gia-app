@@ -5,6 +5,7 @@ import { useGiaStore, Module } from './store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useMemoryStore } from './store/useMemoryStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { App as CapacitorApp } from '@capacitor/app';
 import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
 import PlannerModule from './modules/PlannerModule';
@@ -21,6 +22,7 @@ import { ScreenCaptureService } from './services/ScreenCaptureService';
 import SchedulerService from './services/SchedulerService';
 import BiometricService from './services/BiometricService';
 import MCPManager from './services/MCPManager';
+import { backgroundRecovery } from './services/BackgroundRecovery';
 import SetupWizard from './components/SetupWizard';
 import { proactiveEngine } from './services/autonomy/ProactiveEngine';
 import { useAutonomyStore } from './store/useAutonomyStore';
@@ -399,6 +401,17 @@ const App: React.FC = () => {
       }
     })();
 
+    // App lifecycle — persist + recover on resume
+    backgroundRecovery.recover();
+    const appStateHandle = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) {
+        logger.log('[App] Backgrounded — state persisted');
+      } else {
+        backgroundRecovery.recover();
+        logger.log('[App] Foreground — checking for interrupted tasks');
+      }
+    });
+
     if (locked) {
       handleBiometric();
     }
@@ -409,6 +422,7 @@ const App: React.FC = () => {
       window.removeEventListener('mousedown', trackActivity);
       window.removeEventListener('keydown', trackActivity);
       window.removeEventListener('touchstart', trackActivity);
+      appStateHandle.then(h => h.remove());
       MCPManager.shutdown(); SystemService.stopMonitoring();
       proactiveEngine.stop();
     };

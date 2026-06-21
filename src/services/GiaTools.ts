@@ -23,6 +23,10 @@ import { geolocationTools } from './tools/geolocation';
 import { notificationTools } from './tools/notifications';
 import { deviceTools } from './tools/device';
 import { buildTools } from './tools/build';
+import { sandboxTools } from './tools/sandbox';
+import { cameraTools } from './tools/camera';
+import { filegenTools } from './tools/filegen';
+import { documentTools } from './tools/documents';
 
 export type { ToolResult };
 export type { Tool };
@@ -60,6 +64,10 @@ class GiaTools {
       ...notificationTools,
       ...deviceTools,
       ...buildTools,
+      ...sandboxTools,
+      ...cameraTools,
+      ...filegenTools,
+      ...documentTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

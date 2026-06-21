@@ -42,6 +42,7 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   { id: 'deepinfra',    label: 'DeepInfra',     baseUrl: 'https://api.deepinfra.com/v1/openai',        defaultModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
   { id: 'ai21',         label: 'AI21 Labs',     baseUrl: 'https://api.ai21.com/studio/v1',             defaultModel: 'jamba-1.5-mini',   needsApiKey: true,  listingType: 'openai',     aliases: [] },
   { id: 'replicate',    label: 'Replicate',     baseUrl: 'https://api.replicate.com/v1',               defaultModel: 'meta/meta-llama-3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: ['rep'] },
+  { id: 'nvidia',       label: 'NVIDIA NIM',    baseUrl: 'https://integrate.api.nvidia.com/v1',          defaultModel: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', needsApiKey: true, listingType: 'openai', aliases: ['niv'] },
   // Local providers
   { id: 'ollama',       label: 'Ollama (Local)',       baseUrl: 'http://localhost:11434/v1',             defaultModel: 'llama3.2',         needsApiKey: false, listingType: 'ollama',     aliases: ['ol'] },
   { id: 'lmstudio',     label: 'LM Studio (Local)',    baseUrl: 'http://localhost:1234/v1',              defaultModel: 'local-model',      needsApiKey: false, listingType: 'openai',     aliases: ['lms'] },
@@ -121,6 +122,14 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
   replicate: [
     { id: 'meta/meta-llama-3-70b-instruct', label: 'Llama 3 70B', free: false, context: '8k', tools: false, vision: false },
   ],
+  nvidia: [
+    { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', label: 'Nemotron Ultra 253B', free: false, context: '128k', tools: true, vision: false },
+    { id: 'nvidia/llama-3.3-nemotron-super-49b-v1',  label: 'Nemotron Super 49B',  free: false, context: '128k', tools: true, vision: true  },
+    { id: 'meta/llama-3.3-70b-instruct',              label: 'Llama 3.3 70B',       free: true,  context: '128k', tools: true, vision: true  },
+    { id: 'meta/llama-3.1-405b-instruct',             label: 'Llama 3.1 405B',      free: false, context: '128k', tools: true, vision: true  },
+    { id: 'mistralai/mistral-large-24-11-07',         label: 'Mistral Large',       free: false, context: '128k', tools: true, vision: true  },
+    { id: 'deepseek-ai/deepseek-r1',                  label: 'DeepSeek R1',         free: false, context: '128k', tools: false, vision: false },
+  ],
   ollama: [
     { id: 'llama3.2',   label: 'Llama 3.2',   free: true, context: '128k', tools: true, vision: false },
     { id: 'gemma3',     label: 'Gemma 3',     free: true, context: '128k', tools: true, vision: true  },
@@ -140,6 +149,7 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
 const FALLBACK_IMAGE_MODELS: Record<string, string> = {
   openai: 'dall-e-3',
   openrouter: 'openai/dall-e-3',
+  nvidia: 'nvidia/sana-4k',
 };
 
 class ProviderRegistry {
