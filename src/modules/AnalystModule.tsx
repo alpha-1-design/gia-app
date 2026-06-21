@@ -14,7 +14,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '../utils/helpers';
 import { generateWithRetry } from '../utils/generateWithRetry';
 
-interface DataPoint { label: string; value: number | ; color?: string; [key: string]: unknown }
+interface DataPoint { label: string; value: number; color?: string; [key: string]: unknown }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
 const COLORS = ['#7c3aed','#4f46e5','#059669','#dc2626','#d97706','#0891b2','#be185d','#65a30d','#9333ea','#0284c7'];
 
