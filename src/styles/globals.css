@@ -307,6 +307,8 @@ body {
   font-size: 14px;
   line-height: 1.65;
   color: var(--gia-text);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .gia-markdown h1 { font-size: 20px; font-weight: 700; margin: 16px 0 8px; color: var(--gia-text); }
 .gia-markdown h2 { font-size: 16px; font-weight: 600; margin: 14px 0 6px; color: var(--gia-text); }

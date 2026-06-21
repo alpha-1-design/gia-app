@@ -34,7 +34,10 @@ function parseBatchIntents(transcript: string): string[] {
   return result.length > 1 ? result : [trimmed];
 }
 
-export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) {
+export function useVoiceInput(
+  abortTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  onAutoSend?: (text: string) => void,
+) {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
   const wakeWord = useGiaStore(s => s.wakeWord);
@@ -44,6 +47,7 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
   const voiceLanguage = useGiaStore(s => s.voiceLanguage);
   const nativeWakeWord = useGiaStore(s => s.nativeWakeWord);
   const nativeSensitivity = useGiaStore(s => s.nativeSensitivity);
+  const wakeWordAccessKey = useGiaStore(s => s.wakeWordAccessKey);
 
   const playBeep = useCallback(() => {
     try {
@@ -74,7 +78,7 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
     return '';
   }, [playBeep]);
 
-  const handleVoiceTranscript = useCallback(async (transcript: string, setInput: (val: string) => void, handleSend?: () => void) => {
+  const handleVoiceTranscript = useCallback(async (transcript: string, setInput: (val: string) => void, handleSend?: (text: string) => void) => {
     if (!transcript.trim()) return;
 
     const intents = parseBatchIntents(transcript);
@@ -82,8 +86,10 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
     if (intents.length > 1) {
       useGiaStore.getState().addNotification(`Batch: ${intents.length} intents detected`);
       for (const intent of intents) {
+        let finalText: string;
         if (intent.split(' ').length < 8) {
-          setInput(intent);
+          finalText = intent;
+          setInput(finalText);
         } else {
           const ctrl = new AbortController();
           const timeout = setTimeout(() => ctrl.abort(), 5000);
@@ -96,22 +102,24 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
               maxTokens: 1000,
             });
             clearTimeout(timeout);
-            if (res.text && !ctrl.signal.aborted) {
-              setInput(res.text.trim());
-            }
+            finalText = (res.text && !ctrl.signal.aborted) ? res.text.trim() : intent;
           } catch {
             clearTimeout(timeout);
-            setInput(intent);
+            finalText = intent;
           }
+          setInput(finalText);
         }
         await new Promise(r => setTimeout(r, 300));
-        if (handleSend) handleSend();
+        if (handleSend) handleSend(finalText);
       }
       return;
     }
 
+    let finalText: string;
     if (transcript.split(' ').length < 8) {
-      setInput(transcript);
+      finalText = transcript;
+      setInput(finalText);
+      if (handleSend) handleSend(finalText);
       return;
     }
 
@@ -128,13 +136,13 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
         maxTokens: 1000,
       });
       clearTimeout(timeout);
-      if (res.text && !ctrl.signal.aborted) {
-        setInput(res.text.trim());
-      }
+      finalText = (res.text && !ctrl.signal.aborted) ? res.text.trim() : transcript;
     } catch {
       clearTimeout(timeout);
-      setInput(transcript);
+      finalText = transcript;
     }
+    setInput(finalText);
+    if (handleSend) handleSend(finalText);
   }, [abortTimeoutRef]);
 
   const onWakeWord = useCallback((transcript: string) => {
@@ -146,7 +154,7 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
     onWakeWord,
     onTranscript: (transcript: string) => {
       const setInput = (useGiaStore.getState() as unknown as Record<string, unknown>).setInput as ((v: string) => void) | undefined;
-      if (setInput) handleVoiceTranscript(transcript, setInput);
+      if (setInput) handleVoiceTranscript(transcript, setInput, (text) => onAutoSend?.(text));
     },
     keepListening,
     autoStopAfter: 120000,
@@ -154,6 +162,7 @@ export function useVoiceInput(abortTimeoutRef: React.MutableRefObject<ReturnType
     language: voiceLanguage,
     nativeWakeWord,
     nativeSensitivity,
+    wakeWordAccessKey,
   });
 
   const voiceRef = useRef(voiceControl);

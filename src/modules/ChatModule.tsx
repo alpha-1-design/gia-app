@@ -465,7 +465,7 @@ const ChatModule: React.FC = () => {
   );
 };
 
-export default React.memo(ChatModule);
+export default ChatModule;
 
 const SearchActivityButton: React.FC = () => {
   const { queryCount, sources, panelOpen, setPanelOpen } = useSearchActivity();

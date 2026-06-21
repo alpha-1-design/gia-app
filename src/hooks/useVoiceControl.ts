@@ -61,6 +61,7 @@ export interface VoiceControlConfig {
   language?: string;
   nativeWakeWord?: boolean;
   nativeSensitivity?: number;
+  wakeWordAccessKey?: string;
 }
 
 function escapeRegex(str: string) {
@@ -95,6 +96,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     language = 'en-US',
     nativeWakeWord = true,
     nativeSensitivity = 0.7,
+    wakeWordAccessKey = '',
   } = config;
 
   const [isListening, setIsListening] = useState(false);
@@ -165,6 +167,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const thresholdRef = useRef(confidenceThreshold);
   const langRef = useRef(language);
   const onDirectCommandRef = useRef(config.onDirectCommand);
+  const accessKeyRef = useRef(wakeWordAccessKey);
   wakeWordRef.current = wakeWord;
   keepListeningRef.current = keepListening;
   onWakeWordRef.current = onWakeWord;
@@ -172,6 +175,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   thresholdRef.current = confidenceThreshold;
   langRef.current = language;
   onDirectCommandRef.current = config.onDirectCommand;
+  accessKeyRef.current = wakeWordAccessKey;
 
   const processTranscript = useCallback((text: string, confidence?: number) => {
     if (!text || !activeRef.current) return;
@@ -349,6 +353,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       await GIAWakeWord.startListening({
         keyword: nativeKeyword,
         sensitivity: nativeSensitivity,
+        accessKey: accessKeyRef.current || undefined,
       });
 
       const handle = await GIAWakeWord.addListener('wakeWordDetected', async ({ keyword: kw }) => {

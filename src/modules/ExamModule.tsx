@@ -6,11 +6,45 @@ import { genId } from '../utils/id';
 import ExamSetup from './exam/ExamSetup';
 import ExamQuiz from './exam/ExamQuiz';
 import ExamResult from './exam/ExamResult';
-import type { ExamSystem, ExamMode, Difficulty, Question, QuizResult, Subject } from './exam/types';
+import ExamReference from './exam/ExamReference';
+import type { ExamSystem, ExamMode, Difficulty, Question, QuizResult, Subject, LearningProfile } from './exam/types';
+import { SUBJECTS_STORAGE_KEY, DEFAULT_SUBJECTS } from './exam/types';
 import { generateWithRetry } from '../utils/generateWithRetry';
 import { getFallbackQuestions, loadCachedQuestions, saveQuestionsToCache } from './exam/FallbackQuestions';
 
 const TIMER_SECONDS_PER_QUESTION = 60;
+
+function loadCachedSubjects(): Subject[] | null {
+  try {
+    const raw = localStorage.getItem(SUBJECTS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name && parsed[0].topics) {
+        return parsed;
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveCachedSubjects(subjects: Subject[]): void {
+  try { localStorage.setItem(SUBJECTS_STORAGE_KEY, JSON.stringify(subjects)); } catch { /* ignore */ }
+}
+
+function loadAssessmentProfile(): LearningProfile | null {
+  try {
+    const raw = localStorage.getItem('gia-learning-profile');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.weakAreas) return parsed;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveAssessmentProfile(profile: LearningProfile): void {
+  try { localStorage.setItem('gia-learning-profile', JSON.stringify(profile)); } catch { /* ignore */ }
+}
 
 const ExamModule: React.FC = () => {
   const [examSystem, setExamSystem] = useState<ExamSystem>('WASSCE');
@@ -19,7 +53,7 @@ const ExamModule: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [questionCount, setQuestionCount] = useState(10);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>(() => loadCachedSubjects() ?? DEFAULT_SUBJECTS);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
@@ -28,11 +62,12 @@ const ExamModule: React.FC = () => {
   const [error, setError] = useState('');
   const [result, setResult] = useState<QuizResult | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
-  const [tab, setTab] = useState<'setup' | 'quiz' | 'result'>('setup');
+  const [tab, setTab] = useState<'setup' | 'quiz' | 'result' | 'ref'>('setup');
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [startTime, setStartTime] = useState(0);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [profile, setProfile] = useState<LearningProfile | null>(() => loadAssessmentProfile());
   const submitQuizRef = useRef<() => void>(() => {});
 
   // Warn before leaving during a quiz
@@ -44,7 +79,6 @@ const ExamModule: React.FC = () => {
   }, [tab, questions.length]);
 
   const fetchSubjects = useCallback(async () => {
-    setLoading(true);
     try {
       const { data: parsed } = await generateWithRetry<{ subjects: Subject[] }>(
         () => GiaBrain.generate({
@@ -57,22 +91,19 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
           temperature: 0.3,
           maxTokens: 2000,
         }),
-        { moduleName: 'ExamModule' }
+        { moduleName: 'ExamModule', maxRetries: 2 }
       );
-      setSubjects(parsed.subjects ?? []);
+      if (parsed.subjects && parsed.subjects.length > 0) {
+        setSubjects(parsed.subjects);
+        saveCachedSubjects(parsed.subjects);
+      }
     } catch {
-      // Always available offline fallback
-      setSubjects([
-        { name: 'Mathematics', topics: ['Algebra', 'Geometry', 'Trigonometry', 'Statistics', 'Calculus'] },
-        { name: 'English Language', topics: ['Comprehension', 'Grammar', 'Essay Writing', 'Oral English', 'Literature'] },
-        { name: 'Science', topics: ['Physics', 'Chemistry', 'Biology', 'Integrated Science', 'Practical'] },
-        { name: 'Social Studies', topics: ['Government', 'History', 'Geography', 'Economics', 'Civics'] },
-      ]);
-    } finally {
-      setLoading(false);
+      // Subjects already set from cache/default — no visible error needed
     }
   }, [examSystem]);
 
+  // Background refresh: always show subjects immediately (cache/default),
+  // then quietly try to get better ones from AI
   useEffect(() => {
     if (tab === 'setup') fetchSubjects();
   }, [examSystem, tab, fetchSubjects]);
@@ -98,9 +129,13 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
 
     try {
       const topicContext = topic ? ` focusing on ${topic}` : '';
+      const currentProfile = loadAssessmentProfile();
+      const weakContext = currentProfile?.weakAreas && currentProfile.weakAreas.length > 0
+        ? `\nThe student needs practice on: ${currentProfile.weakAreas.map(w => `${w.topic} (${w.subject})`).join(', ')}. Generate questions targeting these weak areas first.`
+        : '';
       const { data: parsed } = await generateWithRetry<{ questions: Question[] }>(
         () => GiaBrain.generate({
-          prompt: `Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.`,
+          prompt: `Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.${weakContext}`,
           systemPrompt: `You are a ${examSystem} exam expert. Generate accurate, exam-standard questions. Respond with valid JSON:
 {"questions":[{"id":"1","question":"Question text?","options":["A. Option","B. Option","C. Option","D. Option"],"correctAnswer":0,"explanation":"Why this is correct","topic":"Topic name"}]}
 correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accuracy required. Pure JSON, no markdown.`,
@@ -200,31 +235,42 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
       .filter((q, i) => answers[i]?.selected !== q.correctAnswer)
       .map(q => q.topic);
     const weakAreas = [...new Set(wrongTopics)].slice(0, 5);
+    const score = Math.round((correct / questions.length) * 100);
 
     setResult({
-      total: questions.length,
-      correct,
-      incorrect,
-      skipped,
-      score: Math.round((correct / questions.length) * 100),
-      answers,
-      weakAreas,
-      timeSpent,
+      total: questions.length, correct, incorrect, skipped,
+      score, answers, weakAreas, timeSpent,
     });
     setTab('result');
     useGiaStore.getState().addExamResult({
-      id: genId(),
-      examSystem,
-      subject,
-      topic,
-      score: Math.round((correct / questions.length) * 100),
-      correct,
-      total: questions.length,
-      weakAreas,
-      timestamp: Date.now(),
-      timeSpent,
+      id: genId(), examSystem, subject, topic,
+      score, correct, total: questions.length,
+      weakAreas, timestamp: Date.now(), timeSpent,
     });
-    useGiaStore.getState().addNotification(`📝 ${examSystem} ${subject} quiz: ${correct}/${questions.length} (${Math.round((correct / questions.length) * 100)}%)`);
+    useGiaStore.getState().addNotification(`📝 ${examSystem} ${subject} quiz: ${correct}/${questions.length} (${score}%)`);
+
+    // Update learning profile with weak areas from this quiz
+    setProfile(prev => {
+      const existing = prev || { weakAreas: [], strongAreas: [], overallScore: 0, totalAssessments: 0, lastUpdated: 0 };
+      const newWeakAreas = weakAreas.map(area => {
+        const existingArea = existing.weakAreas.find(w => w.topic === area);
+        if (existingArea) {
+          return { ...existingArea, score: Math.round((existingArea.score + (100 - score)) / 2), recommendations: existingArea.recommendations };
+        }
+        return { subject, topic: area, score: 100 - score, recommendations: [`Review ${area} in ${subject} — this needs practice`] };
+      });
+      const updatedWeak = [...newWeakAreas, ...existing.weakAreas.filter(w => !weakAreas.includes(w.topic))].slice(0, 15);
+      const strongAreas = score >= 70
+        ? [...existing.strongAreas.filter(s => s.topic !== (topic || subject)), { subject, topic: topic || subject, score }].slice(0, 15)
+        : existing.strongAreas;
+      const avgScore = Math.round((existing.overallScore * existing.totalAssessments + score) / (existing.totalAssessments + 1));
+      const updated: LearningProfile = {
+        weakAreas: updatedWeak, strongAreas, overallScore: avgScore,
+        totalAssessments: existing.totalAssessments + 1, lastUpdated: Date.now(),
+      };
+      saveAssessmentProfile(updated);
+      return updated;
+    });
   };
   submitQuizRef.current = handleSubmitQuiz;
 
@@ -268,6 +314,26 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
         )}
       </div>
 
+      {/* Tab bar */}
+      {tab !== 'quiz' && tab !== 'result' && (
+        <div className="flex gap-1 px-4 pt-3 pb-0 shrink-0">
+          {([
+            { id: 'setup' as const, label: 'Setup' },
+            { id: 'ref' as const, label: 'Reference' },
+          ]).map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className="text-[11px] px-3 py-1.5 rounded-lg font-medium transition-all tap-feedback"
+              style={{
+                background: tab === t.id ? 'rgba(245,158,11,0.15)' : 'transparent',
+                color: tab === t.id ? '#f59e0b' : 'var(--gia-muted)',
+                fontWeight: tab === t.id ? 600 : 400,
+              }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {tab === 'setup' && (
         <ExamSetup
           examSystem={examSystem} setExamSystem={setExamSystem}
@@ -278,6 +344,20 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
           questionCount={questionCount} setQuestionCount={setQuestionCount}
           subjects={subjects} loading={loading} error={error}
           onStart={handleGenerateQuestions}
+          profile={profile}
+          onProfileUpdate={setProfile}
+        />
+      )}
+
+      {tab === 'ref' && (
+        <ExamReference
+          profile={profile}
+          onProfileUpdate={setProfile}
+          onStartQuiz={(subj, top) => {
+            setSubject(subj);
+            setTopic(top || '');
+            setTab('setup');
+          }}
         />
       )}
 
@@ -319,4 +399,4 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
   );
 };
 
-export default React.memo(ExamModule);
+export default ExamModule;

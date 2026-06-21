@@ -119,6 +119,13 @@ export function useChatGeneration() {
       attachments: attachments.length > 0 ? attachments as { name: string; type: string; content: string; preview?: string }[] : undefined,
     };
 
+    // Auto-name session from first user message
+    const session = state.sessions.find(s => s.id === sessionId);
+    if (session && session.title === 'New Chat' && userContent) {
+      const title = userContent.replace(/```[\s\S]*?```/g, '').trim().slice(0, 60);
+      if (title) state.updateSessionTitle(sessionId, title.length >= 60 ? title + '…' : title);
+    }
+
     state.addMessage(sessionId, userMsg);
     AnalyticsService.trackMessage('user');
     TTSService.stop();
@@ -206,7 +213,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, parserState);
           if (newDisplay) displayAccumulated += newDisplay;
           state.updateMessage(sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined);
-          const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
+          const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
           }
@@ -346,7 +353,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, contParserState);
           if (newDisplay) contDisplayAccumulated += newDisplay;
           state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated || undefined);
-          const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
+          const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
           }
@@ -435,7 +442,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, clarParserState);
           if (newDisplay) clarDisplayAccumulated += newDisplay;
           state.updateMessage(sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated || undefined);
-          const lastChunk = chunk.replace(/```tool[\s\S]*$/g, '').trim();
+          const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
           }

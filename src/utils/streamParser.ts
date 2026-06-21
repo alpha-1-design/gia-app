@@ -20,7 +20,8 @@ export const createStreamParser = (): StreamParserState => ({
 
 /** Check if the given string (body of a json block) looks like a tool call JSON */
 function isToolCallJson(body: string): boolean {
-  return /"(?:id|tool|function|name)"\s*:/.test(body);
+  return /"(?:id|tool|function|name)"\s*:/.test(body)
+    && /"(?:args|input)"\s*:/.test(body);
 }
 
 export const processStreamChunk = (
@@ -167,11 +168,10 @@ export const stripToolBlocks = (text: string): string => {
   let result = text.replace(/```tool[\s\S]*?```/g, '');
   // Remove incomplete trailing ```tool blocks
   result = result.replace(/```tool[\s\S]*$/gm, '');
-  // Remove ```json or ``` blocks containing tool call indicators (id, tool, function, name)
-  // Uses a specific pattern that respects fence boundaries
-  result = result.replace(/```(?:json)?\s*\n?[\s\S]*?"(?:id|tool|function|name)"\s*:[\s\S]*?```/g, '');
+  // Remove ```json or ``` blocks containing tool call indicators (must have both id and args/input keys)
+  result = result.replace(/```(?:json)?\s*\n?[\s\S]*?"(?:id|tool|function|name)"\s*:[\s\S]*?"(?:args|input)"\s*:[\s\S]*?```/g, '');
   // Remove bare JSON objects with tool call indicators (not inside fences)
-  result = result.replace(/^\s*\{(?:[^{}]|"(?:[^"\\]|\\.)*")*"(?:id|tool|function|name)"\s*:[\s\S]*?\}\s*$/gm, '');
+  result = result.replace(/^\s*\{(?:[^{}]|"(?:[^"\\]|\\.)*")*"(?:id|tool|function|name)"\s*:[\s\S]*?"(?:args|input)"\s*:[\s\S]*?\}\s*$/gm, '');
   return result.trim();
 };
 

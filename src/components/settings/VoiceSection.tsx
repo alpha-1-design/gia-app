@@ -29,6 +29,7 @@ export const VoiceSection: React.FC = () => {
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
   const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
   const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
+  const [accessKey, setAccessKey] = useState(() => localStorage.getItem('gia-wake-word-access-key') || '');
 
   const [useWhisper, setUseWhisper] = useState(() => localStorage.getItem('gia-use-whisper') === 'true');
   const [whisperStatus, setWhisperStatus] = useState(WhisperService.status);
@@ -130,6 +131,11 @@ export const VoiceSection: React.FC = () => {
     useGiaStore.getState().setNativeSensitivity(sensitivity);
   }, [sensitivity]);
 
+  useEffect(() => {
+    localStorage.setItem('gia-wake-word-access-key', accessKey);
+    useGiaStore.getState().setWakeWordAccessKey(accessKey);
+  }, [accessKey]);
+
   return (
     <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div className="flex items-center gap-2">
@@ -183,24 +189,45 @@ export const VoiceSection: React.FC = () => {
       />
 
       {nativeWW && (
-        <div>
-          <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
-            Sensitivity: {sensitivity.toFixed(1)}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={sensitivity}
-            onChange={e => setSensitivity(parseFloat(e.target.value))}
-            style={{ width: '100%', accentColor: '#a855f7' }}
-          />
-          <div className="flex justify-between text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
-            <span>Fewer detections</span>
-            <span>More detections</span>
+        <>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+              Sensitivity: {sensitivity.toFixed(1)}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={sensitivity}
+              onChange={e => setSensitivity(parseFloat(e.target.value))}
+              style={{ width: '100%', accentColor: '#a855f7' }}
+            />
+            <div className="flex justify-between text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+              <span>Fewer detections</span>
+              <span>More detections</span>
+            </div>
           </div>
-        </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+              Porcupine Access Key
+            </label>
+            <input
+              className="gia-input"
+              type="text"
+              value={accessKey}
+              onChange={e => setAccessKey(e.target.value)}
+              placeholder="Enter your Picovoice AccessKey"
+              style={{ fontSize: '12px', width: '100%' }}
+            />
+            <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+              Required for Porcupine wake word engine. Get a free key at{' '}
+              <a href="https://console.picovoice.ai/" target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7' }}>
+                console.picovoice.ai
+              </a>
+            </p>
+          </div>
+        </>
       )}
 
       <Switch

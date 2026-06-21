@@ -90,7 +90,7 @@ const PlannerModule: React.FC = () => {
 
     updateTaskStatus(task.id, 'running');
     try {
-      const res = await GiaBrain.generate({ prompt: task.prompt, maxTokens: 800 });
+      const res = await GiaBrain.generate({ prompt: task.prompt, maxTokens: 800, systemPrompt: 'Execute the requested task and return a concise result. Do not use any tools or functions.', systemPromptMode: 'append', temperature: 0.3 });
       const isRecurring = task.interval && ['hourly', 'daily', 'weekly'].includes(task.interval);
       if (isRecurring) {
         const nextRun = Date.now() + getIntervalMs(task.interval);

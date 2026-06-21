@@ -86,17 +86,22 @@ export function useChatState() {
   }, [activeSession, getBranchMessages]);
 
   const {
-    voiceEnabled, setVoiceEnabled, voiceRef, keepListeningRef,
-    voiceLanguage,
-  } = useVoiceInput(gen.abortTimeoutRef);
-
-  const {
     attachments, setAttachments, isDragging, dragCounter,
     processingFiles, processingFileName,
     addFiles, handleFile, handlePaste,
     handleDragEnter, handleDragLeave, handleDragOver, handleDrop,
     removeAttachment,
   } = useFileAttachments();
+
+  const {
+    voiceEnabled, setVoiceEnabled, voiceRef, keepListeningRef,
+    voiceLanguage,
+  } = useVoiceInput(
+    gen.abortTimeoutRef,
+    useCallback((text: string) => {
+      gen.handleSend(text, attachments, setInput, v => setAttachments(v as Attachment[]));
+    }, [gen, attachments, setInput, setAttachments]),
+  );
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
     let newFeatureState: boolean | undefined;
@@ -123,12 +128,17 @@ export function useChatState() {
             }
             addNotification('Transcribing…');
             const text = await WhisperService.transcribe(blob);
-            if (text) setInput(text);
+            if (text) {
+              gen.handleSend(text, attachments, setInput, v => setAttachments(v as Attachment[]));
+            }
           }).catch(() => {});
         }
       } else {
-        if (newState) voiceRef.current.startListening(true);
-        else voiceRef.current.stopListening();
+        if (newState) {
+          voiceRef.current.startListening(true);
+        } else {
+          voiceRef.current.stopListening();
+        }
       }
     }
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);

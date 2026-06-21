@@ -30,6 +30,41 @@ function getDB(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+// Debounce writes during rapid updates (streaming) — last write wins within 300ms
+const pendingWrites = new Map<string, { value: string; timer: ReturnType<typeof setTimeout> }>();
+const DEBOUNCE_MS = 300;
+
+async function writeNow(name: string, value: string): Promise<void> {
+  try {
+    const db = await getDB();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.put(value, name);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    logger.error('[idb-storage] Failed to set item in IndexedDB:', e);
+  }
+}
+
+/** Flush all pending writes immediately — call on page unload */
+export async function flushStorage(): Promise<void> {
+  const entries = Array.from(pendingWrites.entries());
+  pendingWrites.clear();
+  for (const [name, { value, timer }] of entries) {
+    clearTimeout(timer);
+    await writeNow(name, value);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  const onLeave = () => { flushStorage(); };
+  window.addEventListener('beforeunload', onLeave);
+  window.addEventListener('pagehide', onLeave);
+}
+
 export const idbStorage = {
   getItem: async (name: string): Promise<string | null> => {
     try {
@@ -47,18 +82,18 @@ export const idbStorage = {
     }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    try {
-      const db = await getDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put(value, name);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    } catch (e) {
-      logger.error('[idb-storage] Failed to set item in IndexedDB:', e);
-    }
+    const existing = pendingWrites.get(name);
+    if (existing) clearTimeout(existing.timer);
+    return new Promise((resolve) => {
+      const timer = setTimeout(async () => {
+        pendingWrites.delete(name);
+        await writeNow(name, value);
+        resolve();
+      }, DEBOUNCE_MS);
+      pendingWrites.set(name, { value, timer });
+      // Resolve immediately — caller doesn't wait for debounced write
+      resolve();
+    });
   },
   removeItem: async (name: string): Promise<void> => {
     try {

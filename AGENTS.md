@@ -8,7 +8,7 @@ npm run lint       # eslint . (no Prettier — ESLint only)
 npm run test       # vitest (watch mode)
 npm run test:run   # vitest run
 npm run preview    # vite preview
-npx cap sync android   # sync Capacitor Android after build
+npm run cap:sync       # npx cap sync android (sync Capacitor Android after build)
 ```
 
 ## Build & CI
@@ -53,5 +53,5 @@ npx cap sync android   # sync Capacitor Android after build
 
 ## Testing Conventions
 - Tests use `@testing-library/react` + `@testing-library/user-event` + `@testing-library/jest-dom`
-- 11 test files across store, services, hooks, utils
+- 26 test files across store, services, hooks, utils
 - Focused unit tests (no integration/e2e suite)

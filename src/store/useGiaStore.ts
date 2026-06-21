@@ -213,6 +213,7 @@ interface GiaState {
   voiceLanguage: string;
   nativeWakeWord: boolean;
   nativeSensitivity: number;
+  wakeWordAccessKey: string;
   useWhisper: boolean;
   setUseWhisper: (v: boolean) => void;
   customInstructions: string;
@@ -256,6 +257,7 @@ interface GiaState {
   setVoiceLanguage: (lang: string) => void;
   setNativeWakeWord: (on: boolean) => void;
   setNativeSensitivity: (val: number) => void;
+  setWakeWordAccessKey: (key: string) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -398,6 +400,7 @@ export const useGiaStore = create<GiaState>()(
       voiceLanguage: (() => { try { return localStorage.getItem('gia-voice-language') || 'en-US'; } catch { return 'en-US'; } })(),
       nativeWakeWord: (() => { try { return localStorage.getItem('gia-native-wake-word') !== 'false'; } catch { return true; } })(),
       nativeSensitivity: (() => { try { return parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'); } catch { return 0.7; } })(),
+      wakeWordAccessKey: (() => { try { return localStorage.getItem('gia-wake-word-access-key') || ''; } catch { return ''; } })(),
       useWhisper: localStorage.getItem('gia-use-whisper') === 'true',
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
@@ -453,6 +456,10 @@ export const useGiaStore = create<GiaState>()(
       setNativeSensitivity: (val) => {
         localStorage.setItem('gia-native-sensitivity', String(val));
         set({ nativeSensitivity: val });
+      },
+      setWakeWordAccessKey: (key) => {
+        localStorage.setItem('gia-wake-word-access-key', key);
+        set({ wakeWordAccessKey: key });
       },
       setUseWhisper: (v) => {
         localStorage.setItem('gia-use-whisper', String(v));
@@ -728,6 +735,7 @@ export const useGiaStore = create<GiaState>()(
         voiceLanguage: s.voiceLanguage,
         nativeWakeWord: s.nativeWakeWord,
         nativeSensitivity: s.nativeSensitivity,
+        wakeWordAccessKey: s.wakeWordAccessKey,
         useWhisper: s.useWhisper,
       }),
     }

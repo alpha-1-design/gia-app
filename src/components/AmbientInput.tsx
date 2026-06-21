@@ -116,6 +116,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
               minHeight: '48px',
               maxHeight: '120px',
               overflow: 'auto',
+              overflowWrap: 'break-word',
             }}
           />
         ) : (

@@ -97,8 +97,13 @@ class GiaBrain {
     let clarificationAttempts = 0;
     const sourcesAcc: string[] = [];
 
-    // Calibrate temperature based on prompt type
-    const calibratedTemp = (() => {
+    if (req.forceJson) {
+      req.systemPrompt = (req.systemPrompt || '') + '\n\nCRITICAL: You MUST respond with ONLY valid JSON. No markdown fences, no code blocks, no explanations, no text before or after the JSON. The entire response must be parseable by JSON.parse(). Start directly with { or [ and end with } or ]. Do NOT use any tools or call any functions.';
+      req.temperature = 0.1;
+    }
+
+    // Calibrate temperature based on prompt type (after forceJson override)
+    const finalTemp = (() => {
       if (req.temperature !== undefined) return req.temperature;
       const lower = req.prompt.toLowerCase();
       if (lower.startsWith('write') || lower.startsWith('draft') || lower.startsWith('compose') || lower.startsWith('create')) return 0.9;
@@ -107,7 +112,7 @@ class GiaBrain {
       if (lower.startsWith('translate')) return 0.5;
       return 0.7;
     })();
-    const loopReq: BrainRequest = { ...req, temperature: calibratedTemp };
+    const loopReq: BrainRequest = { ...req, temperature: finalTemp };
 
     while (iterations < maxIterations) {
       if (req.signal?.aborted) throw new Error('Request aborted');
@@ -207,8 +212,13 @@ class GiaBrain {
         }
       }
 
+      // tool execution is skipped when forceJson is active —
+      // tool calls would leak execution history into the next iteration,
+      // confusing the model and risking agentic loops
       const toolState = { history: history as { role: string; content: string }[], currentPrompt, clarificationAttempts };
-      const toolResult = await executeToolBlocks(text, toolState, req.onThought, req.signal, sourcesAcc);
+      const toolResult = req.forceJson
+        ? { didExecute: false }
+        : await executeToolBlocks(text, toolState, req.onThought, req.signal, sourcesAcc);
       currentPrompt = toolState.currentPrompt;
       clarificationAttempts = toolState.clarificationAttempts;
 

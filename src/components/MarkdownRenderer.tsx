@@ -85,7 +85,7 @@ const inlineRender = (text: string, footnotes: Map<string, string>): React.React
 
     const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link)
-      return <a key={i} href={link[2]} style={{ color: '#a855f7', textDecoration: 'underline', textUnderlineOffset: '2px' }} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
+      return <a key={i} href={link[2]} style={{ color: '#a855f7', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
 
     const img = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (img)
@@ -102,7 +102,7 @@ const inlineRender = (text: string, footnotes: Map<string, string>): React.React
 
     const autoUrl = part.match(/^https?:\/\/[^\s<]+$/);
     if (autoUrl)
-      return <a key={i} href={part} style={{ color: '#60a5fa', textDecoration: 'underline', textUnderlineOffset: '2px' }} target="_blank" rel="noopener noreferrer">{part}</a>;
+      return <a key={i} href={part} style={{ color: '#60a5fa', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }} target="_blank" rel="noopener noreferrer">{part}</a>;
 
     return part;
   });
