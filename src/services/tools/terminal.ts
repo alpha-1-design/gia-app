@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import terminalService from '../TerminalService';
+import SandboxService from '../SandboxService';
+import CodeRunner from '../CodeRunner';
 import type { Tool, ToolContext } from './types';
 
 function formatZodError(issues: z.ZodIssue[]): string {
@@ -46,34 +48,65 @@ const terminalRun: Tool = {
     } else if (language === 'js') {
       shellCommand = `node << 'GIA_EOF'\n${command}\nGIA_EOF`;
     } else if (language === 'cpp') {
-      // Write to temp file, compile, run, clean up
       const safeId = `gia_cpp_${Date.now()}`;
       shellCommand = `cat > /tmp/${safeId}.cpp << 'GIA_EOF'\n${command}\nGIA_EOF\ng++ -o /tmp/${safeId} /tmp/${safeId}.cpp -std=c++17 -O2 2>&1 && /tmp/${safeId} 2>&1; rm -f /tmp/${safeId}.cpp /tmp/${safeId}`;
     }
 
-    ctx?.onProgress?.(0.2, `Executing via proot+Alpine terminal...`);
+    ctx?.onProgress?.(0.1, 'Attempting native terminal...');
 
+    // Try backends in order: native plugin → sandbox server → code runner
+    const errors: string[] = [];
+
+    // 1. Try native Capacitor plugin (Android)
     try {
       const result = await terminalService.exec(shellCommand, workdir, undefined, timeout);
-      ctx?.onProgress?.(1, 'Done');
-      const output = result.output || '(no output)';
-      if (result.exitCode === 0) {
+      if (result.exitCode !== -1 || result.sessionId !== 'mock') {
+        ctx?.onProgress?.(1, 'Done');
+        const output = result.output || '(no output)';
+        const status = result.exitCode === 0 ? '✅' : '⚠️';
         return {
           success: true,
-          content: `## ✅ Terminal Output\n\n\`\`\`\n${output.slice(0, 50000)}\n\`\`\`\n\n_Exit code: ${result.exitCode}_`,
+          content: `## ${status} Terminal Output\n\n\`\`\`\n${output.slice(0, 50000)}\n\`\`\`\n\n_Exit code: ${result.exitCode}_`,
         };
       }
-      return {
-        success: true,
-        content: `## ⚠️ Terminal Output (exit code: ${result.exitCode})\n\n\`\`\`\n${output.slice(0, 50000)}\n\`\`\`\n\n_Exit code: ${result.exitCode}_`,
-      };
-    } catch (e: unknown) {
-      return {
-        success: false,
-        content: '',
-        error: e instanceof Error ? e.message : String(e),
-      };
+      errors.push(`Native plugin: ${result.output}`);
+    } catch { errors.push('Native plugin unavailable'); }
+
+    // 2. Try Sandbox server (desktop dev, port 3081)
+    ctx?.onProgress?.(0.3, 'Trying sandbox server...');
+    try {
+      const available = await SandboxService.ensureAvailable();
+      if (available) {
+        const result = await SandboxService.exec(shellCommand, { timeout, workdir });
+        ctx?.onProgress?.(1, 'Done');
+        const parts: string[] = [];
+        if (result.stdout) parts.push(result.stdout);
+        if (result.stderr) parts.push(`[stderr]\n${result.stderr}`);
+        if (result.exitCode !== 0) parts.push(`\nExit code: ${result.exitCode}`);
+        return { success: true, content: parts.join('\n\n') || '(no output)' };
+      }
+      errors.push('Sandbox server not running');
+    } catch { errors.push('Sandbox server error'); }
+
+    // 3. Fall back to CodeRunner (Piston API or local JS)
+    ctx?.onProgress?.(0.5, 'Falling back to code runner...');
+    try {
+      const codeLang = language === 'sh' ? 'python' : language;
+      const result = await CodeRunner.run({ language: codeLang, code: command });
+      ctx?.onProgress?.(1, 'Done');
+      if (result.error) {
+        return { success: false, content: result.output, error: result.error };
+      }
+      return { success: true, content: result.output || '(no output)' };
+    } catch (e) {
+      errors.push(`Code runner: ${e instanceof Error ? e.message : 'failed'}`);
     }
+
+    return {
+      success: false,
+      content: '',
+      error: `All terminal backends failed:\n${errors.join('\n')}`,
+    };
   },
 };
 

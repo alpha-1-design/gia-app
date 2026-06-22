@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GIAOverlayPlugin.class);
         registerPlugin(GIASMSPlugin.class);
         registerPlugin(GIAAlarmPlugin.class);
+        registerPlugin(GIATerminalPlugin.class);
     }
 
     @Override

@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 gia-become-claude-spec.md
 gia-bug-report.md
+
+# Sandbox rootfs (heavy, not needed for APK build)
+server/alpine-rootfs/

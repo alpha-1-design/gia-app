@@ -1,2 +1,0 @@
-[console_scripts]
-pipx = pipx.main:cli

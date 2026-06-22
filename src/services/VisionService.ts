@@ -65,7 +65,11 @@ class VisionService {
     const key = `${task}:${modelId}`;
     if (this.pipelineCache.has(key)) return this.pipelineCache.get(key);
     if (this._loading.has(key)) {
-      while (this._loading.has(key)) await new Promise(r => setTimeout(r, 100));
+      let waited = 0;
+      while (this._loading.has(key) && waited < 30000) {
+        await new Promise(r => setTimeout(r, 100));
+        waited += 100;
+      }
       return this.pipelineCache.get(key);
     }
     this._loading.add(key);

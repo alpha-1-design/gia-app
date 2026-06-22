@@ -5,19 +5,23 @@ import connectorManager from '../../services/connectors/ConnectorManager';
 export const ConnectorsSection: React.FC = () => {
   const [connectors, setConnectors] = useState(connectorManager.getAll());
   const [editId, setEditId] = useState<string | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
   const refresh = () => setConnectors(connectorManager.getAll());
 
-  useEffect(() => { const iv = setInterval(refresh, 5000); return () => clearInterval(iv); }, []);
+  useEffect(() => { refresh(); }, []);
 
-  const handleConfigure = (id: string) => {
-    if (apiKeyInput.trim()) {
-      connectorManager.configure(id, { apiKey: apiKeyInput.trim(), enabled: true });
-      setEditId(null);
-      setApiKeyInput('');
-      refresh();
+  const handleConfigure = (c: { id: string; fields?: { key: string; required: boolean }[] }) => {
+    const filled = c.fields?.every(f => !f.required || fieldValues[f.key]?.trim());
+    if (!filled) return;
+    const config: Record<string, string> = {};
+    for (const f of c.fields || []) {
+      if (fieldValues[f.key]?.trim()) config[f.key] = fieldValues[f.key].trim();
     }
+    connectorManager.configure(c.id, { config, enabled: true });
+    setEditId(null);
+    setFieldValues({});
+    refresh();
   };
 
   const handleToggle = (id: string, current: boolean) => {
@@ -31,8 +35,17 @@ export const ConnectorsSection: React.FC = () => {
   };
 
   const handleRemove = (id: string) => {
-    connectorManager.configure(id, { apiKey: undefined, enabled: false, status: 'disconnected' });
+    connectorManager.configure(id, { config: {}, apiKey: undefined, enabled: false, status: 'disconnected' });
     refresh();
+  };
+
+  const openEdit = (c: { id: string; fields?: { key: string }[]; config?: Record<string, string>; apiKey?: string }) => {
+    const vals: Record<string, string> = {};
+    for (const f of c.fields || []) {
+      vals[f.key] = c.config?.[f.key] || (f.key === 'apiKey' ? (c.apiKey || '') : '');
+    }
+    setFieldValues(vals);
+    setEditId(c.id);
   };
 
   const typeIcons: Record<string, React.ReactNode> = {
@@ -40,6 +53,9 @@ export const ConnectorsSection: React.FC = () => {
     messaging: <PlugZap size={14} />,
     database: <Key size={14} />,
   };
+
+  const hasAnyConfig = (c: { fields?: { key: string }[]; config?: Record<string, string>; apiKey?: string }) =>
+    c.fields?.some(f => c.config?.[f.key] || (f.key === 'apiKey' && c.apiKey));
 
   return (
     <div className="p-4 rounded-xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }}>
@@ -87,35 +103,40 @@ export const ConnectorsSection: React.FC = () => {
             </div>
 
             {editId === c.id ? (
-              <div className="flex gap-2 mt-2">
-                <input
-                  value={apiKeyInput}
-                  onChange={e => setApiKeyInput(e.target.value)}
-                  placeholder="Paste API key..."
-                  className="flex-1 text-[10px] px-2.5 py-1.5 rounded-lg outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
-                  autoFocus
-                />
-                <button onClick={() => handleConfigure(c.id)}
-                  className="text-[10px] px-2.5 py-1.5 rounded-lg"
-                  style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399' }}>
-                  Save
-                </button>
-                <button onClick={() => { setEditId(null); setApiKeyInput(''); }}
-                  className="text-[10px] px-2.5 py-1.5 rounded-lg"
-                  style={{ color: 'var(--gia-muted)' }}>
-                  Cancel
-                </button>
+              <div className="flex flex-col gap-2 mt-2">
+                {(c.fields || []).map(f => (
+                  <input key={f.key}
+                    value={fieldValues[f.key] || ''}
+                    onChange={e => setFieldValues(p => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    type={f.type}
+                    className="flex-1 text-[10px] px-2.5 py-1.5 rounded-lg outline-none"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
+                    autoFocus={f === (c.fields || [])[0]}
+                  />
+                ))}
+                <div className="flex gap-2">
+                  <button onClick={() => handleConfigure(c)}
+                    className="text-[10px] px-2.5 py-1.5 rounded-lg"
+                    style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399' }}>
+                    Save
+                  </button>
+                  <button onClick={() => { setEditId(null); setFieldValues({}); }}
+                    className="text-[10px] px-2.5 py-1.5 rounded-lg"
+                    style={{ color: 'var(--gia-muted)' }}>
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex gap-1.5 mt-2">
-                <button onClick={() => { setEditId(c.id); setApiKeyInput(c.apiKey || ''); }}
+                <button onClick={() => openEdit(c)}
                   className={`text-[9px] px-2 py-1 rounded-lg transition-all ${
-                    c.apiKey ? 'text-amber-400 bg-amber-500/10' : 'text-zinc-400 bg-zinc-500/10'
+                    hasAnyConfig(c) ? 'text-amber-400 bg-amber-500/10' : 'text-zinc-400 bg-zinc-500/10'
                   }`}>
-                  {c.apiKey ? 'Change Key' : 'Set API Key'}
+                  {hasAnyConfig(c) ? 'Edit Config' : 'Configure'}
                 </button>
-                {c.apiKey && (
+                {hasAnyConfig(c) && (
                   <button onClick={() => handleRemove(c.id)}
                     className="text-[9px] px-2 py-1 rounded-lg text-red-400 bg-red-500/10">
                     Remove
