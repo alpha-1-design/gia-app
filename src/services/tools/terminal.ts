@@ -15,15 +15,53 @@ function formatZodError(issues: z.ZodIssue[]): string {
   }).join('; ');
 }
 
+/**
+ * Prepare the shell command for the target language.
+ * Uses $HOME instead of /tmp because Alpine proot on Android
+ * may not have a writable /tmp — $HOME is always safe.
+ */
+function buildShellCommand(command: string, language: string): string {
+  switch (language) {
+    case 'python':
+      return `python3 - << 'GIA_PYEOF'
+${command}
+GIA_PYEOF`;
+    case 'js':
+      return `node - << 'GIA_JSEOF'
+${command}
+GIA_JSEOF`;
+    case 'cpp': {
+      const safeId = `gia_cpp_${Date.now()}`;
+      // Use $HOME not /tmp — /tmp may not exist in proot Alpine
+      return [
+        `_TMPDIR="$HOME/.gia_tmp" && mkdir -p "$_TMPDIR"`,
+        `cat > "$_TMPDIR/${safeId}.cpp" << 'GIA_CPPEOF'`,
+        command,
+        'GIA_CPPEOF',
+        `g++ -o "$_TMPDIR/${safeId}" "$_TMPDIR/${safeId}.cpp" -std=c++17 -O2 2>&1`,
+        `&& "$_TMPDIR/${safeId}" 2>&1`,
+        `; rm -f "$_TMPDIR/${safeId}.cpp" "$_TMPDIR/${safeId}"`,
+      ].join('
+');
+    }
+    default:
+      return command;
+  }
+}
+
 const terminalRun: Tool = {
   id: 'terminal_run',
   name: 'terminal_run',
-  description: 'Execute shell commands in GIA\'s proot+Alpine terminal environment. Supports Python, JavaScript, shell scripts, and any command available in Alpine Linux.',
+  description: 'Execute shell commands in GIA\'s proot+Alpine terminal environment. Supports Python, JavaScript, shell scripts, and any command available in Alpine Linux. Results are shown to the user as terminal output.',
   schema: {
     type: 'object',
     properties: {
       command: { type: 'string', description: 'Command or code to execute in the terminal' },
-      language: { type: 'string', enum: ['sh', 'python', 'js', 'cpp'], description: 'Language/execution mode. Use "python" for .py, "js" for Node.js, "cpp" for compiled C++, "sh" (default) for shell commands.' },
+      language: {
+        type: 'string',
+        enum: ['sh', 'python', 'js', 'cpp'],
+        description: 'Language/execution mode. Use "python" for Python scripts, "js" for Node.js, "cpp" for compiled C++, "sh" (default) for shell commands.',
+      },
       workdir: { type: 'string', description: 'Optional working directory inside the proot environment' },
       timeout: { type: 'number', description: 'Timeout in milliseconds (default: 30000, max: 300000)' },
     },
@@ -36,44 +74,45 @@ const terminalRun: Tool = {
       workdir: z.string().max(500).optional(),
       timeout: z.number().min(1000).max(300000).default(30000),
     });
+
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
-
-    const { command, language, workdir, timeout } = parsed.data;
-
-    // Transform based on language
-    let shellCommand = command;
-    if (language === 'python') {
-      shellCommand = `python3 << 'GIA_EOF'\n${command}\nGIA_EOF`;
-    } else if (language === 'js') {
-      shellCommand = `node << 'GIA_EOF'\n${command}\nGIA_EOF`;
-    } else if (language === 'cpp') {
-      const safeId = `gia_cpp_${Date.now()}`;
-      shellCommand = `cat > /tmp/${safeId}.cpp << 'GIA_EOF'\n${command}\nGIA_EOF\ng++ -o /tmp/${safeId} /tmp/${safeId}.cpp -std=c++17 -O2 2>&1 && /tmp/${safeId} 2>&1; rm -f /tmp/${safeId}.cpp /tmp/${safeId}`;
+    if (!parsed.success) {
+      return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     }
 
-    ctx?.onProgress?.(0.1, 'Attempting native terminal...');
-
-    // Try backends in order: native plugin → sandbox server → code runner
+    const { command, language, workdir, timeout } = parsed.data;
+    const shellCommand = buildShellCommand(command, language);
     const errors: string[] = [];
 
-    // 1. Try native Capacitor plugin (Android)
+    // ── Backend 1: Native Capacitor plugin (Android proot+Alpine) ──────────
+    ctx?.onProgress?.(0.1, 'Running in terminal…');
     try {
       const result = await terminalService.exec(shellCommand, workdir, undefined, timeout);
-      if (result.exitCode !== -1 || result.sessionId !== 'mock') {
+
+      // exitCode -1 + sessionId 'mock' = plugin not available (web fallback)
+      if (!(result.exitCode === -1 && result.sessionId === 'mock')) {
         ctx?.onProgress?.(1, 'Done');
-        const output = result.output || '(no output)';
-        const status = result.exitCode === 0 ? '✅' : '⚠️';
+        const output = result.output?.trim() || '(no output)';
+        const statusIcon = result.exitCode === 0 ? '✅' : '⚠️';
         return {
-          success: true,
-          content: `## ${status} Terminal Output\n\n\`\`\`\n${output.slice(0, 50000)}\n\`\`\`\n\n_Exit code: ${result.exitCode}_`,
+          success: result.exitCode === 0,
+          content: `## ${statusIcon} Terminal Output
+
+\`\`\`
+${output.slice(0, 50000)}
+\`\`\`
+
+_Exit code: ${result.exitCode}_`,
+          error: result.exitCode !== 0 ? `Process exited with code ${result.exitCode}` : undefined,
         };
       }
-      errors.push(`Native plugin: ${result.output}`);
-    } catch { errors.push('Native plugin unavailable'); }
+      errors.push('Native GIATerminal plugin: not available on this platform');
+    } catch (e) {
+      errors.push(`Native plugin error: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
-    // 2. Try Sandbox server (desktop dev, port 3081)
-    ctx?.onProgress?.(0.3, 'Trying sandbox server...');
+    // ── Backend 2: Sandbox server (desktop dev, port 3081) ─────────────────
+    ctx?.onProgress?.(0.35, 'Trying sandbox…');
     try {
       const available = await SandboxService.ensureAvailable();
       if (available) {
@@ -81,31 +120,61 @@ const terminalRun: Tool = {
         ctx?.onProgress?.(1, 'Done');
         const parts: string[] = [];
         if (result.stdout) parts.push(result.stdout);
-        if (result.stderr) parts.push(`[stderr]\n${result.stderr}`);
-        if (result.exitCode !== 0) parts.push(`\nExit code: ${result.exitCode}`);
-        return { success: true, content: parts.join('\n\n') || '(no output)' };
-      }
-      errors.push('Sandbox server not running');
-    } catch { errors.push('Sandbox server error'); }
+        if (result.stderr) parts.push(`[stderr]
+${result.stderr}`);
+        if (result.exitCode !== 0) parts.push(`
+Exit code: ${result.exitCode}`);
+        return {
+          success: result.exitCode === 0,
+          content: parts.join('
 
-    // 3. Fall back to CodeRunner (Piston API or local JS)
-    ctx?.onProgress?.(0.5, 'Falling back to code runner...');
+') || '(no output)',
+          error: result.exitCode !== 0 ? `Exit code ${result.exitCode}` : undefined,
+        };
+      }
+      errors.push('Sandbox server: not running on port 3081');
+    } catch {
+      errors.push('Sandbox server: connection failed');
+    }
+
+    // ── Backend 3: CodeRunner / Piston API ─────────────────────────────────
+    ctx?.onProgress?.(0.6, 'Trying code runner…');
     try {
+      // Map sh → python for Piston (bash support is inconsistent on free tier)
       const codeLang = language === 'sh' ? 'python' : language;
       const result = await CodeRunner.run({ language: codeLang, code: command });
       ctx?.onProgress?.(1, 'Done');
-      if (result.error) {
-        return { success: false, content: result.output, error: result.error };
+      if (result.error && !result.output) {
+        errors.push(`Code runner: ${result.error}`);
+      } else {
+        return {
+          success: !result.error,
+          content: result.output || '(no output)',
+          error: result.error || undefined,
+        };
       }
-      return { success: true, content: result.output || '(no output)' };
     } catch (e) {
       errors.push(`Code runner: ${e instanceof Error ? e.message : 'failed'}`);
     }
 
+    // ── All backends exhausted ──────────────────────────────────────────────
+    // Give the user an honest, actionable error instead of letting the AI hallucinate success.
+    const detail = errors.map((e, i) => `${i + 1}. ${e}`).join('
+');
     return {
       success: false,
       content: '',
-      error: `All terminal backends failed:\n${errors.join('\n')}`,
+      error: [
+        'All terminal backends are unavailable right now.',
+        '',
+        'What was tried:',
+        detail,
+        '',
+        'To fix:',
+        '• On Android: ensure the GIATerminal native plugin is installed and the proot Alpine environment is set up.',
+        '• For code execution: configure a Piston endpoint in Settings → Code Execution.',
+      ].join('
+'),
     };
   },
 };
@@ -125,10 +194,31 @@ const terminalStatus: Tool = {
 
       return {
         success: true,
-        content: `## 🖥️ Terminal Status\n\n**Running:** ${status.running ? '✅ Yes' : '❌ No'}\n**Active Sessions:** ${status.sessionCount}\n\n**Filesystem:**\n- Total: ${totalGB} GB\n- Used: ${usedGB} GB\n- Free: ${freeGB} GB\n\n${sessions.length > 0 ? `**Sessions:**\n${sessions.map(s => `- \`${s.sessionId}\`: ${s.command.slice(0, 80)}${s.running ? ' (running)' : ''}`).join('\n')}` : ''}`,
+        content: [
+          '## 🖥️ Terminal Status',
+          '',
+          `**Running:** ${status.running ? '✅ Yes' : '❌ No'}`,
+          `**Active Sessions:** ${status.sessionCount}`,
+          '',
+          '**Filesystem:**',
+          `- Total: ${totalGB} GB`,
+          `- Used: ${usedGB} GB`,
+          `- Free: ${freeGB} GB`,
+          '',
+          sessions.length > 0
+            ? `**Sessions:**
+${sessions.map(s => `- \`${s.sessionId}\`: ${s.command.slice(0, 80)}${s.running ? ' _(running)_' : ''}`).join('
+')}`
+            : '_No active sessions._',
+        ].join('
+'),
       };
     } catch (e: unknown) {
-      return { success: false, content: '', error: e instanceof Error ? e.message : 'Terminal not available' };
+      return {
+        success: false,
+        content: '',
+        error: `Terminal not available: ${e instanceof Error ? e.message : 'unknown error'}`,
+      };
     }
   },
 };
@@ -147,12 +237,18 @@ const terminalKill: Tool = {
   execute: async (args) => {
     const schema = z.object({ sessionId: z.string().min(1) });
     const parsed = schema.safeParse(args);
-    if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
+    if (!parsed.success) {
+      return { success: false, content: '', error: formatZodError(parsed.error.issues) };
+    }
     try {
       await terminalService.kill(parsed.data.sessionId);
       return { success: true, content: `🔪 Session \`${parsed.data.sessionId}\` killed.` };
     } catch (e: unknown) {
-      return { success: false, content: '', error: e instanceof Error ? e.message : 'Failed to kill session' };
+      return {
+        success: false,
+        content: '',
+        error: `Failed to kill session: ${e instanceof Error ? e.message : 'unknown error'}`,
+      };
     }
   },
 };
