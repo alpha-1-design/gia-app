@@ -145,8 +145,15 @@ const MathBlock: React.FC<{ formula: string; inline: boolean }> = ({ formula, in
   });
 };
 
+const stripScripts = (html: string): string =>
+  html.replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\bon\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\bon\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/javascript\s*:/gi, '');
+
 const InlineSvg: React.FC<{ svg: string }> = ({ svg }) => (
-  <div className="my-3 rounded-xl overflow-hidden" style={{ border: '1px solid var(--gia-border)', background: 'white' }} dangerouslySetInnerHTML={{ __html: svg }} />
+  <div className="my-3 rounded-xl overflow-hidden" style={{ border: '1px solid var(--gia-border)', background: 'white' }} dangerouslySetInnerHTML={{ __html: stripScripts(svg) }} />
 );
 
 const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => {

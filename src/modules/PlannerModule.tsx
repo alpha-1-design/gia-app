@@ -81,17 +81,18 @@ const PlannerModule: React.FC = () => {
 
   // Restore scheduled task timers on mount (survives navigation)
   useEffect(() => {
-    const pending = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun > Date.now());
+    if (scheduledTasks.length === 0) return;
+    const now = Date.now();
+    const pending = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun > now);
     for (const task of pending) {
-      const delay = task.nextRun - Date.now();
-      mountTimeoutRef.current = setTimeout(() => runTask(task), Math.min(delay, 86400000)); // cap at 24h
+      const delay = Math.max(0, task.nextRun - now);
+      mountTimeoutRef.current = setTimeout(() => runTask(task), Math.min(delay, 86400000));
     }
-    // also check for overdue tasks
-    const overdue = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun <= Date.now());
+    const overdue = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun <= now);
     for (const task of overdue) {
       runTask(task);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runTask = useCallback(async (task: ScheduledTask) => {
     if (task.status === 'running') return;

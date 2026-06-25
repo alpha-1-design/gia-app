@@ -122,16 +122,17 @@ const AgentsModule: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editAgentId, setEditAgentId] = useState<string | null>(null);
 
-  const editingAgent = editAgentId ? agents.find(a => a.id === editAgentId) ?? null : null;
+  const safeAgents = agents ?? [];
+  const editingAgent = editAgentId ? safeAgents.find(a => a.id === editAgentId) ?? null : null;
 
   const openChat = (id: string) => { setChatAgentId(id); setView('chat'); };
-  const agent = chatAgentId ? agents.find(a => a.id === chatAgentId) ?? null : null;
+  const agent = chatAgentId ? safeAgents.find(a => a.id === chatAgentId) ?? null : null;
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--gia-bg)' }}>
       {view === 'list' && (
         <AgentListView
-          agents={agents}
+          agents={safeAgents}
           onOpenChat={openChat}
           onCreateNew={() => setShowCreate(true)}
           onEdit={(id) => setEditAgentId(id)}

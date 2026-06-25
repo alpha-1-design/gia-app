@@ -1,96 +1,111 @@
-# GIA App — Agents Module
+# GIA App — Agent Guide
 
-## Custom Agents (AgentsModule)
-
-Custom agents are like Gemini Gems or Claude Projects — self-contained AI personas with their own system prompt, toolset, and private knowledge files, all running within GIA.
-
-### Architecture
-- **Store**: `src/store/useAgentStore.ts` — Zustand store persisted to IndexedDB with CRUD for custom agents, per-agent file management, chat session storage, and per-agent RAG indexing/search helpers.
-- **Module**: `src/modules/AgentsModule.tsx` — Three views (list, chat, create/edit modal).
-- **UI entry**: Lazy-loaded in `src/App.tsx` with `Bot` icon in the module selector. CSS variable `--mod-agents: 168, 85, 247` in `globals.css`.
-- **System prompt mode**: `systemPromptMode: 'replace'` — agent only knows about its own tools and files.
-
-### Key Features
-- **Per-agent RAG**: Documents are indexed with `agent:{agentId}:` namespace prefix in RAGService. `search()` and `listDocuments()` accept an optional `namespace` parameter for isolation.
-- **Per-agent tool assignment**: 16 available tools (web_search, filesystem_read, rag_search, code_runner, etc.). Only assigned tools appear in the agent's system prompt.
-- **Self-contained chat**: Each agent has its own message list in `useAgentStore.chatSessions[agentId]`. No shared sessions or branches with the main chat.
-- **Source citations**: File name + relevance score chips appear below agent responses. Hover shows excerpt.
-- **42 avatar icons**: Lucide React icons with per-icon color mappings.
-
-### Animations
-- **Cosmic portal empty state**: Animated nebula gradient BG, rotating portal rings, orbiting particles, floating geometric shapes, cosmic rays, word-reveal headline, pulsing create button.
-- **Spring physics**: Agent cards use `layout` animations with spring stiffness 300 / damping 30. Modal entrance uses spring damping 28 / stiffness 280 / mass 0.8.
-- **Staggered entrances**: Message list items stagger at `idx * 0.04s`. Form fields in modal stagger from 0.08s-0.44s.
-- **Source chip bounce-in**: CSS `source-bounce-in` keyframe (scale 0.92 → 1.02 → 1) with stagger delay.
-- **Hover effects**: Source chips scale to 1.05 with purple glow shadow on hover. Tooltip slides up with spring easing.
-- **Thinking dots**: Three dots with float + glow animation, staggered 0.15s apart.
-- **Streaming glow**: Latest streaming message has a subtle purple `box-shadow` aura.
-- **Card exit**: Cards exit with blur(4px) + scale(0.92).
-
-## File & Document Reading Tools
-
-GIA has these local on-device tools that do **not** rely on AI providers:
-
-| Tool | File | Scope | Local? |
-|------|------|-------|--------|
-| `filesystem_read` | `src/services/tools/filesystem.ts` | Reads any file from device filesystem (Android, via Capacitor) | ✅ Yes (native only) |
-| `filesystem_write` | `src/services/tools/filesystem.ts` | Writes files to device | ✅ Yes |
-| `filesystem_list` | `src/services/tools/filesystem.ts` | Lists directory contents | ✅ Yes |
-| `read_document` | `src/services/tools/documents.ts` | Reads DOCX, XLSX, PPTX, ODT, ODS, EPUB, HTML, MD, RTF, CSV, JSON, XML, YAML, plain text — runs Python parser in sandbox | ✅ Yes (needs sandbox server) |
-| `download_url` | `src/services/tools/documents.ts` | Downloads any URL to device | ✅ Yes |
-| `browse_web` | `src/services/tools/documents.ts` | Fetches and reads web page content | ✅ Yes (needs browser server) |
-| `rag_search` | `src/services/tools/rag.ts` | Semantic vector search across indexed documents | ✅ Yes (uses local ONNX embeddings via LocalAI) |
-
-`filesystem_read`/`write`/`list` are fully local via Capacitor Filesystem plugin (Android only).  
-`read_document` runs a Python script in the local sandbox server — no network calls to any AI provider.  
-`rag_search` uses local ONNX embeddings (`LocalAI.embed()`) — purely client-side.
-
-## Settings Toggles & Injection
-
-### Settings injected into GIA's context
-Settings in the store flow into GIA's system prompt (`buildGiaSystem.ts`) or as direct generation options:
-
-| Setting | Where injected | File |
-|---------|---------------|------|
-| `customInstructions` | System prompt footer | `buildGiaSystem.ts:289` |
-| `handsOff` | Controls tool approval note + native schema skipping | `buildGiaSystem.ts:93` |
-| `pinnedMemories` | System prompt memory section | `buildGiaSystem.ts:75` |
-| `userProfile` | System prompt user context | `buildGiaSystem.ts:37` |
-| `webSearch` | `useWebSearch` option to GiaBrain | `useChatGeneration.ts:219` |
-| `extThinking` | `useExtendedThinking` option + temperature control | `useChatGeneration.ts:220` |
-| `localVision` | Disables vision model switching | `GiaBrain.ts:84` |
-| `responseCache` | Caches/reuses responses | `GiaBrain.ts:69` |
-| `outputValidation` | Sanitizes provider output | `GiaBrain.ts:207` |
-| `smartFallback` | Smart provider failover | `GiaBrain.ts:151` |
-| `localSummarize` | Controls auto-summarization of long context | `useChatGeneration.ts:178` |
-| `inputGuardrails` | Prompt safety check before generation | `useChatGeneration.ts:109` |
-
-### Settings page
-- **ReliabilitySection**: Smart Fallback, Response Cache, Input Guardrails, Output Validation, Local Summarization — all wired to store.
-- **DeveloperSettings**: Smart Fallback, Output Validation, Response Cache (read from store directly — no desync).
-- **ChatModule feature bar**: Web Search, Extended Thinking, Hands-off, Local Vision (toggles only in chat, not in Settings page).
-- **KnowledgePanel**: Custom Instructions (textarea, save button).
-
-### Persistence
-The following survive page reloads via IndexedDB (`partialize` in `useGiaStore.ts`): sessions, `webSearch`, `extThinking`, `handsOff`, `localVision`, `localSummarize`, `responseCache`, `inputGuardrails`, `outputValidation`, `smartFallback`, `customInstructions`, theme, wake word settings, voice settings.
-
-## Generation Continuity (Anti-Hang)
-
-When the user switches modules or leaves the app during an active generation:
-
-1. **No abort on unmount**: `useChatState.ts` no longer aborts the AbortController on component unmount (removed).
-2. **Store-level tracking**: `generationState` in `useGiaStore` tracks `{ active, module, sessionId, messageId }` so the in-progress state survives module switches.
-3. **Background message updates**: The `onStream` callback calls `state.updateMessage()` which writes to the store (persisted to IndexDB with 300ms debounce). Even when the component is unmounted, messages continue to update.
-4. **Desktop notifications**: When generation completes and the user is on a different module, `DesktopNotifications.notify()` fires a browser notification. On Android, `LocalNotifications.schedule()` fires a native notification.
-5. **Agent notifications**: Same flow for agent chat — notification fires when `currentModule !== 'agents'`.
-
-## Commands
+## Commands (order matters)
 ```bash
-npm run dev        # Vite dev server
-npm run build      # tsc -b && vite build (typecheck THEN build — never skip)
-npm run lint       # eslint .
-npm run test       # vitest (watch mode)
-npm run test:run   # vitest run
-npm run preview    # vite preview
-npm run cap:sync   # npx cap sync android (run after build for Android)
+npm ci --legacy-peer-deps   # install (needs legacy flag)
+npm run lint                # eslint . — must pass
+npm run test:run            # vitest run (not watch)
+npm run build               # tsc -b && vite build — typecheck THEN build
+npm run dev                 # Vite dev server
+npx cap sync android        # after build, for Android APK
 ```
+
+## Architecture
+
+**Single-page React 19 app** — not monorepo. No framework router.
+
+| Layer | Key facts |
+|-------|-----------|
+| **Build** | Vite 8, `base: './'` (critical for Capacitor assets), `cssMinify: 'esbuild'` (avoids LightningCSS/Tailwind v4 conflict) |
+| **Styling** | Tailwind CSS v4 (`@import "tailwindcss"`, no `tailwind.config.js`), `@tailwindcss/vite` plugin |
+| **State** | Zustand 5 with `persist` middleware → IndexedDB via `src/store/idb-storage.ts` (debounces writes 300ms, flushes on `beforeunload`). Use `useShallow` from `zustand/react/shallow` for selector perf. |
+| **Animation** | `motion` package (import from `motion/react`, NOT `framer-motion`) |
+| **Path alias** | `@/` → `src/` |
+| **Icons** | Lucide React |
+| **Charts** | Recharts; Mermaid/KaTeX loaded from CDN on demand |
+
+**8 modules** in `src/modules/`, registered in `src/App.tsx:52`. Analyst, Exam, Autonomy, Agents are lazy-loaded.
+
+## Generation Pipeline
+
+```
+useChatState → useChatGeneration → GiaBrain.generate() → provider adapter → tool loop
+```
+
+- `GiaBrain` is a **singleton** (`src/services/GiaBrain.ts`). The tool execution loop runs max 10 iterations: model output → extract `` ```tool ``` blocks → execute (parallel-safe read tools batch, mutating tools sequential) → feed observations back → loop.
+- Provider adapters: `src/services/providers/{openai,anthropic,gemini,local}.ts`.
+- System prompt builder: `src/services/buildGiaSystem.ts` (~350 lines, merges identity, memories, profile, tools, custom instructions).
+- Tools: `src/services/tools/` (35 files), registered in `src/services/GiaTools.ts`.
+- `AbortController` for cancellation; generation survives module switches via `generationState` in store.
+
+## Stores (`src/store/`)
+
+All Zustand, persisted to IndexedDB. Key stores:
+- `useGiaStore` — modules, sessions (tree-based messages), feature toggles, notifications
+- `useProviderStore` — provider API keys, models
+- `useMemoryStore` — persistent memory with relevance scoring
+- `useAgentStore` — custom agents + per-agent RAG
+- `useAutonomyStore` — autonomous goals/progress
+- `useProtocolStore` — tool approval workflow
+- `useMCPStore`, `useNotesStore`, `useTaskStore`, `usePluginStore`, `useSearchStore`
+
+## Test Patterns
+
+- **Vitest 4** with `globals: true`, `jsdom`, `jest-dom` matchers.
+- Import from `'vitest'` explicitly (despite globals).
+- Mock stores via `vi.mock()` with external mutable state variable reset in `beforeEach`.
+- Mock IndexedDB storage with in-memory `Map`.
+- Factory functions for test data (e.g. `makeTask()`, `userMsg()`).
+- `vi.spyOn(globalThis, 'fetch')` for HTTP services.
+- `vi.useFakeTimers()` for time-dependent tests.
+
+## Module Theming
+
+CSS variables in `src/styles/globals.css`:
+```
+--mod-chat: 168, 85, 247  (violet)
+--mod-exam: 245, 158, 11  (amber)
+--mod-analyst: 59, 130, 246 (blue)
+--mod-writer: 236, 72, 153 (pink)
+--mod-planner: 16, 185, 129 (emerald)
+--mod-agents: 168, 85, 247 (violet)
+--mod-autonomy: 52, 211, 153 (emerald)
+--mod-settings: 148, 163, 184 (slate)
+```
+
+## Code Conventions
+
+- Functional components + hooks only. No class components.
+- TypeScript strict mode. Avoid `any`.
+- Zod schemas for tool input validation.
+- CSS variables for theming (`var(--gia-*)`), Tailwind utility classes for layout.
+- Prefer Lucide icons; `clsx` for conditional classes.
+
+## Key Services
+
+| Service | Path | Role |
+|---------|------|------|
+| `GiaBrain` | `services/GiaBrain.ts` | Generation orchestrator, tool loop |
+| `buildGiaSystem` | `services/buildGiaSystem.ts` | System prompt assembly |
+| `ProviderRegistry` | `services/ProviderRegistry.ts` | Provider definitions |
+| `ProviderMonitor` | `services/ProviderMonitor.ts` | Health tracking, smart fallback |
+| `RAGService` | `services/RAGService.ts` | Vector search (local ONNX embeddings) |
+| `LocalAI` | `services/LocalAI.ts` | On-device embedding/classification |
+| `LocalLLMService` | `services/LocalLLMService.ts` | Local Qwen2.5 (0.5B–3B) via Transformers WASM |
+| `OutputValidator` | `services/OutputValidator.ts` | Auto-repair malformed JSON/fences |
+| `InputGuardrails` | `services/InputGuardrails.ts` | Prompt injection blocking |
+| `ResponseCache` | `services/ResponseCache.ts` | Request dedup with TTL |
+| `PluginManager` | `services/PluginManager.ts` | Hook-based plugin system |
+| `MCPManager` | `services/MCPManager.ts` | MCP server lifecycle |
+| `ToolRunner` | `services/brain/toolRunner.ts` | Tool execution with retry + protocol approvals |
+| `SchedulerService` | `services/SchedulerService.ts` | Periodic background tasks |
+| `MessagingBridge` | `services/MessagingBridge.ts` | Telegram/WhatsApp integration |
+| `DesktopNotifications` | `services/DesktopNotifications.ts` | Browser notifications |
+| `generateWithRetry` | `utils/generateWithRetry.ts` | JSON + network retry (used by Analyst/Planner/Exam) |
+
+## Server & Daemon
+
+- `server/` — Sandbox (Python doc parser, browse_web), GIA Stdio Bridge.
+- `daemon/` — Background gateway daemon (Node.js).
+- `scripts/` — Alpine sandbox setup, sandbox helper.
+- `android/` — Capacitor Android project.

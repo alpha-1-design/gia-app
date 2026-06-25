@@ -54,6 +54,7 @@ export function useChatState() {
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase,
     keepListening, currentTool,
+    clarification, setClarification,
   } = useGiaStore(useShallow(s => ({
     sessions: s.sessions,
     activeSessionId: s.activeSessionId, createSession: s.createSession, setActiveSession: s.setActiveSession,
@@ -72,6 +73,7 @@ export function useChatState() {
     wakeWord: s.wakeWord, thinkingPhase: s.thinkingPhase, setThinkingPhase: s.setThinkingPhase,
     keepListening: s.keepListening, setKeepListening: s.setKeepListening,
     currentTool: s.currentTool,
+    clarification: s.clarification, setClarification: s.setClarification,
   })));
 
   const { providers, activeProvider } = useProviderStore(useShallow(s => ({
@@ -340,6 +342,19 @@ export function useChatState() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgOps.handleEditResend]);
 
+  // Track actual input container height so messages don't hide behind it
+  useEffect(() => {
+    const el = inputContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setInputContainerHeight(entry.contentRect.height);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return {
     input, setInput,
     loading: gen.loading, streamingMsgId: gen.streamingMsgId,
@@ -373,6 +388,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     localVision, setLocalVision,
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase, currentTool,
+    clarification, setClarification,
     providers, activeProvider, activeProtocols,
     keepListening, voiceLanguage, activeSession, messages,
     providerLabel, providerConnected, activeModel,

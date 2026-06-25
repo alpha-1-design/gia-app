@@ -41,7 +41,7 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: '100%', opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1"
+            className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden py-1"
             >
             <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
               <Paperclip size={11} /> File

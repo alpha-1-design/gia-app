@@ -61,6 +61,7 @@ const ChatModule: React.FC = () => {
     copyMessage, scrollToBottom, handleScroll, exportChat,
     setShowSkillPicker, setShowTools, setShowConsole,
     showBranchView, setShowBranchView,
+    clarification, setClarification,
   } = useChatState();
 
   const { greeting, tip } = useProactiveMessage();
@@ -91,11 +92,11 @@ const ChatModule: React.FC = () => {
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {sessions.filter(s => {
-            if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
+            if (s.title?.toLowerCase().includes(historySearch.toLowerCase())) return true;
             if (!historySearch) return false;
-            return s.messages.some(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase()));
+            return s.messages.some(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase()));
           }).map((sess) => {
-            const matchCount = historySearch ? sess.messages.filter(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
+            const matchCount = historySearch ? sess.messages.filter(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
             return (
               <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
                 <div className="flex-1 min-w-0">
@@ -109,9 +110,9 @@ const ChatModule: React.FC = () => {
             );
           })}
           {sessions.filter(s => {
-            if (s.title.toLowerCase().includes(historySearch.toLowerCase())) return true;
+            if (s.title?.toLowerCase().includes(historySearch.toLowerCase())) return true;
             if (!historySearch) return false;
-            return s.messages.some(m => m.message.content.toLowerCase().includes(historySearch.toLowerCase()));
+            return s.messages.some(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase()));
           }).length === 0 && (
             <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
           )}
@@ -269,14 +270,14 @@ const ChatModule: React.FC = () => {
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
         <RecentToolExecutions loading={loading} />
 
-        {useGiaStore.getState().clarification && (
+        {clarification && (
           <ClarificationBottomSheet
-            clarification={useGiaStore.getState().clarification!}
+            clarification={clarification}
             clarAnswer={clarAnswer}
             setClarAnswer={setClarAnswer}
             handleClarificationAnswer={handleClarificationAnswer}
             loading={loading}
-            onDismiss={() => useGiaStore.getState().setClarification(null)}
+            onDismiss={() => setClarification(null)}
           />
         )}
         </div>
@@ -385,7 +386,7 @@ const ChatModule: React.FC = () => {
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: '100%', opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
-                className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1"
+                className="flex items-center gap-1.5 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
                 >
                 <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <Paperclip size={11} /> File
@@ -421,7 +422,7 @@ const ChatModule: React.FC = () => {
                     {localVision && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-emerald-500/20 text-emerald-400"><Eye size={10} /></div>}
                   </div>
                   <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                    {(!webSearch && !extThinking && !handsOff && !localVision) ? 'No active tools' : 'Tools active'}
+                    {(!webSearch && !extThinking && !handsOff && !localVision && !voiceEnabled) ? 'No active tools' : 'Tools active'}
                   </span>
                 </motion.div>
               )}

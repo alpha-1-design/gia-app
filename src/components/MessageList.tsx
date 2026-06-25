@@ -5,6 +5,7 @@ import { ThinkingPanel } from './ThinkingPanel';
 import { ThinkingStatus } from './ThinkingStatus';
 import MarkdownRenderer from './MarkdownRenderer';
 import MessageContextMenu from './MessageContextMenu';
+import { ChatSkeleton } from './feedback';
 import type { Message, ThinkingPhase } from '../store/useGiaStore';
 
 interface MessageListProps {
@@ -60,6 +61,9 @@ const MessageList: React.FC<MessageListProps> = ({
   const showTokenUsage = useShowTokenUsage();
   return (
     <>
+      {loading && messages.length === 0 && (
+        <ChatSkeleton count={3} />
+      )}
       {messages.map((msg) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
@@ -94,7 +98,7 @@ const MessageList: React.FC<MessageListProps> = ({
               onRetry={onRetry}
             >
               <div
-                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative select-none ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : ''}`}
+                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative select-none ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id ? 'streaming-message' : ''}`}
                 style={{
                   borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                   borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',

@@ -107,14 +107,18 @@ export function useChatGeneration() {
 
     // ── InputGuardrails: check prompt safety ────────────────
     if (state.inputGuardrails) {
-      const guard = await InputGuardrails.check(text);
-      if (guard.risk === 'blocked') {
-        state.addNotification(`🚫 Blocked: ${guard.reason}`);
-        return;
-      }
-      if (guard.risk === 'suspicious') {
-        state.addNotification(`⚠️ ${guard.reason}`);
-        text = guard.sanitized;
+      try {
+        const guard = await InputGuardrails.check(text);
+        if (guard.risk === 'blocked') {
+          state.addNotification(`🚫 Blocked: ${guard.reason}`);
+          return;
+        }
+        if (guard.risk === 'suspicious') {
+          state.addNotification(`⚠️ ${guard.reason}`);
+          text = guard.sanitized;
+        }
+      } catch {
+        state.addNotification('⚠️ Safety check failed, proceeding without guardrails');
       }
     }
     const { webSearch, extThinking, handsOff, localVision } = state;

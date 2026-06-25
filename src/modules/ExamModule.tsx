@@ -196,17 +196,17 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
   useEffect(() => {
     if (!timerActive || timeLeft <= 0) return;
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          setTimerActive(false);
-          submitQuizRef.current();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
+
+  useEffect(() => {
+    if (timerActive && timeLeft <= 0 && startTime > 0) {
+      setTimerActive(false);
+      submitQuizRef.current?.();
+    }
+  }, [timerActive, timeLeft, startTime]);
 
   const handleAnswer = (questionId: string, optionIndex: number) => {
     if (submittedQuestions.has(questionId)) return;

@@ -5,6 +5,7 @@ import {
   AlertCircle, CheckCircle, ListTodo, Settings2,
 } from 'lucide-react';
 import { useAutonomyStore, type Goal } from '../store/useAutonomyStore';
+import { useGiaStore } from '../store/useGiaStore';
 import { autonomousAgent } from '../services/autonomy/AutonomousAgent';
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -23,9 +24,10 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 
 function GoalCard({ goal }: { goal: Goal }) {
   const [expanded, setExpanded] = useState(false);
-  const store = useAutonomyStore.getState();
-  const plan = store.plans.find(p => p.id === goal.planId);
-  const reflections = store.getGoalReflections(goal.id);
+  const plans = useAutonomyStore(s => s.plans);
+  const getGoalReflections = useAutonomyStore(s => s.getGoalReflections);
+  const plan = plans.find(p => p.id === goal.planId);
+  const reflections = getGoalReflections(goal.id);
 
   return (
     <motion.div
@@ -67,7 +69,7 @@ function GoalCard({ goal }: { goal: Goal }) {
               <div className="flex gap-1.5">
                 {goal.status === 'active' ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); store.setGoalStatus(goal.id, 'paused'); }}
+                    onClick={(e) => { e.stopPropagation(); useAutonomyStore.getState().setGoalStatus(goal.id, 'paused'); }}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium"
                     style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}
                   >
@@ -75,7 +77,7 @@ function GoalCard({ goal }: { goal: Goal }) {
                   </button>
                 ) : goal.status === 'paused' ? (
                   <button
-                    onClick={(e) => { e.stopPropagation(); store.setGoalStatus(goal.id, 'active'); }}
+                    onClick={(e) => { e.stopPropagation(); useAutonomyStore.getState().setGoalStatus(goal.id, 'active'); }}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium"
                     style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}
                   >
@@ -83,7 +85,7 @@ function GoalCard({ goal }: { goal: Goal }) {
                   </button>
                 ) : null}
                 <button
-                  onClick={(e) => { e.stopPropagation(); store.removeGoal(goal.id); }}
+                  onClick={(e) => { e.stopPropagation(); useAutonomyStore.getState().removeGoal(goal.id); }}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-red-500"
                   style={{ background: 'var(--gia-surface-2)' }}
                 >
@@ -149,6 +151,7 @@ export default function AutonomyModule() {
       setShowCreate(false);
     } catch (e) {
       console.error('Failed to create goal:', e);
+      useGiaStore.getState().addNotification('Failed to create goal');
     }
     setCreating(false);
   };

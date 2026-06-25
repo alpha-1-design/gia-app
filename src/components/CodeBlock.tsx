@@ -2,6 +2,7 @@ import { logger } from '../utils/logger';
 import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, Play, RotateCcw, Download, Loader2, AlertCircle } from 'lucide-react';
 import CodeRunner, { CodeRunResult } from '../services/CodeRunner';
+import { highlightSyntax } from '../utils/syntaxHighlight';
 
 interface Props {
   lang: string;
@@ -107,7 +108,7 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
           </button>
         </div>
       </div>
-      <pre className="code-block-body"><code>{currentCode}</code></pre>
+      <pre className="code-block-body"><code>{highlightSyntax(currentCode, lang)}</code></pre>
 
       {result && (
         <div className="border-t" style={{ borderColor: 'var(--gia-border)' }}>

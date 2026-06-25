@@ -37,7 +37,7 @@
   /* Ambient glow system */
   --glow-color:   var(--mod-chat);
   --glow-opacity: 0.25;
-  --glow-size:    80px;
+  --glow-size:    40px;
   --glow-speed:   4s;
 
   /* Spacing / radius */
@@ -392,6 +392,19 @@ body {
   line-height: 1.6;
   color: #e2e8f0;
   white-space: pre;
+  tab-size: 2;
+}
+.code-block-body code {
+  font-family: inherit;
+}
+
+/* Streaming message glow */
+@keyframes streaming-glow {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(168,85,247,0.08); }
+  50% { box-shadow: inset 0 0 0 1px rgba(168,85,247,0.25), 0 0 16px rgba(168,85,247,0.06); }
+}
+.streaming-message {
+  animation: streaming-glow 2s ease-in-out infinite;
 }
 
 /* ============================================================
@@ -454,6 +467,29 @@ body {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+/* Skeleton loader */
+.skeleton-pulse {
+  background: linear-gradient(110deg, var(--gia-surface-2) 30%, var(--gia-surface-3) 50%, var(--gia-surface-2) 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  min-height: 1em;
+}
+
+/* Syntax highlighting */
+.hl-keyword   { color: #ff79c6; }
+.hl-string    { color: #f1fa8c; }
+.hl-number    { color: #bd93f9; }
+.hl-builtin   { color: #8be9fd; }
+.hl-comment   { color: #6272a4; font-style: italic; }
+.hl-function  { color: #50fa7b; }
+.hl-type      { color: #ffb86c; }
+.hl-operator  { color: #ff79c6; }
+.hl-punctuation { color: #f8f8f2; }
+.hl-param     { color: #ffb86c; }
+.hl-tag       { color: #ff79c6; }
+.hl-attr      { color: #50fa7b; }
+.hl-attr-value { color: #f1fa8c; }
 
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(8px); }

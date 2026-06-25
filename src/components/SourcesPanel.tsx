@@ -13,25 +13,26 @@ export const SourcesPanel: React.FC = () => {
   return (
     <AnimatePresence>
       {panelOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            onClick={() => setPanelOpen(false)}
-          />
+        <motion.div
+          key="sources-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={() => setPanelOpen(false)}
+        />
+      )}
 
-          {/* Panel */}
-          <motion.div
-            initial={{ opacity: 0, y: '100%' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 max-h-[70vh] rounded-t-2xl overflow-hidden border-t border-zinc-800 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
-            style={{ background: 'rgba(12,12,16,0.98)', backdropFilter: 'blur(20px)' }}
-          >
+      {panelOpen && (
+        <motion.div
+          key="sources-panel"
+          initial={{ opacity: 0, y: '100%' }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: '100%' }}
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          className="fixed bottom-0 left-0 right-0 z-50 max-h-[70vh] rounded-t-2xl overflow-hidden border-t border-zinc-800 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+          style={{ background: 'rgba(12,12,16,0.98)', backdropFilter: 'blur(20px)' }}
+        >
             {/* Handle */}
             <div className="flex justify-center pt-2 pb-1">
               <div className="w-8 h-1 rounded-full bg-zinc-700" />
@@ -139,7 +140,6 @@ export const SourcesPanel: React.FC = () => {
               )}
             </div>
           </motion.div>
-        </>
       )}
     </AnimatePresence>
   );

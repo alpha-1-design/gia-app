@@ -247,7 +247,7 @@ const EngineRoom: React.FC = () => {
     if (modelMatch) {
       const p = providerRegistry.resolveAlias(modelMatch[1].toLowerCase());
       if (!p) { push(mk('err', `Unknown alias.`)); return; }
-      if (!providers[p].enabled) { push(mk('err', `${providerRegistry.getLabel(p)} not connected.`)); return; }
+      if (!providers[p]?.enabled) { push(mk('err', `${providerRegistry.getLabel(p)} not connected.`)); return; }
       push(mk('prompt', `Fetching models for ${providerRegistry.getLabel(p)}...`));
       setBusy(true);
       try {
@@ -267,7 +267,7 @@ const EngineRoom: React.FC = () => {
     if (useMatch) {
       const p = providerRegistry.resolveAlias(useMatch[1].toLowerCase());
       if (!p) { push(mk('err', `Unknown alias.`)); return; }
-      if (!providers[p].enabled) { push(mk('err', `${providerRegistry.getLabel(p)} not connected.`)); return; }
+      if (!providers[p]?.enabled) { push(mk('err', `${providerRegistry.getLabel(p)} not connected.`)); return; }
       setActiveProvider(p);
       push(mk('success', `✓ Active → ${providerRegistry.getLabel(p)}`));
       return;

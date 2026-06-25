@@ -132,7 +132,7 @@ class GiaBrain {
         ProviderMonitor.recordFailure(activeProvider, finalModel, msg, Math.round(performance.now() - callStart));
 
         // Retry once without native tool schemas
-        if (!loopReq._skipNativeSchemas && !req.onStream && (
+        if (!loopReq._skipNativeSchemas && (
           msg.includes('tools') || msg.includes('tool') ||
           msg.includes('function') || msg.includes('functions') ||
           msg.includes('400') || msg.includes('bad request')

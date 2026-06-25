@@ -256,7 +256,7 @@ export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) =
               </button>
             </div>
 
-            <div className="flex gap-1.5 px-4 py-2 overflow-x-auto scrollbar-hide shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
+            <div className="flex gap-1.5 px-4 py-2 overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
               {(['all', 'pinned', ...Object.keys(CATEGORY_META)] as (MemoryCategory | 'pinned' | 'all')[]).map(cat => {
                 const active = filterCat === cat;
                 const meta = cat === 'all' ? { label: 'All', icon: null, color: '#a855f7' }

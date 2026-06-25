@@ -68,7 +68,7 @@ const GiaConsole: React.FC<GiaConsoleProps> = ({ logs, isVisible, onClose }) => 
       </div>
 
       {/* Logs View */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 font-mono scrollbar-hide">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 font-mono [&::-webkit-scrollbar]:hidden">
         {logs.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 opacity-20">
             <Zap size={32} className="text-zinc-500" />
