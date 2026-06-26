@@ -60,6 +60,10 @@ public class GIAAccessibilityService extends AccessibilityService {
     // Static API
     // -----------------------------------------------------------------------
 
+    public static GIAAccessibilityService getInstance() {
+        return instance;
+    }
+
     public static boolean isRunning() {
         return instance != null;
     }
