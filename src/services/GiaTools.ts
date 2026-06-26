@@ -37,6 +37,7 @@ import { databaseTools } from './tools/database';
 import { websocketTools } from './tools/websocket';
 import { fileTools } from './tools/filetool';
 import { networkTools } from './tools/network';
+import { securityTools } from './tools/security';
 
 export type { ToolResult };
 export type { Tool };
@@ -88,6 +89,7 @@ class GiaTools {
       ...websocketTools,
       ...fileTools,
       ...networkTools,
+      ...securityTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

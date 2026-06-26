@@ -113,7 +113,7 @@ mkdir -p "${ROOTFS_DIR}/workspace"
 # Install base packages inside sandbox
 echo ""
 echo "=== Installing Packages ==="
-INSTALL_CMD="apk update && apk add python3 py3-pip nodejs npm git bash curl wget openssh sudo vim build-base gcc g++ make sqlite ca-certificates jq yq-go ripgrep fd tree zip unzip rsync aria2 openssl ffmpeg redis go perl pipx httpie"
+INSTALL_CMD="apk update && apk add python3 py3-pip nodejs npm git bash curl wget openssh sudo vim build-base gcc g++ make sqlite ca-certificates jq yq-go ripgrep fd tree zip unzip rsync aria2 openssl ffmpeg redis go perl pipx httpie iptables ip6tables whois nmap nmap-scripts lsof tcpdump bind-tools ethtool net-tools kmod strace"
 
 SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
