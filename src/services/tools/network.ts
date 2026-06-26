@@ -149,18 +149,18 @@ const networkConnectivity: Tool = {
 const networkDetect: Tool = {
   id: 'network_detect',
   name: 'network_detect',
-  description: 'Auto-detect local network services on common ports. Scans the local subnet for open services like SSH, HTTP, databases, etc.',
+  description: 'Auto-detect local network services on common ports. Scans the full local subnet (1-254) for open services like SSH, HTTP, databases, etc.',
   schema: {
     type: 'object',
     properties: {
       subnet: { type: 'string', description: 'Subnet to scan — e.g. "192.168.1" (defaults to auto-detected local subnet)' },
-      timeout: { type: 'number', description: 'Timeout per host in ms (default 2000)' },
+      timeout: { type: 'number', description: 'Timeout per port probe in ms (default 1000)' },
     },
   },
   execute: async (args) => {
     const schema = z.object({
       subnet: z.string().optional(),
-      timeout: z.number().min(100).max(30000).optional().default(2000),
+      timeout: z.number().min(100).max(30000).optional().default(1000),
     });
     const parsed = schema.safeParse(args);
     if (!parsed.success) {
@@ -176,43 +176,90 @@ const networkDetect: Tool = {
       targetSubnet = m ? m[1] : '192.168.1';
     }
 
-    const commonPorts = [22, 80, 443, 445, 8080, 8443, 3306, 5432, 6379, 27017, 3000, 5000, 9090, 6443];
+    const commonPorts = [22, 80, 443, 445, 8080, 8443, 3306, 5432, 6379, 27017, 3000, 5000, 9090, 6443, 21, 25, 53, 110, 143, 389, 993, 995, 3389, 5900, 8081, 9200, 15672, 194, 6667, 3690, 11211, 6000, 4000];
     const timeoutSec = Math.ceil(timeout / 1000);
-    const hosts = [1, 2, 254];
 
-    const results: Array<{ host: string; openPorts: number[] }> = [];
-    for (const hostSuffix of hosts) {
-      const host = `${targetSubnet}.${hostSuffix}`;
-      const openPorts: number[] = [];
-      for (const port of commonPorts) {
-        const cmd = `timeout ${timeoutSec} bash -c '(echo > /dev/tcp/${host}/${port}) 2>/dev/null && echo "OPEN" || true'`;
-        const r = await sandboxExec(cmd, timeout + 1000);
-        if (r.stdout.trim() === 'OPEN') openPorts.push(port);
+    // Phase 1: quick ping sweep to find live hosts (probe port 80 + ping)
+    const allHosts = Array.from({ length: 254 }, (_, i) => i + 1);
+    const liveHosts: number[] = [];
+    const sweepBatchSize = 50;
+    for (let i = 0; i < allHosts.length; i += sweepBatchSize) {
+      const batch = allHosts.slice(i, i + sweepBatchSize);
+      const cmds = batch.map(suffix => {
+        const h = `${targetSubnet}.${suffix}`;
+        return `(echo > /dev/tcp/${h}/80 2>/dev/null || ping -c1 -W1 ${h} 2>/dev/null) &>/dev/null && echo "UP:${suffix}" || true`;
+      });
+      const script = cmds.join('; ');
+      const result = await sandboxExec(script, Math.max(timeoutSec * 1000 * batch.length, 30000));
+      for (const line of result.stdout.split('\n')) {
+        const m = line.match(/^UP:(\d+)/);
+        if (m) liveHosts.push(parseInt(m[1]));
       }
-      if (openPorts.length > 0) results.push({ host, openPorts });
     }
+
+    if (liveHosts.length === 0) {
+      return {
+        success: true,
+        content: JSON.stringify({
+          subnet: targetSubnet,
+          hostsScanned: 254,
+          liveHosts: 0,
+          servicesFound: [],
+          note: 'No live hosts detected. Devices may block ping/port-80 probes.',
+        }, null, 2),
+      };
+    }
+
+    // Phase 2: scan all common ports on live hosts only
+    const results: Array<{ host: string; openPorts: number[] }> = [];
+    const scanBatchSize = 10;
+    for (let i = 0; i < liveHosts.length; i += scanBatchSize) {
+      const batch = liveHosts.slice(i, i + scanBatchSize);
+      const cmds: string[] = [];
+      for (const suffix of batch) {
+        const h = `${targetSubnet}.${suffix}`;
+        for (const port of commonPorts) {
+          cmds.push(`(echo > /dev/tcp/${h}/${port}) 2>/dev/null && echo "${suffix}:${port}" || true`);
+        }
+      }
+      const script = cmds.join('; ');
+      const result = await sandboxExec(script, Math.max(timeoutSec * 1000 * cmds.length, 60000));
+
+      const hostPorts = new Map<number, number[]>();
+      for (const line of result.stdout.split('\n')) {
+        const m = line.match(/^(\d+):(\d+)/);
+        if (m) {
+          const suffix = parseInt(m[1]);
+          const port = parseInt(m[2]);
+          if (!hostPorts.has(suffix)) hostPorts.set(suffix, []);
+          hostPorts.get(suffix)!.push(port);
+        }
+      }
+      for (const [suffix, ports] of hostPorts) {
+        results.push({ host: `${targetSubnet}.${suffix}`, openPorts: ports.sort((a, b) => a - b) });
+      }
+    }
+
+    results.sort((a, b) => a.host.localeCompare(b.host));
 
     return {
       success: true,
       content: JSON.stringify({
         subnet: targetSubnet,
-        hostsScanned: hosts.length,
+        hostsScanned: 254,
+        liveHosts: liveHosts.length,
         servicesFound: results,
         portLegend: {
-          22: 'SSH',
-          80: 'HTTP',
-          443: 'HTTPS',
-          445: 'SMB',
-          8080: 'HTTP-Alt',
-          8443: 'HTTPS-Alt',
-          3306: 'MySQL',
-          5432: 'PostgreSQL',
-          6379: 'Redis',
-          27017: 'MongoDB',
-          3000: 'Dev-Server',
-          5000: 'Flask/Serv',
-          9090: 'Prometheus',
-          6443: 'K8s-API',
+          21: 'FTP', 22: 'SSH', 25: 'SMTP', 53: 'DNS',
+          80: 'HTTP', 110: 'POP3', 143: 'IMAP', 389: 'LDAP',
+          443: 'HTTPS', 445: 'SMB', 993: 'IMAPS', 995: 'POP3S',
+          194: 'IRC', 3306: 'MySQL', 3389: 'RDP', 3690: 'SVN',
+          4000: 'Remote', 5432: 'PostgreSQL', 5900: 'VNC',
+          6000: 'X11', 6379: 'Redis', 6443: 'K8s-API',
+          6667: 'IRC-SSL', 8080: 'HTTP-Alt', 8081: 'HTTP-Alt2',
+          8443: 'HTTPS-Alt', 9090: 'Prometheus', 9200: 'Elasticsearch',
+          11211: 'Memcached', 15672: 'RabbitMQ', 27017: 'MongoDB',
+          3000: 'Dev-Server', 5000: 'Flask/Serv',
         },
       }, null, 2),
     };
