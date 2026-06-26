@@ -32,23 +32,55 @@
 
 ---
 
-## 🤖 Supported Providers
+## 🤖 Supported Providers (18+)
 
-GIA connects directly to provider APIs — no proxy, no middleman:
+GIA connects directly to provider APIs — no proxy, no middleman. All providers support OpenAI-compatible chat completions unless noted. Models are dynamically fetched from each provider's API; fallback model lists are bundled for offline-first startup.
 
-- **Anthropic** — Claude 3.5/3.7 with extended thinking
-- **Gemini** — Flash/Pro 1.5 & 2.0 with vision
-- **OpenAI** — GPT-4o, o1, o3, o4-mini (with reasoning_effort)
-- **Groq** — Ultra-fast Llama-3/Mistral inference
-- **OpenRouter** — 100+ models (DeepSeek, Llama, etc.)
-- **OpenCode** — Specialized coding provider
-- **NVIDIA NIM** — NVIDIA's hosted inference API (Llama, Mistral, Nemotron, etc.)
+### Cloud Providers
+
+| Provider | Type | API Format | Key Models |
+|----------|------|-----------|------------|
+| **OpenAI** | General | `openai` | GPT-4o, GPT-4o-mini, o1, o3, o4-mini |
+| **Anthropic** | General | `anthropic` | Claude Sonnet 4, Claude Haiku 3.5 |
+| **Google Gemini** | General | `gemini` | Gemini 2.5 Flash (free), 2.5 Pro |
+| **OpenRouter** | Aggregator | `openai` | 200+ models — Gemma 3 27B (free), GPT-4o, DeepSeek, Llama |
+| **Groq** | High-speed | `openai` | Llama 3 70B (free), Mixtral 8x7B, Gemma 2 9B |
+| **DeepSeek** | General | `openai` | DeepSeek V3, DeepSeek R1 |
+| **Mistral AI** | General | `openai` | Mistral Small/Large, Pixtral Large (vision) |
+| **xAI (Grok)** | General | `openai` | Grok 2, Grok Vision |
+| **Together AI** | Hosted | `openai` | Llama 3.3 70B, DeepSeek V3, 100+ open models |
+| **Perplexity** | Search-native | `openai` | Sonar Pro, Sonar Deep Research |
+| **Cohere** | Enterprise | `openai` | Command R+, Command R |
+| **Fireworks AI** | Fast inference | `openai` | Llama 3.3 70B, DeepSeek R1, 40+ models |
+| **DeepInfra** | Hosted | `openai` | Llama 3.1 70B, Qwen 2.5 72B |
+| **Cerebras** | Ultra-fast | `openai` | Llama 3.1 8B (free), Llama 3.3 70B (free) |
+| **AI21 Labs** | General | `openai` | Jamba 1.5 Mini (256k ctx), Jamba 1.5 Large |
+| **Replicate** | Hosted | `openai` | Llama 3 70B, 100+ open-source |
+| **NVIDIA NIM** | Enterprise | `openai` | Nemotron Ultra 253B, Llama 3.3 70B, DeepSeek R1, Mistral Large |
+| **HuggingFace** | Hosted | `huggingface` | Qwen 2.5 72B, Mistral 7B, 100k+ models |
+| **OpenCode Zen** | Coding | `openai` | DeepSeek V4 Flash (free), GPT-4o Mini |
+
+### Local / On-Device Providers
+
+| Provider | Type | Details |
+|----------|------|---------|
+| **Ollama** | Local | Connect to any Ollama instance at `localhost:11434` — Llama 3.2, Gemma 3, Phi-4 |
+| **LM Studio** | Local | Connect to LM Studio server at `localhost:1234` |
+| **Local LLM** | On-device | Runs **Qwen2.5** (0.5B–3B) directly in-browser via Transformers WASM — fully offline |
+
+### Image Generation Providers
+
+- **OpenAI** — DALL-E 3
+- **OpenRouter** — DALL-E 3, Stable Diffusion, FLUX
+- **NVIDIA NIM** — Sana 4K, SDXL
 
 ---
 
-## 🎙 Wake Word System
+## 🎙 Wake Word System (Proposed)
 
-GIA uses **Porcupine** by Picovoice — an on-device deep neural network wake word engine:
+> **Status: Proposed** — architecture designed, Android service scaffolding in place, full implementation in progress. The wake word engine and native service code exist in the repository but require additional testing and polish before production use.
+
+GIA will use **Porcupine** by Picovoice — an on-device deep neural network wake word engine:
 
 - **100% offline** — all audio processing stays on your phone. No audio data is ever sent to any server.
 - **Foreground Service** — on Android, GIA runs a persistent foreground service with a notification, keeping the wake word detector alive even when the app is backgrounded.
@@ -63,7 +95,7 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 - The **native** Porcupine keyword (`JARVIS`) is used by the Android foreground service
 - Once a custom "Hey GIA" `.ppn` model is trained and deployed, Porcupine switches to it automatically
 
-### UX Flow — What happens when you say "Hey GIA"
+### UX Flow — What happens when you say "Hey GIA" (planned)
 
 1. Porcupine's DNN processes the live audio stream (16kHz, on-device)
 2. On detection → the foreground service fires a `wakeWordDetected` event to GIA's WebView
@@ -86,7 +118,7 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Live Reasoning** | Real-time streaming thought panel during generation |
 | **Deep Memory** | On-device persistent memory with relevance scoring, auto-extraction, pinning, and manual fact management |
 | **Custom Instructions** | User-defined rules injected into every conversation system prompt |
-| **Voice** | Wake-word ("Hey Gia"), push-to-talk, transcript polishing, TTS |
+| **Voice** | Push-to-talk, transcript polishing, TTS (wake-word proposed) |
 | **Web Search** | DuckDuckGo with formatted citations and clickable source badges |
 | **File Operations** | Read/write files (native + desktop), ZIP bundling, download triggers (browser) |
 | **Code Execution** | Run Python/JS/C++ via Piston API, auto-fix on error |
@@ -99,7 +131,7 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **MCP Support** | Model Context Protocol — extend tools via external MCP servers (SSE/stdio) |
 | **Plugin System** | Hook-based plugin architecture with tool registration API |
 | **Scheduled Tasks** | Hourly/daily/weekly background AI task execution |
-| **Circle-to-Search** | Screen capture → region select → AI vision analysis |
+| **Circle-to-Search** | Screen capture → region select → AI vision analysis (proposed) |
 | **Brain Export/Import** | Full memory backup and restore as JSON |
 | **Deep Links** | `gia://` and `web+gia://` protocol handling |
 | **PWA Share Target** | Receive shared content from other apps |
@@ -178,14 +210,84 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Session Summarization** | Tracks session summarization history for efficient context window management |
 | **No-API-Key Banner** | Clickable banner redirects to Settings when no API keys are configured |
 
+## 🔌 Any-Endpoint Connectivity
+
+GIA can connect to **any reachable TCP/UDP endpoint** — remote servers, databases, IoT devices, TVs, APIs, WebSocket services, and more:
+
+### TCP/UDP Connections
+
+| Tool | What it does |
+|------|-------------|
+| `network_scan` | Scan TCP ports on any host (`host`, `ports` like `"22,80,443"` or `"1-1000"`) |
+| `network_connectivity` | Test if a `host:port` is reachable (TCP or UDP) |
+| `network_detect` | Auto-scan local subnet for open services (SSH, HTTP, MySQL, Postgres, Redis, etc.) |
+| `ssh_connect` | SSH into any remote machine and execute commands (password or key auth) |
+| `ssh_add_key` | Store SSH private keys for key-based authentication |
+| `ssh_list_connections` | List saved SSH connections and keys |
+| `ssh_remove_connection` | Remove a saved SSH connection |
+
+### Database Connections
+
+| Tool | What it does |
+|------|-------------|
+| `db_query` | Execute SQL on PostgreSQL, MySQL, or SQLite (`type`, `query`, connection params) |
+| `db_configure` | Save a database connection for reuse (credentials stored locally) |
+| `db_list_connections` | List saved database connections |
+| `db_remove_connection` | Remove a saved DB connection |
+
+### WebSocket Connections
+
+| Tool | What it does |
+|------|-------------|
+| `ws_connect` | Connect to any WebSocket endpoint (`url`) |
+| `ws_send` | Send a message through an active WebSocket |
+| `ws_receive` | Read pending messages (non-blocking) |
+| `ws_wait` | Block until a message arrives (with timeout) |
+| `ws_close` | Close a WebSocket connection |
+| `ws_status` | Check all active WebSocket connections |
+
+Connections are **persistent**: SSH keys, database credentials, and WebSocket connections survive page reloads. GIA can discover, probe, and connect to any endpoint it can reach on the network.
+
+---
+
+## 📁 Persistent File Store
+
+GIA includes a **permanent file storage system** for all uploaded files — images, documents, code, and data:
+
+- **Persistent storage**: All uploaded files are stored in IndexedDB and survive app restarts
+- **File Manager UI**: Open from the chat toolbar — browse in grid/list view, search by name/tag/content, preview inline
+- **Tagging**: Add/remove tags to organize files
+- **Source tracking**: Files tagged by source — `chat_upload`, `manual`, `capture`
+- **Drag-and-drop**: Drop files directly into the File Manager
+- **Camera capture**: Take photos directly from the File Manager
+- **Full preview**: View images inline, read document content (text, code, PDF)
+
+### File Tools for GIA
+
+| Tool | What it does |
+|------|-------------|
+| `file_search` | Search files by name, type, tags, or full-text content |
+| `file_get` | Retrieve full content (text or image data URL) by file ID |
+| `file_list` | List all files, optionally filtered by source |
+| `file_delete` | Permanently delete a file |
+| `file_tag` | Add or remove tags on a file |
+
+Files uploaded in any chat session are visible in the File Manager and searchable by GIA across all sessions. GIA can reference any uploaded file at any time using `file_search` + `file_get`.
+
+---
+
+## 🎨 Display Capabilities
+
+GIA can render **anything** in chat — charts, 3D, maps, diagrams, math, images, terminals, and rich interactive visual blocks:
+
 ### Interactive Visual Blocks
 
-GIA can render rich interactive visualizations in chat using ` ```visual ` code blocks:
+Rendered from ` ```visual ` code blocks (GIA generates these automatically):
 
 | Type | Tag | Example |
 |------|-----|---------|
-| **Charts** | `chart` | Bar, line, pie, area charts via Recharts |
-| **Data Tables** | `table` | Sortable, copyable data tables |
+| **Charts** | `chart` | Bar, line, pie, area, radar charts via Recharts |
+| **Data Tables** | `table` | Sortable, copyable data tables with pagination |
 | **Mind Maps** | `mindmap` | Tree/radial diagrams |
 | **Timelines** | `timeline` | Chronological event displays |
 | **Code Diffs** | `diff` | Side-by-side code comparison |
@@ -195,6 +297,7 @@ GIA can render rich interactive visualizations in chat using ` ```visual ` code 
 | **Document Outlines** | `outline` | Tree/table-of-contents views |
 | **Maps** | `map` | Interactive Leaflet/OpenStreetMap |
 | **Audio Waveforms** | `waveform` | Audio visualization |
+| **3D Objects** | `graph` | Network graphs, force-directed layouts, 3D visualizations |
 
 ### Markdown Rendering
 
@@ -300,9 +403,11 @@ Full backup and restore of GIA's knowledge:
 - **Import**: Restore from a previously exported file via Settings → Brain Export
 - **Scope**: Includes memories (all tiers), user profile, custom instructions, pinned memories
 
-## 📱 Circle-to-Search
+## 📱 Circle-to-Search (Proposed)
 
-Screen capture + region selection for AI analysis:
+> **Status: Proposed** — concept designed, component scaffolding in place (`RegionSelectorOverlay`), full implementation pending. Inspired by Gemini's Circle-to-Search functionality.
+
+Planned UX:
 
 - **Trigger**: Keyboard shortcut `Ctrl+Shift+C` or via command palette
 - **Capture**: Takes a screenshot using native Capacitor plugin or browser `getDisplayMedia`

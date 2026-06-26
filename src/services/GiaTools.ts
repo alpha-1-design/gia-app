@@ -32,6 +32,11 @@ import { emailTools } from './tools/email';
 import { calendarTools } from './tools/calendar';
 import { messagingTools } from './tools/messaging';
 import { personalTools } from './tools/personal';
+import { sshTools } from './tools/ssh';
+import { databaseTools } from './tools/database';
+import { websocketTools } from './tools/websocket';
+import { fileTools } from './tools/filetool';
+import { networkTools } from './tools/network';
 
 export type { ToolResult };
 export type { Tool };
@@ -78,6 +83,11 @@ class GiaTools {
       ...calendarTools,
       ...messagingTools,
       ...personalTools,
+      ...sshTools,
+      ...databaseTools,
+      ...websocketTools,
+      ...fileTools,
+      ...networkTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

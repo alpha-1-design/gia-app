@@ -185,7 +185,7 @@ describe('useGiaStore', () => {
       expect(msgs[0].children[0].message.content).toBe('hello!');
     });
 
-    it('updateMessage updates content and clears thinking flag', () => {
+    it('updateMessage updates content and thoughts', () => {
       const sid = useGiaStore.getState().createSession();
       useGiaStore.getState().addMessage(sid, asstMsg({ id: 'm1', content: '', thinking: true }));
       useGiaStore.getState().updateMessage(sid, 'm1', 'full response', 'some thoughts');

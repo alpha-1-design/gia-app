@@ -284,10 +284,18 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           }
         }
       };
-      sr.onerror = () => { if (activeRef.current) stopListening(); };
+      sr.onerror = (event) => {
+        if (!activeRef.current) return;
+        const err = event as { error?: string };
+        if (err?.error === 'no-speech' || err?.error === 'aborted') {
+          timeoutRef.current = setTimeout(restartBrowserRecognition, 300);
+        } else {
+          stopListening();
+        }
+      };
       sr.onend = () => {
         setIsHearing(false);
-        if (activeRef.current && keepListeningRef.current) {
+        if (activeRef.current) {
           timeoutRef.current = setTimeout(restartBrowserRecognition, 500);
         }
       };
@@ -327,7 +335,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         const backoff = hadResult ? 1500 : 3000;
         listeningLoopRef.current = false;
 
-        if (keepListeningRef.current) {
+        if (activeRef.current) {
           timeoutRef.current = setTimeout(listenOnce, backoff);
         } else {
           stopListening();
@@ -336,7 +344,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     } catch (e) {
       logger.error('Speech recognition error:', e);
       listeningLoopRef.current = false;
-      if (activeRef.current && keepListeningRef.current) {
+      if (activeRef.current) {
         timeoutRef.current = setTimeout(listenOnce, 3000);
       } else {
         stopListening();

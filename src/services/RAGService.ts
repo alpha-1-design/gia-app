@@ -82,9 +82,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 function chunkText(text: string): string[] {
-  const sentences = text.match(/[^.!?
-]+[.!?
-]*/g) || [text];
+  const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
   const chunks: string[] = [];
   let current = '';
   for (const s of sentences) {

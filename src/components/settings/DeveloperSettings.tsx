@@ -191,22 +191,38 @@ export const DeveloperSettings: React.FC = () => {
           <Database size={11} />
           HuggingFace Access Token
         </label>
-        <div className="relative">
+        <div className="flex gap-2">
           <input
             type="password"
             defaultValue={localStorage.getItem('gia:vision:hfToken') || ''}
-            onBlur={(e) => {
-              const val = e.target.value.trim();
-              localStorage.setItem('gia:vision:hfToken', val);
-            }}
+            id="hf-token-input"
             placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono"
+            className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-mono"
             style={{
               background: 'var(--gia-bg-2)',
               color: 'var(--gia-text)',
               border: '1px solid var(--gia-border)',
             }}
           />
+          <button
+            onClick={() => {
+              const input = document.getElementById('hf-token-input') as HTMLInputElement;
+              if (input) {
+                const val = input.value.trim();
+                localStorage.setItem('gia:vision:hfToken', val);
+                input.dataset.saved = 'true';
+                setTimeout(() => { if (input) input.dataset.saved = ''; }, 2000);
+              }
+            }}
+            className="px-3 py-1.5 rounded-lg text-[10px] font-medium transition-colors whitespace-nowrap"
+            style={{
+              background: 'rgba(34,197,94,0.1)',
+              color: '#22c55e',
+              border: '1px solid rgba(34,197,94,0.2)',
+            }}
+          >
+            Save
+          </button>
         </div>
         <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
           Required for gated/private HuggingFace models. Get yours at huggingface.co/settings/tokens.

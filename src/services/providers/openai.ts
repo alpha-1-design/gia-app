@@ -3,7 +3,6 @@ import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../ProviderRegistry';
 import { useGiaStore } from '../../store/useGiaStore';
 import { corsProxy } from '../CorsProxy';
-import { createStreamParser, processStreamChunk } from '../../utils/streamParser';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
 
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
@@ -55,9 +54,8 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       let lastProcessed = 0;
       let processing = false;
       let pendingBuffer = '';
-      const streamState = createStreamParser();
+      let partialLine = '';
       const toolCallAccum: Map<number, { id?: string; name?: string; args: string }> = new Map();
-      let thoughtBuffer = '';
 
       xhr.open('POST', `${baseUrl}/chat/completions`);
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
@@ -80,20 +78,16 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         toolCallAccum.clear();
       };
 
-      const flushThoughts = () => {
-        if (thoughtBuffer) {
-          req.onThought?.(thoughtBuffer);
-          thoughtBuffer = '';
-        }
-      };
-
       const drain = () => {
         if (processing) return;
         processing = true;
         while (pendingBuffer) {
           const chunk = pendingBuffer;
           pendingBuffer = '';
-          const lines = chunk.split('\n');
+          const combined = partialLine + chunk;
+          partialLine = '';
+          const lines = combined.split('\n');
+          partialLine = lines.pop() || '';
           for (const line of lines) {
             const t = line.trim();
             if (!t || t === 'data: [DONE]') continue;
@@ -148,16 +142,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
                   const textDelta = delta?.content || '';
                 if (textDelta) {
                   fullText += textDelta;
-                  const displayText = processStreamChunk(textDelta, streamState);
-                  if (streamState.thoughtsAccumulated) {
-                    const newThoughts = streamState.thoughtsAccumulated;
-                    streamState.thoughtsAccumulated = '';
-                    thoughtBuffer += newThoughts;
-                    flushThoughts();
-                  }
-                  if (displayText) {
-                    req.onStream!(displayText);
-                  }
+                  req.onStream!(textDelta);
                 }
               } catch (e) { logger.error('[openai] Failed to parse streaming response chunk:', e); continue; }
             }
@@ -178,8 +163,17 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
 
       xhr.onload = () => {
         onData();
+        if (partialLine.trim()) {
+          const t = partialLine.trim();
+          if (t.startsWith('data: ')) {
+            try {
+              const json = JSON.parse(t.slice(6));
+              const delta = json.choices?.[0]?.delta;
+              if (delta?.content) fullText += delta.content;
+            } catch (e) { /* ignore partial parse errors on close */ }
+          }
+        }
         flushToolCalls();
-        flushThoughts();
         if (!fullText.trim() && !req.signal?.aborted) {
           reject(new Error(`⚠️ ${label} returned empty response. The model may be overloaded. Try again or switch providers.`));
         } else {

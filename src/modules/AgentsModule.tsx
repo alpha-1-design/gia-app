@@ -383,8 +383,7 @@ function buildToolSection(tools: string[]): string {
     const desc = TOOL_DESCRIPTIONS[t] || 'No description';
     lines.push(`| \`${t}\` | ${desc} |`);
   }
-  return lines.join('
-');
+  return lines.join('\n');
 }
 
 const AgentChatView: React.FC<{
@@ -445,10 +444,7 @@ const AgentChatView: React.FC<{
 ## Knowledge files
 Relevant passages from the user's knowledge files. Cite the specific file name when you use information from it.
 
-${ragResults.map((r, i) => `[Source ${i + 1}: ${r.title}]
-${r.text.slice(0, 600)}`).join('
-
-')}`
+${ragResults.map((r, i) => `[Source ${i + 1}: ${r.title}]\n${r.text.slice(0, 600)}`).join('\n\n')}`
         : '';
 
       const toolSection = buildToolSection(agent.tools);

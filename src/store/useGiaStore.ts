@@ -62,7 +62,7 @@ function addMessageToTree(nodes: MessageNode[], msg: Message, branchId: string):
 function updateMessageInTree(nodes: MessageNode[], msgId: string, content: string, thoughts?: string): MessageNode[] {
   return nodes.map(node => {
     if (node.message.id === msgId) {
-      return { ...node, message: { ...node.message, content, ...(thoughts !== undefined ? { thoughts } : {}), thinking: false } };
+      return { ...node, message: { ...node.message, content, ...(thoughts !== undefined ? { thoughts } : {}) } };
     }
     if (node.children.length > 0) {
       return { ...node, children: updateMessageInTree(node.children, msgId, content, thoughts) };

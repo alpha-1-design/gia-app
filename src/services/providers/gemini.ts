@@ -1,7 +1,6 @@
 import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
 import { useGiaStore } from '../../store/useGiaStore';
-import { createStreamParser, processStreamChunk } from '../../utils/streamParser';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
 
 export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
@@ -51,9 +50,8 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
       let lastProcessed = 0;
       let processing = false;
       let pendingBuffer = '';
-      const streamState = createStreamParser();
+      let partialEvent = '';
       const functionCallsAccum: { name: string; args: Record<string, unknown> }[] = [];
-      let thoughtBuffer = '';
 
       const flushFunctionCalls = () => {
         if (functionCallsAccum.length === 0) return;
@@ -61,13 +59,6 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
           fullText += `\`\`\`tool\n${JSON.stringify({ id: fc.name, args: fc.args })}\n\`\`\``;
         }
         functionCallsAccum.length = 0;
-      };
-
-      const flushThoughts = () => {
-        if (thoughtBuffer) {
-          req.onThought?.(thoughtBuffer);
-          thoughtBuffer = '';
-        }
       };
 
       xhr.open('POST', url);
@@ -81,7 +72,10 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
         while (pendingBuffer) {
           const chunk = pendingBuffer;
           pendingBuffer = '';
-          const events = chunk.split('\n\n');
+          const combined = partialEvent + chunk;
+          partialEvent = '';
+          const events = combined.split('\n\n');
+          partialEvent = events.pop() || '';
           for (const event of events) {
             const t = event.trim();
             if (!t.startsWith('data: ')) continue;
@@ -108,16 +102,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
                 if (part?.text) {
                   const delta = part.text;
                   fullText += delta;
-                  const displayText = processStreamChunk(delta, streamState);
-                  if (streamState.thoughtsAccumulated) {
-                    const newThoughts = streamState.thoughtsAccumulated;
-                    streamState.thoughtsAccumulated = '';
-                    thoughtBuffer += newThoughts;
-                    flushThoughts();
-                  }
-                  if (displayText) {
-                    req.onStream!(displayText);
-                  }
+                  req.onStream!(delta);
                 }
               }
             } catch (e) { logger.error('[gemini] Failed to parse streaming response chunk:', e); }
@@ -138,8 +123,19 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
 
       xhr.onload = () => {
         onData();
+        if (partialEvent.trim()) {
+          const t = partialEvent.trim();
+          if (t.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(t.slice(6).trim());
+              const parts = parsed.candidates?.[0]?.content?.parts || [];
+              for (const part of parts) {
+                if (part?.text) fullText += part.text;
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
         flushFunctionCalls();
-        flushThoughts();
         if (!fullText.trim()) reject(new Error('Gemini returned empty response'));
         else {
           const wasTruncated = finishReason === 'MAX_TOKENS';

@@ -1,10 +1,10 @@
 import React from 'react';
 import {
   Bot, Plus, History, Trash2,
-  Paperclip, X, Download, Globe, Image as ImageIcon,
+  Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
-  Eye, CheckCircle2, Loader2,
+  Eye, CheckCircle2, Loader2, Upload,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -19,6 +19,7 @@ import SkillPicker from '../components/SkillPicker';
 import GiaConsole from '../components/GiaConsole';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 import FileBrowser from '../components/FileBrowser';
+import FileManager from '../components/FileManager';
 import InlineToolExecution from '../components/InlineToolExecution';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { BranchView } from '../components/chat/BranchView';
@@ -40,7 +41,7 @@ const ChatModule: React.FC = () => {
     showScrollBtn, undoMsg, showSkillPicker,
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
     liveThoughts, showKnowledge, setShowKnowledge,
-    isDragging, showFileBrowser, setShowFileBrowser, showTools,
+    isDragging, showFileBrowser, setShowFileBrowser, showFileManager, setShowFileManager, showTools,
     inputContainerHeight,
     scrollRef, inputContainerRef, fileRef, imgRef,
     responseTimesRef, clarAnswer, setClarAnswer,
@@ -57,7 +58,7 @@ const ChatModule: React.FC = () => {
     handleInputChange, handleSend, handleClarificationAnswer,
     handleDeleteWithUndo, handleContinue, handleFork, handleRetry, handleEditResend,
     handlePaste, handleDragEnter, handleDragLeave,
-    handleDragOver, handleDrop, handleFile, removeAttachment,
+    handleDragOver, handleDrop, handleFile, removeAttachment, addFiles,
     copyMessage, scrollToBottom, handleScroll, exportChat,
     setShowSkillPicker, setShowTools, setShowConsole,
     showBranchView, setShowBranchView,
@@ -166,6 +167,7 @@ const ChatModule: React.FC = () => {
             )}
           </div>
           <button onClick={() => setShowFileBrowser(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title="Browse files"><Folder size={13} /></button>
+          <button onClick={() => setShowFileManager(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title="File Manager"><Upload size={13} /></button>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
           <SearchActivityButton />
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Download size={13} /></button>
@@ -394,6 +396,23 @@ const ChatModule: React.FC = () => {
                 <button type="button" onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <ImageIcon size={11} /> Photo
                 </button>
+                <button type="button" onClick={async () => {
+                  try {
+                    const { Camera: CapCamera, CameraResultType } = await import('@capacitor/camera');
+                    const image = await CapCamera.getPhoto({ resultType: CameraResultType.DataUrl, quality: 85, allowEditing: false, saveToGallery: false });
+                    if (image.dataUrl) {
+                      const blob = await (await fetch(image.dataUrl)).blob();
+                      const file = new File([blob], `camera-${Date.now()}.${image.format || 'jpg'}`, { type: `image/${image.format || 'jpeg'}` });
+                      await addFiles([file], true);
+                    }
+                  } catch (e) {
+                    if (e instanceof Error && e.message !== 'User cancelled photos app') {
+                      imgRef.current?.click();
+                    }
+                  }
+                }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+                  <Camera size={11} /> Camera
+                </button>
                 <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
                 {[
                   { label: 'Search', feature: 'webSearch' as const, icon: Globe, active: webSearch, color: '#3b82f6' },
@@ -450,6 +469,7 @@ const ChatModule: React.FC = () => {
       </AnimatePresence>
       {showKnowledge && <KnowledgePanel onClose={() => setShowKnowledge(false)} />}
       {showFileBrowser && <FileBrowser onClose={() => setShowFileBrowser(false)} />}
+      {showFileManager && <FileManager onClose={() => setShowFileManager(false)} />}
       {showBranchView && activeSession && (
         <BranchView
           session={activeSession}

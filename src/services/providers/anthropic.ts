@@ -64,6 +64,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
       let lastProcessed = 0;
       let processing = false;
       let pendingBuffer = '';
+      let partialEvent = '';
       const toolUseBlocks: Map<number, { id: string; name: string; input: string }> = new Map();
 
       const flushToolUses = () => {
@@ -88,7 +89,10 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
         while (pendingBuffer) {
           const chunk = pendingBuffer;
           pendingBuffer = '';
-          const events = chunk.split('\n\n');
+          const combined = partialEvent + chunk;
+          partialEvent = '';
+          const events = combined.split('\n\n');
+          partialEvent = events.pop() || '';
           for (const event of events) {
             const t = event.trim();
             if (!t.startsWith('data:')) continue;
@@ -153,6 +157,19 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
 
       xhr.onload = () => {
         onData();
+        if (partialEvent.trim()) {
+          const t = partialEvent.trim();
+          if (t.startsWith('data:')) {
+            try {
+              const parsed = JSON.parse(t.slice(5).trim());
+              if (parsed.type === 'content_block_delta') {
+                if (parsed.delta?.type === 'text_delta') {
+                  fullText += parsed.delta.text ?? '';
+                }
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
         flushToolUses();
         if (!fullText.trim()) reject(new Error('Anthropic returned empty response'));
         else {

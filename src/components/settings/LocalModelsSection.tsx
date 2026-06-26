@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Download, AlertTriangle, CheckCircle, RefreshCw, Cpu, HardDrive, Zap, XCircle } from 'lucide-react';
+import { logger } from '../../utils/logger';
 import LocalLLMService, { LOCAL_LLM_MODELS, type LocalModelId, type LocalLLMState } from '../../services/LocalLLMService';
 
 type ModelStatusKey = 'not_loaded' | 'loading' | 'ready' | 'error';
@@ -36,8 +37,9 @@ export const LocalModelsSection: React.FC = () => {
     try {
       await service.loadModel(modelId);
       setActiveModelId(modelId);
-    } catch {
-      // error logged by service
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Download failed';
+      logger.error('[LocalModelsSection] Model download failed:', msg);
     } finally {
       setDownloading(null);
       refresh();

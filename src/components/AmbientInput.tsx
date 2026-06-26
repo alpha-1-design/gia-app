@@ -136,7 +136,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
             className="absolute left-1.5 bottom-1.5 w-10 h-10 rounded-full flex items-center justify-center transition-all"
             style={{ color: isVoiceListening ? '#f87171' : 'var(--gia-muted)' }}
           >
-            {isVoiceListening ? <MicOff size={17} className="animate-pulse" /> : <Mic size={17} />}
+            {isVoiceListening ? <Mic size={17} className="animate-pulse" /> : <MicOff size={17} />}
           </button>
         )}
 

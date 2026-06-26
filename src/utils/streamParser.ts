@@ -31,10 +31,10 @@ export const processStreamChunk = (
   if (state.pendingBacktickCount > 0) {
     const needed = 3 - state.pendingBacktickCount;
     const chunkAfter = chunk.startsWith('`') ? chunk.slice(needed) : chunk;
-    if ((chunk.startsWith('tool') || chunk.startsWith('json')) && needed <= 3) {
+    if ((chunk.startsWith('tool') || chunk.startsWith('json') || chunk.startsWith('visual')) && needed <= 3) {
+      chunk = '```' + chunk;
+    } else if ((chunkAfter.startsWith('tool') || chunkAfter.startsWith('json') || chunkAfter.startsWith('visual')) && needed <= 3) {
       chunk = '`'.repeat(state.pendingBacktickCount) + chunk;
-    } else if ((chunkAfter.startsWith('tool') || chunkAfter.startsWith('json')) && needed <= 3) {
-      chunk = chunk.slice(needed);
     }
     state.pendingBacktickCount = 0;
   }
@@ -155,8 +155,11 @@ export const processStreamChunk = (
 
   const trailingBackticks = displayChunk.match(/`{1,3}$/);
   if (trailingBackticks) {
-    state.pendingBacktickCount = trailingBackticks[0].length;
-    displayChunk = displayChunk.slice(0, -state.pendingBacktickCount);
+    const count = trailingBackticks[0].length;
+    if (count < 3) {
+      state.pendingBacktickCount = count;
+      displayChunk = displayChunk.slice(0, -count);
+    }
   }
 
   state.accumulated += displayChunk;

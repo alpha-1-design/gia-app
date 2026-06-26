@@ -274,6 +274,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         (res.text || '').trim().slice(0, 200) ||
         '🤖 _Taking action..._';
       state.updateMessage(sessionId, asstId, finalText, parserState.thoughtsAccumulated || undefined);
+      useGiaStore.setState(s => ({
+        sessions: s.sessions.map(sess =>
+          sess.id === sessionId
+            ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, thinking: false } } : m) }
+            : sess
+        ),
+      }));
       if (res.sources?.length) {
         useGiaStore.setState({
           sessions: useGiaStore.getState().sessions.map(s =>
@@ -310,6 +317,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
     } finally {
       setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
+      useGiaStore.setState(s => ({
+        sessions: s.sessions.map(sess =>
+          sess.id === sessionId
+            ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, thinking: false } } : m) }
+            : sess
+        ),
+      }));
       setLoading(false);
       setStreamingMsgId(null);
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
@@ -397,12 +411,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
     } catch (err: unknown) {
       if (!ctrl.signal.aborted) {
-        const msg = err instanceof Error ? err.message : 'Continue failed.';
-        state.updateMessage(state.activeSessionId!, asstId, '⚠️ ' + msg);
+        const msg = err instanceof Error ? err.message : 'Something went wrong.';
+        state.updateMessage(state.activeSessionId!, asstId, msg);
         useGiaStore.setState({
           sessions: useGiaStore.getState().sessions.map(s =>
             s.id === state.activeSessionId
-              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, error: true } } : m) }
+              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, error: true, thinking: false } } : m) }
               : s
           ),
         });

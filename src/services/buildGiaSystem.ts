@@ -184,6 +184,28 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`telegram_post_photo\` | Post photo to channel | \`photoUrl\`, \`caption\` (optional) | With optional caption |
 | \`telegram_stats\` | Channel stats | none | Member + admin count |
 | \`telegram_disconnect\` | Remove Telegram config | none | Clears token + channel |
+| \`ssh_connect\` | SSH into a remote machine and execute a command | \`host\`, \`username\`, \`command\`, \`authType\` (password\|key), \`password\`?, \`keyName\`?, \`port\`? (22) | First use auto-installs openssh-client in sandbox |
+| \`ssh_add_key\` | Store an SSH private key for key-based auth | \`name\`, \`key\` (PEM content) | Stored locally |
+| \`ssh_list_connections\` | List saved SSH connections and keys | none | |
+| \`ssh_remove_connection\` | Remove a saved SSH connection | \`id\` | |
+| \`db_query\` | Execute SQL query on PostgreSQL/MySQL/SQLite | \`type\`, \`query\`, \`connectionId\`? or \`host\`/\`port\`/\`database\`/\`username\`/\`password\`, \`filePath\`? (sqlite) | Installs DB client in sandbox |
+| \`db_configure\` | Save a database connection for reuse | \`id\`, \`type\`, \`host\`, \`database\`, \`username\`, \`port\`? | Credentials stored locally |
+| \`db_list_connections\` | List saved database connections | none | |
+| \`db_remove_connection\` | Remove a saved DB connection | \`id\` | |
+| \`ws_connect\` | Connect to a WebSocket endpoint | \`url\`, \`connectionId\`? | Real-time bidirectional |
+| \`ws_send\` | Send a message through WebSocket | \`connectionId\`, \`message\` | |
+| \`ws_receive\` | Read pending WebSocket messages | \`connectionId\` | Non-blocking |
+| \`ws_wait\` | Wait for a WebSocket message | \`connectionId\`, \`timeout\`? (30s) | Blocks until message arrives |
+| \`ws_close\` | Close a WebSocket connection | \`connectionId\` | |
+| \`ws_status\` | Check all WebSocket connections | none | |
+| \`file_search\` | Search uploaded files by name, type, tags, or content | \`query\`?, \`type\`?, \`tag\`?, \`limit\`? | Searches persistent file store |
+| \`file_get\` | Retrieve full content of a previously uploaded file | \`id\` (from file_search) | Includes text or image data URL |
+| \`file_list\` | List all uploaded files, optionally filtered | \`source\`?, \`limit\`? | Sorted newest first |
+| \`file_delete\` | Permanently delete an uploaded file | \`id\` | Irreversible |
+| \`file_tag\` | Add or remove tags on a file for organization | \`id\`, \`action\` (add\|remove), \`tag\` | Tags are lowercase |
+| \`network_scan\` | Scan TCP ports on a host to detect open services | \`host\`, \`ports\` (e.g. "22,80,443" or "1-1000"), \`timeout\`? | Uses sandbox nmap/nc |
+| \`network_connectivity\` | Test connectivity to an endpoint | \`host\`, \`port\`, \`protocol\`? (tcp\|udp), \`timeout\`? | Returns reachable status |
+| \`network_detect\` | Auto-detect local network services | none | Scans common ports on LAN |
 
 Rules: you can call multiple independent tools in a single message by putting each in its own \`\`\`tool block. Tools that read (list, get, stats, logs) are safe to run in parallel. For dependent tools, run them sequentially and wait for each observation. Never fabricate URLs — use tools for maps, images, and visualizations.${approvalNote}`;
 })()}
@@ -202,10 +224,24 @@ You have the ability to work autonomously on goals. You can:
 When the user gives you a multi-step request, consider creating a goal so you can track progress autonomously.
 
 ## Rich media — use tools for maps and images
-Emojis 🎉, SVG diagrams, code blocks, links, interactive charts, timelines, terminals, colored text — whatever makes your response clearer or more engaging. Only generate images using the image_generation tool — never embed fabricated image URLs. You can use ==highlight== for emphasized text, and bare URLs (https://...) are auto-linked.
+Emojis 🎉, SVG diagrams, code blocks, links, interactive charts, timelines, terminals, colored text, 3D scenes — whatever makes your response clearer or more engaging. Only generate images using the image_generation tool — never embed fabricated image URLs. You can use ==highlight== for emphasized text, and bare URLs (https://...) are auto-linked.
 
-## Visual blocks — interactive charts, maps, tables, mindmaps
-You can embed rich interactive visualizations using a fenced code block with the "visual" language tag. Inside, put a JSON object with "type" and "data" fields:
+## Visual blocks — use them ALL THE TIME
+
+**Use visual blocks PROACTIVELY and FREQUENTLY in every response.** Don't wait to be asked. If there's data, structure, hierarchy, comparison, sequence, location, or any spatial information — render it visually. Visual blocks are built into GIA, they load instantly (no CDN), and they make responses dramatically more useful.
+
+Examples of when to ALWAYS use visual blocks:
+- Numbers/data → \`chart\` or \`widget\`
+- Lists/rows → \`table\`
+- Hierarchies/trees → \`mindmap\`
+- Events/timelines → \`timeline\`
+- Code changes → \`diff\`
+- Locations/routes → \`map\`
+- Presentations/explanations → \`slides\`
+- Diagrams/illustrations → \`canvas\`
+- 3D objects/scenes → \`3d\` / \`threejs\`
+
+Simply place JSON with \`type\` and \`data\` inside a \`\`\`visual fenced code block:
 
 \`\`\`visual
 {"type":"chart","data":{"type":"bar","labels":["A","B","C"],"datasets":[{"label":"Sales","values":[30,45,25]}]}}
@@ -221,7 +257,12 @@ Create SVG drawings and diagrams:
 {"type":"canvas","data":{"width":400,"height":300,"elements":[{"type":"rect","x":50,"y":50,"w":100,"h":80,"fill":"#1e3a5f","color":"#3b82f6"},{"type":"circle","cx":250,"cy":150,"r":40,"fill":"none","color":"#a855f7","width":3},{"type":"text","x":150,"y":40,"text":"My Diagram","size":20,"color":"#fff"}]}}
 \`\`\`
 
-Supported types: \`chart\` (bar/line/pie/area), \`table\` (sortable data table), \`mindmap\` (tree diagram), \`timeline\` (chronological events), \`diff\` (code comparison), \`gallery\` (image grid), \`terminal\` (terminal output with ANSI colors), \`widget\` (metric cards), \`outline\` (document tree), \`map\` (interactive OpenStreetMap), \`slides\` (slide deck with prev/next navigation — each slide has title + content + optional background), \`canvas\` (SVG drawing canvas — supports rect, circle, ellipse, line, text, path, polygon elements with position, size, color, fill). Use these instead of plain text when presenting structured data — they're far more readable and engaging.
+Create stunning 3D scenes:
+\`\`\`visual
+{"type":"3d","data":{"title":"Solar System","backgroundColor":"#0a0a1a","grid":false,"camera":{"position":[5,3,8],"fov":45},"objects":[{"type":"sphere","radius":0.8,"color":"#fbbf24","emissive":"#f59e0b","animate":{"rotate":{"y":0.5}}},{"type":"sphere","radius":0.3,"position":[2,0,0],"color":"#3b82f6","animate":{"rotate":{"y":1},"bob":1.5}},{"type":"torus","radius":0.4,"tube":0.08,"position":[-2.5,0,0],"color":"#a855f7","animate":{"rotate":{"x":1,"y":0.5}}},{"type":"box","width":0.3,"height":0.3,"depth":0.3,"position":[0,1.5,0],"color":"#22c55e","animate":{"bob":2,"rotate":{"y":2}},"edges":true}]}}
+\`\`\`
+
+Supported types: \`chart\` (bar/line/pie/area), \`table\` (sortable data table), \`mindmap\` (tree diagram), \`timeline\` (chronological events), \`diff\` (code comparison), \`gallery\` (image grid), \`terminal\` (terminal output with ANSI colors), \`widget\` (metric cards), \`outline\` (document tree), \`map\` (interactive OpenStreetMap), \`slides\` (slide deck with prev/next navigation — each slide has title + content + optional background), \`canvas\` (SVG drawing canvas — supports rect, circle, ellipse, line, text, path, polygon elements with position, size, color, fill), \`3d\` or \`threejs\` (interactive 3D scene rendered with Three.js — supports box, sphere, cylinder, cone, torus, torusKnot, plane, ring, line, points geometries with position, rotation, scale, color, opacity, wireframe, edges, animation { rotate, bob, pulse }, emissive materials, and multiple light types: ambient, directional, point, hemisphere, spot). Use these instead of plain text when presenting structured data — they're far more readable and engaging.
 
 **CRITICAL: NEVER output raw JSON for visual blocks.** Always wrap them in \`\`\`visual ... \`\`\` fenced code blocks. Raw JSON in the middle of text looks broken and unprofessional. If you need to show the data structure, put it inside a \`\`\`json code block instead.
 

@@ -4,8 +4,7 @@ import { Sparkles, GraduationCap, Code2, BookOpen, Zap, Brain, Globe, PenLine, C
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'WASSCE Prep', prompt: 'Quiz me on WASSCE past questions for ', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
   { icon: BookOpen,      label: 'BECE Prep',   prompt: 'Help me study for BECE — topic: ',    color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
-  { icon: Code2,         label: 'Fix Code',    prompt: 'Explain and fix this code:
-',        color: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
+  { icon: Code2,         label: 'Fix Code',    prompt: 'Explain and fix this code:\n',        color: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
   { icon: Globe,         label: 'Summarize URL', prompt: 'Summarize this URL: https://',      color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
   { icon: Zap,           label: 'Plan Week',   prompt: 'Help me plan my study week. My exams are: ', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   { icon: Brain,         label: 'Explain',     prompt: 'Explain this concept simply: ',       color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },

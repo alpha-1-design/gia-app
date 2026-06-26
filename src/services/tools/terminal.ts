@@ -41,8 +41,7 @@ GIA_JSEOF`;
         `g++ -o "$_TMPDIR/${safeId}" "$_TMPDIR/${safeId}.cpp" -std=c++17 -O2 2>&1`,
         `&& "$_TMPDIR/${safeId}" 2>&1`,
         `; rm -f "$_TMPDIR/${safeId}.cpp" "$_TMPDIR/${safeId}"`,
-      ].join('
-');
+      ].join('\n');
     }
     default:
       return command;
@@ -120,15 +119,11 @@ _Exit code: ${result.exitCode}_`,
         ctx?.onProgress?.(1, 'Done');
         const parts: string[] = [];
         if (result.stdout) parts.push(result.stdout);
-        if (result.stderr) parts.push(`[stderr]
-${result.stderr}`);
-        if (result.exitCode !== 0) parts.push(`
-Exit code: ${result.exitCode}`);
+        if (result.stderr) parts.push(`[stderr]\n${result.stderr}`);
+        if (result.exitCode !== 0) parts.push(`\nExit code: ${result.exitCode}`);
         return {
           success: result.exitCode === 0,
-          content: parts.join('
-
-') || '(no output)',
+          content: parts.join('\n\n') || '(no output)',
           error: result.exitCode !== 0 ? `Exit code ${result.exitCode}` : undefined,
         };
       }
@@ -159,8 +154,7 @@ Exit code: ${result.exitCode}`);
 
     // ── All backends exhausted ──────────────────────────────────────────────
     // Give the user an honest, actionable error instead of letting the AI hallucinate success.
-    const detail = errors.map((e, i) => `${i + 1}. ${e}`).join('
-');
+    const detail = errors.map((e, i) => `${i + 1}. ${e}`).join('\n');
     return {
       success: false,
       content: '',
@@ -173,8 +167,7 @@ Exit code: ${result.exitCode}`);
         'To fix:',
         '• On Android: ensure the GIATerminal native plugin is installed and the proot Alpine environment is set up.',
         '• For code execution: configure a Piston endpoint in Settings → Code Execution.',
-      ].join('
-'),
+      ].join('\n'),
     };
   },
 };
@@ -206,12 +199,9 @@ const terminalStatus: Tool = {
           `- Free: ${freeGB} GB`,
           '',
           sessions.length > 0
-            ? `**Sessions:**
-${sessions.map(s => `- \`${s.sessionId}\`: ${s.command.slice(0, 80)}${s.running ? ' _(running)_' : ''}`).join('
-')}`
+            ? `**Sessions:**\n${sessions.map(s => `- \`${s.sessionId}\`: ${s.command.slice(0, 80)}${s.running ? ' _(running)_' : ''}`).join('\n')}`
             : '_No active sessions._',
-        ].join('
-'),
+        ].join('\n'),
       };
     } catch (e: unknown) {
       return {

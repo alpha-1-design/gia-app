@@ -24,6 +24,7 @@ export function useChatState() {
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [clarAnswer, setClarAnswer] = useState('');
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showFileManager, setShowFileManager] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [inputContainerHeight, setInputContainerHeight] = useState(140);
 
@@ -368,7 +369,7 @@ export function useChatState() {
     liveThoughts: gen.liveThoughts, setLiveThoughts: gen.setLiveThoughts,
     showKnowledge, setShowKnowledge,
     clarAnswer, setClarAnswer, processingFiles, processingFileName, isDragging,
-    showFileBrowser, setShowFileBrowser, showTools, setShowTools,
+    showFileBrowser, setShowFileBrowser, showFileManager, setShowFileManager, showTools, setShowTools,
     inputContainerHeight, setInputContainerHeight,
     keepListeningRef, voiceRef, dragCounter, undoTimeoutRef: msgOps.undoTimeoutRef,
     abortRef: gen.abortRef, abortTimeoutRef: gen.abortTimeoutRef,

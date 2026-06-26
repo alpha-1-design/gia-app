@@ -208,7 +208,7 @@ const parseTaskList = (line: string): React.ReactNode => {
   );
 };
 
-const VISUAL_TYPES = new Set(['chart', 'mindmap', 'mind_map', 'mind-map', 'diff', 'code_diff', 'code-diff', 'table', 'data_table', 'data-table', 'gallery', 'image_gallery', 'image-gallery', 'timeline', 'terminal', 'terminal_output', 'terminal-output', 'widget', 'metric', 'metrics', 'waveform', 'audio', 'outline', 'document_outline', 'toc', 'map', 'openstreetmap', 'slides', 'presentation', 'slide_deck', 'slide-deck', 'canvas', 'drawing', 'diagram']);
+const VISUAL_TYPES = new Set(['chart', 'mindmap', 'mind_map', 'mind-map', 'diff', 'code_diff', 'code-diff', 'table', 'data_table', 'data-table', 'gallery', 'image_gallery', 'image-gallery', 'timeline', 'terminal', 'terminal_output', 'terminal-output', 'widget', 'metric', 'metrics', 'waveform', 'audio', 'outline', 'document_outline', 'toc', 'map', 'openstreetmap', 'slides', 'presentation', 'slide_deck', 'slide-deck', 'canvas', 'drawing', 'diagram', '3d', 'three', 'threejs', 'scene']);
 
 const wrapBareVisualBlocks = (text: string): string => {
   const blocks = text.split(/(\n\n+)/);

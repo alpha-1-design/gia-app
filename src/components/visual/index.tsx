@@ -14,6 +14,7 @@ import { DocumentOutlineVisual } from './DocumentOutlineVisual';
 import { MapVisual } from './MapVisual';
 import { SlidesVisual } from './SlidesVisual';
 import { CanvasVisual } from './CanvasVisual';
+import ThreeVisual from './ThreeVisual';
 
 const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
@@ -70,8 +71,13 @@ const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
     case 'drawing':
     case 'diagram':
       return <CanvasVisual data={data} />;
+    case '3d':
+    case 'three':
+    case 'threejs':
+    case 'scene':
+      return <ThreeVisual data={data} />;
     default:
-      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas`} />;
+      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d`} />;
   }
 };
 
