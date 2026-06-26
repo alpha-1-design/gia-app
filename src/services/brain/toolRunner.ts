@@ -187,6 +187,7 @@ async function executeSingleTool(
   };
 
   while (true) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     try {
       result = await tool.execute(toolCall.args, toolContext);
     } catch (e: unknown) {
@@ -196,7 +197,13 @@ async function executeSingleTool(
     toolAttempts++;
     const backoff = Math.min(1000 * Math.pow(2, toolAttempts), 8000);
     onThought?.(`⚠️ ${tool.name} attempt ${toolAttempts} failed — retrying in ${backoff}ms...`);
-    await new Promise(r => setTimeout(r, backoff));
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, backoff);
+      if (signal) {
+        const onAbort = () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); };
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
   }
   useGiaStore.getState().setCurrentTool(null);
   AnalyticsService.trackTool(toolCall.id, result!.success);

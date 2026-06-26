@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/option_capture"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:text="Capture &amp; Analyze"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:background="@drawable/popup_item_bg" />
+
+    <TextView
+        android:id="@+id/option_settings"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:text="Settings"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:background="@drawable/popup_item_bg" />
+
+    <TextView
+        android:id="@+id/option_hide"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:text="Hide Orb"
+        android:textColor="#f87171"
+        android:textSize="14sp"
+        android:background="@drawable/popup_item_bg" />
+
+</LinearLayout>

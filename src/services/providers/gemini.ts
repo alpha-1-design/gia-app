@@ -102,7 +102,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
                 if (part?.text) {
                   const delta = part.text;
                   fullText += delta;
-                  req.onStream!(delta);
+                  try { req.onStream!(delta); } catch { /* ignore stream errors */ }
                 }
               }
             } catch (e) { logger.error('[gemini] Failed to parse streaming response chunk:', e); }
@@ -132,7 +132,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
               for (const part of parts) {
                 if (part?.text) fullText += part.text;
               }
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
           }
         }
         flushFunctionCalls();

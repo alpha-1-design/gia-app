@@ -314,6 +314,7 @@ const App: React.FC = () => {
     SchedulerService.start();
     MCPManager.init();
     proactiveEngine.start();
+    import('./services/GIACoreServices').then(m => m.giaCoreServices.onAppStart());
 
     // Track user activity for autonomy engine + idle manager
     const trackActivity = () => {

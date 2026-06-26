@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { logger } from '../../utils/logger';
-import type { Tool, ToolResult } from './types';
+import type { Tool } from './types';
 
 async function sandboxExec(cmd: string, timeout = 30000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {

@@ -142,7 +142,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
                   const textDelta = delta?.content || '';
                 if (textDelta) {
                   fullText += textDelta;
-                  req.onStream!(textDelta);
+                  try { req.onStream!(textDelta); } catch { /* ignore stream errors to keep processing flag */ }
                 }
               } catch (e) { logger.error('[openai] Failed to parse streaming response chunk:', e); continue; }
             }
@@ -170,7 +170,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
               const json = JSON.parse(t.slice(6));
               const delta = json.choices?.[0]?.delta;
               if (delta?.content) fullText += delta.content;
-            } catch (e) { /* ignore partial parse errors on close */ }
+            } catch { /* ignore partial parse errors on close */ }
           }
         }
         flushToolCalls();

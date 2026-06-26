@@ -142,6 +142,62 @@ const SettingsModule: React.FC = () => {
         )}
       </div>
 
+      {/* Setup Guide (Android) */}
+      {isNativePlatform() && (
+        <div className="gia-card p-4" style={{ borderColor: 'rgba(168,85,247,0.2)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Smartphone size={14} style={{ color: '#a855f7' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+              Setup GIA as Personal Assistant
+            </span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {[
+              {
+                num: '1',
+                title: 'Default Assistant',
+                desc: 'Settings → Apps → Default apps → Digital assistant app → pick GIA',
+                note: 'Long-press home button anywhere to launch GIA',
+                color: '#a855f7',
+              },
+              {
+                num: '2',
+                title: 'Accessibility Service',
+                desc: 'Settings → Accessibility → GIA Circle-to-Search → enable',
+                note: 'Grants screen reading, screenshots & gesture control',
+                color: '#3b82f6',
+              },
+              {
+                num: '3',
+                title: 'Floating Orb',
+                desc: 'Tap "Orb" in the chat toolbar → purple overlay appears over every app',
+                note: 'Tap to capture screen · Long-press to resize/hide',
+                color: '#10b981',
+              },
+              {
+                num: '4',
+                title: 'Overlay Permission',
+                desc: 'Settings → Apps → GIA → Display over other apps → enable',
+                note: 'Required for the floating orb to work',
+                color: '#f59e0b',
+              },
+            ].map(step => (
+              <div key={step.num} className="flex gap-3 items-start">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold"
+                  style={{ background: `${step.color}20`, color: step.color, border: `1px solid ${step.color}40` }}>
+                  {step.num}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>{step.title}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{step.desc}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: step.color, opacity: 0.7 }}>↳ {step.note}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Engine Room CTA */}
       <button
         onClick={() => setShowTerminal(true)}

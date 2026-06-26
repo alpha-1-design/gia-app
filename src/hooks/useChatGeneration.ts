@@ -9,6 +9,7 @@ import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
 import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock } from '../utils/streamParser';
 import InputGuardrails from '../services/InputGuardrails';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { giaCoreServices } from '../services/GIACoreServices';
 import type { Message } from '../store/useGiaStore';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -142,6 +143,7 @@ export function useChatGeneration() {
 
     state.addMessage(sessionId, userMsg);
     AnalyticsService.trackMessage('user');
+    giaCoreServices.onMessage(userContent, userMsg.id, 'user');
     TTSService.stop();
     const sentAttachments = [...attachments];
     setInput('');
@@ -274,6 +276,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         (res.text || '').trim().slice(0, 200) ||
         '🤖 _Taking action..._';
       state.updateMessage(sessionId, asstId, finalText, parserState.thoughtsAccumulated || undefined);
+      giaCoreServices.onMessage(finalText, asstId, 'assistant');
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
@@ -422,6 +425,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      useGiaStore.setState(s => ({
+        sessions: s.sessions.map(sess =>
+          sess.id === state.activeSessionId
+            ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, thinking: false } } : m) }
+            : sess
+        ),
+      }));
       setLoading(false);
       setStreamingMsgId(null);
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
@@ -506,6 +516,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      useGiaStore.setState(s => ({
+        sessions: s.sessions.map(sess =>
+          sess.id === sessionId
+            ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, thinking: false } } : m) }
+            : sess
+        ),
+      }));
       setLoading(false);
       setStreamingMsgId(null);
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
@@ -588,6 +605,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      useGiaStore.setState(s => ({
+        sessions: s.sessions.map(sess =>
+          sess.id === state.activeSessionId
+            ? { ...sess, messages: sess.messages.map(m => m.message.id === id ? { ...m, message: { ...m.message, thinking: false } } : m) }
+            : sess
+        ),
+      }));
       setLoading(false);
       setStreamingMsgId(null);
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });

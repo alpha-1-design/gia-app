@@ -1,4 +1,3 @@
-import { logger } from '../../utils/logger';
 import type { Tool, ToolResult } from './types';
 
 interface WSConnection {

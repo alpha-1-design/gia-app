@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Bot, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
-  Eye, CheckCircle2, Loader2, Upload,
+  Eye, CheckCircle2, Loader2, Upload, Monitor, CircleDot,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -24,6 +24,7 @@ import InlineToolExecution from '../components/InlineToolExecution';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
+import { useScreenCapture } from '../hooks/useScreenCapture';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7' },
@@ -66,6 +67,23 @@ const ChatModule: React.FC = () => {
   } = useChatState();
 
   const { greeting, tip } = useProactiveMessage();
+  const { captureScreen, capturing } = useScreenCapture();
+  const [orbActive, setOrbActive] = useState(false);
+
+  const toggleOrb = async () => {
+    try {
+      const { GIAScreenAgent } = await import('../services/GIAScreenAgent');
+      if (orbActive) {
+        await GIAScreenAgent.hideOrb();
+        setOrbActive(false);
+      } else {
+        await GIAScreenAgent.showOrb();
+        setOrbActive(true);
+      }
+    } catch {
+      // Not on native platform — ignore silently
+    }
+  };
 
   if (showHistory) {
     return (
@@ -412,6 +430,28 @@ const ChatModule: React.FC = () => {
                   }
                 }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <Camera size={11} /> Camera
+                </button>
+                <button type="button" onClick={captureScreen}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
+                  style={{
+                    background: capturing ? 'rgba(16,185,129,0.2)' : 'var(--gia-surface)',
+                    border: capturing ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--gia-border)',
+                    color: capturing ? '#10b981' : 'var(--gia-muted)',
+                    fontWeight: 500,
+                  }}>
+                  <Monitor size={11} className={capturing ? 'animate-pulse' : ''} />
+                  {capturing ? 'Capturing...' : 'Screen'}
+                </button>
+                <button type="button" onClick={toggleOrb}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
+                  style={{
+                    background: orbActive ? 'rgba(168,85,247,0.2)' : 'var(--gia-surface)',
+                    border: orbActive ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--gia-border)',
+                    color: orbActive ? '#a855f7' : 'var(--gia-muted)',
+                    fontWeight: 500,
+                  }}>
+                  <CircleDot size={11} className={orbActive ? 'animate-pulse' : ''} />
+                  {orbActive ? 'Orb On' : 'Orb'}
                 </button>
                 <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
                 {[

@@ -65,9 +65,9 @@ function forceLayout(nodes: GraphNode[], edges: GraphEdge[], width: number, heig
       for (let j = i + 1; j < nodeIds.length; j++) {
         const a = positions[nodeIds[i]];
         const b = positions[nodeIds[j]];
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const force = repulsion / (dist * dist);
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
@@ -83,8 +83,8 @@ function forceLayout(nodes: GraphNode[], edges: GraphEdge[], width: number, heig
       const a = positions[e.source];
       const b = positions[e.target];
       if (!a || !b) continue;
-      let dx = b.x - a.x;
-      let dy = b.y - a.y;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const force = (dist - k) * attraction;
       const fx = (dx / dist) * force;
@@ -170,7 +170,6 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
   }
 
   const { nodes, edges = [], directed = false } = data;
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
   return (
     <div ref={containerRef} className="w-full h-full min-h-[300px] relative overflow-hidden rounded-lg border border-gray-700/30 bg-gray-900/20">

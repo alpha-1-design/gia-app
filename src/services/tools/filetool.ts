@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { useFileStore } from '../../store/useFileStore';
-import type { Tool, ToolResult } from './types';
+import type { Tool } from './types';
 
 const fileSearch: Tool = {
   id: 'file_search',
@@ -27,7 +27,7 @@ const fileSearch: Tool = {
       return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
     }
     const { query, type, tag, limit } = parsed.data;
-    const { files, searchFiles, filterByTag, filterByType } = useFileStore.getState();
+    const { files, searchFiles } = useFileStore.getState();
 
     let results = query ? searchFiles(query) : [...files];
     if (tag) results = results.filter(f => f.tags.includes(tag));
@@ -108,7 +108,7 @@ const fileList: Tool = {
       return { success: false, content: '', error: parsed.error.issues.map(i => i.message).join(', ') };
     }
     const { files } = useFileStore.getState();
-    let results = parsed.data.source
+    const results = parsed.data.source
       ? files.filter(f => f.source === parsed.data.source)
       : [...files];
     results.sort((a, b) => b.uploadedAt - a.uploadedAt);

@@ -101,7 +101,6 @@ const databaseTools: Tool[] = [
         const escapedQuery = query.replace(/"/g, '\\"').replace(/\$/g, '\\$');
 
         if (dbType === 'postgresql') {
-          const sslMode = ssl ? 'require' : 'disable';
           const pgpass = `localhost:${port}:${database}:${username}:${password}`;
           cmd = `echo '${pgpass}' > /tmp/pgpass && chmod 600 /tmp/pgpass && PGPASSFILE=/tmp/pgpass psql -h ${host} -p ${port} -U ${username} -d ${database} -c "${escapedQuery}" --pset=tuples_only=on --pset=format=unaligned 2>&1`;
         } else if (dbType === 'mysql') {

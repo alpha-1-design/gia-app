@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { VisualCard } from './common';
 import { useCopy } from './useCopy';
@@ -6,12 +6,11 @@ import { useCopy } from './useCopy';
 const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const [error, setError] = useState('');
   const [copied, copy] = useCopy();
 
   const sceneData = data as Record<string, unknown>;
-  const objects = (sceneData.objects as Array<Record<string, unknown>>) || [];
-  const lights = (sceneData.lights as Array<Record<string, unknown>>) || [];
+  const objects = useMemo(() => (sceneData.objects as Array<Record<string, unknown>>) || [], [sceneData.objects]);
+  const lights = useMemo(() => (sceneData.lights as Array<Record<string, unknown>>) || [], [sceneData.lights]);
 
   const hex = (c?: string): number => c ? parseInt(c.replace('#', ''), 16) : 0xa855f7;
 

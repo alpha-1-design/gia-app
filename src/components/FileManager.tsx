@@ -1,16 +1,14 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Upload, Search, Grid3x3, List, Trash2, Tag, FileImage,
-  FileText, FileCode, FileArchive, File, FolderOpen, Download,
-  Camera, Paperclip, Image as ImageIcon, Loader2,
+  X, Upload, Search, Grid3x3, List, Trash2, Tag,
+  FileText, FileCode, FileArchive, File, FolderOpen,
+  Camera, Image as ImageIcon, Loader2,
 } from 'lucide-react';
 import { useFileStore, type StoredFile } from '../store/useFileStore';
-import { genId } from '../utils/id';
 
 interface FileManagerProps {
   onClose: () => void;
-  onAttachToChat?: (fileId: string) => void;
 }
 
 const FILE_TYPE_ICON: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -109,7 +107,7 @@ const FileCard: React.FC<{ file: StoredFile; onDelete: (id: string) => void; onT
   );
 };
 
-const FileManager: React.FC<FileManagerProps> = ({ onClose, onAttachToChat }) => {
+const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
   const { files, addFile, deleteFile, addTag, removeTag, getAllTags, searchFiles } = useFileStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -123,7 +121,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onClose, onAttachToChat }) =>
   const imgInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
-  const allTags = useMemo(() => getAllTags(), [files]);
+  const allTags = getAllTags();
 
   const filtered = useMemo(() => {
     let result = searchQuery ? searchFiles(searchQuery) : [...files];
@@ -131,7 +129,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onClose, onAttachToChat }) =>
     if (viewSource) result = result.filter(f => f.source === viewSource);
     result.sort((a, b) => b.uploadedAt - a.uploadedAt);
     return result;
-  }, [files, searchQuery, activeTag, viewSource]);
+  }, [files, searchQuery, activeTag, viewSource, searchFiles]);
 
   const handleFileAdd = useCallback(async (fileList: FileList | null, source: 'manual' | 'capture') => {
     if (!fileList) return;

@@ -118,10 +118,10 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
                 if (delta?.type === 'text_delta') {
                   const text = delta.text ?? '';
                   fullText += text;
-                  req.onStream!(text);
+                  try { req.onStream!(text); } catch { /* ignore stream errors */ }
                 }
                 if (delta?.type === 'thinking_delta') {
-                  req.onThought?.(delta.thinking ?? '');
+                  try { req.onThought?.(delta.thinking ?? ''); } catch { /* ignore */ }
                 }
                 if (delta?.type === 'input_json_delta') {
                   const existing = toolUseBlocks.get(parsed.index);
@@ -167,7 +167,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
                   fullText += parsed.delta.text ?? '';
                 }
               }
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
           }
         }
         flushToolUses();

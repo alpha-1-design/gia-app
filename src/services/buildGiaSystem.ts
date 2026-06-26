@@ -184,7 +184,7 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`telegram_post_photo\` | Post photo to channel | \`photoUrl\`, \`caption\` (optional) | With optional caption |
 | \`telegram_stats\` | Channel stats | none | Member + admin count |
 | \`telegram_disconnect\` | Remove Telegram config | none | Clears token + channel |
-| \`ssh_connect\` | SSH into a remote machine and execute a command | \`host\`, \`username\`, \`command\`, \`authType\` (password\|key), \`password\`?, \`keyName\`?, \`port\`? (22) | First use auto-installs openssh-client in sandbox |
+| \`ssh_connect\` | SSH into a remote machine and execute a command | \`host\`, \`username\`, \`command\`, \`authType\` (password|key), \`password\`?, \`keyName\`?, \`port\`? (22) | First use auto-installs openssh-client in sandbox |
 | \`ssh_add_key\` | Store an SSH private key for key-based auth | \`name\`, \`key\` (PEM content) | Stored locally |
 | \`ssh_list_connections\` | List saved SSH connections and keys | none | |
 | \`ssh_remove_connection\` | Remove a saved SSH connection | \`id\` | |
@@ -202,13 +202,13 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`file_get\` | Retrieve full content of a previously uploaded file | \`id\` (from file_search) | Includes text or image data URL |
 | \`file_list\` | List all uploaded files, optionally filtered | \`source\`?, \`limit\`? | Sorted newest first |
 | \`file_delete\` | Permanently delete an uploaded file | \`id\` | Irreversible |
-| \`file_tag\` | Add or remove tags on a file for organization | \`id\`, \`action\` (add\|remove), \`tag\` | Tags are lowercase |
+| \`file_tag\` | Add or remove tags on a file for organization | \`id\`, \`action\` (add|remove), \`tag\` | Tags are lowercase |
 | \`network_scan\` | Scan TCP ports on a host to detect open services | \`host\`, \`ports\` (e.g. "22,80,443" or "1-1000"), \`timeout\`? | Uses sandbox nmap/nc |
-| \`network_connectivity\` | Test connectivity to an endpoint | \`host\`, \`port\`, \`protocol\`? (tcp\|udp), \`timeout\`? | Returns reachable status |
+| \`network_connectivity\` | Test connectivity to an endpoint | \`host\`, \`port\`, \`protocol\`? (tcp|udp), \`timeout\`? | Returns reachable status |
   | \`network_detect\` | Auto-detect local network services | \`subnet\`? (auto), \`timeout\`? (1s) | Scans full /24 subnet (1-254), probes 35+ common ports on live hosts |
 | \`security_install_tools\` | Install security tools in sandbox | none | iptables, whois, nmap, lsof, tcpdump, bind-tools |
 | \`security_scan\` | Comprehensive security scan of this device | \`deep\`? (boolean) | Processes, ports, connections, auth logs, SUID, cron, temp files |
-| \`security_firewall\` | Block or allow network traffic | \`action\` (block_all\|block_incoming\|block_outgoing\|allow_all\|status) | iptables-based, auto-installs if missing |
+| \`security_firewall\` | Block or allow network traffic | \`action\` (block_all|block_incoming|block_outgoing|allow_all|status) | iptables-based, auto-installs if missing |
 | \`security_threat_intel\` | Check IPs/domains/hashes against threat databases | \`targets\` (array, max 10) | AbuseIPDB, VirusTotal, ThreatFox |
 | \`security_trace\` | Geolocate an IP address or domain | \`target\` | Returns city, ISP, coordinates, WHOIS |
 | \`security_quarantine\` | Emergency quarantine — kill threats + block all traffic | \`confirm\` (must be true) | Destructive — call only when threat is confirmed |

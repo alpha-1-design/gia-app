@@ -159,6 +159,14 @@
             android:foregroundServiceType="mediaProjection">
         </service>
 
+        <!-- Floating Screen Orb (persistent draggable overlay) -->
+        <service
+            android:name=".GIAScreenOrbService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+        </service>
+
         <!-- VoiceInteractionService: makes GIA selectable as default assistant -->
         <service
             android:name=".GIAVoiceInteractionService"

@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
-import { logger } from '../utils/logger';
 
 export interface StoredFile {
   id: string;
@@ -122,9 +121,8 @@ export const useFileStore = create<FileStore>()(
 export function fileStoreHelpers() {
   const { files } = useFileStore.getState();
   return {
-    async attachFromMessage(messageId: string, sessionId: string) {
-      const msgFiles = files.filter(f => f.messageId === messageId);
-      return msgFiles;
+    async attachFromMessage(messageId: string) {
+      return files.filter(f => f.messageId === messageId);
     },
     async attachFromSession(sessionId: string) {
       return files.filter(f => f.sessionId === sessionId);
