@@ -224,7 +224,6 @@ public class GIAMediaService extends Service implements MediaPlayer.OnCompletion
                 .setOngoing(true)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
-                        .setMediaSession(mediaSession.getSessionToken())
                         .setShowActionsInCompactView(0, 1, 2))
                 .addAction(android.R.drawable.ic_media_previous, "Previous",
                         PendingIntent.getService(this, 1, prevIntent, flags))
