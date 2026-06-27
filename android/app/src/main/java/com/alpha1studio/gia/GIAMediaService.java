@@ -5,21 +5,20 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ContentUris;
 import android.content.Intent;
+import android.content.ContentUris;
 import android.database.Cursor;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.provider.MediaStore;
-import androidx.media.MediaMetadataCompat;
-import androidx.media.session.MediaSessionCompat;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -27,7 +26,6 @@ import androidx.core.app.NotificationCompat;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 public class GIAMediaService extends Service implements MediaPlayer.OnCompletionListener,
         MediaPlayer.OnErrorListener, MediaPlayer.OnPreparedListener, AudioManager.OnAudioFocusChangeListener {
@@ -37,7 +35,7 @@ public class GIAMediaService extends Service implements MediaPlayer.OnCompletion
     private static final int NOTIFICATION_ID = 1001;
 
     private MediaPlayer mediaPlayer;
-    private MediaSessionCompat mediaSession;
+    private MediaSession mediaSession;
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
     private boolean isPrepared = false;
@@ -147,16 +145,16 @@ public class GIAMediaService extends Service implements MediaPlayer.OnCompletion
     }
 
     private void setupMediaSession() {
-        mediaSession = new MediaSessionCompat(this, TAG);
-        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSession = new MediaSession(this, TAG);
+        mediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
+                MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
 
         Intent intent = new Intent(this, MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         mediaSession.setSessionActivity(pi);
 
-        mediaSession.setCallback(new MediaSessionCompat.Callback() {
+        mediaSession.setCallback(new MediaSession.Callback() {
             @Override
             public void onPlay() { resume(); }
             @Override
@@ -195,16 +193,17 @@ public class GIAMediaService extends Service implements MediaPlayer.OnCompletion
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void updateMediaMetadata() {
         if (mediaSession == null || currentPath == null) return;
-        MediaMetadataCompat.Builder builder = new MediaMetadataCompat.Builder();
-        if (currentTitle != null) builder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle);
-        if (currentArtist != null) builder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist);
-        builder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDuration);
+        MediaMetadata.Builder builder = new MediaMetadata.Builder();
+        if (currentTitle != null) builder.putString(MediaMetadata.METADATA_KEY_TITLE, currentTitle);
+        if (currentArtist != null) builder.putString(MediaMetadata.METADATA_KEY_ARTIST, currentArtist);
+        builder.putLong(MediaMetadata.METADATA_KEY_DURATION, currentDuration);
         if (currentAlbumId > 0) {
             Uri artworkUri = ContentUris.withAppendedId(
                     Uri.parse("content://media/external/audio/albumart"), currentAlbumId);
-            builder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, artworkUri.toString());
+            builder.putString(MediaMetadata.METADATA_KEY_ART_URI, artworkUri.toString());
         }
         mediaSession.setMetadata(builder.build());
     }
