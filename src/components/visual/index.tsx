@@ -16,6 +16,7 @@ import { SlidesVisual } from './SlidesVisual';
 import { CanvasVisual } from './CanvasVisual';
 import ThreeVisual from './ThreeVisual';
 import GraphVisual from './GraphVisual';
+import { FileVisual } from './FileVisual';
 
 const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
@@ -83,8 +84,11 @@ const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
     case 'node-graph':
     case 'topology':
       return <GraphVisual data={data as never} />;
+    case 'file_preview':
+    case 'file-preview':
+      return <FileVisual data={data as never} />;
     default:
-      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d, graph`} />;
+      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d, graph, file_preview`} />;
   }
 };
 

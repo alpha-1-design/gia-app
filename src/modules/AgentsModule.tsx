@@ -689,6 +689,8 @@ const CreateAgentModal: React.FC<{
   const [tools, setTools] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadComplete, setUploadComplete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -710,9 +712,10 @@ const CreateAgentModal: React.FC<{
   const handleSave = async () => {
     if (!name.trim()) return;
     setUploading(true);
+    setUploadProgress(0);
+    setUploadComplete(false);
     try {
       if (isEditing && editAgent) {
-        // Update existing agent
         useAgentStore.getState().updateAgent(editAgent.id, {
           name: name.trim(),
           description: description.trim(),
@@ -720,14 +723,24 @@ const CreateAgentModal: React.FC<{
           icon,
           tools,
         });
-        // Upload new files if any
-        for (const file of files) {
-          try { await useAgentStore.getState().addFileToAgent(editAgent.id, file); }
-          catch (e) { console.error('Upload failed:', file.name, e); }
+        const total = files.length;
+        for (let i = 0; i < total; i++) {
+          const file = files[i];
+          try {
+            const endPct = Math.round(((i + 1) / total) * 80) + 10;
+            const progressInterval = setInterval(() => {
+              setUploadProgress(prev => Math.min(prev + 2, endPct - 5));
+            }, 100);
+            await useAgentStore.getState().addFileToAgent(editAgent.id, file);
+            clearInterval(progressInterval);
+            setUploadProgress(endPct);
+          } catch (e) { console.error('Upload failed:', file.name, e); }
         }
+        setUploadProgress(100);
+        setUploadComplete(true);
+        setTimeout(() => setUploadComplete(false), 2000);
         onSave(editAgent.id);
       } else {
-        // Create new agent — single call, no double creation
         const agent = useAgentStore.getState().addAgent({
           name: name.trim(),
           description: description.trim(),
@@ -735,10 +748,22 @@ const CreateAgentModal: React.FC<{
           icon,
           tools,
         });
-        for (const file of files) {
-          try { await useAgentStore.getState().addFileToAgent(agent.id, file); }
-          catch (e) { console.error('Upload failed:', file.name, e); }
+        const total = files.length;
+        for (let i = 0; i < total; i++) {
+          const file = files[i];
+          try {
+            const endPct = Math.round(((i + 1) / total) * 80) + 10;
+            const progressInterval = setInterval(() => {
+              setUploadProgress(prev => Math.min(prev + 2, endPct - 5));
+            }, 100);
+            await useAgentStore.getState().addFileToAgent(agent.id, file);
+            clearInterval(progressInterval);
+            setUploadProgress(endPct);
+          } catch (e) { console.error('Upload failed:', file.name, e); }
         }
+        setUploadProgress(100);
+        setUploadComplete(true);
+        setTimeout(() => setUploadComplete(false), 2000);
         onSave(agent.id);
       }
     } catch (e) {
@@ -877,6 +902,33 @@ const CreateAgentModal: React.FC<{
           </div>
         </div>
 
+        {uploadProgress > 0 && uploadProgress < 100 && (
+          <div className="px-5 py-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Loader2 size={11} className="animate-spin shrink-0" style={{ color: '#a855f7' }} />
+              <span className="text-[10px] font-medium" style={{ color: 'var(--gia-muted)' }}>Uploading files... {uploadProgress}%</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--gia-surface-2)' }}>
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(90deg, #a855f7, #c084fc)' }}
+                initial={{ width: 0 }}
+                animate={{ width: `${uploadProgress}%` }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+              />
+            </div>
+          </div>
+        )}
+        {uploadComplete && (
+          <div className="px-5 py-3 flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.2)' }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <span className="text-[10px] font-medium" style={{ color: '#34d399' }}>Upload complete</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 px-5 py-4" style={{ borderTop: '1px solid var(--gia-border)' }}>
           <button onClick={onClose} className="flex-1 gia-btn gia-btn-ghost text-xs py-2.5">Cancel</button>
           <button

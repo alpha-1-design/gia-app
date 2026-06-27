@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Download, Key, MessageCircle, Smartphone, Github, Shield, Cpu } from 'lucide-react';
+import { ArrowRight, Download, Key, MessageCircle, Smartphone, Github } from 'lucide-react';
 
 const steps = [
   {
@@ -37,10 +37,6 @@ const steps = [
 ];
 
 export const GettingStarted: React.FC = () => {
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <section id="getting-started" className="relative py-28 overflow-hidden bg-[#0a0a0f]">
       <div className="absolute inset-0">

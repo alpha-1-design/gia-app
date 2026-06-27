@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import {
   MessageCircle, BarChart2, GraduationCap, PenLine, ListTodo,
-  Settings, Target, Bot, Send, Sparkles, ChevronDown, Wifi, Monitor, Mic
+  Settings, Target, Bot, Send, ChevronDown, Wifi, Monitor, Mic
 } from 'lucide-react';
 
 const modules = [

@@ -99,6 +99,9 @@ class GiaBrain {
 
     if (req.forceJson) {
       req.systemPrompt = (req.systemPrompt || '') + '\n\nCRITICAL: You MUST respond with ONLY valid JSON. No markdown fences, no code blocks, no explanations, no text before or after the JSON. The entire response must be parseable by JSON.parse(). Start directly with { or [ and end with } or ]. Do NOT use any tools or call any functions.';
+      if (activeProvider === 'anthropic') {
+        req.systemPrompt += '\n\nIMPORTANT: You MUST respond with ONLY valid JSON. No markdown, no code fences, no explanation. Just the raw JSON object.';
+      }
       req.temperature = 0.1;
     }
 

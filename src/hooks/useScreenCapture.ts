@@ -16,7 +16,16 @@ export function useScreenCapture() {
 
       if (isNative) {
         // Native Android — use the accessibility service plugin
-        const { GIAScreenAgent } = await import('../services/GIAScreenAgent');
+        let GIAScreenAgent: typeof import('../services/GIAScreenAgent').GIAScreenAgent;
+        try {
+          GIAScreenAgent = (await import('../services/GIAScreenAgent')).GIAScreenAgent;
+        } catch {
+          useGiaStore.getState().addNotification(
+            'Screen capture requires Android (accessibility service) or screen share permissions. Try again after enabling the GIA accessibility service.'
+          );
+          return;
+        }
+
         const result = await GIAScreenAgent.capture();
 
         const state = useGiaStore.getState();
@@ -44,10 +53,18 @@ export function useScreenCapture() {
         });
       } else {
         // Web — use getDisplayMedia + OCR
-        await screenAgent.activate();
+        try {
+          await screenAgent.activate();
+        } catch {
+          useGiaStore.getState().addNotification(
+            'Screen capture requires Android (accessibility service) or screen share permissions. Please try screen sharing again.'
+          );
+          return;
+        }
+
         const content = await screenAgent.captureAndAnalyze();
         if (!content) {
-          useGiaStore.getState().addNotification('Screen capture cancelled or failed');
+          useGiaStore.getState().addNotification('Screen capture was cancelled or failed. Try again and allow screen sharing when prompted.');
           return;
         }
 
@@ -67,8 +84,14 @@ export function useScreenCapture() {
         });
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Screen capture failed';
-      useGiaStore.getState().addNotification(msg);
+      if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        useGiaStore.getState().addNotification(
+          'Screen capture was denied. Please allow screen sharing when prompted, then try again.'
+        );
+      } else {
+        const msg = e instanceof Error ? e.message : 'Screen capture failed';
+        useGiaStore.getState().addNotification(`${msg}. Try again or use a different capture method.`);
+      }
     } finally {
       setCapturing(false);
     }

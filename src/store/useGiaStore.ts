@@ -169,6 +169,7 @@ export interface UserProfile {
   name: string;
   bio: string;
   goals: string;
+  profilePictureUri?: string;
 }
 
 export interface Clarification {
@@ -222,7 +223,8 @@ interface GiaState {
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
-  generationState: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null };
+  generationState: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal };
+  generationControllers: Map<string, AbortController>;
   showCircleSearch: boolean;
   setShowCircleSearch: (v: boolean) => void;
   pendingCircleImage: string | null;
@@ -237,8 +239,12 @@ interface GiaState {
   setDeepLinkQueue: (v: string[]) => void;
 
   setModule: (module: Module) => void;
-  setGenerationState: (state: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null }) => void;
+  setGenerationState: (state: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal }) => void;
   setCurrentTool: (tool: string | null) => void;
+  registerGenerationController: (key: string, controller: AbortController) => void;
+  unregisterGenerationController: (key: string) => void;
+  abortGeneration: (key: string) => void;
+  abortAllGenerations: () => void;
   setClarification: (c: Clarification | null) => void;
   setIntentState: (state: IntentState) => void;
   setShowTerminal: (show: boolean) => void;
@@ -327,7 +333,7 @@ export const useGiaStore = create<GiaState>()(
       sessions: [],
       activeSessionId: null,
       scheduledTasks: [],
-      userProfile: { name: '', bio: '', goals: '' },
+      userProfile: { name: '', bio: '', goals: '', profilePictureUri: '' },
       notifications: [],
       skills: [
         {
@@ -410,13 +416,14 @@ export const useGiaStore = create<GiaState>()(
       connectionStatus: navigator.onLine ? 'online' : 'offline',
       providerConnected: false,
       currentTool: null,
+      generationState: { active: false, module: null, sessionId: null, messageId: null },
+      generationControllers: new Map(),
       showCircleSearch: false,
       pendingCircleImage: null,
       pendingInput: null,
       pendingFiles: [],
       pendingAction: null,
       deepLinkQueue: [],
-      generationState: { active: false, module: null, sessionId: null, messageId: null },
       longRunningMode: false,
       autoModelUnload: true,
 
@@ -426,6 +433,23 @@ export const useGiaStore = create<GiaState>()(
         return { currentModule: module };
       }),
       setGenerationState: (generationState) => set({ generationState }),
+      registerGenerationController: (key, controller) => set((s) => {
+        const newControllers = new Map(s.generationControllers);
+        newControllers.set(key, controller);
+        return { generationControllers: newControllers };
+      }),
+      unregisterGenerationController: (key) => set((s) => {
+        const newControllers = new Map(s.generationControllers);
+        newControllers.delete(key);
+        return { generationControllers: newControllers };
+      }),
+      abortGeneration: (key) => {
+        const controller = useGiaStore.getState().generationControllers.get(key);
+        if (controller) controller.abort();
+      },
+      abortAllGenerations: () => {
+        useGiaStore.getState().generationControllers.forEach(c => c.abort());
+      },
       setCurrentTool: (tool) => set({ currentTool: tool }),
       setClarification: (c) => set({ clarification: c }),
       setIntentState: (state) => set({ intentState: state }),

@@ -1,10 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import {
-  Brain, Network, FileText, Image, Code2, Globe,
-  BookOpen, Map, Calendar, MessageSquare, Zap, Lock,
-  Search, Terminal, Workflow, GitBranch, Bell, Eye,
-  Music, Palette, Cloud, Cpu, Radio, Plug, Sparkles, PenLine,
+  Brain, FileText, Image, Code2, Globe,
+  Calendar, MessageSquare, Zap, Lock,
+  Workflow, GitBranch, Sparkles,
+  Palette, Cpu, Radio, Plug, PenLine,
 } from 'lucide-react';
 
 const showcaseGroups = [

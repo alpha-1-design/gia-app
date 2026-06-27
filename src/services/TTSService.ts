@@ -31,6 +31,8 @@ class TTSService {
 
   isEnabled() { return this.enabled; }
 
+  isSpeaking() { return this.speaking; }
+
   onSpeakComplete(cb: SpeakCallback | null) {
     this.onComplete = cb;
   }

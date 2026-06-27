@@ -135,6 +135,16 @@ class MessagingBridge {
     if (ch) delete ch.config.lastMessageUrl;
   }
 
+  setTelegramChatId(chatId: string): { success: boolean } {
+    const ch = this.channels.get('telegram');
+    if (ch) {
+      ch.config.chatId = chatId;
+      this.save();
+      return { success: true };
+    }
+    return { success: false };
+  }
+
   setMentionOnly(enabled: boolean): void {
     const ch = this.channels.get('telegram');
     if (ch) {

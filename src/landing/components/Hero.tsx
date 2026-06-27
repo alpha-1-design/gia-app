@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { AnimatedCharacter } from './AnimatedCharacter';
-import { ArrowRight, Sparkles, Github, Smartphone, Shield, Cpu, Download } from 'lucide-react';
+import { ArrowRight, Sparkles, Github, Smartphone, Shield, Cpu } from 'lucide-react';
 
 const FloatingTaglines: React.FC = () => {
   const taglines = [
@@ -16,7 +16,7 @@ const FloatingTaglines: React.FC = () => {
   React.useEffect(() => {
     const t = setInterval(() => setIndex((i) => (i + 1) % taglines.length), 3000);
     return () => clearInterval(t);
-  }, []);
+  }, [taglines.length]);
 
   return (
     <div className="h-8 overflow-hidden relative">

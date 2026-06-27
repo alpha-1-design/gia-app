@@ -54,14 +54,23 @@ export function useChatGeneration() {
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
 
-  const abortRef = useRef<AbortController | null>(null);
   const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const responseStartRef = useRef(0);
   const responseTimesRef = useRef<Record<string, number>>({});
   const lastUserMsgRef = useRef('');
+  const generationKeyRef = useRef<string | null>(null);
+
+  const { registerGenerationController, unregisterGenerationController, abortGeneration } = useGiaStore(s => ({
+    registerGenerationController: s.registerGenerationController,
+    unregisterGenerationController: s.unregisterGenerationController,
+    abortGeneration: s.abortGeneration,
+  }));
 
   const handleStop = useCallback(() => {
-    abortRef.current?.abort();
+    if (generationKeyRef.current) {
+      abortGeneration(generationKeyRef.current);
+      unregisterGenerationController(generationKeyRef.current);
+    }
     TTSService.stop();
     const state = useGiaStore.getState();
     if (streamingMsgId && state.activeSessionId) {
@@ -86,7 +95,8 @@ export function useChatGeneration() {
     setStreamingMsgId(null);
     state.setIntentState('idle');
     state.setThinkingPhase('idle');
-  }, [streamingMsgId]);
+    generationKeyRef.current = null;
+  }, [streamingMsgId, abortGeneration, unregisterGenerationController]);
 
   const handleSend = useCallback(async (
     input: string,
@@ -174,11 +184,11 @@ export function useChatGeneration() {
       id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
     });
     setStreamingMsgId(asstId);
-    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId });
-
+    const genKey = `chat-${sessionId}-${asstId}`;
+    generationKeyRef.current = genKey;
     const ctrl = new AbortController();
-    abortRef.current?.abort();
-    abortRef.current = ctrl;
+    registerGenerationController(genKey, ctrl);
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId, abortSignal: ctrl.signal });
 
     try {
       const currentMsgs = state.getActiveSession()?.messages ?? [];
@@ -333,7 +343,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
-  }, [loading]);
+  }, [loading, registerGenerationController]);
 
   const handleContinue = useCallback(async (msgId: string) => {
     const state = useGiaStore.getState();
@@ -351,13 +361,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     });
     setStreamingMsgId(asstId);
     setLoading(true);
-    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId: state.activeSessionId, messageId: asstId });
+    const genKey = `chat-continue-${state.activeSessionId}-${asstId}`;
+    generationKeyRef.current = genKey;
+    const ctrl = new AbortController();
+    registerGenerationController(genKey, ctrl);
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId: state.activeSessionId, messageId: asstId, abortSignal: ctrl.signal });
     state.setIntentState('thinking');
     state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');
-
-    const ctrl = new AbortController();
-    abortRef.current?.abort();
-    abortRef.current = ctrl;
 
     try {
       let history: { role: "user" | "assistant"; content: string }[] = msgs.slice(0, msgIndex + 1)
@@ -425,6 +435,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      if (generationKeyRef.current) {
+        unregisterGenerationController(generationKeyRef.current);
+        generationKeyRef.current = null;
+      }
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === state.activeSessionId
@@ -438,7 +452,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
-  }, [loading]);
+  }, [loading, registerGenerationController, unregisterGenerationController]);
 
   const handleClarificationAnswer = useCallback(async (answer: string) => {
     const state = useGiaStore.getState();
@@ -459,11 +473,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     });
     setStreamingMsgId(asstId);
 
+    const genKey = `chat-clarify-${sessionId}-${asstId}`;
+    generationKeyRef.current = genKey;
     const ctrl = new AbortController();
-    abortRef.current?.abort();
-    abortRef.current = ctrl;
+    registerGenerationController(genKey, ctrl);
     setLoading(true);
-    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId });
+    useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId, abortSignal: ctrl.signal });
     state.setIntentState('responding');
 
     try {
@@ -516,6 +531,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      if (generationKeyRef.current) {
+        unregisterGenerationController(generationKeyRef.current);
+        generationKeyRef.current = null;
+      }
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
@@ -529,7 +548,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
-  }, []);
+  }, [registerGenerationController, unregisterGenerationController]);
 
   const handleRetry = useCallback(async (id: string) => {
     const state = useGiaStore.getState();
@@ -540,9 +559,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     const originalPrompt = msgs[msgIndex - 1]?.message.content || '';
     if (!originalPrompt) return;
 
+    const genKey = `chat-retry-${state.activeSessionId}-${id}`;
+    generationKeyRef.current = genKey;
     const ctrl = new AbortController();
-    abortRef.current?.abort();
-    abortRef.current = ctrl;
+    registerGenerationController(genKey, ctrl);
 
     state.updateMessage(state.activeSessionId, id, '');
     useGiaStore.setState({
@@ -605,6 +625,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      if (generationKeyRef.current) {
+        unregisterGenerationController(generationKeyRef.current);
+        generationKeyRef.current = null;
+      }
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === state.activeSessionId
@@ -618,13 +642,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
     }
-  }, []);
+  }, [registerGenerationController, unregisterGenerationController]);
 
   return {
     loading, setLoading,
     streamingMsgId, setStreamingMsgId,
     liveThoughts, setLiveThoughts,
-    abortRef, abortTimeoutRef,
+    abortTimeoutRef,
     responseStartRef, responseTimesRef, lastUserMsgRef,
     handleSend, handleContinue, handleClarificationAnswer,
     handleRetry, handleStop,

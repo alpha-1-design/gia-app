@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import {
   GraduationCap, Code2, Beaker, Palette, BarChart2, ListTodo,
-  Brain, Users, Sparkles, Star, BookOpen, Music
+  Brain, Users, Star
 } from 'lucide-react';
 
 const skills = [

@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { Github, Heart, Twitter, Linkedin, Mail } from 'lucide-react';
 
 export const Footer: React.FC = () => {

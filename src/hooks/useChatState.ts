@@ -372,7 +372,7 @@ export function useChatState() {
     showFileBrowser, setShowFileBrowser, showFileManager, setShowFileManager, showTools, setShowTools,
     inputContainerHeight, setInputContainerHeight,
     keepListeningRef, voiceRef, dragCounter, undoTimeoutRef: msgOps.undoTimeoutRef,
-    abortRef: gen.abortRef, abortTimeoutRef: gen.abortTimeoutRef,
+    abortTimeoutRef: gen.abortTimeoutRef,
     copyTimeoutRef: msgOps.copyTimeoutRef,
     responseStartRef: gen.responseStartRef,
     responseTimesRef: gen.responseTimesRef,
