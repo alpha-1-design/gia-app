@@ -10,7 +10,6 @@
     android:maxResizeWidth="250dp"
     android:maxResizeHeight="250dp"
     android:updatePeriodMillis="0"
-    android:previewImage="@drawable/gia_widget_preview"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen|keyguard"
     android:description="@string/widget_description" />
