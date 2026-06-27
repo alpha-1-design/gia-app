@@ -42,29 +42,31 @@ export interface ChatSession {
 function addMessageToTree(nodes: MessageNode[], msg: Message, branchId: string): MessageNode[] {
   const newNode: MessageNode = { message: { ...msg, branchId }, children: [] };
   
+  if (!Array.isArray(nodes)) return [newNode];
+  
   if (msg.parentId) {
-    // Find parent and add as child
     return nodes.map(node => {
+      if (!node || !node.message) return node;
       if (node.message.id === msg.parentId) {
-        return { ...node, children: [...node.children, newNode] };
+        return { ...node, children: [...(node.children || []), newNode] };
       }
-      if (node.children.length > 0) {
+      if (Array.isArray(node.children) && node.children.length > 0) {
         return { ...node, children: addMessageToTree(node.children, msg, branchId) };
       }
       return node;
     });
   }
   
-  // Root message
   return [...nodes, newNode];
 }
 
 function updateMessageInTree(nodes: MessageNode[], msgId: string, content: string, thoughts?: string): MessageNode[] {
+  if (!Array.isArray(nodes)) return [];
   return nodes.map(node => {
     if (node.message.id === msgId) {
       return { ...node, message: { ...node.message, content, ...(thoughts !== undefined ? { thoughts } : {}) } };
     }
-    if (node.children.length > 0) {
+    if (Array.isArray(node.children) && node.children.length > 0) {
       return { ...node, children: updateMessageInTree(node.children, msgId, content, thoughts) };
     }
     return node;
@@ -72,9 +74,11 @@ function updateMessageInTree(nodes: MessageNode[], msgId: string, content: strin
 }
 
 function findMessageInTree(nodes: MessageNode[], msgId: string): MessageNode | null {
+  if (!Array.isArray(nodes)) return null;
   for (const node of nodes) {
+    if (!node || !node.message) continue;
     if (node.message.id === msgId) return node;
-    if (node.children.length > 0) {
+    if (Array.isArray(node.children) && node.children.length > 0) {
       const found = findMessageInTree(node.children, msgId);
       if (found) return found;
     }
@@ -84,12 +88,16 @@ function findMessageInTree(nodes: MessageNode[], msgId: string): MessageNode | n
 
 function getPathToMessage(nodes: MessageNode[], msgId: string): MessageNode[] {
   const path: MessageNode[] = [];
+  if (!Array.isArray(nodes)) return path;
   
   function dfs(node: MessageNode): boolean {
+    if (!node || !node.message) return false;
     path.push(node);
     if (node.message.id === msgId) return true;
-    for (const child of node.children) {
-      if (dfs(child)) return true;
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (dfs(child)) return true;
+      }
     }
     path.pop();
     return false;
@@ -102,7 +110,7 @@ function getPathToMessage(nodes: MessageNode[], msgId: string): MessageNode[] {
 }
 
 function clonePathAsNewBranch(nodes: MessageNode[], path: MessageNode[], newBranchId: string): MessageNode[] {
-  if (path.length === 0) return [];
+  if (!Array.isArray(nodes) || !Array.isArray(path) || path.length === 0) return [];
   
   // Clone the path, each node gets the new branchId
   const clonedPath = path.map(p => ({
@@ -120,13 +128,17 @@ function clonePathAsNewBranch(nodes: MessageNode[], path: MessageNode[], newBran
 
 function flattenBranch(nodes: MessageNode[], branchId: string): Message[] {
   const result: Message[] = [];
+  if (!Array.isArray(nodes)) return result;
   
   function traverse(node: MessageNode) {
+    if (!node || !node.message) return;
     if (node.message.branchId === branchId || branchId === 'all') {
       result.push(node.message);
     }
-    for (const child of node.children) {
-      traverse(child);
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        traverse(child);
+      }
     }
   }
   
@@ -596,7 +608,7 @@ export const useGiaStore = create<GiaState>()(
       getBranchMessages: (sessionId, branchId) => {
         const { sessions } = get();
         const sess = sessions.find((s) => s.id === sessionId);
-        if (!sess) return [];
+        if (!sess || !Array.isArray(sess.messages)) return [];
         return flattenBranch(sess.messages, branchId);
       },
 
@@ -748,7 +760,44 @@ export const useGiaStore = create<GiaState>()(
     }),
     {
       name: 'gia-store-v3',
+      version: 3,
       storage: createJSONStorage(() => idbStorage),
+      migrate: (persistedState: unknown, version: number) => {
+        if (version < 3 && persistedState && typeof persistedState === 'object') {
+          const state = persistedState as Record<string, unknown>;
+          if (Array.isArray(state.sessions)) {
+            state.sessions = state.sessions.map((sess: unknown) => {
+              if (!sess || typeof sess !== 'object') return sess;
+              const s = sess as Record<string, unknown>;
+              if (Array.isArray(s.messages)) {
+                const hasTreeStructure = s.messages.some((m: unknown) =>
+                  m && typeof m === 'object' && 'children' in (m as Record<string, unknown>)
+                );
+                if (!hasTreeStructure) {
+                  const branchId = typeof s.currentBranchId === 'string' && s.currentBranchId
+                    ? s.currentBranchId
+                    : `branch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                  s.messages = s.messages.map((msg: unknown) => {
+                    if (!msg || typeof msg !== 'object') return msg;
+                    const m = msg as Record<string, unknown>;
+                    return {
+                      message: {
+                        ...m,
+                        branchId,
+                      },
+                      children: [],
+                    };
+                  });
+                  s.currentBranchId = branchId;
+                  s.branches = s.branches || { [branchId]: { id: branchId, name: 'Main', createdAt: Date.now() } };
+                }
+              }
+              return s;
+            });
+          }
+        }
+        return persistedState as Record<string, unknown>;
+      },
       partialize: (s) => ({
         sessions: s.sessions,
         activeSessionId: s.activeSessionId,
