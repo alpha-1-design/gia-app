@@ -66,7 +66,7 @@ public class GIASMSReceiver extends BroadcastReceiver {
                 payload.put("from", sender != null ? sender : "unknown");
                 payload.put("body", fullBody.toString());
                 payload.put("timestamp", timestamp);
-                ref.notifyListeners("smsReceived", payload);
+                ref.notifySmsReceived(payload);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to forward SMS to plugin", e);
             }

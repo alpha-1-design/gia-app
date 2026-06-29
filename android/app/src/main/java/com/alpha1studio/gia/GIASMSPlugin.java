@@ -173,6 +173,10 @@ public class GIASMSPlugin extends Plugin {
         }
     }
 
+    public void notifySmsReceived(com.getcapacitor.JSObject payload) {
+        notifyListeners("smsReceived", payload);
+    }
+
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();

@@ -11,7 +11,6 @@ import android.os.IBinder;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-import com.getcapacitor.JSObject;
 
 import ai.picovoice.porcupine.Porcupine;
 import ai.picovoice.porcupine.PorcupineManager;
@@ -169,9 +168,7 @@ public class GIAWakeWordService extends Service {
         GIAWakeWordPlugin ref = pluginRef;
         if (ref != null) {
             try {
-                JSObject error = new JSObject();
-                error.put("error", message);
-                ref.notifyListeners("wakeWordError", error);
+                ref.notifyWakeWordError(message);
             } catch (Exception ignored) {}
         }
     }

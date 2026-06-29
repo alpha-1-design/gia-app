@@ -74,6 +74,12 @@ public class GIAWakeWordPlugin extends Plugin {
         fireWakeWordEvent("wake_word");
     }
 
+    public void notifyWakeWordError(String message) {
+        JSObject error = new JSObject();
+        error.put("error", message);
+        notifyListeners("wakeWordError", error);
+    }
+
     private void fireWakeWordEvent(String keyword) {
         JSObject ret = new JSObject();
         ret.put("keyword", keyword);
