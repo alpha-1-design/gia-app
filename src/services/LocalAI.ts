@@ -1,5 +1,21 @@
 import { logger } from '../utils/logger';
 
+function supportsWasmThreads(): boolean {
+  try {
+    return typeof SharedArrayBuffer !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+function wasmEnv() {
+  const threading = supportsWasmThreads();
+  if (!threading) {
+    logger.warn('[LocalAI] SharedArrayBuffer unavailable — falling back to single-threaded WASM. Local inference will be slower.');
+  }
+  return { threading };
+}
+
 export interface LocalClassificationResult {
   label: string;
   score: number;
@@ -63,10 +79,15 @@ class LocalAI {
 
     this.loading.set(key, true);
     try {
-      const { pipeline } = await import('@huggingface/transformers');
+      const mod = await import('@huggingface/transformers');
+      const { env, pipeline } = mod;
+      const { threading } = wasmEnv();
+      if (!threading && env?.backends?.onnx?.wasm) {
+        env.backends.onnx.wasm.numThreads = 1;
+      }
       const pipe = await pipeline(task, modelId);
       this.pipelines.set(key, { pipeline: pipe as PipelineFn, modelId });
-      logger.log(`[LocalAI] Loaded ${task} model: ${modelId}`);
+      logger.log(`[LocalAI] Loaded ${task} model: ${modelId}${threading ? '' : ' (single-threaded)'}`);
       return pipe as PipelineFn;
     } finally {
       this.loading.set(key, false);

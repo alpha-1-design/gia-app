@@ -175,7 +175,13 @@ public class GIATerminalService extends Service {
 
         // Update notification with session count
         Notification notification = buildNotification(sessions.size());
-        startForeground(NOTIFICATION_ID, notification);
+        try {
+            startForeground(NOTIFICATION_ID, notification);
+        } catch (SecurityException e) {
+            Log.e(TAG, "startForeground failed: " + e.getMessage());
+            stopSelf();
+            return START_NOT_STICKY;
+        }
 
         return START_STICKY;
     }
@@ -296,7 +302,25 @@ public class GIATerminalService extends Service {
         pb.environment().put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
         pb.environment().put("SHELL", "/bin/sh");
 
-        Process process = pb.start();
+        Process process;
+        try {
+            process = pb.start();
+        } catch (IOException e) {
+            String msg = e.getMessage();
+            // Android 10+ (API 29+) blocks execution of binaries in app-private
+            // directories due to W^X SELinux policy. The proot binary extracted to
+            // getFilesDir() cannot be executed directly via execve().
+            // Fix: compile proot as a shared library (libproot.so) and load via
+            // System.loadLibrary(), then use GIAProotNative JNI bridge instead.
+            if (msg != null && (msg.contains("error=13") || msg.contains("Permission denied") || msg.contains("EACCES"))) {
+                throw new IOException(
+                    "Cannot execute proot: Android W^X policy blocks binaries in app data directory. " +
+                    "See FAT-01 fix: compile proot as libproot.so and use GIAProotNative JNI bridge.",
+                    e
+                );
+            }
+            throw e;
+        }
 
         // Wire stdin to process
         OutputStream procStdin = process.getOutputStream();

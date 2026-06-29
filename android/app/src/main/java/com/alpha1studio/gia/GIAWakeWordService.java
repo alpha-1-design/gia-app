@@ -11,6 +11,8 @@ import android.os.IBinder;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import com.getcapacitor.JSObject;
+
 import ai.picovoice.porcupine.Porcupine;
 import ai.picovoice.porcupine.PorcupineManager;
 import ai.picovoice.porcupine.PorcupineManagerCallback;
@@ -18,8 +20,10 @@ import ai.picovoice.porcupine.PorcupineException;
 
 public class GIAWakeWordService extends Service {
 
+    private static final String TAG = "GIAWakeWord";
     private static final String CHANNEL_ID = "GIAWakeWordChannel";
     private static final int NOTIFICATION_ID = 1001;
+    private static final int ERROR_NOTIFICATION_ID = 1002;
     private static volatile boolean isRunning = false;
     private static volatile GIAWakeWordPlugin pluginRef = null;
 
@@ -61,7 +65,14 @@ public class GIAWakeWordService extends Service {
         }
 
         Notification notification = buildNotification();
-        startForeground(NOTIFICATION_ID, notification);
+        try {
+            startForeground(NOTIFICATION_ID, notification);
+        } catch (SecurityException e) {
+            android.util.Log.e(TAG, "startForeground failed: " + e.getMessage());
+            notifyWakeWordError("Foreground service permission denied");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
 
         startWakeWordDetection();
         isRunning = true;
@@ -112,6 +123,13 @@ public class GIAWakeWordService extends Service {
     }
 
     private void startWakeWordDetection() {
+        if (accessKey == null || accessKey.isEmpty()) {
+            android.util.Log.e(TAG, "Cannot start wake word: accessKey is null or empty");
+            notifyWakeWordError("Missing Picovoice AccessKey — configure it in Settings → Developer");
+            stopSelf();
+            return;
+        }
+
         try {
             PorcupineManagerCallback callback = keywordIndex -> onWakeWordDetected();
 
@@ -128,7 +146,9 @@ public class GIAWakeWordService extends Service {
             porcupineManager = builder.build(getApplicationContext(), callback);
             porcupineManager.start();
         } catch (PorcupineException e) {
+            android.util.Log.e(TAG, "Wake word initialization failed: " + e.getMessage());
             e.printStackTrace();
+            notifyWakeWordError("Wake word engine failed: " + e.getMessage());
             stopSelf();
         }
     }
@@ -142,6 +162,17 @@ public class GIAWakeWordService extends Service {
                 e.printStackTrace();
             }
             porcupineManager = null;
+        }
+    }
+
+    private void notifyWakeWordError(String message) {
+        GIAWakeWordPlugin ref = pluginRef;
+        if (ref != null) {
+            try {
+                JSObject error = new JSObject();
+                error.put("error", message);
+                ref.notifyListeners("wakeWordError", error);
+            } catch (Exception ignored) {}
         }
     }
 
