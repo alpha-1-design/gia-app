@@ -15,6 +15,13 @@ const STATUS_CONFIG: Record<ModelStatusKey, { label: string; color: string; bg: 
 export const LocalModelsSection: React.FC = () => {
   const service = LocalLLMService;
 
+  // ── Device RAM detection ───────────────────────────────────────
+  const deviceRAM = (navigator as { deviceMemory?: number }).deviceMemory;
+  const recommendedId: LocalModelId = !deviceRAM ? 'Xenova/Qwen2.5-1.5B-Instruct'
+    : deviceRAM < 2 ? 'Xenova/Qwen2.5-0.5B-Instruct'
+    : deviceRAM < 6 ? 'Xenova/Qwen2.5-1.5B-Instruct'
+    : 'Xenova/Qwen2.5-3B-Instruct';
+
   // ── State ──────────────────────────────────────────────────────
   const [statuses, setStatuses] = useState<Record<string, LocalLLMState>>(() => service.getStatus());
   const [downloading, setDownloading] = useState<LocalModelId | null>(null);
@@ -105,6 +112,12 @@ export const LocalModelsSection: React.FC = () => {
                     {model.description}
                   </p>
                 </div>
+                {/* Recommended badge */}
+                {model.id === recommendedId && (
+                  <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ml-1" style={{ background: 'rgba(34,197,94,0.1)', color: '#34d399', border: '1px solid rgba(34,197,94,0.2)' }}>
+                    ✓ Best for your device
+                  </span>
+                )}
                 {/* Status badge */}
                 <span
                   className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ml-2"

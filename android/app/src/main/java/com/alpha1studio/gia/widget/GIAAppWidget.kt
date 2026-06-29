@@ -20,6 +20,7 @@ import androidx.glance.layout.Arrangement
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
@@ -37,21 +38,12 @@ class GIAAppWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, glanceId: GlanceId) {
         provideContent {
-            val prefs = currentState<Preferences>()
             val time = DateFormat.format("HH:mm", System.currentTimeMillis()).toString()
             val date = DateFormat.format("EEE, MMM d", System.currentTimeMillis()).toString()
 
-            val weather = prefs.getString("weather") ?: "Loading…"
-            val temp = prefs.getString("temp") ?: "--°"
-            val condition = prefs.getString("condition") ?: ""
-
-            val battery = prefs.getInt("battery", -1)
-            val storage = prefs.getString("storage") ?: "Checking…"
-
-            val nextTask = prefs.getString("nextTask") ?: "No upcoming tasks"
-
+            val prefs = currentState<Preferences>()
             val providerConnected = prefs.getBoolean("providerConnected", false)
-            val providerName = prefs.getString("providerName") ?: "None"
+            val providerName = prefs.getString("providerName") ?: "GIA"
 
             GIAWidgetTheme {
                 Box(
@@ -85,13 +77,25 @@ class GIAAppWidget : GlanceAppWidget() {
                                     )
                                 )
                             }
-
                             ProviderPill(connected = providerConnected, name = providerName)
                         }
 
-                        WeatherCard(weather = weather, temp = temp, condition = condition)
-                        DeviceHealthRow(battery = battery, storage = storage)
-                        NextTaskCard(task = nextTask)
+                        Spacer(modifier = GlanceModifier.weight(1f))
+                        Row(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "GIA",
+                                style = TextStyle(
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GIAWidgetTheme.colors.accent
+                                )
+                            )
+                        }
+                        Spacer(modifier = GlanceModifier.weight(1f))
+
                         QuickActionsRow(
                             onVoiceClick = actionStartVoice,
                             onCaptureClick = actionCaptureScreen,

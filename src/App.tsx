@@ -7,9 +7,6 @@ import { useMemoryStore } from './store/useMemoryStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import ChatModule from './modules/ChatModule';
-import WriterModule from './modules/WriterModule';
-import PlannerModule from './modules/PlannerModule';
-import SettingsModule from './modules/SettingsModule';
 import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
@@ -46,6 +43,9 @@ import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
 const ExamModule = lazy(() => import('./modules/ExamModule'));
+const WriterModule = lazy(() => import('./modules/WriterModule'));
+const PlannerModule = lazy(() => import('./modules/PlannerModule'));
+const SettingsModule = lazy(() => import('./modules/SettingsModule'));
 const AutonomyModule = lazy(() => import('./modules/AutonomyModule'));
 const AgentsModule = lazy(() => import('./modules/AgentsModule'));
 
@@ -102,9 +102,9 @@ const ModuleView: React.FC = () => {
     chat:     <ErrorBoundary name="Chat"><ChatModule /></ErrorBoundary>,
     exam:     <Suspense fallback={<Fallback />}><ErrorBoundary name="Exam"><ExamModule /></ErrorBoundary></Suspense>,
     analyst:  <Suspense fallback={<Fallback />}><ErrorBoundary name="Analyst"><AnalystModule /></ErrorBoundary></Suspense>,
-    writer:   <ErrorBoundary name="Writer"><WriterModule /></ErrorBoundary>,
-    planner:  <ErrorBoundary name="Planner"><PlannerModule /></ErrorBoundary>,
-    settings: <ErrorBoundary name="Settings"><SettingsModule /></ErrorBoundary>,
+    writer:   <Suspense fallback={<Fallback />}><ErrorBoundary name="Writer"><WriterModule /></ErrorBoundary></Suspense>,
+    planner:  <Suspense fallback={<Fallback />}><ErrorBoundary name="Planner"><PlannerModule /></ErrorBoundary></Suspense>,
+    settings: <Suspense fallback={<Fallback />}><ErrorBoundary name="Settings"><SettingsModule /></ErrorBoundary></Suspense>,
     autonomy: <Suspense fallback={<Fallback />}><ErrorBoundary name="Autonomy"><AutonomyModule /></ErrorBoundary></Suspense>,
     agents:   <Suspense fallback={<Fallback />}><ErrorBoundary name="Agents"><AgentsModule /></ErrorBoundary></Suspense>,
   };
@@ -239,6 +239,13 @@ const App: React.FC = () => {
           logger.warn('[SW] Registration failed:', e);
         }
       }
+
+      // Configure status bar for proper safe-area rendering
+      try {
+        const { StatusBar } = await import('@capacitor/status-bar');
+        await StatusBar.setOverlaysWebView({ overlay: false });
+        await StatusBar.setBackgroundColor({ color: '#0a0a0f' });
+      } catch { /* StatusBar plugin may not be available on web */ }
 
       // Deep link detection — handle ?url= param
       const params = new URLSearchParams(window.location.search);
