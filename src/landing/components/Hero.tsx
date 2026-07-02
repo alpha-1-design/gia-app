@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { Sparkles, Download, Github, ArrowRight, Shield, Cpu, Wifi, Lock } from 'lucide-react'
+import { MockUI } from './MockUI'
 
 export function Hero() {
   return (
@@ -20,87 +21,100 @@ export function Hero() {
         />
       </div>
 
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 py-24 lg:py-32">
-        <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/15 text-violet-400 text-xs font-semibold mb-8 tracking-widest uppercase">
-              <Sparkles size={12} />
-              v2.3.1 — Now Available
-            </div>
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.05] mb-6"
-          >
-            <span className="gradient-text">Your AI.</span>
-            <br />
-            <span className="text-white">Your Device.</span>
-            <br />
-            <span className="text-zinc-500">Your Privacy.</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-lg sm:text-xl text-zinc-500 max-w-2xl mb-10 leading-relaxed"
-          >
-            GIA is a private, on-device AI workspace that runs entirely on your machine.
-            <span className="text-zinc-400"> No cloud. No telemetry. No compromises.</span>
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center gap-4 mb-16"
-          >
-            <a
-              href="https://github.com/alpha-1-design/gia-app/releases"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-base font-semibold text-white shadow-2xl shadow-violet-500/25 transition-all duration-300"
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 py-16 lg:py-24">
+        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+          {/* Left: Text */}
+          <div className="flex-1 text-center lg:text-left max-w-xl">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
             >
-              <Download size={18} />
-              Download APK
-              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-            </a>
-            <a
-              href="https://github.com/alpha-1-design/gia-app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-base font-medium text-zinc-400 hover:text-white transition-all"
-            >
-              <Github size={18} />
-              View on GitHub
-            </a>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-3xl"
-          >
-            {[
-              { icon: Shield, label: '100% Private', desc: 'No cloud dependency' },
-              { icon: Cpu, label: 'On-Device', desc: 'Runs locally' },
-              { icon: Wifi, label: 'Offline Capable', desc: 'No internet needed' },
-              { icon: Lock, label: 'Zero Telemetry', desc: 'No tracking ever' },
-            ].map((item) => (
-              <div key={item.label} className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
-                <item.icon size={20} className="text-violet-400" />
-                <div className="text-sm font-semibold text-zinc-200">{item.label}</div>
-                <div className="text-[11px] text-zinc-600">{item.desc}</div>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/15 text-violet-400 text-xs font-semibold mb-6 tracking-widest uppercase">
+                <Sparkles size={12} />
+                v2.3.1 — Now Available
               </div>
-            ))}
+            </motion.div>
+
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-5"
+            >
+              <span className="gradient-text">Your AI.</span>
+              <br />
+              <span className="text-white">Your Device.</span>
+              <br />
+              <span className="text-zinc-500">Your Privacy.</span>
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="text-base sm:text-lg text-zinc-500 max-w-lg mb-8 leading-relaxed"
+            >
+              GIA is a private, on-device AI workspace that runs entirely on your machine.
+              <span className="text-zinc-400"> No cloud. No telemetry. No compromises.</span>
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="flex flex-col sm:flex-row items-center gap-3 mb-10"
+            >
+              <a
+                href="https://github.com/alpha-1-design/gia-app/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-sm font-semibold text-white shadow-2xl shadow-violet-500/25 transition-all duration-300"
+              >
+                <Download size={16} />
+                Download APK
+                <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+              </a>
+              <a
+                href="https://github.com/alpha-1-design/gia-app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-sm font-medium text-zinc-400 hover:text-white transition-all"
+              >
+                <Github size={16} />
+                View on GitHub
+              </a>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+            >
+              {[
+                { icon: Shield, label: '100% Private', desc: 'No cloud dependency' },
+                { icon: Cpu, label: 'On-Device', desc: 'Runs locally' },
+                { icon: Wifi, label: 'Offline Capable', desc: 'No internet needed' },
+                { icon: Lock, label: 'Zero Telemetry', desc: 'No tracking ever' },
+              ].map((item) => (
+                <div key={item.label} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <item.icon size={18} className="text-violet-400" />
+                  <div className="text-xs font-semibold text-zinc-200">{item.label}</div>
+                  <div className="text-[10px] text-zinc-600">{item.desc}</div>
+                </div>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* Right: Mock UI */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.7, delay: 0.3 }}
+            className="flex-1 w-full max-w-[520px] lg:max-w-none"
+          >
+            <MockUI />
           </motion.div>
         </div>
       </div>
