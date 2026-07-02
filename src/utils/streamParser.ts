@@ -89,12 +89,10 @@ export const processStreamChunk = (
       const thinkStart = remaining.indexOf('<think>');
       let toolStart = remaining.indexOf('```tool');
       if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
-      if (toolStart === 0) toolStart = 0; // Allow at chunk start (boundary case)
 
       // Also detect ```json blocks that may contain tool calls
       let jsonStart = remaining.indexOf('```json');
       if (jsonStart > 0 && remaining[jsonStart - 1] !== '\n') jsonStart = -1;
-      if (jsonStart === 0) jsonStart = 0;
 
       // Pick the earliest marker
       const firstMarker = (() => {

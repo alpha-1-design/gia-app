@@ -192,10 +192,11 @@ export function useChatGeneration() {
     useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId, abortSignal: ctrl.signal });
 
     try {
-      const currentMsgs = state.getActiveSession()?.messages ?? [];
+      const activeBranchId = state.getActiveSession()?.currentBranchId ?? '';
+      const currentMsgs = sessionId ? state.getBranchMessages(sessionId, activeBranchId) : [];
       let history: { role: "user" | "assistant"; content: string }[] = currentMsgs
-        .filter(m => !m.message.thinking && m.message.content)
-        .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       // Auto-summarize if context window is large and setting is enabled
       if (sessionId && history.length > 15 && useGiaStore.getState().localSummarize) {
@@ -350,10 +351,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     const state = useGiaStore.getState();
     const { webSearch } = state;
     if (!state.activeSessionId || loading) return;
-    const msgs = state.getActiveSession()?.messages ?? [];
-    const msgIndex = msgs.findIndex(m => m.message.id === msgId);
+    const activeBranchId = state.getActiveSession()?.currentBranchId ?? '';
+    const msgs = state.getBranchMessages(state.activeSessionId, activeBranchId);
+    const msgIndex = msgs.findIndex(m => m.id === msgId);
     if (msgIndex < 0) return;
-    const lastContent = msgs[msgIndex]?.message.content || '';
+    const lastContent = msgs[msgIndex]?.content || '';
     if (!lastContent) return;
 
     const asstId = genId();
@@ -372,8 +374,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
     try {
       let history: { role: "user" | "assistant"; content: string }[] = msgs.slice(0, msgIndex + 1)
-        .filter(m => !m.message.thinking && m.message.content)
-        .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       if (state.activeSessionId && history.length > 15 && useGiaStore.getState().localSummarize) {
         const branchId = state.getActiveSession()?.currentBranchId;
@@ -483,10 +485,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     state.setIntentState('responding');
 
     try {
-      const currentMsgs = state.getActiveSession()?.messages ?? [];
+      const activeBranchId = state.getActiveSession()?.currentBranchId ?? '';
+      const currentMsgs = state.getBranchMessages(sessionId, activeBranchId);
       const history: { role: "user" | "assistant"; content: string }[] = currentMsgs
-        .filter(m => !m.message.thinking && m.message.content)
-        .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       const clarParserState = createStreamParser();
       let clarDisplayAccumulated = '';
@@ -554,10 +557,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
   const handleRetry = useCallback(async (id: string) => {
     const state = useGiaStore.getState();
     const { webSearch, extThinking } = state;
-    const msgs = state.getActiveSession()?.messages ?? [];
-    const msgIndex = msgs.findIndex(m => m.message.id === id);
-    if (msgIndex <= 0 || !state.activeSessionId) return;
-    const originalPrompt = msgs[msgIndex - 1]?.message.content || '';
+    if (!state.activeSessionId) return;
+    const activeBranchId = state.getActiveSession()?.currentBranchId ?? '';
+    const msgs = state.getBranchMessages(state.activeSessionId, activeBranchId);
+    const msgIndex = msgs.findIndex(m => m.id === id);
+    if (msgIndex <= 0) return;
+    const originalPrompt = msgs[msgIndex - 1]?.content || '';
     if (!originalPrompt) return;
 
     const genKey = `chat-retry-${state.activeSessionId}-${id}`;
@@ -580,8 +585,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
     try {
       const history: { role: "user" | "assistant"; content: string }[] = msgs.slice(0, msgIndex - 1)
-        .filter(m => !m.message.thinking && m.message.content)
-        .map(m => ({ role: m.message.role as "user" | "assistant", content: m.message.content }));
+        .filter(m => !m.thinking && m.content)
+        .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       const retryParserState = createStreamParser();
       let retryDisplayAccumulated = '';

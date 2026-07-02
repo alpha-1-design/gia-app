@@ -17,6 +17,7 @@ public class GIAIntentPlugin extends Plugin {
     private static final String EVENT_ASSIST = "onAssist";
     private static final String EVENT_DEEP_LINK = "onDeepLink";
     private static final String EVENT_SHARE = "onShareReceived";
+    private static final String EVENT_WIDGET_ACTION = "onWidgetAction";
 
     @Override
     public void load() {
@@ -44,7 +45,22 @@ public class GIAIntentPlugin extends Plugin {
             case Intent.ACTION_VIEW:
                 handleViewIntent(intent);
                 break;
+            case Intent.ACTION_MAIN:
+                handleWidgetAction(intent);
+                break;
         }
+    }
+
+    // Home screen widget buttons launch with ACTION_MAIN (same as tapping the
+    // launcher icon) plus a custom "action" extra. Only fire if that extra is
+    // actually present, so a normal resume-from-recents doesn't trigger this.
+    private void handleWidgetAction(Intent intent) {
+        String widgetAction = intent.getStringExtra("action");
+        if (widgetAction == null || widgetAction.isEmpty()) return;
+
+        JSObject ret = new JSObject();
+        ret.put("action", widgetAction);
+        notifyListeners(EVENT_WIDGET_ACTION, ret);
     }
 
     private void handleAssistIntent(Intent intent) {
@@ -122,6 +138,11 @@ public class GIAIntentPlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("action", intent.getAction());
             ret.put("hasData", intent.getData() != null);
+
+            String widgetAction = intent.getStringExtra("action");
+            if (widgetAction != null && !widgetAction.isEmpty()) {
+                ret.put("widgetAction", widgetAction);
+            }
 
             if (Intent.ACTION_SEND.equals(intent.getAction())) {
                 ret.put("text", intent.getStringExtra(Intent.EXTRA_TEXT));

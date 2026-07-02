@@ -21,6 +21,9 @@ export function useNativeIntents() {
         if (pending.action) {
           handleIntentAction(pending.action, pending);
         }
+        if (pending.widgetAction) {
+          handleWidgetAction(pending.widgetAction);
+        }
 
         // Listen for ASSIST (long-press home button)
         await GIAIntent.addListener('onAssist', (data) => {
@@ -68,6 +71,12 @@ export function useNativeIntents() {
           useGiaStore.getState().setModule('chat');
           useGiaStore.getState().addNotification('📩 Content received from another app');
         });
+
+        // Listen for home screen widget button taps
+        await GIAIntent.addListener('onWidgetAction', (data) => {
+          logger.log('[NativeIntents] Widget action:', data.action);
+          handleWidgetAction(data.action);
+        });
       } catch (e) {
         logger.warn('[NativeIntents] Setup failed:', e);
       }
@@ -99,6 +108,30 @@ export function useNativeIntents() {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
+}
+
+export function handleWidgetAction(action: string) {
+  switch (action) {
+    case 'open_chat':
+      useGiaStore.getState().setModule('chat');
+      break;
+    case 'screen_capture':
+      // Reuses the same trigger App.tsx already uses for circle-search capture
+      // (handles both native overlay and web fallback paths).
+      useGiaStore.getState().setModule('chat');
+      useGiaStore.getState().setShowCircleSearch(true);
+      break;
+    case 'voice_start':
+      // Not wired yet: there's no existing "start voice input now" entry point
+      // in the store (autoStartWakeWord is a persistent settings toggle, not a
+      // one-shot trigger, and the identical 'assist' intent from long-press-home
+      // has the same gap already). Surfacing this instead of silently no-op'ing.
+      useGiaStore.getState().setModule('chat');
+      useGiaStore.getState().addNotification('🎤 Voice-from-widget isn\'t wired up yet');
+      break;
+    default:
+      logger.warn('[NativeIntents] Unknown widget action:', action);
+  }
 }
 
 interface IntentData {

@@ -63,6 +63,21 @@ if (typeof window !== 'undefined') {
   const onLeave = () => { flushStorage(); };
   window.addEventListener('beforeunload', onLeave);
   window.addEventListener('pagehide', onLeave);
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushStorage();
+  });
+
+  // Android WebView: beforeunload/pagehide are not reliable when the app is
+  // backgrounded or the process is reclaimed by the OS. Hook the native
+  // Capacitor lifecycle event so debounced writes aren't lost on a phone
+  // getting killed in the background (common on low-RAM devices).
+  import('@capacitor/app').then(({ App }) => {
+    App.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) flushStorage();
+    });
+  }).catch(() => {
+    // Not running under Capacitor (e.g. plain web/test env) — web listeners above are enough
+  });
 }
 
 export const idbStorage = {
