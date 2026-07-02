@@ -1,24 +1,12 @@
 import { motion } from 'motion/react'
+import { providerIcons } from './ProviderIcons'
 
 const providers = [
-  { name: 'OpenAI', short: 'GPT-4o', color: 'from-green-500/20 to-green-600/10' },
-  { name: 'Anthropic', short: 'Claude', color: 'from-amber-500/20 to-amber-600/10' },
-  { name: 'Google', short: 'Gemini', color: 'from-blue-500/20 to-blue-600/10' },
-  { name: 'Mistral', short: 'Mistral', color: 'from-blue-400/20 to-blue-500/10' },
-  { name: 'Groq', short: 'Groq', color: 'from-orange-500/20 to-orange-600/10' },
-  { name: 'OpenRouter', short: 'OpenRouter', color: 'from-purple-500/20 to-purple-600/10' },
-  { name: 'Local', short: 'Qwen 2.5', color: 'from-emerald-500/20 to-emerald-600/10' },
-  { name: 'DeepSeek', short: 'DeepSeek', color: 'from-cyan-500/20 to-cyan-600/10' },
-  { name: 'Together', short: 'Together', color: 'from-rose-500/20 to-rose-600/10' },
-  { name: 'Azure', short: 'Azure', color: 'from-sky-500/20 to-sky-600/10' },
-  { name: 'Perplexity', short: 'Perplexity', color: 'from-teal-500/20 to-teal-600/10' },
-  { name: 'xAI', short: 'Grok', color: 'from-pink-500/20 to-pink-600/10' },
-  { name: 'Cohere', short: 'Cohere', color: 'from-yellow-500/20 to-yellow-600/10' },
-  { name: 'Fireworks', short: 'Fireworks', color: 'from-red-500/20 to-red-600/10' },
-  { name: 'AI/ML API', short: 'AI/ML', color: 'from-indigo-500/20 to-indigo-600/10' },
-  { name: 'NVIDIA', short: 'NVIDIA', color: 'from-emerald-500/20 to-emerald-600/10' },
-  { name: 'Cerebras', short: 'Cerebras', color: 'from-violet-500/20 to-violet-600/10' },
-  { name: 'GitHub', short: 'GitHub', color: 'from-gray-500/20 to-gray-600/10' },
+  'OpenAI', 'Anthropic', 'Gemini', 'Mistral',
+  'Groq', 'DeepSeek', 'Cohere', 'Perplexity',
+  'xAI', 'Together', 'Azure', 'Fireworks',
+  'NVIDIA', 'Cerebras', 'OpenRouter', 'AI/ML',
+  'Local', 'GitHub',
 ]
 
 const tools = [
@@ -51,18 +39,41 @@ export function Skills() {
         </motion.div>
 
         <div className="flex flex-wrap justify-center gap-3 mb-20">
-          {providers.map((provider, i) => (
-            <motion.div
-              key={provider.name}
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.02 }}
-              className={`px-4 py-2 rounded-xl bg-gradient-to-br ${provider.color} border border-white/[0.04] text-sm font-medium text-zinc-300`}
-            >
-              {provider.short}
-            </motion.div>
-          ))}
+          {providers.map((name, i) => {
+            const icon = providerIcons[name]
+            return (
+              <motion.div
+                key={name}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.025 }}
+                className="group flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all duration-300 cursor-default"
+                style={{
+                  background: `${icon?.color || '#6b7280'}08`,
+                  borderColor: `${icon?.color || '#6b7280'}15`,
+                }}
+                whileHover={{
+                  scale: 1.05,
+                  background: `${icon?.color || '#6b7280'}15`,
+                  borderColor: `${icon?.color || '#6b7280'}30`,
+                  transition: { duration: 0.15 },
+                }}
+              >
+                <div
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-300"
+                  style={{ background: `${icon?.color || '#6b7280'}20` }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill={icon?.color || '#6b7280'}>
+                    <path d={icon?.path || 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z'} />
+                  </svg>
+                </div>
+                <span className="text-sm font-medium transition-colors duration-300" style={{ color: `${icon?.color || '#888'}bb` }}>
+                  {name === 'AI/ML' ? 'AI/ML API' : name}
+                </span>
+              </motion.div>
+            )
+          })}
         </div>
 
         <div className="text-center mb-8">
