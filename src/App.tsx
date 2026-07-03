@@ -46,9 +46,6 @@ import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
 const ExamModule = lazy(() => import('./modules/ExamModule'));
-const WriterModule = lazy(() => import('./modules/WriterModule'));
-const PlannerModule = lazy(() => import('./modules/PlannerModule'));
-const SettingsModule = lazy(() => import('./modules/SettingsModule'));
 const AutonomyModule = lazy(() => import('./modules/AutonomyModule'));
 const AgentsModule = lazy(() => import('./modules/AgentsModule'));
 
