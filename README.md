@@ -8,6 +8,11 @@
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web-blue.svg)](capacitor.config.ts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB.svg)](https://reactjs.org/)
+[![AI](https://img.shields.io/badge/AI-Generative%20Agent-8B5CF6.svg)]()
+[![Privacy](https://img.shields.io/badge/Privacy-First-22c55e.svg)]()
+[![On-Device](https://img.shields.io/badge/On--Device-Yes-22c55e.svg)]()
+[![No Backend](https://img.shields.io/badge/No%20Backend-✔-f59e0b.svg)]()
+[![Local-First](https://img.shields.io/badge/Local--First-Yes-3b82f6.svg)]()
 
 **GIA (Generative Interface Agent)** — private, on-device AI workspace. No backend, no telemetry, no cloud dependency except the AI API calls you configure.
 
