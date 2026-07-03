@@ -34,7 +34,6 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Session Forking** | Fork entire session at any message into a new independent session |
 | **Autonomous Goals** | Goal creation → auto-decomposition → step execution → self-reflection |
 | **Proactive Engine** | Background goal execution during idle time |
-| **Circle-to-Search** | Screen capture with region crop for AI vision analysis |
 | **Scheduled Tasks** | Schedule hourly/daily/weekly AI prompts |
 | **Brain Export/Import** | Full memory backup and restore from JSON |
 | **Smart Provider Fallback** | Automatic provider failover based on real-time latency/error tracking |
@@ -574,15 +573,6 @@ GIA can work autonomously on complex goals. Access via the **Autonomy** module:
 
 Enable **Autonomy Mode** (toggle in Autonomy module) to allow GIA to work on goals during idle time. Adjust **Proactiveness** slider to control how aggressively GIA pursues goals. Idle threshold is 60 seconds — GIA checks for pending work every 30 seconds.
 
-## 🔍 Circle-to-Search
-
-Select any region of your screen for AI analysis:
-
-1. Press `Ctrl+Shift+C` or activate via command palette
-2. GIA captures the current screen
-3. Drag to select a region of interest
-4. The cropped region is sent to GIA's vision model for analysis
-
 ## ⏰ Scheduled Tasks
 
 Schedule recurring AI operations:
@@ -862,7 +852,6 @@ Beyond autonomous goals, GIA runs a proactive engine during user idle time:
 | `Cmd+N` | New Session |
 | `Cmd+Shift+S` | Open Settings |
 | `Cmd+Shift+O` | Toggle Protocol Panel |
-| `Cmd+Shift+C` | Circle-to-Search |
 | `Escape` | Close Command Palette |
 | Right-click / Long-press | Message context menu (Copy/Edit/Retry/Fork/Delete) |
 

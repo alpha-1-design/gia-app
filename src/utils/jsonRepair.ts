@@ -1,3 +1,22 @@
+/**
+ * Find the next properly-closing triple-backtick fence (` ``` `) starting from
+ * `fromIndex`. Skips 4+ consecutive backticks (not valid close). Handles the
+ * case where content inside the fence itself contains single backticks.
+ * Returns the index of the first backtick, or -1 if not found.
+ */
+export function findFenceClose(text: string, fromIndex: number): number {
+  let i = fromIndex;
+  while (i < text.length) {
+    if (text[i] === '`' && text[i + 1] === '`' && text[i + 2] === '`') {
+      if (text[i + 3] !== '`') return i;
+      while (i < text.length && text[i] === '`') i++;
+    } else {
+      i++;
+    }
+  }
+  return -1;
+}
+
 export function repairJson(raw: string): string {
   if (!raw || typeof raw !== 'string') return '';
   let s = raw.trim();
@@ -70,16 +89,43 @@ export interface ToolCall {
 }
 
 export function extractToolCalls(text: string): ToolCall[] {
-  // Match standard ```tool blocks
-  const toolBlocks = Array.from(text.matchAll(/```tool\s*\n?([\s\S]*?)```/g));
-  // Also match ```json blocks that may contain tool call JSON
-  const jsonBlocks = Array.from(text.matchAll(/```json\s*\n?([\s\S]*?)```/g));
   const calls: ToolCall[] = [];
-  for (const m of [...toolBlocks, ...jsonBlocks]) {
-    const parsed = parseJsonSafely<ToolCall>(m[1]);
-    if (parsed && parsed.id && typeof parsed.args === 'object') {
-      calls.push(parsed);
+  let pos = 0;
+
+  while (pos < text.length) {
+    // Find next ```tool or ```json opening
+    const toolIdx = text.indexOf('```tool', pos);
+    const jsonIdx = text.indexOf('```json', pos);
+    let fenceIdx = -1;
+    let fenceLen = 0;
+
+    if (toolIdx >= 0 && (jsonIdx < 0 || toolIdx < jsonIdx)) {
+      fenceIdx = toolIdx;
+      fenceLen = 7; // ```tool
+    } else if (jsonIdx >= 0) {
+      fenceIdx = jsonIdx;
+      fenceLen = 7; // ```json
     }
+
+    if (fenceIdx < 0) break;
+
+    const contentStart = fenceIdx + fenceLen;
+    // Skip past newline if present
+    const bodyStart = text[contentStart] === '\n' ? contentStart + 1 : contentStart;
+
+    const closeIdx = findFenceClose(text, bodyStart);
+    if (closeIdx < 0) break;
+
+    const body = text.slice(bodyStart, closeIdx).trim();
+    if (body) {
+      const parsed = parseJsonSafely<ToolCall>(body);
+      if (parsed && parsed.id && typeof parsed.args === 'object') {
+        calls.push(parsed);
+      }
+    }
+
+    pos = closeIdx + 3; // skip past the closing ```
   }
+
   return calls;
 }

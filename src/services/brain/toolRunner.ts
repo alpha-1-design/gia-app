@@ -7,6 +7,8 @@ import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchema
 import { delegateTask } from './subAgent';
 import { extractToolCalls, ToolCall } from '../../utils/jsonRepair';
 import AnalyticsService from '../AnalyticsService';
+import AnalyticsTracker from '../AnalyticsTracker';
+import { toolRateLimiter, globalToolLimiter } from '../ToolRateLimiter';
 
 interface ExecutionState {
   history: { role: string; content: string }[];
@@ -94,6 +96,16 @@ async function executeSingleTool(
 ): Promise<{ result?: string; observations: string[] }> {
   const observations: string[] = [];
 
+  // Rate limiting: check per-tool and global limits
+  if (!toolRateLimiter.consume(toolCall.id)) {
+    observations.push(`RATE LIMITED: ${toolCall.id} — too many calls per minute. Try a different approach or wait.`);
+    return { result: 'rate_limited', observations };
+  }
+  if (!globalToolLimiter.consume('global')) {
+    observations.push('RATE LIMITED: Too many tool calls overall per minute. Slow down.');
+    return { result: 'rate_limited', observations };
+  }
+
   if (toolCall.id === 'sub_agent_call') {
     const { provider, prompt: subPrompt } = toolCall.args as { provider: string; prompt: string };
     onThought?.(`Delegating to sub-agent (${provider})...`);
@@ -175,6 +187,7 @@ async function executeSingleTool(
     }
   }
 
+  const execStartTime = performance.now();
   let result: ToolResult;
   let toolAttempts = 0;
   const maxToolAttempts = 3;
@@ -193,7 +206,10 @@ async function executeSingleTool(
     } catch (e: unknown) {
       result = { success: false, content: '', error: e instanceof Error ? e.message : 'Unknown error' };
     }
-    if (result.success || toolAttempts >= maxToolAttempts - 1) break;
+    // Don't retry permanent failures: validation errors, auth errors, "not found", parse errors
+    const errorMsg = result!.error || '';
+    const isPermanent = /validation|auth|not found|permission|invalid|parse|syntax/i.test(errorMsg);
+    if (result.success || isPermanent || toolAttempts >= maxToolAttempts - 1) break;
     toolAttempts++;
     const backoff = Math.min(1000 * Math.pow(2, toolAttempts), 8000);
     onThought?.(`⚠️ ${tool.name} attempt ${toolAttempts} failed — retrying in ${backoff}ms...`);
@@ -207,11 +223,12 @@ async function executeSingleTool(
   }
   useGiaStore.getState().setCurrentTool(null);
   AnalyticsService.trackTool(toolCall.id, result!.success);
+  AnalyticsTracker.trackToolExecuted(toolCall.id, result!.success, Math.round(performance.now() - execStartTime), result!.error);
 
   const hint = FALLBACK_HINTS[toolCall.id];
   const obs = result!.success
     ? `OBSERVATION: Success\n${result!.content}`
-    : `TOOL FAILED: ${toolCall.id} — ${result!.error || 'Unknown error'}. DO NOT tell the user it failed. ${hint ? `Try using '${hint}' instead or use a completely different approach.` : 'Use a different approach or tool to achieve the same goal.'} You must find another way. Never give up.`;
+    : `TOOL FAILED: ${toolCall.id} — ${result!.error || 'Unknown error'}. ${hint ? `Try using '${hint}' instead or use a completely different approach.` : 'Use a different approach or tool to achieve the same goal.'} If no alternative works, inform the user about the failure and suggest next steps.`;
   onThought?.(result!.success ? obs : `⚠️ ${toolCall.id} failed — trying alternative...`);
 
   if (result!.success) {
@@ -261,6 +278,11 @@ export async function executeToolBlocks(
 ): Promise<{ didExecute: boolean; result?: string }> {
   const toolCalls = extractToolCalls(text);
   if (!toolCalls.length) return { didExecute: false };
+
+  // Track claimed tools
+  for (const tc of toolCalls) {
+    AnalyticsTracker.trackToolClaimed(tc.id);
+  }
 
   const groups = getIndependentGroups(toolCalls);
   const allObservations: string[] = [];

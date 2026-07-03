@@ -17,6 +17,7 @@ import { isVisionCapable as _isVisionCapable } from './brain/modelUtils';
 import ResponseCache from './ResponseCache';
 import ProviderMonitor from './ProviderMonitor';
 import OutputValidator from './OutputValidator';
+import AnalyticsTracker from './AnalyticsTracker';
 export { setSystemContext };
 
 export type { BrainRequest, BrainResponse } from './providers/types';
@@ -96,6 +97,7 @@ class GiaBrain {
     const maxIterations = 10;
     let clarificationAttempts = 0;
     const sourcesAcc: string[] = [];
+    const genStartTime = performance.now();
 
     if (req.forceJson) {
       req.systemPrompt = (req.systemPrompt || '') + '\n\nCRITICAL: You MUST respond with ONLY valid JSON. No markdown fences, no code blocks, no explanations, no text before or after the JSON. The entire response must be parseable by JSON.parse(). Start directly with { or [ and end with } or ]. Do NOT use any tools or call any functions.';
@@ -234,6 +236,12 @@ class GiaBrain {
         }
         extractMemories(req.prompt, text);
 
+        // ── Raw output detection ─────────────────────────────
+        this._detectRawOutput(text);
+
+        // Track generation
+        AnalyticsTracker.trackGenerationComplete(finalModel, tokenUsage?.output || 0, Math.round(performance.now() - genStartTime), !!toolResult.didExecute, true);
+
         // Cache the final response
         if (state.responseCache && !req.onStream) {
           ResponseCache.set({ prompt: req.prompt, model: finalModel, provider: activeProvider, systemPrompt: req.systemPrompt }, text);
@@ -253,6 +261,31 @@ class GiaBrain {
       }
     }
     throw new Error('Max agentic iterations reached.');
+  }
+
+  private _detectRawOutput(text: string): void {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    // Raw JSON starting directly (not in fence)
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try { JSON.parse(trimmed); AnalyticsTracker.trackRawOutput('json', trimmed.slice(0, 200)); return; } catch { /* not parseable */ }
+    }
+
+    // JSON inside ```json fence but nothing else — raw dump
+    if (/^```json\n?[\s\S]*?\n?```$/.test(trimmed)) {
+      AnalyticsTracker.trackRawOutput('json_fence', trimmed.slice(0, 200));
+      return;
+    }
+
+    // Raw markdown — mostly code fences, little explanation
+    const fences = (trimmed.match(/```/g) || []).length;
+    if (fences >= 4) {
+      const textLen = trimmed.replace(/```[\s\S]*?```/g, '').trim().length;
+      if (textLen < 50) {
+        AnalyticsTracker.trackRawOutput('markdown', trimmed.slice(0, 200));
+      }
+    }
   }
 
   async fetchURL(url: string): Promise<string> {
