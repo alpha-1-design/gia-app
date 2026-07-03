@@ -1,4 +1,4 @@
-import { repairJson } from '../utils/jsonRepair';
+import { repairJson, findFenceClose } from '../utils/jsonRepair';
 
 export interface ValidationResult {
   valid: boolean;
@@ -32,15 +32,30 @@ class OutputValidator {
       issues.push('Added missing </think> closing tag');
     }
 
-    const jsonBlocks = sanitized.match(/```(?:json)?\s*\n?({[\s\S]*?})\n?```/g);
-    if (jsonBlocks) {
+    // Use findFenceClose to properly handle nested backticks inside JSON
+    const jsonBlocks: string[] = [];
+    let ovPos = 0;
+    while (ovPos < sanitized.length) {
+      const fbIdx = sanitized.indexOf('```', ovPos);
+      if (fbIdx < 0) break;
+      const afterLang = sanitized.slice(fbIdx + 3);
+      const isJsonFence = afterLang.startsWith('json') || afterLang.startsWith('\n') || afterLang.startsWith(' ');
+      if (!isJsonFence) { ovPos = fbIdx + 3; continue; }
+      const bodyStart = fbIdx + 3 + (afterLang.startsWith('json') ? 4 : 0);
+      const contentStart = sanitized[bodyStart] === '\n' ? bodyStart + 1 : bodyStart;
+      const closeIdx = findFenceClose(sanitized, contentStart);
+      if (closeIdx < 0) break;
+      jsonBlocks.push(sanitized.slice(fbIdx, closeIdx + 3));
+      ovPos = closeIdx + 3;
+    }
+    if (jsonBlocks.length > 0) {
       for (const block of jsonBlocks) {
         try {
-          const jsonStr = block.replace(/```(?:json)?\s*\n?/, '').replace(/\n?```/, '');
+          const jsonStr = block.replace(/```(?:json)?\s*\n?/, '').replace(/\n?```$/, '');
           JSON.parse(jsonStr);
         } catch {
           try {
-            const jsonStr = block.replace(/```(?:json)?\s*\n?/, '').replace(/\n?```/, '');
+            const jsonStr = block.replace(/```(?:json)?\s*\n?/, '').replace(/\n?```$/, '');
             const repaired = repairJson(jsonStr);
             const repairedBlock = block.replace(jsonStr, repaired);
             sanitized = sanitized.replace(block, repairedBlock);
@@ -58,23 +73,18 @@ class OutputValidator {
       issues.push('Collapsed excessive consecutive newlines');
     }
 
-    const repeatPattern = /(.{20,}?)\1{3,}/g;
-    if (repeatPattern.test(sanitized)) {
-      sanitized = sanitized.replace(repeatPattern, '$1');
-      issues.push('Removed repeated text patterns');
+    // Only remove repeated patterns that are clearly stuck repeats (same word/phrase 5+ times)
+    const stuckPattern = /(\b\w{3,}\b)(?:[^a-zA-Z]+\1){4,}/g;
+    if (stuckPattern.test(sanitized)) {
+      sanitized = sanitized.replace(stuckPattern, '$1');
+      issues.push('Removed stuck repeated word pattern');
     }
 
-    const totalLen = sanitized.length;
-    const charCounts: Record<string, number> = {};
-    for (const ch of sanitized) {
-      charCounts[ch] = (charCounts[ch] || 0) + 1;
-    }
-    for (const [ch, count] of Object.entries(charCounts)) {
-      if (count > totalLen * 0.4 && totalLen > 50) {
-        sanitized = sanitized.replace(new RegExp(`[${ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}]`, 'g'), '');
-        issues.push(`Removed over-represented character "${ch}"`);
-        break;
-      }
+    // Remove single character repeated > 50 times in a row (stuck key)
+    const stuckChar = /(.)\1{50,}/g;
+    if (stuckChar.test(sanitized)) {
+      sanitized = sanitized.replace(stuckChar, '');
+      issues.push('Removed stuck character repetition');
     }
 
     return { valid: issues.length === 0, sanitized, issues };

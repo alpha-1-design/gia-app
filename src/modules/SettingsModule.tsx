@@ -1,59 +1,51 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
-  Terminal, Shield, User, Save, ChevronRight,
-  Trash2, Zap, Sparkles, Download, Smartphone, Globe, Sun, Moon, BarChart3
+  Terminal, User, Save, ChevronRight,
+  Zap, Smartphone, Sun, Moon,
+  UserCircle, PlugZap, Battery, Cpu, Puzzle, Info,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
-import { useGiaIdentity } from '../store/useGiaIdentity';
 import { useProviderStore } from '../store/useProviderStore';
 import { isNativePlatform } from '../utils/helpers';
 import MCPSettings from '../components/MCPSettings';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { SkillsSubPage } from '../components/settings/SkillsSubPage';
-import { IdentitySubPage } from '../components/settings/IdentitySubPage';
-import { BrainExportSubPage } from '../components/settings/BrainExportSubPage';
-import { MemorySection } from '../components/settings/MemorySection';
-import { CodeExecutionSection } from '../components/settings/CodeExecutionSection';
-import { VoiceSection } from '../components/settings/VoiceSection';
-import { SecuritySection } from '../components/settings/SecuritySection';
-import { PluginSection } from '../components/settings/PluginSection';
-import { PluginInstallSection } from '../components/settings/PluginInstallSection';
-import { CodeHistorySection } from '../components/settings/CodeHistorySection';
-import { InstallSection } from '../components/settings/InstallSection';
-import { BrowserSection } from '../components/settings/BrowserSection';
-import { SearchSection } from '../components/settings/SearchSection';
-import { ReliabilitySection } from '../components/settings/ReliabilitySection';
-import { PowerSection } from '../components/settings/PowerSection';
-import { VisionSection } from '../components/settings/VisionSection';
-import { LocalModelsSection } from '../components/settings/LocalModelsSection';
-import { DeveloperSettings } from '../components/settings/DeveloperSettings';
-import { ConnectorsSection } from '../components/settings/ConnectorsSection';
-import { SocialSection } from '../components/settings/SocialSection';
-import { GatewaySection } from '../components/settings/GatewaySection';
-import { ProtocolsApprovalsSection } from '../components/settings/ProtocolsApprovalsSection';
+import { ProfileIdentityPage } from '../components/settings/ProfileIdentityPage';
+import { ConnectionsPage } from '../components/settings/ConnectionsPage';
+import { SystemPage } from '../components/settings/SystemPage';
+import { LocalAIPage } from '../components/settings/LocalAIPage';
+import { AppExtensionsPage } from '../components/settings/AppExtensionsPage';
+import { AboutPage } from '../components/settings/AboutPage';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
-import AnalyticsService from '../services/AnalyticsService';
+
+type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about';
+
+const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
+  { id: 'profile-identity', icon: <UserCircle size={20} />, label: 'Profile & Identity', desc: 'Your profile, GIA identity, skills, memory & brain export', sections: '5 sections', color: '#a855f7' },
+  { id: 'connections', icon: <PlugZap size={20} />, label: 'Connections', desc: 'API connectors, social media, gateway, browser & search', sections: '5 sections', color: '#f59e0b' },
+  { id: 'system', icon: <Battery size={20} />, label: 'System & Performance', desc: 'Security, code execution, voice, power & reliability', sections: '7 sections', color: '#34d399' },
+  { id: 'local-ai', icon: <Cpu size={20} />, label: 'Local AI', desc: 'On-device LLM models & vision recognition', sections: '2 sections', color: '#22c55e' },
+  { id: 'app-extensions', icon: <Puzzle size={20} />, label: 'App & Extensions', desc: 'Plugins, install APK, code history & developer settings', sections: '5 sections', color: '#a855f7' },
+  { id: 'about', icon: <Info size={20} />, label: 'About', desc: 'Analytics, version info & danger zone', sections: '3 sections', color: '#94a3b8' },
+];
 
 const SettingsModule: React.FC = () => {
-  const { 
-    setShowTerminal, userProfile, setUserProfile, skills, addNotification,
+  const {
+    setShowTerminal, userProfile, setUserProfile,
     theme, setTheme,
   } = useGiaStore(useShallow(s => ({
     setShowTerminal: s.setShowTerminal, userProfile: s.userProfile, setUserProfile: s.setUserProfile,
-    skills: s.skills, addNotification: s.addNotification, theme: s.theme, setTheme: s.setTheme,
+    addNotification: s.addNotification, theme: s.theme, setTheme: s.setTheme,
   })));
-  const identity = useGiaIdentity(s => s.identity);
   const providers = useProviderStore(s => s.providers);
 
-  const [settingsPage, setSettingsPage] = useState<'main' | 'skills' | 'identity' | 'brain-export'>('main');
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
   const [editProfile, setEditProfile] = useState(false);
   const [name, setProfileName] = useState(userProfile.name);
   const [bio, setBio] = useState(userProfile.bio);
   const [goals, setGoals] = useState(userProfile.goals);
-  const [codeEndpoint, setCodeEndpoint] = useState(() => localStorage.getItem('gia-piston-endpoint') || '');
   const [confirmChats, setConfirmChats] = useState(false);
   const dangerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current); }; }, []);
@@ -65,22 +57,21 @@ const SettingsModule: React.FC = () => {
 
   const connectedCount = Object.keys(providers).filter(p => providers[p]?.enabled).length;
 
-  if (settingsPage === 'skills') {
-    return <SkillsSubPage onBack={() => setSettingsPage('main')} />;
-  }
-  if (settingsPage === 'identity') {
-    return <IdentitySubPage onBack={() => setSettingsPage('main')} />;
-  }
-  if (settingsPage === 'brain-export') {
-    return <BrainExportSubPage onBack={() => setSettingsPage('main')} />;
-  }
+  // ── Sub-page routing ──────────────────────────────────────────────
+  if (settingsPage === 'profile-identity') return <ProfileIdentityPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'connections') return <ConnectionsPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'system') return <SystemPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'local-ai') return <LocalAIPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'app-extensions') return <AppExtensionsPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'about') return <AboutPage onBack={() => setSettingsPage('main')} />;
 
+  // ── Main page ────────────────────────────────────────────────────
   return (
     <div
       className="flex flex-col h-full overflow-y-auto"
       style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}
     >
-      {/* Profile */}
+      {/* Profile (compact) */}
       <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -89,15 +80,11 @@ const SettingsModule: React.FC = () => {
               Your Profile
             </span>
           </div>
-          <button
-            onClick={() => setEditProfile(e => !e)}
-            className="text-[11px] font-medium"
-            style={{ color: '#a855f7' }}
-          >
+          <button onClick={() => setEditProfile(e => !e)}
+            className="text-[11px] font-medium" style={{ color: '#a855f7' }}>
             {editProfile ? 'Cancel' : 'Edit'}
           </button>
         </div>
-
         {editProfile ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {[
@@ -106,20 +93,11 @@ const SettingsModule: React.FC = () => {
               { label: 'Goals', val: goals, set: setGoals, placeholder: 'e.g. Pass WASSCE, ship my app' },
             ].map(f => (
               <div key={f.label}>
-                <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
-                  {f.label}
-                </label>
-                <input
-                  className="gia-input"
-                  value={f.val}
-                  onChange={e => f.set(e.target.value)}
-                  placeholder={f.placeholder}
-                />
+                <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>{f.label}</label>
+                <input className="gia-input" value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.placeholder} />
               </div>
             ))}
-            <button onClick={saveProfile} className="gia-btn gia-btn-primary w-full mt-1">
-              <Save size={13} /> Save Profile
-            </button>
+            <button onClick={saveProfile} className="gia-btn gia-btn-primary w-full mt-1"><Save size={13} /> Save Profile</button>
           </div>
         ) : (
           <div>
@@ -127,16 +105,10 @@ const SettingsModule: React.FC = () => {
               <>
                 <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>{userProfile.name}</p>
                 {userProfile.bio && <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>{userProfile.bio}</p>}
-                {userProfile.goals && (
-                  <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#a855f7' }}>
-                    ✦ {userProfile.goals}
-                  </p>
-                )}
+                {userProfile.goals && <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#a855f7' }}>✦ {userProfile.goals}</p>}
               </>
             ) : (
-              <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>
-                No profile set — add your name so GIA can personalise responses.
-              </p>
+              <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>No profile set — add your name so GIA can personalise responses.</p>
             )}
           </div>
         )}
@@ -153,34 +125,9 @@ const SettingsModule: React.FC = () => {
           </div>
           <div className="flex flex-col gap-3">
             {[
-              {
-                num: '1',
-                title: 'Default Assistant',
-                desc: 'Settings → Apps → Default apps → Digital assistant app → pick GIA',
-                note: 'Long-press home button anywhere to launch GIA',
-                color: '#a855f7',
-              },
-              {
-                num: '2',
-                title: 'Accessibility Service',
-                desc: 'Settings → Accessibility → GIA Circle-to-Search → enable',
-                note: 'Grants screen reading, screenshots & gesture control',
-                color: '#3b82f6',
-              },
-              {
-                num: '3',
-                title: 'Floating Orb',
-                desc: 'Tap "Orb" in the chat toolbar → purple overlay appears over every app',
-                note: 'Tap to capture screen · Long-press to resize/hide',
-                color: '#10b981',
-              },
-              {
-                num: '4',
-                title: 'Overlay Permission',
-                desc: 'Settings → Apps → GIA → Display over other apps → enable',
-                note: 'Required for the floating orb to work',
-                color: '#f59e0b',
-              },
+              { num: '1', title: 'Default Assistant', desc: 'Settings → Apps → Default apps → Digital assistant app → pick GIA', note: 'Long-press home button anywhere to launch GIA', color: '#a855f7' },
+              { num: '2', title: 'Accessibility Service', desc: 'Settings → Accessibility → GIA Circle-to-Search → enable', note: 'Grants screen reading, screenshots & gesture control', color: '#3b82f6' },
+              { num: '3', title: 'Overlay Permission', desc: 'Settings → Apps → GIA → Display over other apps → enable', note: 'Required for floating UI elements', color: '#f59e0b' },
             ].map(step => (
               <div key={step.num} className="flex gap-3 items-start">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold"
@@ -198,16 +145,14 @@ const SettingsModule: React.FC = () => {
         </div>
       )}
 
-      {/* Engine Room CTA */}
+      {/* Engine Room (untouched) */}
       <button
         onClick={() => setShowTerminal(true)}
         className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback"
         style={{ transition: 'border-color 0.2s' }}
       >
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: '#0d0d14', border: '1px solid rgba(16,185,129,0.2)' }}
-        >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#0d0d14', border: '1px solid rgba(16,185,129,0.2)' }}>
           <Terminal size={18} style={{ color: '#34d399' }} />
         </div>
         <div className="flex-1">
@@ -229,9 +174,7 @@ const SettingsModule: React.FC = () => {
       </button>
 
       {/* MCP Servers */}
-      <div className="gia-card p-4">
-        <MCPSettings />
-      </div>
+      <div className="gia-card p-4"><MCPSettings /></div>
 
       {/* Provider Capability Matrix */}
       <div className="gia-card p-4">
@@ -245,9 +188,7 @@ const SettingsModule: React.FC = () => {
               <tr>
                 <th className="text-left py-2 pr-3 font-medium" style={{ color: 'var(--gia-muted)' }}>Provider</th>
                 {Object.entries(CAPABILITY_LABELS).map(([key, cap]) => (
-                  <th key={key} className="px-2 py-2 text-center font-medium" style={{ color: 'var(--gia-muted)' }} title={cap.label}>
-                    {cap.icon}
-                  </th>
+                  <th key={key} className="px-2 py-2 text-center font-medium" style={{ color: 'var(--gia-muted)' }} title={cap.label}>{cap.icon}</th>
                 ))}
               </tr>
             </thead>
@@ -259,16 +200,10 @@ const SettingsModule: React.FC = () => {
                 const caps = getProviderCapabilities(listingType, model);
                 return (
                   <tr key={id} className="border-t" style={{ borderColor: 'var(--gia-border)' }}>
-                    <td className="py-2 pr-3 font-medium" style={{ color: 'var(--gia-text)' }}>
-                      {providerRegistry.getLabel(id)}
-                    </td>
+                    <td className="py-2 pr-3 font-medium" style={{ color: 'var(--gia-text)' }}>{providerRegistry.getLabel(id)}</td>
                     {(Object.keys(CAPABILITY_LABELS) as Array<keyof ProviderCapabilities>).map(key => (
                       <td key={key} className="px-2 py-2 text-center">
-                        {caps[key] ? (
-                          <span className="text-green-400">✓</span>
-                        ) : (
-                          <span className="opacity-20">—</span>
-                        )}
+                        {caps[key] ? <span className="text-green-400">✓</span> : <span className="opacity-20">—</span>}
                       </td>
                     ))}
                   </tr>
@@ -286,15 +221,12 @@ const SettingsModule: React.FC = () => {
       <div className="gia-card p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
               {theme === 'light' ? <Sun size={18} style={{ color: '#a855f7' }} /> : <Moon size={18} style={{ color: '#a855f7' }} />}
             </div>
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Theme</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
-                {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System default'}
-              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>{theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System default'}</p>
             </div>
           </div>
           <div className="flex gap-1">
@@ -305,178 +237,39 @@ const SettingsModule: React.FC = () => {
                   background: theme === t ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.04)',
                   color: theme === t ? '#a855f7' : 'var(--gia-muted)',
                   border: `1px solid ${theme === t ? 'rgba(168,85,247,0.25)' : 'transparent'}`,
-                }}
-              >{t}</button>
+                }}>{t}</button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Navigation to sub-pages */}
-      <button onClick={() => setSettingsPage('skills')}
-        className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: '#0d0d14', border: '1px solid rgba(245,158,11,0.2)' }}>
-          <Zap size={18} style={{ color: '#f59e0b' }} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Neural Skills</p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
-            {skills.length} active · {skills.filter(s => s.category === 'user').length} custom
-          </p>
-        </div>
-        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
-      </button>
-
-      <button onClick={() => setSettingsPage('identity')}
-        className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: '#0d0d14', border: '1px solid rgba(168,85,247,0.2)' }}>
-          <Sparkles size={18} style={{ color: '#a855f7' }} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>GIA Identity</p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
-            {identity.name} · {identity.personalityStyle} · {identity.tone} tone
-          </p>
-        </div>
-        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
-      </button>
-
-      <button onClick={() => setSettingsPage('brain-export')}
-        className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: '#0d0d14', border: '1px solid rgba(16,185,129,0.2)' }}>
-          <Download size={18} style={{ color: '#34d399' }} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Brain Export</p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
-            Backup or restore GIA memories and identity
-          </p>
-        </div>
-        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
-      </button>
-
-      <MemorySection />
-
-      <div className="gia-card p-4 flex items-start gap-3">
-        <Shield size={14} style={{ color: '#34d399', flexShrink: 0, marginTop: 2 }} />
-        <div>
-          <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Advanced Permissions</p>
-          <p className="text-[11px] mt-1 text-zinc-500 leading-relaxed">
-            Enable <strong>Display over other apps</strong> to allow GIA to wake up and appear over your current task when you say the wake word.
-          </p>
-          <button 
-            onClick={() => {
-              addNotification('Open system settings and enable "Display over other apps" for GIA.');
-            }}
-            className="gia-btn mt-3 text-[10px] px-3 py-1.5 border-emerald-500/20 text-emerald-400 bg-emerald-500/5"
-          >
-            Grant Overlay Permission
-          </button>
-        </div>
-      </div>
-
-      <VoiceSection />
-      <LocalModelsSection />
-      <VisionSection />
-      <SecuritySection />
-      <ProtocolsApprovalsSection />
-      <CodeExecutionSection codeEndpoint={codeEndpoint} setCodeEndpoint={setCodeEndpoint} />
-      <ConnectorsSection />
-      <SocialSection />
-      <GatewaySection />
-      <BrowserSection />
-      <SearchSection />
-      <CodeHistorySection />
-      <PowerSection />
-      <ReliabilitySection />
-      <PluginSection />
-      <PluginInstallSection />
-      <InstallSection />
-      <DeveloperSettings />
-
-      {/* Danger zone */}
-      <div className="gia-card p-4" style={{ borderColor: 'rgba(239,68,68,0.15)' }}>
-        <p className="text-xs font-semibold mb-3" style={{ color: '#f87171' }}>Danger Zone</p>
-        <button
-          onClick={() => setConfirmChats(true)}
-          className="gia-btn flex items-center gap-2 w-full"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}
-        >
-          <Trash2 size={13} /> Clear All Chats
-        </button>
-      </div>
-
-      {/* Platform */}
-      <div className="px-4 py-3">
-        <div className="flex items-center justify-center gap-2 text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-          <Smartphone size={11} />
-          <span>{isNativePlatform() ? 'Android/iOS' : 'Web Browser'}</span>
-          <span className="mx-1">·</span>
-          <Globe size={11} />
-          <span>Capacitor 8</span>
-        </div>
-        <div className="flex flex-wrap justify-center gap-1.5 mt-2">
-          {[
-            { label: 'Files', available: isNativePlatform() },
-            { label: 'Voice', available: isNativePlatform() },
-            { label: 'Biometrics', available: isNativePlatform() },
-            { label: 'TTS', available: true },
-            { label: 'Code Run', available: true },
-            { label: 'Notifications', available: isNativePlatform() },
-          ].map(f => (
-            <span key={f.label} className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{
-              background: f.available ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
-              color: f.available ? '#34d399' : '#f59e0b',
-              border: `1px solid ${f.available ? 'rgba(52,211,153,0.2)' : 'rgba(251,191,36,0.2)'}`,
-            }}>
-              {f.label} {f.available ? '✓' : '~'}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Analytics */}
-      <div className="gia-card p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#0d0d14', border: '1px solid rgba(139,92,246,0.2)' }}>
-              <BarChart3 size={18} style={{ color: '#a78bfa' }} />
+      {/* Category grid */}
+      <p className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--gia-muted)' }}>
+        All Settings
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {CATEGORIES.map(cat => (
+          <button key={cat.id} onClick={() => setSettingsPage(cat.id)}
+            className="gia-card p-4 flex items-start gap-4 w-full text-left tap-feedback"
+            style={{ transition: 'border-color 0.2s' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: '#0d0d14', border: `1px solid ${cat.color}30` }}>
+              <span style={{ color: cat.color }}>{cat.icon}</span>
             </div>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Usage Analytics</p>
-              <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>
-                {AnalyticsService.isOptedIn() ? 'Local-only, no data leaves device' : 'Opt in to track usage locally'}
-              </p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>{cat.label}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>{cat.desc}</p>
+              <span className="text-[9px] mt-1 inline-block px-1.5 py-0.5 rounded" style={{ background: `${cat.color}15`, color: cat.color }}>
+                {cat.sections}
+              </span>
             </div>
-          </div>
-          <button
-            onClick={() => {
-              const v = !AnalyticsService.isOptedIn();
-              AnalyticsService.setOptIn(v);
-              useGiaStore.getState().addNotification(v ? 'Analytics enabled (local only)' : 'Analytics disabled');
-            }}
-            className="relative w-11 h-6 rounded-full transition-colors"
-            style={{
-              background: AnalyticsService.isOptedIn() ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.1)',
-              border: `1px solid ${AnalyticsService.isOptedIn() ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.15)'}`,
-            }}
-          >
-            <div
-              className="absolute top-0.5 w-5 h-5 rounded-full transition-transform shadow-sm"
-              style={{
-                background: AnalyticsService.isOptedIn() ? '#a78bfa' : '#6b7280',
-                transform: AnalyticsService.isOptedIn() ? 'translateX(22px)' : 'translateX(2px)',
-              }}
-            />
+            <ChevronRight size={14} style={{ color: 'var(--gia-muted)', flexShrink: 0, marginTop: 4 }} />
           </button>
-        </div>
+        ))}
       </div>
 
       {/* Version */}
-      <p className="text-center text-[10px] pb-4" style={{ color: 'var(--gia-muted-2)' }}>
+      <p className="text-center text-[10px] pb-4 pt-2" style={{ color: 'var(--gia-muted-2)' }}>
         GIA v2.3.1.2 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
 

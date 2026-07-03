@@ -98,7 +98,7 @@ const MessageList: React.FC<MessageListProps> = ({
               onRetry={onRetry}
             >
               <div
-                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative select-none ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id ? 'streaming-message' : ''}`}
+                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id ? 'streaming-message' : ''}`}
                 style={{
                   borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                   borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',

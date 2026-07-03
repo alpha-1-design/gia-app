@@ -141,6 +141,25 @@ class LocalAI {
     const result = await pipe(text, labels) as { labels: string[]; scores: number[] };
     return result.labels.map((label, i) => ({ label, score: result.scores[i] }));
   }
+
+  unloadPipeline(task: PipelineTask, modelId: string): void {
+    const key = `${task}:${modelId}`;
+    if (this.pipelines.has(key)) {
+      this.pipelines.delete(key);
+      logger.log(`[LocalAI] Unloaded ${task} model: ${modelId}`);
+    }
+  }
+
+  dispose(): void {
+    const count = this.pipelines.size;
+    this.pipelines.clear();
+    this.loading.clear();
+    logger.log(`[LocalAI] Disposed ${count} pipeline(s)`);
+    // Encourage garbage collection of WASM memory
+    if (typeof globalThis !== 'undefined' && 'gc' in globalThis) {
+      try { (globalThis as unknown as { gc: () => void }).gc(); } catch { /* ignore */ }
+    }
+  }
 }
 
 export default LocalAI.getInstance();

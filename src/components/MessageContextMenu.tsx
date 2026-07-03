@@ -131,7 +131,7 @@ const MessageContextMenu: React.FC<Props> = ({
     { id: 'copy', label: 'Copy', icon: <Copy size={13} />, action: () => { onCopy(messageId, content); close(); } },
   ];
 
-  if (onEdit) {
+  if (onEdit && isUser) {
     actions.push({ id: 'edit', label: 'Edit', icon: <Pencil size={13} />, action: () => { onEdit(messageId); close(); } });
   }
   if (onRetry && !isUser) {

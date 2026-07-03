@@ -3,6 +3,11 @@ import OutputValidator from '../OutputValidator';
 
 vi.mock('../../utils/jsonRepair', () => ({
   repairJson: vi.fn((s: string) => s.replace(/,\s*([}\]])/g, '$1')),
+  findFenceClose: vi.fn((text: string, fromIdx: number) => {
+    // Find the next triple backtick
+    const idx = text.indexOf('```', fromIdx);
+    return idx;
+  }),
 }));
 
 describe('OutputValidator', () => {
@@ -30,16 +35,16 @@ describe('OutputValidator', () => {
     expect(result.sanitized).toBe('a\n\n\nb');
   });
 
-  it('removes repeated text patterns', () => {
-    const text = 'I think the answer is that I think the answer is that I think the answer is that I think the answer is that ';
+  it('removes stuck repeated word patterns', () => {
+    const text = 'hello hello hello hello hello hello ';
     const result = OutputValidator.validate(text);
     expect(result.sanitized.length).toBeLessThan(text.length);
   });
 
-  it('removes over-represented character', () => {
+  it('removes stuck character repetition', () => {
     const text = 'x'.repeat(60) + 'abc';
     const result = OutputValidator.validate(text);
-    expect(result.issues.some(i => i.includes('over-represented character'))).toBe(true);
+    expect(result.issues.some(i => i.includes('stuck character repetition'))).toBe(true);
   });
 
   it('does not flag diverse characters', () => {

@@ -18,6 +18,7 @@ describe('createStreamParser', () => {
       inJsonBlock: false,
       jsonBlockBuffer: '',
       pendingBacktickCount: 0,
+      toolBlockBuffer: '',
     });
   });
 });
@@ -371,6 +372,7 @@ describe('processStreamChunk', () => {
         'json\n{"setting":"value"}\n```',
         state,
       );
+      // After fence close, the newline after ``` becomes separator
       expect(r).toBe('```json\n{"setting":"value"}\n```');
       expect(state.accumulated).toBe(
         '```json\n{"setting":"value"}\n```',

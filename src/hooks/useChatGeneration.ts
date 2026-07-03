@@ -6,7 +6,8 @@ import { useProtocolStore } from '../store/useProtocolStore';
 import AnalyticsService from '../services/AnalyticsService';
 import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
-import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock } from '../utils/streamParser';
+import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock, flushToolBlock } from '../utils/streamParser';
+import OutputValidator from '../services/OutputValidator';
 import InputGuardrails from '../services/InputGuardrails';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { giaCoreServices } from '../services/GIACoreServices';
@@ -245,7 +246,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
       if (ctrl.signal.aborted) return;
 
+      // Flush partial blocks before finalising
       flushThinkBlock(parserState);
+      flushToolBlock(parserState);
 
       if (res.text === '__CLARIFICATION__') {
         const stored = useGiaStore.getState().clarification;
@@ -260,7 +263,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         return;
       }
 
-      const rawContent = processStreamForDisplay(parserState.accumulated) || displayAccumulated;
+      let rawContent = processStreamForDisplay(parserState.accumulated) || displayAccumulated;
+      // Wire OutputValidator into the streaming path to fix fence/JSON issues
+      const validation = OutputValidator.validate(rawContent);
+      if (validation.issues.length > 0 && validation.sanitized.length > 0) {
+        rawContent = validation.sanitized;
+      }
       const finalText = rawContent ||
         // If stream parser stripped everything (all tool blocks), use res.text with tool blocks removed
         (() => {
@@ -400,7 +408,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       });
       if (!ctrl.signal.aborted) {
         flushThinkBlock(contParserState);
-        state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated || processStreamForDisplay(contParserState.accumulated), contParserState.thoughtsAccumulated || undefined);
+        flushToolBlock(contParserState);
+        let contContent = processStreamForDisplay(contParserState.accumulated) || contDisplayAccumulated;
+        const contValidation = OutputValidator.validate(contContent);
+        if (contValidation.issues.length > 0 && contValidation.sanitized.length > 0) contContent = contValidation.sanitized;
+        state.updateMessage(state.activeSessionId!, asstId, contContent, contParserState.thoughtsAccumulated || undefined);
         if (contRes.model || contRes.tokenUsage) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
@@ -500,7 +512,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       });
       if (!ctrl.signal.aborted) {
         flushThinkBlock(clarParserState);
-        state.updateMessage(sessionId, asstId, clarDisplayAccumulated || processStreamForDisplay(clarParserState.accumulated), clarParserState.thoughtsAccumulated || undefined);
+        flushToolBlock(clarParserState);
+        let clarContent = processStreamForDisplay(clarParserState.accumulated) || clarDisplayAccumulated;
+        const clarValidation = OutputValidator.validate(clarContent);
+        if (clarValidation.issues.length > 0 && clarValidation.sanitized.length > 0) clarContent = clarValidation.sanitized;
+        state.updateMessage(sessionId, asstId, clarContent, clarParserState.thoughtsAccumulated || undefined);
         notifyIfBackground('chat', sessionId, asstId);
       }
     } catch (err: unknown) {
