@@ -158,7 +158,7 @@ CSS variables in `src/styles/globals.css`:
 
 ## Landing Page
 
-Located at `src/landing/` (separate Vite entry). Deployed to `alpha1-studio.vercel.app` (currently 404 — deployment not configured in repo). To deploy: add `vercel.json` pointing to `src/landing/main.tsx` as entry, or build landing separately.
+Located at `src/landing/` (separate Vite entry). Not deployed anywhere — marketing brochure site, not the actual app.
 
 ## Android APK
 
