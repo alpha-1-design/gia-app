@@ -1,10 +1,10 @@
-# GIA v2.3.1.2 — Generative Interface Agent
+# GIA v2.3.2.0 — Generative Interface Agent
 
 <div align="center">
 
 [![CI](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml/badge.svg)](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.1.2-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.3.2.0-emerald.svg)](package.json)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web-blue.svg)](capacitor.config.ts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB.svg)](https://reactjs.org/)
