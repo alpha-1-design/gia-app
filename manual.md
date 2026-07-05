@@ -6,28 +6,19 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 
 | Feature | Description |
 |---------|-------------|
-| **Agentic Loop** | Full autonomous tool execution — web search, code run, file ops, image gen, ZIP bundling, sub-agent delegation |
-| **Live Thinking Panel** | Real-time streaming of AI reasoning, collapsible per message |
-| **Knowledge Panel** | Manage memories (search, filter, pin, add, delete, import/export facts) + custom instructions editor |
-| **Memory Pinning** | Pin important memories so they're always injected into system prompt |
-| **Custom Instructions** | Write rules GIA follows in every conversation (e.g. "always reply in Twi") |
-| **Conversation Search** | Search across all session titles and message content with match count |
-| **Rich Markdown** | Mermaid diagrams, KaTeX math, SVG blocks, task lists, collapsible sections, footnotes, definition lists, rich tables with copy, inline code click-to-copy |
-| **Interactive Visual Blocks** | Charts, maps, mind maps, timelines, data tables, galleries, terminal output, metric widgets, document outlines |
-| **Image Generation** | DALL-E 3 or OpenRouter image models — images render inline in chat |
-| **Search Citations** | Source numbered badges `[1]` with clickable links in search results |
-| **File Preview** | PDF text extraction, code preview with syntax coloring, file info cards |
-| **Extended Thinking** | Configurable reasoning budget for o1/o3/o4-mini and Gemini models |
-| **Clarification Loop Guard** | GIA asks at most one clarification question per turn to avoid loops |
-| **Streaming Race Guard** | Multiple drain handlers on SSE streams prevented from racing |
-| **Empty Response Guard** | GIA retries if it generates nothing (up to 2 attempts) |
-| **PIN Lock** | SHA-256 hashed PIN via Web Crypto API |
-| **Error Boundary** | Root-level crash recovery so GIA never shows a white screen |
-| **Floating Stop Button** | Always-visible stop during generation |
-| **No-API-Key Banner** | Clickable banner redirects to Settings |
-| **Blurred Input** | Transparent/glass input area with backdrop blur |
-| **Phase Badges** | Thinking… → Generating… → Done (with model name) |
-| **Streaming Cursor** | Blinking `▋` cursor during token delivery |
+| **Landing Page Redesign** | Cinematic MockUI with motion graphics + provider brand icons, realistic GIA app mockup, modern design overhaul |
+| **Android Widget** | Home screen widget with quick actions, device RAM model recommendation, configurable StatusBar |
+| **Lazy-Loaded Modules** | Analyst, Exam, Autonomy, Agents modules load on-demand — faster initial load |
+| **Error Boundary** | On-screen error display with copy button — no more white screens |
+| **Context Menus** | Right-click/long-press on messages for copy, edit, retry, fork, delete, continue |
+| **Session Tree Migration** | Automatic migration + defensive checks for conversation tree structure |
+| **Wake Word Fixes** | Crash fixes, WASM threading fallback, 16KB alignment, Proot W^X, SMS receiver hardening |
+| **GIAMediaService Rewrite** | Migrated from support lib to `androidx.media` with platform MediaSession API |
+| **Accessibility Fix** | Added missing `getInstance()` to GIAAccessibilityService |
+| **Chat Stability** | Fixed `useShallow` selector crash, removed duplicate lazy imports |
+| **Build Fixes** | Compose BOM 2024.09.00, widget drawable resolution, Capacitor 8 compatibility |
+| **Screen Capture Removal** | screen_capture tool removed, hardened parsing pipeline |
+| **Discoverability Badges** | AI, Privacy, On-Device, No Backend, Local-First badges added to README |
 | **Voice (enhanced)** | Native wake word engine (Porcupine), background detection, transcript polishing, TTS |
 | **Message Context Menu** | Right-click or long-press on messages for Copy/Edit/Retry/Continue/Fork/Delete |
 | **Conversation Branching** | Tree-based branching from any message — rename, switch, delete branches |
