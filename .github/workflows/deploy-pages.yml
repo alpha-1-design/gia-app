@@ -24,7 +24,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --legacy-peer-deps
-      - run: npm run build
+      - run: cp landing.html index.html && npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
