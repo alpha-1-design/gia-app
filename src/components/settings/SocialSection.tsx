@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, Link2, Link2Off, CheckCircle2 } from 'lucide-react';
+import { Share2, Link2, Link2Off, CheckCircle2, MessageCircle } from 'lucide-react';
 import socialManager from '../../services/social/SocialManager';
+import messagingBridge from '../../services/MessagingBridge';
 
 // ── Brand SVGs ──────────────────────────────────────────────────────
 const platformSvgs: Record<string, React.ReactNode> = {
@@ -219,8 +220,65 @@ export const SocialSection: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {p.id === 'telegram' && p.connected && (
+              <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid var(--gia-border)' }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <MessageCircle size={11} style={{ color: '#0088CC' }} />
+                  <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Messaging Bridge</span>
+                </div>
+                <TelegramChatIdInput bridge={messagingBridge} />
+              </div>
+            )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+};
+
+const TelegramChatIdInput: React.FC<{ bridge: typeof messagingBridge }> = ({ bridge }) => {
+  const [chatId, setChatId] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const ch = bridge.getChannel('telegram');
+    if (ch?.config?.chatId) {
+      setChatId(ch.config.chatId);
+    }
+  }, [bridge]);
+
+  const handleSave = () => {
+    if (!chatId.trim()) return;
+    bridge.setTelegramChatId(chatId.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const channel = bridge.getChannel('telegram');
+
+  return (
+    <div>
+      {channel?.config?.chatId && (
+        <p className="text-[8px] mb-1" style={{ color: 'var(--gia-muted-2)' }}>Last received from: <span className="font-mono">{channel.config.chatId}</span></p>
+      )}
+      <div className="flex items-center gap-1.5">
+        <input
+          value={chatId}
+          onChange={e => setChatId(e.target.value)}
+          placeholder="Enter Telegram chat ID (e.g. -1001234567890)"
+          className="flex-1 text-[10px] px-2.5 py-1.5 rounded-lg outline-none"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
+        />
+        <button
+          onClick={handleSave}
+          disabled={!chatId.trim()}
+          className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-lg transition-all shrink-0"
+          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(0,136,204,0.15)', color: saved ? '#34d399' : '#0088CC' }}
+        >
+          {saved ? <CheckCircle2 size={10} /> : <Link2 size={10} />}
+          {saved ? 'Saved' : 'Set'}
+        </button>
       </div>
     </div>
   );

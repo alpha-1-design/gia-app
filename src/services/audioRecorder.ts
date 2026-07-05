@@ -2,6 +2,8 @@ export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private _isRecording = false;
+  private stopReject: ((reason?: unknown) => void) | null = null;
+  private stopTimeout: ReturnType<typeof setTimeout> | null = null;
 
   get isRecording() { return this._isRecording; }
 
@@ -25,7 +27,22 @@ export class AudioRecorder {
         return;
       }
 
+      this.stopReject = reject;
+
+      this.stopTimeout = setTimeout(() => {
+        this.stopReject = null;
+        this.stopTimeout = null;
+        reject(new Error('Recording stop timed out'));
+        this.mediaRecorder?.stream.getTracks().forEach(t => t.stop());
+        this.mediaRecorder = null;
+        this.chunks = [];
+        this._isRecording = false;
+      }, 5000);
+
       this.mediaRecorder.onstop = () => {
+        if (this.stopTimeout) clearTimeout(this.stopTimeout);
+        this.stopTimeout = null;
+        this.stopReject = null;
         const blob = new Blob(this.chunks, { type: 'audio/webm' });
         this.mediaRecorder?.stream.getTracks().forEach(t => t.stop());
         this.mediaRecorder = null;
@@ -39,6 +56,14 @@ export class AudioRecorder {
   }
 
   cancel(): void {
+    if (this.stopReject) {
+      this.stopReject(new Error('Recording cancelled'));
+      this.stopReject = null;
+    }
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     if (this.mediaRecorder) {
       this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
       this.mediaRecorder = null;

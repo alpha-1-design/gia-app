@@ -343,19 +343,6 @@ export function useChatState() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgOps.handleEditResend]);
 
-  // Track actual input container height so messages don't hide behind it
-  useEffect(() => {
-    const el = inputContainerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        setInputContainerHeight(entry.contentRect.height);
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   return {
     input, setInput,
     loading: gen.loading, streamingMsgId: gen.streamingMsgId,
@@ -372,7 +359,7 @@ export function useChatState() {
     showFileBrowser, setShowFileBrowser, showFileManager, setShowFileManager, showTools, setShowTools,
     inputContainerHeight, setInputContainerHeight,
     keepListeningRef, voiceRef, dragCounter, undoTimeoutRef: msgOps.undoTimeoutRef,
-    abortRef: gen.abortRef, abortTimeoutRef: gen.abortTimeoutRef,
+    abortTimeoutRef: gen.abortTimeoutRef,
     copyTimeoutRef: msgOps.copyTimeoutRef,
     responseStartRef: gen.responseStartRef,
     responseTimesRef: gen.responseTimesRef,

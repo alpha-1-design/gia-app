@@ -16,6 +16,13 @@ export interface LocalLLMMeta {
   parameters: string;
 }
 
+export interface DownloadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+  file?: string;
+}
+
 export type ModelLoadStatus = 'not_loaded' | 'loading' | 'ready' | 'error';
 
 export interface LocalLLMState {
@@ -88,6 +95,12 @@ class LocalLLMService {
   /** Per-model status. */
   private _status: Record<LocalModelId, LocalLLMState>;
 
+  /** Download progress per model. */
+  private _progress: Record<string, DownloadProgress> = {};
+
+  /** Callbacks for progress updates. */
+  private _progressCallbacks: Set<(modelId: string, progress: DownloadProgress) => void> = new Set();
+
   private _loading = false;
   private _loadPromise: Promise<void> | null = null;
 
@@ -115,6 +128,15 @@ class LocalLLMService {
   }
 
   // ── Public API ──────────────────────────────────────────────────
+
+  onProgress(cb: (modelId: string, progress: DownloadProgress) => void): () => void {
+    this._progressCallbacks.add(cb);
+    return () => this._progressCallbacks.delete(cb);
+  }
+
+  getProgress(modelId: string): DownloadProgress | undefined {
+    return this._progress[modelId];
+  }
 
   getStatus(): Record<string, LocalLLMState> {
     return { ...this._status as Record<string, LocalLLMState> };
@@ -157,17 +179,31 @@ class LocalLLMService {
         const mod = await import('@huggingface/transformers');
         const hfToken = typeof window !== 'undefined' ? localStorage.getItem('gia:vision:hfToken') || undefined : undefined;
         const pipe = await mod.pipeline('text-generation', modelId, {
-          dtype: 'q4', // 4-bit quantized for mobile
+          dtype: 'q4',
           ...(hfToken ? { access_token: hfToken } : {}),
+          progress_callback: (p: { status: string; file: string; loaded: number; total: number }) => {
+            if (p.status === 'progress' || p.status === 'initiate') {
+              const progress: DownloadProgress = {
+                loaded: p.loaded || 0,
+                total: p.total || 0,
+                percent: p.total ? Math.min(100, Math.round((p.loaded / p.total) * 100)) : 0,
+                file: p.file,
+              };
+              this._progress[modelId] = progress;
+              this._progressCallbacks.forEach(cb => cb(modelId, progress));
+            }
+          },
         } as never);
         this._pipeline = pipe as typeof this._pipeline;
         this._loadedModel = modelId;
         this._setStatus(modelId, 'ready');
+        delete this._progress[modelId];
         logger.log(`[LocalLLM] Loaded ${modelId}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         logger.error(`[LocalLLM] Failed to load ${modelId}:`, err);
         this._setStatus(modelId, 'error', msg);
+        delete this._progress[modelId];
         throw err;
       } finally {
         this._loading = false;

@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import ttsService from '../services/TTSService';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import { Capacitor } from '@capacitor/core';
@@ -110,6 +111,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const listeningLoopRef = useRef(false);
   const wakeWordRegexRef = useRef(new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i'));
   const nativeListenerRef = useRef<{ remove: () => void } | null>(null);
+  const restartCountRef = useRef(0);
+  const listenOnceCountRef = useRef(0);
 
   useEffect(() => {
     wakeWordRegexRef.current = new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i');
@@ -131,6 +134,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const stopListening = useCallback(async () => {
     activeRef.current = false;
     listeningLoopRef.current = false;
+    restartCountRef.current = 0;
+    listenOnceCountRef.current = 0;
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
 
     if (nativeListenerRef.current) {
@@ -176,34 +181,6 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   langRef.current = language;
   onDirectCommandRef.current = config.onDirectCommand;
   accessKeyRef.current = wakeWordAccessKey;
-
-  const processTranscript = useCallback((text: string, confidence?: number) => {
-    if (!text || !activeRef.current) return;
-    if (confidence !== undefined && confidence < thresholdRef.current) return;
-    const cleaned = text.replace(/[^\w\s']/g, '').trim();
-    if (cleaned.length < 2) return;
-    lastResultRef.current = Date.now();
-    const hasWakeWord = wakeWordRegexRef.current.test(text);
-    if (hasWakeWord) {
-      onWakeWordRef.current?.(text);
-      if (!keepListeningRef.current) stopListening();
-      return;
-    }
-
-    const onDirectCommand = onDirectCommandRef.current;
-    if (onDirectCommand) {
-      for (const [re, cmd] of DIRECT_COMMANDS) {
-        const match = cleaned.match(re);
-        if (match) {
-          const resolved = cmd.replace(/\$(\d+)/g, (_, i) => match[parseInt(i)] || '');
-          const handled = onDirectCommand(resolved, cleaned);
-          if (handled) return;
-        }
-      }
-    }
-
-    onTranscriptRef.current?.(cleaned);
-  }, [stopListening]);
 
   const captureQueryAfterWake = useCallback(async () => {
     if (!activeRef.current) return;
@@ -262,8 +239,40 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     }
   }, [isCapacitor]);
 
+  const processTranscript = useCallback((text: string, confidence?: number) => {
+    if (!text || !activeRef.current) return;
+    if (ttsService.isSpeaking()) return;
+    if (confidence !== undefined && confidence < thresholdRef.current) return;
+    const cleaned = text.replace(/[^\w\s']/g, '').trim();
+    if (cleaned.length < 2) return;
+    lastResultRef.current = Date.now();
+    const hasWakeWord = wakeWordRegexRef.current.test(text);
+    if (hasWakeWord) {
+      onWakeWordRef.current?.(text);
+      captureQueryAfterWake();
+      if (!keepListeningRef.current) stopListening();
+      return;
+    }
+
+    const onDirectCommand = onDirectCommandRef.current;
+    if (onDirectCommand) {
+      for (const [re, cmd] of DIRECT_COMMANDS) {
+        const match = cleaned.match(re);
+        if (match) {
+          const resolved = cmd.replace(/\$(\d+)/g, (_, i) => match[parseInt(i)] || '');
+          const handled = onDirectCommand(resolved, cleaned);
+          if (handled) return;
+        }
+      }
+    }
+
+    onTranscriptRef.current?.(cleaned);
+  }, [stopListening, captureQueryAfterWake]);
+
   const restartBrowserRecognition = useCallback(() => {
     if (!activeRef.current || isCapacitor || listeningLoopRef.current) return;
+    if (restartCountRef.current > 8) { stopListening(); return; }
+    restartCountRef.current++;
     try {
       const SR = SpeechRecognitionAPI.SpeechRecognition || SpeechRecognitionAPI.webkitSpeechRecognition;
       if (!SR) return;
@@ -273,6 +282,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       sr.lang = langRef.current;
       sr.onresult = (event: SpeechRecognitionEvent) => {
         if (!activeRef.current) return;
+        restartCountRef.current = 0;
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           const text = result[0].transcript;
@@ -296,7 +306,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       sr.onend = () => {
         setIsHearing(false);
         if (activeRef.current) {
-          timeoutRef.current = setTimeout(restartBrowserRecognition, 500);
+          const delay = Math.min(500 * Math.pow(2, restartCountRef.current), 30000);
+          timeoutRef.current = setTimeout(restartBrowserRecognition, delay);
         }
       };
       sr.start();
@@ -306,6 +317,12 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
   const listenOnce = useCallback(async () => {
     if (!activeRef.current || listeningLoopRef.current) return;
+    listenOnceCountRef.current++;
+    if (listenOnceCountRef.current > 20) {
+      logger.warn('[useVoiceControl] Microphone timed out');
+      stopListening();
+      return;
+    }
     listeningLoopRef.current = true;
     try {
       if (isCapacitor) {
@@ -327,6 +344,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
         const hadResult = result?.matches?.length && result.matches[0]?.length > 0;
         if (hadResult) {
+          listenOnceCountRef.current = 0;
           processTranscript(result.matches![0]);
         }
 
@@ -367,6 +385,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       const handle = await GIAWakeWord.addListener('wakeWordDetected', async ({ keyword: kw }) => {
         if (!activeRef.current) return;
         onWakeWordRef.current?.(kw || nativeKeyword);
+        captureQueryAfterWake();
         if (!keepListeningRef.current) {
           setTimeout(() => stopListening(), 500);
         }
@@ -382,7 +401,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         restartBrowserRecognition();
       }
     }
-  }, [isNative, nativeSensitivity, listenOnce, restartBrowserRecognition, stopListening, isCapacitor]);
+  }, [isNative, nativeSensitivity, listenOnce, restartBrowserRecognition, stopListening, isCapacitor, captureQueryAfterWake]);
 
   const startListening = useCallback(async (manual?: boolean) => {
     if (activeRef.current) return;
@@ -408,7 +427,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       if (!activeRef.current) return;
     }
 
-    if (autoStopAfter > 0 && !keepListeningRef.current && !isNative) {
+    if (autoStopAfter > 0 && !isNative) {
       timeoutRef.current = setTimeout(() => stopListening(), autoStopAfter);
     }
   }, [isNative, nativeWakeWord, startNativeWakeWord, isCapacitor, listenOnce, restartBrowserRecognition, autoStopAfter, stopListening, requestPermissions]);

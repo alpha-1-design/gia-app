@@ -8,6 +8,7 @@ const mockGiaState = {
   customInstructions: '',
   pinnedMemories: [] as string[],
   handsOff: false,
+  sessions: [] as unknown[],
 };
 
 const mockIdentityState = {

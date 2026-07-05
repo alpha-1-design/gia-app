@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { parseVisualBlock } from './parseVisualBlock';
 import { ErrorVisual } from './common';
+import VisualErrorBoundary from './VisualErrorBoundary';
 import { ChartVisual } from './ChartVisual';
 import { MindMapVisual } from './MindMapVisual';
 import { DiffVisual } from './DiffVisual';
@@ -16,8 +17,9 @@ import { SlidesVisual } from './SlidesVisual';
 import { CanvasVisual } from './CanvasVisual';
 import ThreeVisual from './ThreeVisual';
 import GraphVisual from './GraphVisual';
+import { FileVisual } from './FileVisual';
 
-const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
+const RenderVisualByType: React.FC<{ code: string }> = ({ code }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
 
   if ('error' in parsed) return <ErrorVisual message={parsed.error} />;
@@ -83,9 +85,18 @@ const VisualRenderer: React.FC<{ code: string }> = ({ code }) => {
     case 'node-graph':
     case 'topology':
       return <GraphVisual data={data as never} />;
+    case 'file_preview':
+    case 'file-preview':
+      return <FileVisual data={data as never} />;
     default:
-      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d, graph`} />;
+      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d, graph, file_preview`} />;
   }
 };
+
+const VisualRenderer: React.FC<{ code: string }> = ({ code }) => (
+  <VisualErrorBoundary>
+    <RenderVisualByType code={code} />
+  </VisualErrorBoundary>
+);
 
 export default React.memo(VisualRenderer);

@@ -43,6 +43,9 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
     body.tools = ctx.buildAnthropicTools();
   }
+  if (req.forceJson) {
+    body.stop_sequences = ["\n```\n"];
+  }
   if (!useThinking && req.temperature !== undefined) body.temperature = req.temperature;
   if (useThinking) body.thinking = { type: 'enabled', budget_tokens: 10000 };
   const anthropicHeaders: Record<string, string> = {

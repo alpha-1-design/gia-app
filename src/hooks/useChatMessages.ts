@@ -57,11 +57,14 @@ export function useChatMessages() {
   const handleEditResend = useCallback((msgId: string, setInput: (v: string) => void) => {
     const state = useGiaStore.getState();
     const currMsgs = state.getActiveSession()?.messages ?? [];
-    const userMsgIndex = currMsgs.findIndex(m => m.message.id === msgId) - 1;
-    if (userMsgIndex >= 0 && state.activeSessionId) {
-      setInput(currMsgs[userMsgIndex].message.content);
-      state.addNotification('Edit and resend');
+    const msgIndex = currMsgs.findIndex(m => m.message.id === msgId);
+    if (msgIndex < 0 || !state.activeSessionId) return;
+    if (currMsgs[msgIndex].message.role === 'user') {
+      setInput(currMsgs[msgIndex].message.content);
+    } else if (msgIndex > 0) {
+      setInput(currMsgs[msgIndex - 1].message.content);
     }
+    state.addNotification('Edit and resend');
   }, []);
 
   const copyMessage = async (id: string, content: string) => {

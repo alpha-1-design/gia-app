@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Bot, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
-  Eye, CheckCircle2, Loader2, Upload, Monitor, CircleDot,
+  Eye, CheckCircle2, Loader2, Upload,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -24,14 +24,13 @@ import InlineToolExecution from '../components/InlineToolExecution';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
-import { useScreenCapture } from '../hooks/useScreenCapture';
 
 const QUICK_STARTS = [
-  { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7' },
-  { icon: BookOpen, label: 'BECE Prep', prompt: 'Help me study for BECE — topic:', color: '#3b82f6' },
-  { icon: Code2, label: 'Code Help', prompt: 'Explain and fix this code:', color: '#ec4899' },
-  { icon: Sparkles, label: 'Summarize URL', prompt: 'Summarize this URL: https://', color: '#10b981' },
-  { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b' },
+  { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
+  { icon: BookOpen, label: 'BECE Prep', prompt: 'Help me study for BECE — topic:', color: '#3b82f6', category: 'study' },
+  { icon: Code2, label: 'Code Help', prompt: 'Explain and fix this code:', color: '#ec4899', category: 'code' },
+  { icon: Sparkles, label: 'Summarize URL', prompt: 'Summarize this URL: https://', color: '#10b981', category: 'tools' },
+  { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b', category: 'productivity' },
 ];
 
 const ChatModule: React.FC = () => {
@@ -67,23 +66,6 @@ const ChatModule: React.FC = () => {
   } = useChatState();
 
   const { greeting, tip } = useProactiveMessage();
-  const { captureScreen, capturing } = useScreenCapture();
-  const [orbActive, setOrbActive] = useState(false);
-
-  const toggleOrb = async () => {
-    try {
-      const { GIAScreenAgent } = await import('../services/GIAScreenAgent');
-      if (orbActive) {
-        await GIAScreenAgent.hideOrb();
-        setOrbActive(false);
-      } else {
-        await GIAScreenAgent.showOrb();
-        setOrbActive(true);
-      }
-    } catch {
-      // Not on native platform — ignore silently
-    }
-  };
 
   if (showHistory) {
     return (
@@ -226,26 +208,43 @@ const ChatModule: React.FC = () => {
                 </div>
               </button>
               {QUICK_STARTS.slice(0, 1).map((qs) => (
-                <button key={qs.label} onClick={() => setInput(qs.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/30 border border-zinc-800 hover:border-violet-500/30">
-                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20` }}><qs.icon size={14} style={{ color: qs.color }} /></div>
+                <motion.button
+                  key={qs.label}
+                  onClick={() => setInput(qs.prompt)}
+                  whileHover={{ scale: 1.02, borderColor: `${qs.color}60` }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback"
+                  style={{ background: `linear-gradient(135deg, ${qs.color}08, ${qs.color}02)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 0 12px ${qs.color}08` }}
+                >
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={14} style={{ color: qs.color }} /></div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
-                    <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{qs.prompt}</p>
+                    <p className="text-[10px] truncate" style={{ color: qs.color }}>{qs.prompt}</p>
                   </div>
-                </button>
+                </motion.button>
               ))}
             </div>
             )}
             {providerConnected && (
             <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
-              {QUICK_STARTS.map((qs) => (
-                  <button key={qs.label} onClick={() => setInput(qs.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-900/50 border border-zinc-800 hover:border-violet-500/30">
-                    <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20` }}><qs.icon size={14} style={{ color: qs.color }} /></div>
+              {QUICK_STARTS.map((qs, i) => (
+                  <motion.button
+                    key={qs.label}
+                    onClick={() => setInput(qs.prompt)}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.07, type: 'spring', stiffness: 200, damping: 20 }}
+                    whileHover={{ scale: 1.02, borderColor: `${qs.color}60`, boxShadow: `0 0 20px ${qs.color}15` }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all"
+                    style={{ background: `linear-gradient(135deg, ${qs.color}0a, ${qs.color}03)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 0 12px ${qs.color}06` }}
+                  >
+                    <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={14} style={{ color: qs.color }} /></div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
-                      <p className="text-[10px] truncate text-zinc-500">{qs.prompt}</p>
+                      <p className="text-[10px] truncate" style={{ color: qs.color, opacity: 0.7 }}>{qs.prompt}</p>
                     </div>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             )}
@@ -430,28 +429,6 @@ const ChatModule: React.FC = () => {
                   }
                 }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <Camera size={11} /> Camera
-                </button>
-                <button type="button" onClick={captureScreen}
-                  className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
-                  style={{
-                    background: capturing ? 'rgba(16,185,129,0.2)' : 'var(--gia-surface)',
-                    border: capturing ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--gia-border)',
-                    color: capturing ? '#10b981' : 'var(--gia-muted)',
-                    fontWeight: 500,
-                  }}>
-                  <Monitor size={11} className={capturing ? 'animate-pulse' : ''} />
-                  {capturing ? 'Capturing...' : 'Screen'}
-                </button>
-                <button type="button" onClick={toggleOrb}
-                  className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
-                  style={{
-                    background: orbActive ? 'rgba(168,85,247,0.2)' : 'var(--gia-surface)',
-                    border: orbActive ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--gia-border)',
-                    color: orbActive ? '#a855f7' : 'var(--gia-muted)',
-                    fontWeight: 500,
-                  }}>
-                  <CircleDot size={11} className={orbActive ? 'animate-pulse' : ''} />
-                  {orbActive ? 'Orb On' : 'Orb'}
                 </button>
                 <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
                 {[

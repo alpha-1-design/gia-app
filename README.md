@@ -8,6 +8,11 @@
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web-blue.svg)](capacitor.config.ts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB.svg)](https://reactjs.org/)
+[![AI](https://img.shields.io/badge/AI-Generative%20Agent-8B5CF6.svg)]()
+[![Privacy](https://img.shields.io/badge/Privacy-First-22c55e.svg)]()
+[![On-Device](https://img.shields.io/badge/On--Device-Yes-22c55e.svg)]()
+[![No Backend](https://img.shields.io/badge/No%20Backend-✔-f59e0b.svg)]()
+[![Local-First](https://img.shields.io/badge/Local--First-Yes-3b82f6.svg)]()
 
 **GIA (Generative Interface Agent)** — private, on-device AI workspace. No backend, no telemetry, no cloud dependency except the AI API calls you configure.
 
@@ -131,7 +136,6 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **MCP Support** | Model Context Protocol — extend tools via external MCP servers (SSE/stdio) |
 | **Plugin System** | Hook-based plugin architecture with tool registration API |
 | **Scheduled Tasks** | Hourly/daily/weekly background AI task execution |
-| **Circle-to-Search** | Screen capture → region select → AI vision analysis (proposed) |
 | **Brain Export/Import** | Full memory backup and restore as JSON |
 | **Deep Links** | `gia://` and `web+gia://` protocol handling |
 | **PWA Share Target** | Receive shared content from other apps |
@@ -160,7 +164,6 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Auto-Summarization** | Automatic conversation history compression when approaching context limits |
 | **Offline Queue** | Persistent tool call queue — queues requests when offline, auto-replays on reconnect |
 | **GitHub Integration** | Fetch GitHub user profiles, repos, files, and metadata directly from chat |
-| **Screen Capture** | Multi-strategy screenshot capture (native Capacitor, html2canvas, getDisplayMedia) |
 | **Biometric Lock** | Optional fingerprint / face unlock via native biometric API |
 | **Device Health** | Storage, battery, memory monitoring with risk alerts |
 | **Directions & Maps** | Turn-by-turn routing (OSRM) with interactive map rendering |
@@ -402,18 +405,6 @@ Full backup and restore of GIA's knowledge:
 - **Export**: Download a complete `.gia-brain.json` file containing all memories, skills, identity config
 - **Import**: Restore from a previously exported file via Settings → Brain Export
 - **Scope**: Includes memories (all tiers), user profile, custom instructions, pinned memories
-
-## 📱 Circle-to-Search (Proposed)
-
-> **Status: Proposed** — concept designed, component scaffolding in place (`RegionSelectorOverlay`), full implementation pending. Inspired by Gemini's Circle-to-Search functionality.
-
-Planned UX:
-
-- **Trigger**: Keyboard shortcut `Ctrl+Shift+C` or via command palette
-- **Capture**: Takes a screenshot using native Capacitor plugin or browser `getDisplayMedia`
-- **Crop**: Interactive region selection overlay with drag handles
-- **Analysis**: Cropped image sent to GIA's vision-capable model for analysis
-- **Fallback**: Multiple capture strategies (native, html2canvas, screen capture API)
 
 ## 🔗 Deep Link Support
 

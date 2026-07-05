@@ -133,7 +133,7 @@ CSS variables in `src/styles/globals.css`:
 | `SchedulerService` | `services/SchedulerService.ts` | Periodic background tasks |
 | `MessagingBridge` | `services/MessagingBridge.ts` | Telegram/WhatsApp integration |
 | `DesktopNotifications` | `services/DesktopNotifications.ts` | Browser notifications |
-| `generateWithRetry` | `utils/generateWithRetry.ts` | JSON + network retry (used by Analyst/Planner/Exam) |
+| `generateWithRetry` | `utils/generateWithRetry.ts` | JSON + network retry (Analyst/Planner/Exam) |
 | `streamParser` | `utils/streamParser.ts` | `processStreamChunk`/`stripToolBlocks`/`flushThinkBlock` for streaming display |
 
 ## Server & Daemon
@@ -155,3 +155,17 @@ CSS variables in `src/styles/globals.css`:
 - **Analyst/Exam/Planner JSON parsing**: These modules use `generateWithRetry<T>()` which expects strict JSON output. If the AI model doesn't follow instructions (e.g., Anthropic lacks native `forceJson`), parsing may fail. The system prompt instructs the AI for JSON-only output, but model behavior varies.
 - **Local LLM download**: `@huggingface/transformers` `pipeline()` downloads models via CDN. Failures are logged but errors are captured and displayed in the UI card.
 - **Camera**: User-facing "Camera" button in chat toolbar uses `@capacitor/camera` plugin (native) with web fallback to file picker.
+
+## Landing Page
+
+Located at `src/landing/` (separate Vite entry). Deployed to `alpha1-studio.vercel.app` (currently 404 — deployment not configured in repo). To deploy: add `vercel.json` pointing to `src/landing/main.tsx` as entry, or build landing separately.
+
+## Android APK
+
+```bash
+npm run build
+npx cap sync android
+npx cap open android  # opens Android Studio
+```
+
+Keystore generated in CI (`github.com/alpha-1-design/gia-app/actions`). Release APK ready to sideload from GitHub Releases.

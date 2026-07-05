@@ -3,7 +3,8 @@ import type { Tool } from './types';
 import bibleService from '../BibleService';
 import messagingBridge from '../MessagingBridge';
 import { useGiaStore } from '../../store/useGiaStore';
-import { getIntervalMs } from '../../utils/helpers';
+import { getIntervalMs, isNativePlatform } from '../../utils/helpers';
+import { GIAMedia } from '../../services/GIAMedia';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -209,15 +210,17 @@ const setReminder: Tool = {
   },
 };
 
+
+
 const playMusic: Tool = {
   id: 'play_music',
   name: 'play_music',
-  description: 'Play music, open a song on YouTube, or start a playlist. GIA can open YouTube Music, Spotify, or play audio from a URL.',
+  description: 'Play music — on your device, via YouTube, YouTube Music, Spotify, or from a URL. On Android, GIA can find and play songs from your local music library directly.',
   schema: {
     type: 'object',
     properties: {
       query: { type: 'string', description: 'Song name, artist, or what you want to listen to' },
-      platform: { type: 'string', enum: ['youtube', 'youtube_music', 'spotify', 'audio_url'], description: 'Platform to play from. youtube = general YouTube search, youtube_music = YouTube Music, spotify = Spotify, audio_url = direct audio file' },
+      platform: { type: 'string', enum: ['device', 'youtube', 'youtube_music', 'spotify', 'audio_url'], description: 'Where to play from. device = local music library (Android only), youtube = general YouTube, youtube_music = YouTube Music, spotify = Spotify, audio_url = direct audio URL' },
       url: { type: 'string', description: 'Direct audio URL (only for platform=audio_url)' },
     },
     required: ['query'],
@@ -225,7 +228,7 @@ const playMusic: Tool = {
   execute: async (args) => {
     const schema = z.object({
       query: z.string().min(1, 'Song name is required'),
-      platform: z.enum(['youtube', 'youtube_music', 'spotify', 'audio_url']).optional().default('youtube_music'),
+      platform: z.enum(['device', 'youtube', 'youtube_music', 'spotify', 'audio_url']).optional().default('youtube_music'),
       url: z.string().optional(),
     });
     const parsed = schema.safeParse(args);
@@ -234,6 +237,35 @@ const playMusic: Tool = {
     const encoded = encodeURIComponent(parsed.data.query);
 
     try {
+      // ── Native Android device playback ──────────────────────
+      if (parsed.data.platform === 'device') {
+        if (!isNativePlatform()) {
+          return { success: false, content: '', error: 'Device music playback requires the Android app. Try platform=youtube or platform=spotify instead.' };
+        }
+
+        const result = await GIAMedia.searchSongs({ query: parsed.data.query });
+        if (result.count === 0) {
+          return { success: true, content: `🎵 No songs found on your device matching "${parsed.data.query}". Try a different search or platform.` };
+        }
+
+        const song = result.songs[0];
+        await GIAMedia.play({
+          path: song.path,
+          title: song.title,
+          artist: song.artist,
+        });
+
+        const minutes = Math.floor(song.duration / 60000);
+        const seconds = Math.floor((song.duration % 60000) / 1000);
+        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        return {
+          success: true,
+          content: `🎵 Now playing from your device: **${song.title}**${song.artist ? ` by *${song.artist}*` : ''} (${durationStr})`,
+        };
+      }
+
+      // ── Audio URL playback (web Audio API) ──────────────────
       if (parsed.data.platform === 'audio_url' && parsed.data.url) {
         const audio = new Audio(parsed.data.url);
         audio.play().then(() => {
@@ -247,16 +279,19 @@ const playMusic: Tool = {
         return { success: true, content: `🎵 Now playing: **${parsed.data.query}** from URL.` };
       }
 
+      // ── Spotify ─────────────────────────────────────────────
       if (parsed.data.platform === 'spotify') {
         window.open(`https://open.spotify.com/search/${encoded}`, '_blank');
         return { success: true, content: `🎵 Opened Spotify search for **${parsed.data.query}**.` };
       }
 
+      // ── YouTube Music ───────────────────────────────────────
       if (parsed.data.platform === 'youtube_music') {
         window.open(`https://music.youtube.com/search?q=${encoded}`, '_blank');
         return { success: true, content: `🎵 Opened YouTube Music search for **${parsed.data.query}**.` };
       }
 
+      // ── YouTube (general) ───────────────────────────────────
       window.open(`https://www.youtube.com/results?search_query=${encoded}`, '_blank');
       return { success: true, content: `🎵 Opened YouTube search for **${parsed.data.query}**.` };
     } catch (e) {

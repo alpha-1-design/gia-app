@@ -5,7 +5,7 @@ import type { Tool } from './types';
 async function sandboxExec(cmd: string, timeout = 15000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
     const baseUrl = 'http://localhost:3081';
-    const res = await fetch(`${baseUrl}/api/exec`, {
+    const res = await fetch(`${baseUrl}/exec`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command: cmd, timeout: Math.floor(timeout / 1000) }),

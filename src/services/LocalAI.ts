@@ -1,5 +1,21 @@
 import { logger } from '../utils/logger';
 
+function supportsWasmThreads(): boolean {
+  try {
+    return typeof SharedArrayBuffer !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+function wasmEnv() {
+  const threading = supportsWasmThreads();
+  if (!threading) {
+    logger.warn('[LocalAI] SharedArrayBuffer unavailable — falling back to single-threaded WASM. Local inference will be slower.');
+  }
+  return { threading };
+}
+
 export interface LocalClassificationResult {
   label: string;
   score: number;
@@ -63,10 +79,15 @@ class LocalAI {
 
     this.loading.set(key, true);
     try {
-      const { pipeline } = await import('@huggingface/transformers');
+      const mod = await import('@huggingface/transformers');
+      const { env, pipeline } = mod;
+      const { threading } = wasmEnv();
+      if (!threading && env?.backends?.onnx?.wasm) {
+        env.backends.onnx.wasm.numThreads = 1;
+      }
       const pipe = await pipeline(task, modelId);
       this.pipelines.set(key, { pipeline: pipe as PipelineFn, modelId });
-      logger.log(`[LocalAI] Loaded ${task} model: ${modelId}`);
+      logger.log(`[LocalAI] Loaded ${task} model: ${modelId}${threading ? '' : ' (single-threaded)'}`);
       return pipe as PipelineFn;
     } finally {
       this.loading.set(key, false);
@@ -140,6 +161,25 @@ class LocalAI {
     const pipe = await this.getPipeline('zero-shot-classification', modelId);
     const result = await pipe(text, labels) as { labels: string[]; scores: number[] };
     return result.labels.map((label, i) => ({ label, score: result.scores[i] }));
+  }
+
+  unloadPipeline(task: PipelineTask, modelId: string): void {
+    const key = `${task}:${modelId}`;
+    if (this.pipelines.has(key)) {
+      this.pipelines.delete(key);
+      logger.log(`[LocalAI] Unloaded ${task} model: ${modelId}`);
+    }
+  }
+
+  dispose(): void {
+    const count = this.pipelines.size;
+    this.pipelines.clear();
+    this.loading.clear();
+    logger.log(`[LocalAI] Disposed ${count} pipeline(s)`);
+    // Encourage garbage collection of WASM memory
+    if (typeof globalThis !== 'undefined' && 'gc' in globalThis) {
+      try { (globalThis as unknown as { gc: () => void }).gc(); } catch { /* ignore */ }
+    }
   }
 }
 

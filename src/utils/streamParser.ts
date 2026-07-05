@@ -1,3 +1,5 @@
+import { findFenceClose } from './jsonRepair';
+
 export interface StreamParserState {
   accumulated: string;
   thoughtsAccumulated: string;
@@ -6,6 +8,8 @@ export interface StreamParserState {
   inJsonBlock: boolean;
   jsonBlockBuffer: string;
   pendingBacktickCount: number;
+  /** Buffered content inside the current tool block (for recovery on stream end) */
+  toolBlockBuffer: string;
 }
 
 export const createStreamParser = (): StreamParserState => ({
@@ -16,12 +20,23 @@ export const createStreamParser = (): StreamParserState => ({
   inJsonBlock: false,
   jsonBlockBuffer: '',
   pendingBacktickCount: 0,
+  toolBlockBuffer: '',
 });
 
-/** Check if the given string (body of a json block) looks like a tool call JSON */
+/** Check if the given string (body of a json block) looks like a tool call JSON.
+ *  Uses a stricter heuristic to reduce false positives: requires both `id`/`name` and `args`/`input`
+ *  keys, and the `args` value must be an object (starts with `{`) not a primitive. */
 function isToolCallJson(body: string): boolean {
-  return /"(?:id|tool|function|name)"\s*:/.test(body)
-    && /"(?:args|input)"\s*:/.test(body);
+  const hasKey = (pattern: RegExp) => pattern.test(body);
+  const hasId = hasKey(/"(?:id|tool|function|name)"\s*:/);
+  const hasArgs = hasKey(/"(?:args|input)"\s*:/);
+  if (!hasId || !hasArgs) return false;
+  // Extra guard: the value of `args` should look like an object or array, not a string
+  const argsMatch = body.match(/"args"\s*:\s*([{[])/);
+  const inputMatch = body.match(/"input"\s*:\s*([{[])/);
+  if (argsMatch || inputMatch) return true;
+  // If we can't find args with an object value, check `input`
+  return false;
 }
 
 export const processStreamChunk = (
@@ -54,21 +69,28 @@ export const processStreamChunk = (
         remaining = '';
       }
     } else if (state.inToolBlock) {
-      const endIdx = remaining.indexOf('\n```');
+      // Use findFenceClose to find the actual closing ``` (skips 4+ backticks)
+      const endIdx = findFenceClose(remaining, 0);
       if (endIdx >= 0) {
-        remaining = remaining.slice(endIdx + 4);
+        state.toolBlockBuffer += remaining.slice(0, endIdx);
+        remaining = remaining.slice(endIdx + 3);
+        state.toolBlockBuffer = '';
         state.inToolBlock = false;
       } else if (remaining.startsWith('```')) {
+        state.toolBlockBuffer = '';
         remaining = remaining.slice(3);
         state.inToolBlock = false;
       } else {
+        state.toolBlockBuffer += remaining;
         remaining = '';
       }
     } else if (state.inJsonBlock) {
       // We're inside a ```json block — buffer content, look for closing fence
-      const endIdx = remaining.indexOf('\n```');
+      const endIdx = findFenceClose(remaining, 0);
       if (endIdx >= 0) {
-        state.jsonBlockBuffer += remaining.slice(0, endIdx);
+        let content = remaining.slice(0, endIdx);
+        if (content.endsWith('\n')) content = content.slice(0, -1);
+        state.jsonBlockBuffer += content;
         // Block complete — check if it's a tool call
         if (!isToolCallJson(state.jsonBlockBuffer)) {
           // Not a tool call — release the buffered content to display
@@ -76,7 +98,7 @@ export const processStreamChunk = (
         }
         state.inJsonBlock = false;
         state.jsonBlockBuffer = '';
-        remaining = remaining.slice(endIdx + 4);
+        remaining = remaining.slice(endIdx + 3);
       } else if (remaining.startsWith('```')) {
         state.inJsonBlock = false;
         state.jsonBlockBuffer = '';
@@ -89,12 +111,10 @@ export const processStreamChunk = (
       const thinkStart = remaining.indexOf('<think>');
       let toolStart = remaining.indexOf('```tool');
       if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
-      if (toolStart === 0) toolStart = 0; // Allow at chunk start (boundary case)
 
       // Also detect ```json blocks that may contain tool calls
       let jsonStart = remaining.indexOf('```json');
       if (jsonStart > 0 && remaining[jsonStart - 1] !== '\n') jsonStart = -1;
-      if (jsonStart === 0) jsonStart = 0;
 
       // Pick the earliest marker
       const firstMarker = (() => {
@@ -110,28 +130,32 @@ export const processStreamChunk = (
         const before = remaining.slice(0, firstMarker.idx);
         displayChunk += before;
         const afterFence = remaining.slice(firstMarker.idx + 7);
-        const closeIdx = afterFence.indexOf('\n```');
+        const closeIdx = findFenceClose(afterFence, 0);
         if (closeIdx >= 0) {
-          remaining = afterFence.slice(closeIdx + 4);
+          state.toolBlockBuffer = afterFence.slice(0, closeIdx);
+          remaining = afterFence.slice(closeIdx + 3);
+          state.toolBlockBuffer = '';
         } else if (afterFence.startsWith('```')) {
           remaining = afterFence.slice(3);
         } else {
           state.inToolBlock = true;
+          state.toolBlockBuffer = afterFence;
           remaining = '';
         }
-      } else if (firstMarker && firstMarker.type === 'json') {
+      } else       if (firstMarker && firstMarker.type === 'json') {
         const before = remaining.slice(0, firstMarker.idx);
         displayChunk += before;
         const afterFence = remaining.slice(firstMarker.idx + 7); // skip ```json
-        const closeIdx = afterFence.indexOf('\n```');
+        const closeIdx = findFenceClose(afterFence, 0);
         if (closeIdx >= 0) {
-          // Complete block in this chunk
-          const body = afterFence.slice(0, closeIdx);
+          // Complete block in this chunk — strip trailing newline before fence
+          let body = afterFence.slice(0, closeIdx);
+          if (body.endsWith('\n')) body = body.slice(0, -1);
           if (!isToolCallJson(body)) {
             // Not a tool call — show it
             displayChunk += '```json' + body + '\n```';
           }
-          remaining = afterFence.slice(closeIdx + 4);
+          remaining = afterFence.slice(closeIdx + 3);
         } else if (afterFence.startsWith('```')) {
           // Empty json block
           remaining = afterFence.slice(3);
@@ -167,21 +191,69 @@ export const processStreamChunk = (
 };
 
 export const stripToolBlocks = (text: string): string => {
-  // Remove standard ```tool blocks
-  let result = text.replace(/```tool[\s\S]*?```/g, '');
-  // Remove incomplete trailing ```tool blocks
-  result = result.replace(/```tool[\s\S]*$/gm, '');
-  // Remove ```json or ``` blocks containing tool call indicators (must have both id and args/input keys)
-  result = result.replace(/```(?:json)?\s*\n?[\s\S]*?"(?:id|tool|function|name)"\s*:[\s\S]*?"(?:args|input)"\s*:[\s\S]*?```/g, '');
+  let result = text;
+
+  // Remove ```tool blocks using character-by-character iteration to handle nested backticks
+  let stripped = '';
+  let pos = 0;
+  while (pos < result.length) {
+    const toolIdx = result.indexOf('```tool', pos);
+    if (toolIdx < 0) { stripped += result.slice(pos); break; }
+    stripped += result.slice(pos, toolIdx);
+    const closeIdx = findFenceClose(result, toolIdx + 7);
+    if (closeIdx < 0) { pos = toolIdx + 7; continue; }
+    pos = closeIdx + 3;
+    // Include trailing newline as separator if present
+    if (pos < result.length && result[pos] === '\n') { stripped += '\n'; pos++; }
+  }
+  result = stripped;
+
+  // Remove ```json blocks containing tool call indicators using balanced iteration
+  stripped = '';
+  pos = 0;
+  while (pos < result.length) {
+    const jsonIdx = result.indexOf('```json', pos);
+    if (jsonIdx < 0) { stripped += result.slice(pos); break; }
+    const before = result.slice(pos, jsonIdx);
+    const closeIdx = findFenceClose(result, jsonIdx + 7);
+    if (closeIdx < 0) {
+      stripped += before + '```json';
+      pos = jsonIdx + 7;
+      continue;
+    }
+    let body = result.slice(jsonIdx + 7, closeIdx);
+    if (body.endsWith('\n')) body = body.slice(0, -1);
+    if (!isToolCallJson(body)) {
+      // Not a tool call — keep it
+      stripped += before + '```json' + body + '\n```';
+    } else {
+      // Tool call — skip, keep surrounding newlines
+      stripped += before;
+    }
+    pos = closeIdx + 3;
+    // Include trailing newline as separator if present
+    if (pos < result.length && result[pos] === '\n') { stripped += '\n'; pos++; }
+  }
+  result = stripped;
+
   // Remove bare JSON objects with tool call indicators (not inside fences)
-  result = result.replace(/^\s*\{(?:[^{}]|"(?:[^"\\]|\\.)*")*"(?:id|tool|function|name)"\s*:[\s\S]*?"(?:args|input)"\s*:[\s\S]*?\}\s*$/gm, '');
+  // Use a line-by-line approach to handle nested objects
+  const lines = result.split('\n');
+  const filtered: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('{') && isToolCallJson(trimmed)) {
+      try { JSON.parse(trimmed); filtered.push(''); continue; } catch { /* not parseable, keep */ }
+    }
+    filtered.push(line);
+  }
+  result = filtered.join('\n');
+
   return result.trim();
 };
 
 export const processStreamForDisplay = (accumulated: string): string => {
   const stripped = stripToolBlocks(accumulated);
-  // If stripping leaves nothing but the original had content (tool blocks only),
-  // return an empty string — the caller handles this gracefully
   return stripped;
 };
 
@@ -190,6 +262,15 @@ export const flushThinkBlock = (state: StreamParserState): string => {
     state.accumulated += '<think>' + state.thoughtsAccumulated;
     state.thoughtsAccumulated = '';
     state.inThinkBlock = false;
+  }
+  return state.accumulated;
+};
+
+export const flushToolBlock = (state: StreamParserState): string => {
+  if (state.inToolBlock && state.toolBlockBuffer) {
+    state.accumulated += '```tool\n' + state.toolBlockBuffer + '\n```';
+    state.toolBlockBuffer = '';
+    state.inToolBlock = false;
   }
   return state.accumulated;
 };
