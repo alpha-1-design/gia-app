@@ -210,6 +210,9 @@ async function executeSingleTool(
     onProgress: (progress: number, label: string) => {
       useProtocolStore.getState().setProgress(protocolId, progress, label);
     },
+    onThought: (thought: string) => {
+      onThought?.(`  · ${thought}`);
+    },
   };
 
   while (true) {

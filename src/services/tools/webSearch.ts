@@ -41,15 +41,22 @@ const webSearchTool: Tool = {
 
     try {
       ctx?.onProgress?.(0.1, 'Searching...');
+      ctx?.onThought?.(`🌐 Searching for "${String(query).slice(0, 60)}"...`);
       const { default: fallback } = await import('../FallbackWebSearch');
       ctx?.onProgress?.(0.3, 'Fetching results...');
+      ctx?.onThought?.('Fetching search results...');
       const results = await fallback.search(query as string);
-      if (results.length === 0) return { success: true, content: 'No results found.', sources: [] };
+      if (results.length === 0) {
+        ctx?.onThought?.('No results found');
+        return { success: true, content: 'No results found.', sources: [] };
+      }
       ctx?.onProgress?.(0.7, 'Processing results...');
+      ctx?.onThought?.(`Found ${results.length} results — processing...`);
       const content = results.map((r, i) =>
         `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.snippet}\n    _(via ${r.source})_`
       ).join('\n\n');
       ctx?.onProgress?.(1, 'Done');
+      ctx?.onThought?.('✅ Web search complete');
       return {
         success: true,
         content: `WEB SEARCH RESULTS for "${query}":\n\n${content}\n\nUse these results to inform your response. Cite sources using [1], [2], etc.`,
@@ -76,13 +83,17 @@ const readUrlTool: Tool = {
   execute: async ({ url, maxChars }, ctx?: ToolContext) => {
     try {
       ctx?.onProgress?.(0.1, 'Connecting...');
+      ctx?.onThought?.(`📄 Connecting to ${new URL(url as string).hostname}...`);
       const { default: fallback } = await import('../FallbackWebSearch');
       ctx?.onProgress?.(0.3, 'Fetching page...');
+      ctx?.onThought?.('Fetching page content...');
       const page = await fallback.scrape(url as string, (maxChars as number) || 60000);
       ctx?.onProgress?.(0.7, 'Extracting content...');
+      ctx?.onThought?.(`Extracted ${page.content.length} chars from ${page.title || 'page'}`);
       const header = `# ${page.title}\n*From [${page.url}](${page.url})* ~ Source: ${page.source}\n\n`;
       const excerpt = page.content.length > 0 ? '' : `*No content extracted.*\n`;
       ctx?.onProgress?.(1, 'Done');
+      ctx?.onThought?.('✅ Page read complete');
       return { success: true, content: `${header}${excerpt}${page.content}`, sources: [{ title: page.title || url as string, url: url as string }] };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : 'Fetch failed' };
@@ -104,19 +115,23 @@ const browserNavigateTool: Tool = {
     try {
       if (!url || typeof url !== 'string') return { success: false, content: '', error: 'URL is required' };
       ctx?.onProgress?.(0.1, 'Preparing browser...');
+      ctx?.onThought?.(`🌐 Navigating to ${new URL(url).hostname}...`);
       const BrowserRunner = (await import('../BrowserRunner')).default;
       useGiaStore.getState().addNotification(`🌐 Navigating to ${new URL(url).hostname}…`);
       ctx?.onProgress?.(0.3, 'Navigating...');
+      ctx?.onThought?.('Loading page in browser...');
       const result = await BrowserRunner.navigate(url, (status) => {
         useGiaStore.getState().addNotification(`🌐 ${status}`);
       });
       ctx?.onProgress?.(0.7, 'Extracting content...');
+      ctx?.onThought?.(`Page loaded — extracting ${result.text.length} chars of content...`);
       const snippet = result.text.slice(0, 2000);
       const title = result.title ? `**${result.title}**\n\n` : '';
       const summary = snippet.length < result.text.length
         ? `\n\n*(Content truncated — ${result.text.length} chars total)*`
         : '';
       ctx?.onProgress?.(1, 'Done');
+      ctx?.onThought?.('✅ Browser navigation complete');
       return { success: true, content: `${title}${snippet}${summary}` };
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === 'AbortError') return { success: false, content: '', error: 'Cancelled' };

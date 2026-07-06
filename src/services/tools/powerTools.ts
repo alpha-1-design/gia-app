@@ -31,6 +31,7 @@ const httpRequest: Tool = {
     const { url, method, headers, body, timeout } = parsed.data;
     try {
       ctx?.onProgress?.(0.1, `Connecting to ${new URL(url).hostname}...`);
+      ctx?.onThought?.(`🌐 ${method} ${new URL(url).hostname}...`);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
       const res = await fetch(url, {
@@ -41,14 +42,17 @@ const httpRequest: Tool = {
       });
       clearTimeout(timer);
       ctx?.onProgress?.(0.6, 'Reading response...');
+      ctx?.onThought?.(`Received ${res.status} ${res.statusText}...`);
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
       ctx?.onProgress?.(0.9, 'Processing response...');
+      ctx?.onThought?.(`${(text.length / 1024).toFixed(1)}KB response — processing...`);
       let content = text;
       if (contentType.includes('application/json') || contentType.includes('json')) {
         try { content = JSON.stringify(JSON.parse(text), null, 2); } catch { content = text; }
       }
       ctx?.onProgress?.(1, 'Done');
+      ctx?.onThought?.('✅ Request complete');
       return {
         success: res.ok,
         content: `${res.status} ${res.statusText}\n\n${content.slice(0, 50000)}`,
@@ -82,10 +86,14 @@ const webScrape: Tool = {
     const { url, maxChars } = parsed.data;
     try {
       ctx?.onProgress?.(0.1, 'Connecting...');
+      ctx?.onThought?.(`📄 Fetching ${new URL(url).hostname}...`);
       const { default: fallback } = await import('../FallbackWebSearch');
       ctx?.onProgress?.(0.3, 'Fetching page...');
+      ctx?.onThought?.('Loading page content...');
       const page = await fallback.scrape(url, maxChars);
       ctx?.onProgress?.(0.8, 'Extracting content...');
+      ctx?.onThought?.(`Extracted ${page.content.length} chars from ${page.title || 'page'}`);
+      ctx?.onThought?.('✅ Scrape complete');
       return { success: true, content: `# ${page.title}\n\n${page.content}\n\n---\n_Fetched via ${page.source}_` };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };

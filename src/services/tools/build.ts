@@ -71,6 +71,7 @@ const buildProject: Tool = {
     const outputName = output_filename.endsWith('.zip') ? output_filename : `${output_filename}.zip`;
 
     ctx?.onProgress?.(0.05, `Creating project with ${files.length} files...`);
+    ctx?.onThought?.(`🔨 Building ${outputName} — ${files.length} files`);
     useGiaStore.getState().addNotification(`Building ${outputName}...`);
 
     let buildOutput = '';
@@ -78,9 +79,11 @@ const buildProject: Tool = {
 
     if (build_command) {
       ctx?.onProgress?.(0.15, `Running build: ${build_command.slice(0, 80)}...`);
+      ctx?.onThought?.(`⚙️ Running build command...`);
       useGiaStore.getState().addNotification(`Running build: ${build_command.slice(0, 60)}...`);
 
       try {
+        ctx?.onThought?.('Compiling via terminal...');
         const TerminalService = (await import('../TerminalService')).default;
         const result = await TerminalService.exec(build_command, undefined, undefined, 120000);
         buildOutput = result.output || '(no output)';
@@ -88,11 +91,14 @@ const buildProject: Tool = {
         if (!buildSuccess) {
           useGiaStore.getState().addNotification('Build failed — check output');
           ctx?.onProgress?.(0.4, `Build exited with code ${result.exitCode}`);
+          ctx?.onThought?.(`⚠️ Build exited with code ${result.exitCode}`);
         } else {
           useGiaStore.getState().addNotification('Build completed');
           ctx?.onProgress?.(0.4, 'Build succeeded');
+          ctx?.onThought?.('✅ Build succeeded');
         }
       } catch {
+        ctx?.onThought?.('Terminal unavailable, trying code runner...');
         try {
           const CodeRunner = (await import('../CodeRunner')).default;
           const result = await CodeRunner.run({ language, code: build_command });
@@ -102,6 +108,7 @@ const buildProject: Tool = {
             buildOutput = (result.error || '') + '\n' + buildOutput;
           }
           ctx?.onProgress?.(0.4, buildSuccess ? 'Build succeeded' : 'Build had errors');
+          ctx?.onThought?.(buildSuccess ? '✅ Build succeeded' : '⚠️ Build had errors');
         } catch (e2) {
           buildOutput = `Build execution unavailable: ${e2 instanceof Error ? e2.message : String(e2)}`;
           buildSuccess = false;
@@ -110,6 +117,7 @@ const buildProject: Tool = {
     }
 
     ctx?.onProgress?.(0.5, 'Packaging files into ZIP...');
+    ctx?.onThought?.('📦 Packaging files...');
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
 

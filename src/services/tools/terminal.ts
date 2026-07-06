@@ -85,6 +85,7 @@ const terminalRun: Tool = {
 
     // ── Backend 1: Native Capacitor plugin (Android proot+Alpine) ──────────
     ctx?.onProgress?.(0.1, 'Running in terminal…');
+    ctx?.onThought?.(`💻 Running: ${shellCommand.slice(0, 80)}...`);
     try {
       const result = await terminalService.exec(shellCommand, workdir, undefined, timeout);
 
@@ -93,6 +94,7 @@ const terminalRun: Tool = {
         ctx?.onProgress?.(1, 'Done');
         const output = result.output?.trim() || '(no output)';
         const statusIcon = result.exitCode === 0 ? '✅' : '⚠️';
+        ctx?.onThought?.(statusIcon === '✅' ? 'Command completed' : `Command exited with code ${result.exitCode}`);
         return {
           success: result.exitCode === 0,
           content: `## ${statusIcon} Terminal Output
@@ -112,6 +114,7 @@ _Exit code: ${result.exitCode}_`,
 
     // ── Backend 2: Sandbox server (desktop dev, port 3081) ─────────────────
     ctx?.onProgress?.(0.35, 'Trying sandbox…');
+    ctx?.onThought?.('Trying sandbox execution...');
     try {
       const available = await SandboxService.ensureAvailable();
       if (available) {
@@ -134,6 +137,7 @@ _Exit code: ${result.exitCode}_`,
 
     // ── Backend 3: CodeRunner / Piston API ─────────────────────────────────
     ctx?.onProgress?.(0.6, 'Trying code runner…');
+    ctx?.onThought?.('Falling back to code runner API...');
     try {
       // Map sh → python for Piston (bash support is inconsistent on free tier)
       const codeLang = language === 'sh' ? 'python' : language;

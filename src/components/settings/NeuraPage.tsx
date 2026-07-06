@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Maximize2, Minimize2, Network } from 'lucide-react';
 import { useKnowledgeGraphStore } from '../../store/useKnowledgeGraphStore';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { SubPageHeader } from './SubPageHeader';
@@ -36,7 +36,7 @@ interface Projected {
 const SPHERE_R = 220;
 
 function nodeSize(e: Entity): number {
-  return 4 + Math.min(e.mentionCount / 6, 1) * 12;
+  return 5 + Math.min(e.mentionCount / 4, 1) * 16;
 }
 
 function fibonacciSphere(count: number, radius: number, entities: Entity[]): SphereNode[] {
@@ -76,6 +76,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [connected, setConnected] = useState<{ entities: Entity[]; relationships: Relationship[] }>({ entities: [], relationships: [] });
   const [query, setQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const entities = useKnowledgeGraphStore(s => s.entities);
   const relationships = useKnowledgeGraphStore(s => s.relationships);
@@ -88,14 +89,21 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const isDrag = useRef(false);
 
   const nodes = useRef<SphereNode[]>([]);
-  const stars = useRef<{ x: number; y: number; r: number; a: number }[]>([]);
+  const stars = useRef<{ x: number; y: number; r: number; a: number; phase: number; twinkleSpeed: number }[]>([]);
 
   // Init stars once
   useEffect(() => {
     if (stars.current.length > 0) return;
     const s: typeof stars.current = [];
-    for (let i = 0; i < 120; i++) {
-      s.push({ x: (Math.random() - 0.5) * 2000, y: (Math.random() - 0.5) * 2000, r: Math.random() * 1.2 + 0.3, a: Math.random() * 0.4 + 0.1 });
+    for (let i = 0; i < 200; i++) {
+      s.push({
+        x: (Math.random() - 0.5) * 2500,
+        y: (Math.random() - 0.5) * 2500,
+        r: Math.random() * 1.5 + 0.2,
+        a: Math.random() * 0.5 + 0.05,
+        phase: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * 0.02 + 0.005,
+      });
     }
     stars.current = s;
   }, []);
@@ -160,30 +168,52 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q) || e.aliases.some(a => a.toLowerCase().includes(q))
     ).map(e => e.id)) : null;
 
-    // ── Stars ──
+    // ── Stars (twinkling) ──
+    const starTime = Date.now();
     for (const s of stars.current) {
+      const twinkle = Math.sin(starTime * s.twinkleSpeed + s.phase) * 0.4 + 0.6;
       ctx.beginPath();
-      ctx.arc(cx + s.x, cy + s.y, s.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(148,163,184,${s.a})`;
+      ctx.arc(cx + s.x, cy + s.y, s.r * (0.6 + twinkle * 0.4), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,190,210,${s.a * twinkle})`;
       ctx.fill();
     }
 
     // ── Atmosphere ──
-    const atm = ctx.createRadialGradient(cx, cy, 0, cx, cy, SPHERE_R * 1.6 * zoom.current);
-    atm.addColorStop(0, 'rgba(168,85,247,0.04)');
-    atm.addColorStop(0.5, 'rgba(99,102,241,0.025)');
+    const atm = ctx.createRadialGradient(cx, cy, 0, cx, cy, SPHERE_R * 1.8 * zoom.current);
+    atm.addColorStop(0, 'rgba(168,85,247,0.08)');
+    atm.addColorStop(0.3, 'rgba(99,102,241,0.05)');
+    atm.addColorStop(0.6, 'rgba(139,92,246,0.02)');
     atm.addColorStop(1, 'transparent');
     ctx.fillStyle = atm;
     ctx.beginPath();
-    ctx.arc(cx, cy, SPHERE_R * 1.6 * zoom.current, 0, Math.PI * 2);
+    ctx.arc(cx, cy, SPHERE_R * 1.8 * zoom.current, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Inner glow sphere ──
+    const innerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, SPHERE_R * 0.5 * zoom.current);
+    innerGlow.addColorStop(0, 'rgba(168,85,247,0.03)');
+    innerGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = innerGlow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, SPHERE_R * 0.5 * zoom.current, 0, Math.PI * 2);
     ctx.fill();
 
     // ── Equatorial ring ──
     ctx.beginPath();
     ctx.ellipse(cx, cy, SPHERE_R * 0.9 * zoom.current, SPHERE_R * 0.15 * zoom.current, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(168,85,247,0.06)';
+    ctx.strokeStyle = 'rgba(168,85,247,0.08)';
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    // ── Longitude arcs ──
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, SPHERE_R * 0.6 * zoom.current, SPHERE_R * 0.6 * zoom.current, angle, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(168,85,247,0.03)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
 
     // ── Edges ──
     const drawn = new Set<string>();
@@ -236,27 +266,36 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const isSel = p.id === selId;
       const isHl = hl?.has(p.id);
       const back = (p.depth + SPHERE_R) / (SPHERE_R * 2);
-      const front = isSel ? 1 : isHl ? 0.95 : 0.25 + back * 0.75;
+      const front = isSel ? 1 : isHl ? 0.95 : 0.3 + back * 0.7;
 
       // Outer glow
-      if (front > 0.3) {
-        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr * 5);
-        g.addColorStop(0, isSel ? `${p.color}45` : `${p.color}12`);
-        g.addColorStop(1, 'transparent');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(sx, sy, sr * 5, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      const glowRadius = sr * (isSel ? 8 : 5);
+      const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowRadius);
+      g.addColorStop(0, isSel ? `${p.color}55` : `${p.color}18`);
+      g.addColorStop(1, 'transparent');
+      ctx.globalAlpha = Math.max(0.4, front);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(sx, sy, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
 
       if (isSel) {
         // Pulse ring
-        const pulse = Math.sin(Date.now() * 0.003) * 0.3 + 0.7;
+        const pulse = Math.sin(Date.now() * 0.004) * 0.3 + 0.7;
         ctx.beginPath();
-        ctx.arc(sx, sy, sr * (2 + pulse), 0, Math.PI * 2);
+        ctx.arc(sx, sy, sr * (2.5 + pulse * 0.5), 0, Math.PI * 2);
         ctx.strokeStyle = p.color;
-        ctx.globalAlpha = 0.3 * pulse;
-        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.4 * pulse;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Second wider pulse
+        const pulse2 = Math.sin(Date.now() * 0.0025 + 1) * 0.3 + 0.7;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr * (4 + pulse2), 0, Math.PI * 2);
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = 0.15 * pulse2;
+        ctx.lineWidth = 0.8;
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
@@ -264,25 +303,37 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       // Body
       ctx.beginPath();
       ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-      ctx.globalAlpha = front;
+      ctx.globalAlpha = Math.max(0.6, front);
       ctx.fillStyle = p.color;
       ctx.fill();
 
+      // Highlight on front-facing nodes
+      if (front > 0.6 && !isSel) {
+        ctx.beginPath();
+        ctx.arc(sx - sr * 0.25, sy - sr * 0.25, sr * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.globalAlpha = front * 0.5;
+        ctx.fill();
+      }
+
       // Ring
       ctx.strokeStyle = p.color;
-      ctx.lineWidth = isSel ? 2.5 : isHl ? 1.5 : 0.8;
-      ctx.globalAlpha = isSel ? 1 : isHl ? 0.8 : 0.3 + back * 0.4;
+      ctx.lineWidth = isSel ? 3 : isHl ? 2 : 1.2;
+      ctx.globalAlpha = isSel ? 1 : isHl ? 0.85 : 0.35 + back * 0.45;
       ctx.stroke();
       ctx.globalAlpha = 1;
 
       // Label
-      if (zoom.current > 0.6 || isSel || isHl) {
-        const fs = Math.max(7.5, Math.min(10.5, 9 * zoom.current));
-        ctx.font = `${fs}px system-ui, -apple-system, sans-serif`;
+      if (zoom.current > 0.5 || isSel || isHl) {
+        const fs = Math.max(7, Math.min(11, 9.5 * zoom.current));
+        ctx.font = `${isSel ? '600 ' : ''}${fs}px system-ui, -apple-system, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.globalAlpha = isSel ? 1 : isHl ? 0.9 : 0.2 + back * 0.5;
-        ctx.fillStyle = isSel ? p.color : 'rgba(255,255,255,0.6)';
-        ctx.fillText(p.entity.name, sx, sy + sr + fs + 1);
+        ctx.globalAlpha = isSel ? 1 : isHl ? 0.9 : 0.25 + back * 0.55;
+        ctx.fillStyle = isSel ? p.color : 'rgba(255,255,255,0.65)';
+        ctx.shadowColor = isSel ? p.color : 'transparent';
+        ctx.shadowBlur = isSel ? 8 : 0;
+        ctx.fillText(p.entity.name, sx, sy + sr + fs + 2);
+        ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
       }
     }
@@ -291,17 +342,18 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   function tick() {
     const r = rot.current;
     const tr = tRot.current;
-    const dt = 0.06;
+    const dt = isDrag.current ? 0.12 : 0.05;
     r.x += (tr.x - r.x) * dt;
     r.y += (tr.y - r.y) * dt;
 
-    // Auto-spin when idle
+    // Auto-spin when idle (smoother ramp-up)
     idle.current += 1;
-    if (idle.current > 90 && !isDrag.current) {
-      tr.y += 0.003;
+    if (idle.current > 120 && !isDrag.current) {
+      const speed = Math.min((idle.current - 120) / 200, 1) * 0.004;
+      tr.y += speed;
     }
 
-    zoom.current += (tZoom.current - zoom.current) * 0.1;
+    zoom.current += (tZoom.current - zoom.current) * (isDrag.current ? 0.2 : 0.08);
     render();
     raf.current = requestAnimationFrame(tick);
   }
@@ -316,7 +368,8 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const hWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     idle.current = 0;
-    tZoom.current = Math.max(0.3, Math.min(4, tZoom.current * (1 - e.deltaY * 0.002)));
+    const inertia = e.deltaY * 0.003;
+    tZoom.current = Math.max(0.25, Math.min(5, tZoom.current * (1 - inertia)));
   }, []);
 
   const hDown = useCallback((e: React.PointerEvent) => {
@@ -343,7 +396,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const pts = Array.from(pointers.current.values());
       const dist = Math.sqrt((pts[1].x - pts[0].x) ** 2 + (pts[1].y - pts[0].y) ** 2);
       const scale = dist / pinch.current.dist;
-      tZoom.current = Math.max(0.3, Math.min(4, pinch.current.zoom * scale));
+      tZoom.current = Math.max(0.25, Math.min(5, pinch.current.zoom * (0.7 + scale * 0.3)));
       return;
     }
 
@@ -351,7 +404,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const dx = e.clientX - drag.current.x;
     const dy = e.clientY - drag.current.y;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-    tRot.current = { x: rot.current.x + dy * 0.006, y: rot.current.y + dx * 0.006 };
+    tRot.current = { x: rot.current.x + dy * 0.008, y: rot.current.y + dx * 0.008 };
     drag.current = { x: e.clientX, y: e.clientY };
   }, []);
 
@@ -438,144 +491,223 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setQuery('');
   }
 
+  const entityTypeCount = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of entities) counts[e.type] = (counts[e.type] || 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [entities]);
+
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--gia-bg)' }}>
       <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3 shrink-0">
         <SubPageHeader title="Neura" onBack={onBack} />
-        <button
-          onClick={() => { setShowSearch(s => !s); if (!showSearch) setTimeout(() => searchRef.current?.focus(), 100); }}
-          className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback shrink-0"
-          style={{ background: showSearch ? 'rgba(168,85,247,0.12)' : 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
-        >
-          {showSearch ? <X size={14} style={{ color: '#a855f7' }} /> : <Search size={14} style={{ color: 'var(--gia-muted)' }} />}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => { setShowSearch(s => !s); if (!showSearch) setTimeout(() => searchRef.current?.focus(), 100); }}
+            className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback shrink-0"
+            style={{ background: showSearch ? 'rgba(168,85,247,0.12)' : 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+          >
+            {showSearch ? <X size={14} style={{ color: '#a855f7' }} /> : <Search size={14} style={{ color: 'var(--gia-muted)' }} />}
+          </button>
+          <button
+            onClick={() => setExpanded(s => !s)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback shrink-0"
+            style={{ background: expanded ? 'rgba(168,85,247,0.12)' : 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+            title={expanded ? 'Collapse' : 'Expand'}
+          >
+            {expanded ? <Minimize2 size={14} style={{ color: '#a855f7' }} /> : <Maximize2 size={14} style={{ color: 'var(--gia-muted)' }} />}
+          </button>
+        </div>
       </div>
 
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 cursor-grab active:cursor-grabbing"
-          onWheel={hWheel}
-          onPointerDown={hDown}
-          onPointerMove={hMove}
-          onPointerUp={hUp}
-          onPointerLeave={hUp}
-        />
+      {expanded ? (
+        <div ref={containerRef} className="flex-1 relative overflow-hidden">
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 cursor-grab active:cursor-grabbing"
+            onWheel={hWheel}
+            onPointerDown={hDown}
+            onPointerMove={hMove}
+            onPointerUp={hUp}
+            onPointerLeave={hUp}
+          />
 
-        <div className="absolute top-2 left-3 flex items-center gap-2 pointer-events-none">
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px]" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
-            <span style={{ color: 'rgba(148,163,184,0.6)' }}>{entities.length} nodes</span>
-            <span style={{ color: 'rgba(148,163,184,0.3)' }}>·</span>
-            <span style={{ color: 'rgba(148,163,184,0.6)' }}>{relationships.length} edges</span>
-            {selected && (
-              <>
-                <span style={{ color: 'rgba(148,163,184,0.3)' }}>·</span>
-                <span style={{ color: '#a78bfa' }}>{selected.name}</span>
-              </>
+          <div className="absolute top-2 left-3 flex items-center gap-2 pointer-events-none">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[9px]" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+              <span style={{ color: 'rgba(148,163,184,0.6)' }}>{entities.length} nodes</span>
+              <span style={{ color: 'rgba(148,163,184,0.3)' }}>·</span>
+              <span style={{ color: 'rgba(148,163,184,0.6)' }}>{relationships.length} edges</span>
+              {selected && (
+                <>
+                  <span style={{ color: 'rgba(148,163,184,0.3)' }}>·</span>
+                  <span style={{ color: '#a78bfa' }}>{selected.name}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {showSearch && (
+            <div className="absolute top-0 left-0 right-0 p-3 z-10">
+              <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(14,14,20,0.96)', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 12px 48px rgba(0,0,0,0.5)' }}>
+                <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+                  <Search size={13} style={{ color: 'rgba(148,163,184,0.5)' }} />
+                  <input
+                    ref={searchRef}
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search knowledge sphere…"
+                    className="flex-1 bg-transparent text-[12px] outline-none"
+                    style={{ color: 'var(--gia-text)' }}
+                  />
+                  {query && <button onClick={() => setQuery('')} className="p-0.5"><X size={11} style={{ color: 'rgba(148,163,184,0.5)' }} /></button>}
+                </div>
+                {query && searchResults.length > 0 && (
+                  <div className="max-h-44 overflow-y-auto py-1">
+                    {searchResults.map(r => (
+                      <button
+                        key={`${r.type}-${r.id}`}
+                        onClick={() => r.type === 'entity' ? focusEntity(r.id) : null}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:opacity-80 transition-opacity"
+                      >
+                        <div className="w-4 h-4 rounded flex items-center justify-center shrink-0">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: r.color }} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-medium truncate" style={{ color: 'var(--gia-text)' }}>{r.label}</p>
+                          <p className="text-[8px] truncate" style={{ color: 'rgba(148,163,184,0.5)' }}>{r.sub}</p>
+                        </div>
+                        <span className="text-[7px] uppercase tracking-wider shrink-0" style={{ color: r.color }}>{r.type}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {query && searchResults.length === 0 && <p className="text-[11px] text-center py-4" style={{ color: 'rgba(148,163,184,0.4)' }}>No matches found</p>}
+              </div>
+            </div>
+          )}
+
+          {!hasData && !showSearch && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center px-8">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 70%)', border: '1px solid rgba(168,85,247,0.15)' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /><circle cx="4.93" cy="4.93" r="1" />
+                    <circle cx="19.07" cy="4.93" r="1" /><circle cx="4.93" cy="19.07" r="1" /><circle cx="19.07" cy="19.07" r="1" />
+                    <line x1="8.7" y1="8.7" x2="6.34" y2="6.34" /><line x1="15.3" y1="8.7" x2="17.66" y2="6.34" />
+                    <line x1="8.7" y1="15.3" x2="6.34" y2="17.66" /><line x1="15.3" y1="15.3" x2="17.66" y2="17.66" />
+                  </svg>
+                </div>
+                <p className="text-xs font-medium" style={{ color: 'rgba(168,85,247,0.6)' }}>The sphere is dark</p>
+                <p className="text-[10px] mt-1.5 leading-relaxed max-w-xs mx-auto" style={{ color: 'rgba(148,163,184,0.4)' }}>
+                  Every entity, concept, and connection GIA discovers appears as a glowing node. The more you talk, the brighter it gets. Spin, zoom, explore — the sphere grows as you do.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {selected && (
+            <div
+              className="absolute bottom-0 left-0 right-0 px-5 pt-8 pb-5"
+              style={{
+                background: 'linear-gradient(to top, rgba(0,0,0,0.93) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)',
+                pointerEvents: 'auto',
+              }}
+            >
+              <div className="max-w-md mx-auto">
+                <div className="flex items-center gap-3 mb-2.5">
+                  <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: `${COLORS[selected.type] || '#94a3b8'}18`, border: `1px solid ${COLORS[selected.type] || '#94a3b8'}25` }}>
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[selected.type] || '#94a3b8' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{selected.name}</p>
+                    <p className="text-[9px]" style={{ color: `${COLORS[selected.type] || '#94a3b8'}` }}>
+                      {selected.type} · {selected.mentionCount}m · {(selected.confidence * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                </div>
+                {selected.description && (
+                  <p className="text-[10.5px] mb-3 leading-relaxed" style={{ color: 'rgba(148,163,184,0.65)' }}>{selected.description}</p>
+                )}
+                {connected.entities.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {connected.entities.slice(0, 8).map(e => {
+                      const rel = connected.relationships.find(r => r.sourceId === e.id || r.targetId === e.id);
+                      return (
+                        <div key={e.id} className="flex items-center gap-1.5 px-2 py-1 rounded text-[9px]" style={{ background: `${COLORS[e.type] || '#94a3b8'}0d`, border: `1px solid ${COLORS[e.type] || '#94a3b8'}15` }}>
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: COLORS[e.type] || '#94a3b8' }} />
+                          <span style={{ color: 'rgba(255,255,255,0.6)' }}>{e.name}</span>
+                          {rel && <span className="text-[7px]" style={{ color: `${EDGE_COLORS[rel.type] || '#94a3b8'}` }}>{rel.type.replace(/_/g, ' ')}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── Compact preview card ── */
+        <div className="flex-1 flex flex-col p-4 pt-2 gap-3 overflow-y-auto">
+          <div
+            className="rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer tap-feedback"
+            style={{ background: 'radial-gradient(ellipse at center, rgba(168,85,247,0.06) 0%, transparent 70%)', border: '1px solid rgba(168,85,247,0.1)' }}
+            onClick={() => setExpanded(true)}
+          >
+            <div className="relative w-24 h-24 mb-3 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.1) 0%, transparent 60%)', animation: 'pulse 3s ease-in-out infinite' }} />
+              <div className="relative flex flex-wrap items-center justify-center gap-1" style={{ maxWidth: 80 }}>
+                {entityTypeCount.slice(0, 6).map(([type]) => (
+                  <div key={type} className="w-3 h-3 rounded-full" style={{ background: COLORS[type] || '#94a3b8', opacity: 0.8 }} />
+                ))}
+                {entityTypeCount.length === 0 && <Network size={28} style={{ color: 'rgba(168,85,247,0.4)' }} />}
+              </div>
+            </div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>
+              {hasData ? `${entities.length} entities · ${relationships.length} connections` : 'The sphere is dark'}
+            </p>
+            <p className="text-[10px] mt-1" style={{ color: 'rgba(148,163,184,0.5)' }}>
+              {hasData ? `Tap to explore · ${entityTypeCount.slice(0, 3).map(([t, c]) => `${t} (${c})`).join(', ')}` : 'Knowledge accumulates as you talk — entities, concepts, connections.'}
+            </p>
+            {hasData && (
+              <div className="flex items-center gap-4 mt-3 text-[9px]" style={{ color: 'rgba(148,163,184,0.4)' }}>
+                <span>{memories.length} memories linked</span>
+              </div>
             )}
           </div>
+
+          {entityTypeCount.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-1">
+              {entityTypeCount.map(([type, count]) => (
+                <div
+                  key={type}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px]"
+                  style={{ background: `${COLORS[type] || '#94a3b8'}0d`, border: `1px solid ${COLORS[type] || '#94a3b8'}18` }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: COLORS[type] || '#94a3b8' }} />
+                  <span style={{ color: COLORS[type] || '#94a3b8' }}>{type}</span>
+                  <span style={{ color: 'rgba(148,163,184,0.4)' }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {entities.length > 0 && (
+            <div className="mt-auto px-1">
+              <p className="text-[9px] font-medium mb-2" style={{ color: 'rgba(148,163,184,0.4)' }}>Top referenced</p>
+              <div className="flex flex-col gap-1.5">
+                {[...entities].sort((a, b) => b.mentionCount - a.mentionCount).slice(0, 5).map(e => (
+                  <div key={e.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: COLORS[e.type] || '#94a3b8' }} />
+                    <span className="text-[11px] font-medium flex-1 truncate" style={{ color: 'var(--gia-text)' }}>{e.name}</span>
+                    <span className="text-[8px]" style={{ color: 'rgba(148,163,184,0.4)' }}>{e.type} · {e.mentionCount}m</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-
-        {showSearch && (
-          <div className="absolute top-0 left-0 right-0 p-3 z-10">
-            <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(14,14,20,0.96)', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 12px 48px rgba(0,0,0,0.5)' }}>
-              <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
-                <Search size={13} style={{ color: 'rgba(148,163,184,0.5)' }} />
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Search knowledge sphere…"
-                  className="flex-1 bg-transparent text-[12px] outline-none"
-                  style={{ color: 'var(--gia-text)' }}
-                />
-                {query && <button onClick={() => setQuery('')} className="p-0.5"><X size={11} style={{ color: 'rgba(148,163,184,0.5)' }} /></button>}
-              </div>
-              {query && searchResults.length > 0 && (
-                <div className="max-h-44 overflow-y-auto py-1">
-                  {searchResults.map(r => (
-                    <button
-                      key={`${r.type}-${r.id}`}
-                      onClick={() => r.type === 'entity' ? focusEntity(r.id) : null}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:opacity-80 transition-opacity"
-                    >
-                      <div className="w-4 h-4 rounded flex items-center justify-center shrink-0">
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: r.color }} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-medium truncate" style={{ color: 'var(--gia-text)' }}>{r.label}</p>
-                        <p className="text-[8px] truncate" style={{ color: 'rgba(148,163,184,0.5)' }}>{r.sub}</p>
-                      </div>
-                      <span className="text-[7px] uppercase tracking-wider shrink-0" style={{ color: r.color }}>{r.type}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {query && searchResults.length === 0 && <p className="text-[11px] text-center py-4" style={{ color: 'rgba(148,163,184,0.4)' }}>No matches found</p>}
-            </div>
-          </div>
-        )}
-
-        {!hasData && !showSearch && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center px-8">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.1)' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /><circle cx="4.93" cy="4.93" r="1" />
-                  <circle cx="19.07" cy="4.93" r="1" /><circle cx="4.93" cy="19.07" r="1" /><circle cx="19.07" cy="19.07" r="1" />
-                  <line x1="8.7" y1="8.7" x2="6.34" y2="6.34" /><line x1="15.3" y1="8.7" x2="17.66" y2="6.34" />
-                  <line x1="8.7" y1="15.3" x2="6.34" y2="17.66" /><line x1="15.3" y1="15.3" x2="17.66" y2="17.66" />
-                </svg>
-              </div>
-              <p className="text-xs font-medium" style={{ color: 'rgba(148,163,184,0.6)' }}>The sphere is dark</p>
-              <p className="text-[10px] mt-1.5 leading-relaxed max-w-xs mx-auto" style={{ color: 'rgba(148,163,184,0.35)' }}>
-                Every entity, concept, and connection GIA discovers appears as a node. Spin the sphere to explore. It grows as you do.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {selected && (
-          <div
-            className="absolute bottom-0 left-0 right-0 px-5 pt-8 pb-5"
-            style={{
-              background: 'linear-gradient(to top, rgba(0,0,0,0.93) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)',
-              pointerEvents: 'auto',
-            }}
-          >
-            <div className="max-w-md mx-auto">
-              <div className="flex items-center gap-3 mb-2.5">
-                <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: `${COLORS[selected.type] || '#94a3b8'}18`, border: `1px solid ${COLORS[selected.type] || '#94a3b8'}25` }}>
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[selected.type] || '#94a3b8' }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{selected.name}</p>
-                  <p className="text-[9px]" style={{ color: `${COLORS[selected.type] || '#94a3b8'}` }}>
-                    {selected.type} · {selected.mentionCount}m · {(selected.confidence * 100).toFixed(0)}%
-                  </p>
-                </div>
-              </div>
-              {selected.description && (
-                <p className="text-[10.5px] mb-3 leading-relaxed" style={{ color: 'rgba(148,163,184,0.65)' }}>{selected.description}</p>
-              )}
-              {connected.entities.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {connected.entities.slice(0, 8).map(e => {
-                    const rel = connected.relationships.find(r => r.sourceId === e.id || r.targetId === e.id);
-                    return (
-                      <div key={e.id} className="flex items-center gap-1.5 px-2 py-1 rounded text-[9px]" style={{ background: `${COLORS[e.type] || '#94a3b8'}0d`, border: `1px solid ${COLORS[e.type] || '#94a3b8'}15` }}>
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: COLORS[e.type] || '#94a3b8' }} />
-                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>{e.name}</span>
-                        {rel && <span className="text-[7px]" style={{ color: `${EDGE_COLORS[rel.type] || '#94a3b8'}` }}>{rel.type.replace(/_/g, ' ')}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

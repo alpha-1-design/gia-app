@@ -7,6 +7,7 @@ export interface ToolResult {
 
 export interface ToolContext {
   onProgress?: (progress: number, label: string) => void;
+  onThought?: (thought: string) => void;
   signal?: AbortSignal;
 }
 

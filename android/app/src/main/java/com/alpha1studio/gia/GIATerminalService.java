@@ -210,7 +210,7 @@ public class GIATerminalService extends Service {
     // -------------------------------------------------------------------------
     // Asset extraction (proot binary + Alpine minirootfs)
     // -------------------------------------------------------------------------
-    private void extractAssets() throws IOException {
+    void extractAssets() throws IOException {
         File terminalDir = getTerminalDir();
         if (!terminalDir.exists()) {
             terminalDir.mkdirs();
@@ -225,7 +225,8 @@ public class GIATerminalService extends Service {
                  FileOutputStream out = new FileOutputStream(prootFile)) {
                 copyStream(in, out);
             }
-            prootFile.setExecutable(true);
+            prootFile.setExecutable(true, false);
+            prootFile.setWritable(false);
             Log.i(TAG, "Extracted proot binary to " + prootFile.getAbsolutePath());
         }
 
@@ -273,6 +274,25 @@ public class GIATerminalService extends Service {
     // -------------------------------------------------------------------------
 
     /**
+     * Resolve the proot binary path, trying native library directory first
+     * (avoids Android 10+ W^X policy on app-private directories), then falling
+     * back to asset extraction.
+     */
+    private static String resolveProotPath(Context context) {
+        // Native library directory is always executable on all Android versions
+        String nativeLibPath = context.getApplicationInfo().nativeLibraryDir
+                + File.separator + "libproot.so";
+        File nativeProot = new File(nativeLibPath);
+        if (nativeProot.exists() && nativeProot.canRead()) {
+            Log.i(TAG, "Using proot from native lib dir: " + nativeLibPath);
+            return nativeLibPath;
+        }
+
+        // Fall back: extracted from assets to app-private files/terminal/
+        return new File(new File(context.getFilesDir(), TERMINAL_DIR), PROOT_BINARY).getAbsolutePath();
+    }
+
+    /**
      * Start a new terminal session running the given command inside proot+Alpine.
      *
      * @param sessionId Unique session identifier
@@ -287,8 +307,11 @@ public class GIATerminalService extends Service {
             service = (GIATerminalService) context;
         }
 
+        String prootPath = resolveProotPath(context);
+        String rootfsPath = new File(new File(context.getFilesDir(), TERMINAL_DIR), ROOTFS_DIR).getAbsolutePath();
+
         // Build proot command: run Alpine's /bin/sh -c "<command>"
-        String prootCmd = buildProotCommand(context, command);
+        String prootCmd = buildProotCommand(prootPath, rootfsPath, command);
 
         // Setup I/O pipes — PipedOutputStream connects TO PipedInputStream
         PipedInputStream stdinIn = new PipedInputStream();
@@ -307,19 +330,45 @@ public class GIATerminalService extends Service {
             process = pb.start();
         } catch (IOException e) {
             String msg = e.getMessage();
-            // Android 10+ (API 29+) blocks execution of binaries in app-private
-            // directories due to W^X SELinux policy. The proot binary extracted to
-            // getFilesDir() cannot be executed directly via execve().
-            // Fix: compile proot as a shared library (libproot.so) and load via
-            // System.loadLibrary(), then use GIAProotNative JNI bridge instead.
             if (msg != null && (msg.contains("error=13") || msg.contains("Permission denied") || msg.contains("EACCES"))) {
-                throw new IOException(
-                    "Cannot execute proot: Android W^X policy blocks binaries in app data directory. " +
-                    "See FAT-01 fix: compile proot as libproot.so and use GIAProotNative JNI bridge.",
-                    e
-                );
+                // If native lib path failed, that's unexpected (it should always be executable)
+                boolean fromNativeLib = prootPath.contains("libproot.so");
+                if (fromNativeLib) {
+                    // Fall back to asset extraction
+                    Log.w(TAG, "Native lib path blocked by W^X, falling back to asset extraction");
+                    File terminalDir = new File(context.getFilesDir(), TERMINAL_DIR);
+                    File terminalProot = new File(terminalDir, PROOT_BINARY);
+                    String fallbackRootfs = new File(terminalDir, ROOTFS_DIR).getAbsolutePath();
+                    if (!terminalProot.exists()) {
+                        throw new IOException(
+                            "Cannot execute proot from native lib dir (W^X) and asset extraction " +
+                            "not yet complete. Try again in a few seconds.",
+                            e
+                        );
+                    }
+                    prootCmd = buildProotCommand(terminalProot.getAbsolutePath(), fallbackRootfs, command);
+                    pb.command("sh", "-c", prootCmd);
+                    try {
+                        process = pb.start();
+                        Log.i(TAG, "Asset extraction fallback succeeded");
+                    } catch (IOException e2) {
+                        throw new IOException(
+                            "Cannot execute proot from any location. " +
+                            "Android W^X policy blocks binaries in app data directory. " +
+                            "Fix: compile proot as libproot.so and use GIAProotNative JNI bridge.",
+                            e2
+                        );
+                    }
+                } else {
+                    throw new IOException(
+                        "Cannot execute proot: Android W^X policy blocks binaries in app data directory. " +
+                        "Fix: compile proot as libproot.so and use GIAProotNative JNI bridge.",
+                        e
+                    );
+                }
+            } else {
+                throw e;
             }
-            throw e;
         }
 
         // Wire stdin to process
@@ -406,11 +455,7 @@ public class GIATerminalService extends Service {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private static String buildProotCommand(Context context, String command) {
-        File terminalDir = new File(context.getFilesDir(), TERMINAL_DIR);
-        String prootPath = new File(terminalDir, PROOT_BINARY).getAbsolutePath();
-        String rootfsPath = new File(terminalDir, ROOTFS_DIR).getAbsolutePath();
-
+    private static String buildProotCommand(String prootPath, String rootfsPath, String command) {
         return prootPath
                 + " -r " + rootfsPath
                 + " -b /proc"

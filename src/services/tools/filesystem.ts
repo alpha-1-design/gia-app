@@ -141,6 +141,7 @@ const zipProject: Tool = {
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
 
+      ctx?.onThought?.('📦 Creating archive...');
       ctx?.onProgress?.(0.05, 'Adding files...');
       if (files && Array.isArray(files)) {
         files.forEach((f: { path: string; content: string | Record<string, unknown> }) => {
@@ -156,6 +157,7 @@ const zipProject: Tool = {
           if (pathErr) continue;
           try {
             ctx?.onProgress?.(0.1, `Reading ${p}...`);
+            ctx?.onThought?.(`  Reading ${p}...`);
             const res = await Filesystem.readFile({ path: p, directory: Directory.Documents, encoding: Encoding.UTF8 });
             zip.file(p, res.data as string);
           } catch (e) { logger.error('[filesystem] Skipping unreadable file:', e); }
@@ -164,10 +166,12 @@ const zipProject: Tool = {
 
       useGiaStore.getState().addNotification(`📦 Packaging ${filename}...`);
       ctx?.onProgress?.(0.3, 'Compressing...');
+      ctx?.onThought?.('Compressing...');
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }, (meta) => {
         ctx?.onProgress?.(0.3 + meta.percent / 100 * 0.6, `Compressing... ${Math.round(meta.percent)}%`);
       });
       ctx?.onProgress?.(0.95, 'Finalizing...');
+      ctx?.onThought?.('✅ Archive ready');
       useGiaStore.getState().addNotification(`✅ ${filename} ready`);
 
       if (isNative()) {

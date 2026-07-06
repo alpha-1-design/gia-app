@@ -22,5 +22,6 @@
     "downlevelIteration": true,
     "types": []
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/test"]
 }

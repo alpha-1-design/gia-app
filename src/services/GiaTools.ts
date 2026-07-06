@@ -41,6 +41,7 @@ import { securityTools } from './tools/security';
 import { createPdfTool } from './tools/createPdf';
 import { mediaAccessTools } from './tools/mediaAccess';
 import { smartHomeTools } from './tools/smartHome';
+import { neuraTools } from './tools/neura';
 
 export type { ToolResult };
 export type { Tool };
@@ -96,6 +97,7 @@ class GiaTools {
       createPdfTool,
       ...mediaAccessTools,
       ...smartHomeTools,
+      ...neuraTools,
     ];
     for (const tool of allTools) {
       this.tools.set(tool.id, tool);

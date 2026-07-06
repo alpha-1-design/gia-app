@@ -23,7 +23,7 @@ class MockIDBDatabase {
 
 class MockIDBFactory {
   open = vi.fn(() => {
-    const request: any = {
+    const request: Record<string, unknown> = {
       onupgradeneeded: null,
       onsuccess: null,
       onerror: null,

@@ -1,6 +1,7 @@
 import { useProviderStore } from '../store/useProviderStore';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useKnowledgeGraphStore } from '../store/useKnowledgeGraphStore';
 import { useGiaIdentity } from '../store/useGiaIdentity';
 import { useSearchStore } from '../store/useSearchStore';
 import { isNativePlatform } from '../utils/helpers';
@@ -22,6 +23,7 @@ const connectedConnectors = connectorManager.getAll().filter(c => c.status === '
   const memStore = useMemoryStore.getState();
   const memory = memStore.getRelevantContext(query);
   const memoryCount = memStore.memories.length;
+  const neuraCtx = useKnowledgeGraphStore.getState().getGraphContext(query || '');
   const pinnedMems = pinnedMemories.length > 0
     ? memStore.memories.filter(m => pinnedMemories.includes(m.id))
     : [];
@@ -75,6 +77,8 @@ You're ${userName}'s co-work agent. Talk like it.`}
 ${pinnedMems.length > 0 ? `## What I know about ${userName} right now\n${pinnedMems.map(m => `- ${m.key}: ${m.value}`).join('\n')}` : ''}
 
 ${memory}
+
+${neuraCtx ? `\n## What Neura knows\nNeura is GIA's living knowledge graph — every entity, concept, and connection discovered during conversations lives here. You can query it anytime with the neura_query tool.\n${neuraCtx}` : ''}
 
 ${userContext || ''}
 
