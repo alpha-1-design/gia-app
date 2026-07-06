@@ -112,7 +112,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setConnected({ entities: [], relationships: [] });
   }, [entities]);
 
-  function getRelations(id: string) {
+  const getRelations = useCallback((id: string) => {
     const rels = relationships.filter(r => r.sourceId === id || r.targetId === id);
     const ids = new Set<string>();
     for (const r of rels) {
@@ -120,7 +120,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       if (r.targetId !== id) ids.add(r.targetId);
     }
     return { entities: entities.filter(e => ids.has(e.id)), relationships: rels };
-  }
+  }, [entities, relationships]);
 
   function project(): Projected[] {
     const r = rot.current;
@@ -309,6 +309,8 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   useEffect(() => {
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
+    // tick uses refs intentionally — no external deps needed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entities, relationships, selected, query]);
 
   const hWheel = useCallback((e: React.WheelEvent) => {
@@ -404,7 +406,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setSelected(null);
       setConnected({ entities: [], relationships: [] });
     }
-  }, [selected]);
+  }, [selected, getRelations]);
 
   const hasData = entities.length > 0;
 

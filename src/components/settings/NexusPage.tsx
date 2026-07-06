@@ -4,7 +4,7 @@ import {
   Search, TrendingUp, AlertTriangle, Lightbulb, GitMerge,
   Compass, Zap, Code2, Navigation2, ShieldCheck, Thermometer,
   Sun, Heart, BookOpen, Handshake, Brain, GraduationCap, Eye,
-  CircleDot, Share2, Plus, X, Check, Sliders,
+  CircleDot, Share2, Plus, X, Check,
 } from 'lucide-react';
 import { SubPageHeader } from './SubPageHeader';
 
