@@ -301,6 +301,7 @@ Rendered from ` ```visual ` code blocks (GIA generates these automatically):
 | **Maps** | `map` | Interactive Leaflet/OpenStreetMap |
 | **Audio Waveforms** | `waveform` | Audio visualization |
 | **3D Objects** | `graph` | Network graphs, force-directed layouts, 3D visualizations |
+| **3D Scenes** ⚗️ | `scene` | **Experimental** — AI-generated 3D scenes via Three.js (objects, lighting, materials, animation). Ask GIA to "generate a 3D scene" or "render a 3D [object/environment]" |
 
 ### Markdown Rendering
 

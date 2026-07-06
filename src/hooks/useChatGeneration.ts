@@ -61,6 +61,7 @@ export function useChatGeneration() {
   const responseTimesRef = useRef<Record<string, number>>({});
   const lastUserMsgRef = useRef('');
   const generationKeyRef = useRef<string | null>(null);
+  const streamTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const { registerGenerationController, unregisterGenerationController, abortGeneration } = useGiaStore(useShallow(s => ({
     registerGenerationController: s.registerGenerationController,
@@ -253,7 +254,15 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           if (ctrl.signal.aborted) return;
           const newDisplay = sharedProcessStreamChunk(chunk, parserState);
           if (newDisplay) displayAccumulated += newDisplay;
-          state.updateMessage(sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined);
+          // Schedule store update async to let React render per-token instead of batching all tokens from one onprogress event
+          const _c = displayAccumulated;
+          const _t = parserState.thoughtsAccumulated || undefined;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(sessionId, asstId, _c, _t);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -262,12 +271,23 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-          state.updateMessage(sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated);
+          const _c = displayAccumulated;
+          const _t = parserState.thoughtsAccumulated;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(sessionId, asstId, _c, _t);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
         }
       });
 
       if (ctrl.signal.aborted) return;
+
+      // Flush any pending per-token timeouts so the final update isn't stale
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
 
       // Flush partial blocks before finalising
       flushThinkBlock(parserState);
@@ -338,6 +358,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
       notifyIfBackground('chat', sessionId, asstId);
     } catch (err: unknown) {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
         state.updateMessage(sessionId, asstId, msg);
@@ -350,6 +372,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
@@ -418,7 +442,14 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           if (ctrl.signal.aborted) return;
           const newDisplay = sharedProcessStreamChunk(chunk, contParserState);
           if (newDisplay) contDisplayAccumulated += newDisplay;
-          state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated || undefined);
+          const _c = contDisplayAccumulated;
+          const _t = contParserState.thoughtsAccumulated || undefined;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(state.activeSessionId!, asstId, _c, _t);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -427,10 +458,19 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           contParserState.thoughtsAccumulated += (contParserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
-          state.updateMessage(state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated);
+          const _c = contDisplayAccumulated;
+          const _t = contParserState.thoughtsAccumulated;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(state.activeSessionId!, asstId, _c, _t);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
         },
       });
       if (!ctrl.signal.aborted) {
+        for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+        streamTimeoutsRef.current.clear();
         flushThinkBlock(contParserState);
         flushToolBlock(contParserState);
         let contContent = processStreamForDisplay(contParserState.accumulated) || contDisplayAccumulated;
@@ -449,6 +489,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         notifyIfBackground('chat', state.activeSessionId!, asstId);
       }
     } catch (err: unknown) {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
         state.updateMessage(state.activeSessionId!, asstId, msg);
@@ -461,6 +503,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (generationKeyRef.current) {
         unregisterGenerationController(generationKeyRef.current);
         generationKeyRef.current = null;
@@ -526,7 +570,14 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           if (ctrl.signal.aborted) return;
           const newDisplay = sharedProcessStreamChunk(chunk, clarParserState);
           if (newDisplay) clarDisplayAccumulated += newDisplay;
-          state.updateMessage(sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated || undefined);
+          const _c = clarDisplayAccumulated;
+          const _t = clarParserState.thoughtsAccumulated || undefined;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(sessionId, asstId, _c, _t);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -535,12 +586,21 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           clarParserState.thoughtsAccumulated += (clarParserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
-          state.updateMessage(sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated);
+          const _c = clarDisplayAccumulated;
+          const _t = clarParserState.thoughtsAccumulated;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(sessionId, asstId, _c, _t);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           useGiaStore.setState({ showConsole: true });
         }
       });
       if (!ctrl.signal.aborted) {
+        for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+        streamTimeoutsRef.current.clear();
         flushThinkBlock(clarParserState);
         flushToolBlock(clarParserState);
         let clarContent = processStreamForDisplay(clarParserState.accumulated) || clarDisplayAccumulated;
@@ -550,6 +610,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         notifyIfBackground('chat', sessionId, asstId);
       }
     } catch (err: unknown) {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
         state.updateMessage(sessionId, asstId, msg);
@@ -562,6 +624,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (generationKeyRef.current) {
         unregisterGenerationController(generationKeyRef.current);
         generationKeyRef.current = null;
@@ -627,10 +691,18 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           if (ctrl.signal.aborted) return;
           const newDisplay = sharedProcessStreamChunk(chunk, retryParserState);
           if (newDisplay) retryDisplayAccumulated += newDisplay;
-          state.updateMessage(state.activeSessionId!, id, retryDisplayAccumulated);
+          const _c = retryDisplayAccumulated;
+          const _timer = setTimeout(() => {
+            streamTimeoutsRef.current.delete(_timer);
+            if (ctrl.signal.aborted) return;
+            state.updateMessage(state.activeSessionId!, id, _c);
+          }, 0);
+          streamTimeoutsRef.current.add(_timer);
         },
       });
       if (!ctrl.signal.aborted) {
+        for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+        streamTimeoutsRef.current.clear();
         state.updateMessage(state.activeSessionId!, id, retryDisplayAccumulated || processStreamForDisplay(retryParserState.accumulated));
         if (genRes.model || genRes.tokenUsage) {
           useGiaStore.setState({
@@ -648,6 +720,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         notifyIfBackground('chat', state.activeSessionId!, id);
       }
     } catch (e: unknown) {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (!ctrl.signal.aborted) {
         useGiaStore.setState({
           sessions: useGiaStore.getState().sessions.map(s =>
@@ -658,6 +732,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
+      for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
+      streamTimeoutsRef.current.clear();
       if (generationKeyRef.current) {
         unregisterGenerationController(generationKeyRef.current);
         generationKeyRef.current = null;

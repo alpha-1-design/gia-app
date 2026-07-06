@@ -42,6 +42,8 @@ import giaForegroundService from './services/GIAForegroundService';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
+import { updateService } from './services/UpdateService';
+import type { UpdateInfo } from './services/UpdateService';
 import './styles/globals.css';
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
@@ -140,6 +142,8 @@ const App: React.FC = () => {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moduleOpen, setModuleOpen] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  const [updateNotification, setUpdateNotification] = useState<UpdateInfo | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const moduleRef = useRef<HTMLDivElement>(null);
   const offsetSyncRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -371,6 +375,16 @@ const App: React.FC = () => {
 
     const t1 = setTimeout(() => useMemoryStore.getState().compactMemories(), 1000);
     const t2 = setTimeout(() => useGiaStore.getState().hibernateSessions(), 2000);
+
+    // Check for app updates on startup (only if not dismissed)
+    if (!updateDismissed) {
+      setTimeout(async () => {
+        try {
+          const info = await updateService.checkForUpdate();
+          if (info) setUpdateNotification(info);
+        } catch { /* ignore */ }
+      }, 4000);
+    }
 
     // Persistent notification — shows in Android notification tray while GIA is running
     const LONGRUNNING_NOTIF_ID = 9999;
@@ -839,6 +853,59 @@ const App: React.FC = () => {
                   className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300"
                 >
                   <X size={12} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Update notification slide-up */}
+      <AnimatePresence>
+        {updateNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: 60, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.95 }}
+            transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed bottom-24 left-4 right-4 z-50 max-w-md mx-auto"
+          >
+            <div
+              className="flex items-start gap-3 px-4 py-4 rounded-2xl shadow-2xl"
+              style={{
+                background: 'rgba(15, 15, 22, 0.98)',
+                border: '1px solid rgba(52,211,153,0.3)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(52,211,153,0.1), inset 0 1px 0 rgba(52,211,153,0.08)',
+              }}
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, rgba(52,211,153,0.2), rgba(16,185,129,0.1))', border: '1px solid rgba(52,211,153,0.25)' }}>
+                <Download size={20} style={{ color: '#34d399' }} />
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <p className="text-sm font-semibold" style={{ color: '#e5e7eb' }}>Update Available</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--gia-muted)' }}>
+                  v{updateNotification.version} · {updateNotification.size ? (updateNotification.size / (1024*1024)).toFixed(1) + ' MB' : 'Download'}
+                </p>
+                <p className="text-[10px] mt-2" style={{ color: 'var(--gia-muted-2)' }}>
+                  {updateNotification.releaseName}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => { setModule('settings'); setUpdateNotification(null); }}
+                  className="px-3.5 py-1.5 rounded-xl text-[10px] font-semibold whitespace-nowrap transition-all"
+                  style={{ background: 'linear-gradient(135deg, rgba(52,211,153,0.2), rgba(16,185,129,0.1))', color: '#34d399', border: '1px solid rgba(52,211,153,0.2)' }}
+                >
+                  Update
+                </button>
+                <button
+                  onClick={() => { setUpdateNotification(null); setUpdateDismissed(true); }}
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-600 hover:text-zinc-400 transition-all"
+                  style={{ background: 'rgba(255,255,255,0.03)' }}
+                >
+                  <X size={14} />
                 </button>
               </div>
             </div>

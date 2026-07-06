@@ -535,6 +535,7 @@ GIA can render interactive data visualizations inside chat messages. These are g
 - **Document Outlines** — Tree/table-of-contents views
 - **Maps** — Interactive Leaflet/OpenStreetMap with markers and routes
 - **Audio Waveforms** — Audio visualization
+- **3D Scenes** ⚗️ — *Experimental.* AI-generated 3D environments and objects via Three.js (lighting, materials, animation, camera controls). Tell GIA to "generate a 3D scene" or "render a 3D [object/environment]"
 
 GIA will use these automatically when presenting structured data.
 

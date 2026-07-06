@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Terminal, User, Save, ChevronRight,
   Zap, Smartphone, Sun, Moon,
-  UserCircle, PlugZap, Battery, Cpu, Puzzle, Info,
-  Network, Bot,
+  UserCircle, PlugZap, Battery, Cpu,   Puzzle, Info,
+  Network, Bot, Activity, Download, CheckCircle, XCircle,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { isNativePlatform } from '../utils/helpers';
+import { updateService, formatSize } from '../services/UpdateService';
+import type { UpdateInfo, DownloadProgress } from '../services/UpdateService';
 import MCPSettings from '../components/MCPSettings';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ProfileIdentityPage } from '../components/settings/ProfileIdentityPage';
@@ -32,6 +35,7 @@ const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc
   { id: 'system', icon: <Battery size={20} />, label: 'System & Performance', desc: 'Security, code execution, voice, power & reliability', sections: '7 sections', color: '#34d399' },
   { id: 'local-ai', icon: <Cpu size={20} />, label: 'Local AI', desc: 'On-device LLM models & vision recognition', sections: '2 sections', color: '#22c55e' },
   { id: 'app-extensions', icon: <Puzzle size={20} />, label: 'App & Extensions', desc: 'Plugins, install APK, code history & developer settings', sections: '5 sections', color: '#a855f7' },
+  { id: 'dashboard', icon: <Activity size={20} />, label: 'Dashboard', desc: 'Performance analytics, tool usage, error tracking & insights', sections: '6 sections', color: '#3b82f6' },
   { id: 'about', icon: <Info size={20} />, label: 'About', desc: 'Analytics, version info & danger zone', sections: '3 sections', color: '#94a3b8' },
 ];
 
@@ -53,6 +57,42 @@ const SettingsModule: React.FC = () => {
   const [confirmChats, setConfirmChats] = useState(false);
   const dangerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current); }; }, []);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateState, setUpdateState] = useState<'idle' | 'downloading' | 'ready' | 'error'>('idle');
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [updateError, setUpdateError] = useState('');
+
+  useEffect(() => {
+    if (settingsPage !== 'main') return;
+    updateService.checkForUpdate().then(info => {
+      if (info) setUpdateInfo(info);
+    });
+  }, [settingsPage]);
+
+  const handleDownload = async () => {
+    if (!updateInfo) return;
+    setUpdateState('downloading');
+    setDownloadProgress(0);
+    try {
+      await updateService.downloadUpdate(updateInfo.downloadUrl, (p: DownloadProgress) => {
+        setDownloadProgress(p.percent);
+      });
+      setUpdateState('ready');
+    } catch (e) {
+      setUpdateState('error');
+      setUpdateError((e as Error).message);
+    }
+  };
+
+  const handleInstall = async () => {
+    try {
+      await updateService.installUpdate();
+    } catch (e) {
+      setUpdateState('error');
+      setUpdateError((e as Error).message);
+    }
+  };
 
   const saveProfile = () => {
     setUserProfile({ name: name.trim(), bio: bio.trim(), goals: goals.trim() });
@@ -120,6 +160,64 @@ const SettingsModule: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Update Banner */}
+      {updateInfo && (
+        <div className="gia-card p-4" style={{ borderColor: 'rgba(52,211,153,0.3)' }}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)' }}>
+              {updateState === 'ready' ? <CheckCircle size={18} style={{ color: '#34d399' }} /> :
+               updateState === 'error' ? <XCircle size={18} style={{ color: '#f87171' }} /> :
+               <Download size={18} style={{ color: '#34d399' }} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>
+                {updateState === 'ready' ? 'Download Complete' :
+                 updateState === 'error' ? 'Download Failed' :
+                 `Update Available: v${updateInfo.version}`}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+                {updateState === 'ready' ? (
+                  <>Tap Install to upgrade now · {formatSize(updateInfo.size)}</>
+                ) :
+                 updateState === 'error' ? updateError :
+                 `Current: v${updateInfo.currentVersion} · ${updateInfo.releaseName} · ${formatSize(updateInfo.size)}`}
+              </p>
+            </div>
+            {updateState === 'downloading' ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'linear-gradient(90deg, rgba(52,211,153,0.1), rgba(16,185,129,0.2))', border: '1px solid rgba(52,211,153,0.2)' }}>
+                  <motion.div 
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${downloadProgress}%`, background: 'linear-gradient(90deg, #34d399, #10b981)' }}
+                    animate={{ background: ['linear-gradient(90deg, #34d399, #10b981)', 'linear-gradient(90deg, #10b981, #34d399)'] }}
+                    transition={{ duration: 1.5, repeat: Infinity, repeatType: 'loop', ease: 'linear' }}
+                  />
+                </div>
+                <span className="text-[10px] font-medium shrink-0" style={{ color: '#34d399' }}>{downloadProgress}%</span>
+              </div>
+            ) : updateState === 'ready' ? (
+              <button onClick={handleInstall}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-semibold whitespace-nowrap"
+                style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>
+                Install
+              </button>
+            ) : updateState === 'error' ? (
+              <button onClick={handleDownload}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-semibold whitespace-nowrap"
+                style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171' }}>
+                Retry
+              </button>
+            ) : (
+              <button onClick={handleDownload}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-semibold whitespace-nowrap"
+                style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>
+                Download
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Setup Guide (Android) */}
       {isNativePlatform() && (
