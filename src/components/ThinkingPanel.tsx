@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Brain, Search, Code, Globe, FileText, MapPin, ImageIcon, ChevronDown, ChevronRight, Loader } from 'lucide-react';
+import { useGiaStore } from '../store/useGiaStore';
+import GiaIcon from './GiaIcon';
 
 interface ThinkingPanelProps {
   thoughts: string;
@@ -23,6 +25,7 @@ const thoughtIcon = (t: string) => {
 export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
   thoughts, isLive, isExpanded, onToggle
 }) => {
+  const extThinking = useGiaStore(s => s.extThinking);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,20 +55,23 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
         <Brain size={12} />
         <span className="text-[11px] font-medium flex-1">
           {isLive ? (
-            <span className="flex items-center gap-1.5">
-              Thinking
-              <span className="flex gap-0.5">
-                {[0,1,2].map(i => (
-                  <span key={i} className="thinking-dot"
-                    style={{
-                      animationDelay: `${i * 0.16}s`,
-                      background: isLive ? '#a855f7' : '#f59e0b',
-                      width: 4, height: 4, borderRadius: '50%', display: 'inline-block',
-                      animation: 'thinking-pulse 1.2s ease-in-out infinite',
-                    }} />
-                ))}
+              <span className="flex items-center gap-1.5">
+                Thinking
+                {extThinking
+                  ? <GiaIcon size={12} animate color={isLive ? '#a855f7' : '#f59e0b'} speed={1.3} />
+                  : <span className="flex gap-0.5">
+                      {[0,1,2].map(i => (
+                        <span key={i} className="thinking-dot"
+                          style={{
+                            animationDelay: `${i * 0.16}s`,
+                            background: isLive ? '#a855f7' : '#f59e0b',
+                            width: 4, height: 4, borderRadius: '50%', display: 'inline-block',
+                            animation: 'thinking-pulse 1.2s ease-in-out infinite',
+                          }} />
+                      ))}
+                    </span>
+                }
               </span>
-            </span>
           ) : (
             `${isExpanded ? 'Hide' : 'Show'} reasoning  (${thoughts.split(' ').length} words)`
           )}
@@ -91,7 +97,10 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
               </div>
             );
           })}
-          {isLive && <span className="animate-pulse ml-0.5 text-[11px]" style={{ color: '#a855f7' }}>▋</span>}
+          {isLive && (extThinking
+            ? <GiaIcon size={11} animate color="#a855f7" className="ml-0.5" speed={1.4} />
+            : <span className="animate-pulse ml-0.5 text-[11px]" style={{ color: '#a855f7' }}>▋</span>
+          )}
         </div>
       )}
     </div>

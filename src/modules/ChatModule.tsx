@@ -22,6 +22,7 @@ import FileBrowser from '../components/FileBrowser';
 import FileManager from '../components/FileManager';
 import InlineToolExecution from '../components/InlineToolExecution';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
+import { EngineSheet } from '../components/chat/EngineSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
 
@@ -64,6 +65,8 @@ const ChatModule: React.FC = () => {
     showBranchView, setShowBranchView,
     clarification, setClarification,
   } = useChatState();
+
+  const [showEngine, setShowEngine] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
 
@@ -284,6 +287,7 @@ const ChatModule: React.FC = () => {
           onFork={handleFork}
           onRetry={handleRetry}
           onEditResend={handleEditResend}
+          onTapThought={loading && extThinking ? () => setShowEngine(true) : undefined}
         />
 
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
@@ -299,6 +303,7 @@ const ChatModule: React.FC = () => {
             onDismiss={() => setClarification(null)}
           />
         )}
+        <EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />
         </div>
         {isDragging && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(168,85,247,0.08)' }}>

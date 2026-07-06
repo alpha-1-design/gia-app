@@ -5,6 +5,7 @@ import { useSearchActivity } from '../../store/useSearchActivity';
 import { ProtocolProposal } from '../../types/protocol';
 import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchemas';
 import { delegateTask } from './subAgent';
+import { SubAgentManager } from './SubAgentManager';
 import { extractToolCalls, ToolCall } from '../../utils/jsonRepair';
 import AnalyticsService from '../AnalyticsService';
 import AnalyticsTracker from '../AnalyticsTracker';
@@ -64,17 +65,28 @@ const PARALLEL_SAFE_TOOLS = new Set([
 function getIndependentGroups(toolCalls: ToolCall[]): ToolCall[][] {
   const groups: ToolCall[][] = [];
   let currentGroup: ToolCall[] = [];
+  let subAgentGroup: ToolCall[] = [];
 
   for (const call of toolCalls) {
-    if (call.id === 'sub_agent_call' || call.id === 'request_clarification') {
+    if (call.id === 'sub_agent_call') {
+      subAgentGroup.push(call);
+    } else if (call.id === 'request_clarification') {
       if (currentGroup.length > 0) {
         groups.push(currentGroup);
         currentGroup = [];
       }
       groups.push([call]);
     } else if (PARALLEL_SAFE_TOOLS.has(call.id)) {
+      if (subAgentGroup.length > 0) {
+        groups.push(subAgentGroup);
+        subAgentGroup = [];
+      }
       currentGroup.push(call);
     } else {
+      if (subAgentGroup.length > 0) {
+        groups.push(subAgentGroup);
+        subAgentGroup = [];
+      }
       if (currentGroup.length > 0) {
         groups.push(currentGroup);
         currentGroup = [];
@@ -82,6 +94,7 @@ function getIndependentGroups(toolCalls: ToolCall[]): ToolCall[][] {
       groups.push([call]);
     }
   }
+  if (subAgentGroup.length > 0) groups.push(subAgentGroup);
   if (currentGroup.length > 0) groups.push(currentGroup);
   return groups;
 }
@@ -279,6 +292,8 @@ export async function executeToolBlocks(
   const toolCalls = extractToolCalls(text);
   if (!toolCalls.length) return { didExecute: false };
 
+  const isGodMode = useGiaStore.getState().extThinking;
+
   // Track claimed tools
   for (const tc of toolCalls) {
     AnalyticsTracker.trackToolClaimed(tc.id);
@@ -289,6 +304,23 @@ export async function executeToolBlocks(
 
   for (const group of groups) {
     if (signal?.aborted) break;
+
+    // Sub-agent batch — run all in parallel via SubAgentManager
+    if (group.length > 0 && group[0].id === 'sub_agent_call') {
+      const manager = new SubAgentManager(isGodMode ? 8 : 5, isGodMode);
+      const tasks = group.map((call) => ({
+        provider: (call.args.provider as string) || 'openai',
+        prompt: (call.args.prompt as string) || '',
+      }));
+      onThought?.(`Spawning ${group.length} sub-agents in parallel${isGodMode ? ' [GOD MODE]' : ''}...`);
+      await manager.runAll(tasks, signal);
+      const results = manager.synthesize();
+      allObservations.push(`SUB-AGENT RESULTS:\n${results}`);
+      state.history.push({ role: 'assistant', content: text });
+      state.history.push({ role: 'user', content: allObservations.join('\n') });
+      state.currentPrompt = `Sub-agents completed. Use their findings to respond.`;
+      return { didExecute: true };
+    }
 
     if (group.length === 1) {
       const call = group[0];

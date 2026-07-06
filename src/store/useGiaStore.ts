@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 
-export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy' | 'agents' | 'dashboard';
+export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy' | 'agents';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 

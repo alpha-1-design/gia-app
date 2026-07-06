@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
+import { useGiaStore } from '../store/useGiaStore';
+import GiaIcon from './GiaIcon';
 export type ThinkingPhase =
   | 'gathering'
   | 'analyzing'
@@ -64,10 +66,11 @@ function ThinkingDot({ delay, color }: { delay: number; color: string }) {
   );
 }
 
-export function ThinkingStatus({ phase, toolName }: { phase?: ThinkingPhase; toolName?: string | null }) {
+export function ThinkingStatus({ phase, toolName, onTap }: { phase?: ThinkingPhase; toolName?: string | null; onTap?: () => void }) {
   const [currentPhase, setCurrentPhase] = useState(0);
   const [visible, setVisible] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const extThinking = useGiaStore(s => s.extThinking);
   const phases: ThinkingPhase[] = [
     'gathering', 'reasoning', 'analyzing', 'planning', 'processing',
   ];
@@ -83,25 +86,41 @@ export function ThinkingStatus({ phase, toolName }: { phase?: ThinkingPhase; too
     };
   }, [phases.length]);
 
+  const sharedStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '6px 14px',
+    borderRadius: 20,
+    cursor: extThinking && onTap ? 'pointer' : 'default',
+    transition: 'all 0.25s ease',
+  };
+
+  const renderIcon = (color: string) => {
+    if (extThinking) {
+      return <GiaIcon size={16} animate color={color} />;
+    }
+    return (
+      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+        <ThinkingDot delay={0} color={color} />
+        <ThinkingDot delay={0.2} color={color} />
+        <ThinkingDot delay={0.4} color={color} />
+      </div>
+    );
+  };
+
   if (toolName && TOOL_LABELS[toolName]) {
     const tl = TOOL_LABELS[toolName];
     return (
       <div
+        onClick={onTap}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '6px 14px',
-          borderRadius: 20,
+          ...sharedStyle,
           background: `${tl.color}22`,
           border: `1px solid ${tl.color}44`,
         }}
       >
-        <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-          <ThinkingDot delay={0} color={tl.color} />
-          <ThinkingDot delay={0.2} color={tl.color} />
-          <ThinkingDot delay={0.4} color={tl.color} />
-        </div>
+        {renderIcon(tl.color)}
         <span className="text-xs font-medium tracking-wide" style={{ color: tl.color }}>
           {tl.label}
         </span>
@@ -128,23 +147,15 @@ export function ThinkingStatus({ phase, toolName }: { phase?: ThinkingPhase; too
 
   return (
     <div
+      onClick={onTap}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '6px 14px',
-        borderRadius: 20,
+        ...sharedStyle,
         background: `${def.glowColor}`,
         border: `1px solid ${def.color}33`,
         opacity: visible ? 1 : 0,
-        transition: 'opacity 0.3s ease',
       }}
     >
-      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-        <ThinkingDot delay={0} color={def.color} />
-        <ThinkingDot delay={0.2} color={def.color} />
-        <ThinkingDot delay={0.4} color={def.color} />
-      </div>
+      {renderIcon(def.color)}
       <span
         className="text-xs font-medium tracking-wide"
         style={{
@@ -168,6 +179,7 @@ export function ThinkingOverlay({
   toolName?: string | null;
   onStop?: () => void;
 }) {
+  const extThinking = useGiaStore(s => s.extThinking);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const cycle: ThinkingPhase[] = [
     'gathering', 'analyzing', 'reasoning', 'searching', 'coding', 'planning', 'writing',
@@ -198,10 +210,16 @@ export function ThinkingOverlay({
             boxShadow: `0 0 40px ${tl.color}33`,
           }}
         >
-          <div className="flex gap-1.5">
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: tl.color, animationDuration: '0.8s' }} />
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: tl.color, animationDelay: '0.15s', animationDuration: '0.8s' }} />
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: tl.color, animationDelay: '0.3s', animationDuration: '0.8s' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {extThinking ? (
+              <GiaIcon size={20} animate color={tl.color} speed={1.2} />
+            ) : (
+              <div className="flex gap-1.5">
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: tl.color, animationDuration: '0.8s' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: tl.color, animationDelay: '0.15s', animationDuration: '0.8s' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: tl.color, animationDelay: '0.3s', animationDuration: '0.8s' }} />
+              </div>
+            )}
           </div>
           <span className="text-sm font-semibold tracking-wider" style={{ color: tl.color }}>
             {tl.label}
@@ -236,31 +254,16 @@ export function ThinkingOverlay({
           boxShadow: `0 0 40px ${def.glowColor}`,
         }}
       >
-        <div className="flex gap-1.5">
-          <div
-            className="w-2 h-2 rounded-full animate-bounce"
-            style={{
-              backgroundColor: def.color,
-              animationDelay: '0s',
-              animationDuration: '0.8s',
-            }}
-          />
-          <div
-            className="w-2 h-2 rounded-full animate-bounce"
-            style={{
-              backgroundColor: def.color,
-              animationDelay: '0.15s',
-              animationDuration: '0.8s',
-            }}
-          />
-          <div
-            className="w-2 h-2 rounded-full animate-bounce"
-            style={{
-              backgroundColor: def.color,
-              animationDelay: '0.3s',
-              animationDuration: '0.8s',
-            }}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {extThinking ? (
+            <GiaIcon size={22} animate color={def.color} speed={1.2} />
+          ) : (
+            <div className="flex gap-1.5">
+              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: def.color, animationDuration: '0.8s' }} />
+              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: def.color, animationDelay: '0.15s', animationDuration: '0.8s' }} />
+              <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: def.color, animationDelay: '0.3s', animationDuration: '0.8s' }} />
+            </div>
+          )}
         </div>
         <span
           className="text-sm font-semibold tracking-wider"

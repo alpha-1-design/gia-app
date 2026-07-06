@@ -4,6 +4,7 @@ import {
   Terminal, User, Save, ChevronRight,
   Zap, Smartphone, Sun, Moon,
   UserCircle, PlugZap, Battery, Cpu, Puzzle, Info,
+  Network, Bot,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
@@ -16,11 +17,14 @@ import { SystemPage } from '../components/settings/SystemPage';
 import { LocalAIPage } from '../components/settings/LocalAIPage';
 import { AppExtensionsPage } from '../components/settings/AppExtensionsPage';
 import { AboutPage } from '../components/settings/AboutPage';
+import { NeuraPage } from '../components/settings/NeuraPage';
+import { NexusPage } from '../components/settings/NexusPage';
+import { DashboardModule } from './DashboardModule';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
 
-type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about';
+type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus';
 
 const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
   { id: 'profile-identity', icon: <UserCircle size={20} />, label: 'Profile & Identity', desc: 'Your profile, GIA identity, skills, memory & brain export', sections: '5 sections', color: '#a855f7' },
@@ -64,6 +68,9 @@ const SettingsModule: React.FC = () => {
   if (settingsPage === 'local-ai') return <LocalAIPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'app-extensions') return <AppExtensionsPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'about') return <AboutPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'dashboard') return <DashboardModule onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'neura') return <NeuraPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'nexus') return <NexusPage onBack={() => setSettingsPage('main')} />;
 
   // ── Main page ────────────────────────────────────────────────────
   return (
@@ -266,6 +273,45 @@ const SettingsModule: React.FC = () => {
             <ChevronRight size={14} style={{ color: 'var(--gia-muted)', flexShrink: 0, marginTop: 4 }} />
           </button>
         ))}
+      </div>
+
+      {/* Neura + Nexus cards */}
+      <p className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--gia-muted)' }}>
+        Intelligence
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button onClick={() => setSettingsPage('neura')}
+          className="gia-card p-4 flex items-start gap-4 w-full text-left tap-feedback"
+          style={{ transition: 'border-color 0.2s' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: '#0d0d14', border: '1px solid #a855f730' }}>
+            <Network size={20} style={{ color: '#a855f7' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Neura</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>Knowledge graph, search & indexed intelligence</p>
+            <span className="text-[9px] mt-1 inline-block px-1.5 py-0.5 rounded" style={{ background: '#a855f715', color: '#a855f7' }}>
+              Graph · Search · Sources
+            </span>
+          </div>
+          <ChevronRight size={14} style={{ color: 'var(--gia-muted)', flexShrink: 0, marginTop: 4 }} />
+        </button>
+        <button onClick={() => setSettingsPage('nexus')}
+          className="gia-card p-4 flex items-start gap-4 w-full text-left tap-feedback"
+          style={{ transition: 'border-color 0.2s' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: '#0d0d14', border: '1px solid #10b98130' }}>
+            <Bot size={20} style={{ color: '#10b981' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Nexus</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>Sub-agent command center & tuning</p>
+            <span className="text-[9px] mt-1 inline-block px-1.5 py-0.5 rounded" style={{ background: '#10b98115', color: '#10b981' }}>
+              Agents · Stats · Tuning
+            </span>
+          </div>
+          <ChevronRight size={14} style={{ color: 'var(--gia-muted)', flexShrink: 0, marginTop: 4 }} />
+        </button>
       </div>
 
       {/* Version */}

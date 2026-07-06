@@ -1,6 +1,6 @@
 import React, { useEffect, lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target, Bot, BarChart3, ClipboardIcon } from 'lucide-react';
+import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target, Bot, ClipboardIcon } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useMemoryStore } from './store/useMemoryStore';
@@ -10,7 +10,7 @@ import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
 import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
-import { DashboardModule } from './modules/DashboardModule';
+
 import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
@@ -58,7 +58,6 @@ const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string
   { id: 'agents',   label: 'Agents',   icon: <Bot size={18} />,          color: 'var(--mod-agents)' },
   { id: 'settings', label: 'Settings', icon: <Settings size={18} />,     color: 'var(--mod-settings)' },
   { id: 'autonomy', label: 'Autonomy', icon: <Target size={18} />,       color: 'var(--mod-autonomy)' },
-  { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={18} />,  color: '#3b82f6' },
 ];
 
 async function checkProviderHealth(provider: string, apiKey: string, model: string): Promise<boolean> {
@@ -108,7 +107,6 @@ const ModuleView: React.FC = () => {
     settings:  <ErrorBoundary name="Settings"><SettingsModule /></ErrorBoundary>,
     autonomy:  <Suspense fallback={<Fallback />}><ErrorBoundary name="Autonomy"><AutonomyModule /></ErrorBoundary></Suspense>,
     agents:    <Suspense fallback={<Fallback />}><ErrorBoundary name="Agents"><AgentsModule /></ErrorBoundary></Suspense>,
-    dashboard: <ErrorBoundary name="Dashboard"><DashboardModule /></ErrorBoundary>,
   };
   return (
     <AnimatePresence mode="wait">
@@ -703,7 +701,7 @@ const App: React.FC = () => {
                     style={{
                       background: 'var(--gia-surface-2)',
                       border: '1px solid var(--gia-border)',
-                      color: cur.id === 'chat' ? '#a855f7' : cur.id === 'exam' ? '#f59e0b' : cur.id === 'analyst' ? '#3b82f6' : cur.id === 'writer' ? '#ec4899' : cur.id === 'planner' ? '#10b981' : cur.id === 'agents' ? '#a855f7' : cur.id === 'dashboard' ? '#3b82f6' : '#94a3b8',
+                      color: cur.id === 'chat' ? '#a855f7' : cur.id === 'exam' ? '#f59e0b' : cur.id === 'analyst' ? '#3b82f6' : cur.id === 'writer' ? '#ec4899' : cur.id === 'planner' ? '#10b981' : cur.id === 'agents' ? '#a855f7' : '#94a3b8',
                     }}
                   >
                     <span className="shrink-0">{cur.icon}</span>
@@ -737,7 +735,7 @@ const App: React.FC = () => {
                               background: active ? 'rgba(168,85,247,0.1)' : 'transparent',
                             }}
                           >
-                            <span style={{ color: mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : mod.id === 'agents' ? '#a855f7' : mod.id === 'dashboard' ? '#3b82f6' : '#94a3b8' }}>
+                            <span style={{ color: mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : mod.id === 'agents' ? '#a855f7' : '#94a3b8' }}>
                               {mod.icon}
                             </span>
                             <span className="flex-1 text-left">{mod.label}</span>

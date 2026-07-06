@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   BarChart3, MessageCircle, Wrench, AlertTriangle, Clock,
   Brain, Zap, Activity, TrendingUp, Cpu, Terminal,
-  ChevronDown, ChevronUp, Calendar,
+  ChevronDown, ChevronUp, ChevronLeft, Calendar,
 } from 'lucide-react';
 import { useGiaStore, type Message } from '../store/useGiaStore';
 import AnalyticsService from '../services/AnalyticsService';
@@ -17,6 +17,7 @@ interface FlatMsg {
   tokenUsage?: { input: number; output: number };
   thinking?: boolean;
   content?: string;
+  sessionTitle: string;
 }
 
 function flattenMessages(sessions: { title: string; messages: { message: Message; children: unknown[] }[] }[]): FlatMsg[] {
@@ -32,6 +33,7 @@ function flattenMessages(sessions: { title: string; messages: { message: Message
           tokenUsage: node.message.tokenUsage,
           thinking: node.message.thinking,
           content: node.message.content,
+          sessionTitle: session.title,
         });
         if (node.children) walk(node.children as { message: Message; children: unknown[] }[]);
       }
@@ -41,7 +43,7 @@ function flattenMessages(sessions: { title: string; messages: { message: Message
   return result;
 }
 
-export const DashboardModule: React.FC = () => {
+export const DashboardModule: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const { sessions } = useGiaStore(useShallow(s => ({
     sessions: s.sessions,
   })));
@@ -65,8 +67,6 @@ export const DashboardModule: React.FC = () => {
 
     for (let i = 0; i < allMessages.length; i++) {
       const m = allMessages[i];
-      const session = sessions[0];
-
       if (m.model) modelUsage[m.model] = (modelUsage[m.model] || 0) + 1;
 
       if (m.tokenUsage) {
@@ -77,16 +77,24 @@ export const DashboardModule: React.FC = () => {
         errors.push({
           msg: (m.content || '').slice(0, 120) || 'Unknown error',
           timestamp: m.timestamp,
-          sessionTitle: session?.title || '',
+          sessionTitle: m.sessionTitle,
         });
       }
 
       if (m.role === 'assistant' && m.content?.includes('```tool')) {
-        const matches = m.content.match(/```tool\s+(\w+)/g);
-        if (matches) {
-          for (const match of matches) {
-            const name = match.replace('```tool', '').trim();
-            toolCalls.push({ name: name || 'unknown', timestamp: m.timestamp, success: true });
+        const blockRegex = /```tool\s*\n?({[\s\S]*?})\n?```/g;
+        let blockMatch;
+        while ((blockMatch = blockRegex.exec(m.content)) !== null) {
+          try {
+            const parsed = JSON.parse(blockMatch[1]);
+            const name = parsed.id || parsed.name || 'unknown';
+            toolCalls.push({ name, timestamp: m.timestamp, success: true });
+            toolCallCount++;
+            toolSuccessCount++;
+          } catch {
+            const nameMatch = blockMatch[1].match(/"id"\s*:\s*"([^"]+)"/);
+            const name = nameMatch ? nameMatch[1] : 'unknown';
+            toolCalls.push({ name, timestamp: m.timestamp, success: true });
             toolCallCount++;
             toolSuccessCount++;
           }
@@ -184,6 +192,11 @@ export const DashboardModule: React.FC = () => {
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
       <div className="flex items-center gap-3 mb-2">
+        {onBack && (
+          <button onClick={onBack} className="w-9 h-9 rounded-xl flex items-center justify-center tap-feedback" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+            <ChevronLeft size={18} style={{ color: 'var(--gia-muted)' }} />
+          </button>
+        )}
         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
           <BarChart3 size={18} style={{ color: '#3b82f6' }} />
         </div>

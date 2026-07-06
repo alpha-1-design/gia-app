@@ -675,6 +675,30 @@ body {
 }
 
 /* ============================================================
+   GIA ICON — IMPOSSIBLE STAR ANIMATIONS
+   ============================================================ */
+@keyframes gia-spin-cw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes gia-spin-ccw {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+@keyframes gia-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.12); }
+}
+@keyframes gia-ring-expand {
+  0%   { r: 8; opacity: 0.6; }
+  100% { r: 14; opacity: 0; }
+}
+@keyframes gia-thought-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px currentColor); }
+  50%      { filter: drop-shadow(0 0 8px currentColor); }
+}
+
+/* ============================================================
    AGENTS MODULE — COSMIC PORTAL AESTHETIC
    ============================================================ */
 @keyframes nebula-drift {

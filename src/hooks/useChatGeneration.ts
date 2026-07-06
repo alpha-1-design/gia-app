@@ -170,9 +170,20 @@ export function useChatGeneration() {
 
     let prompt = text;
     if (sentAttachments.length > 0) {
+      const maxFileLen = extThinking ? 150000 : 30000;
       const fileContext = sentAttachments
         .filter(a => !a.type.startsWith('image/'))
-        .map(a => `\n[BEGIN FILE: ${a.name}]\n${(a.content || '').slice(0, 30000)}\n[END FILE]`)
+        .map(a => {
+          const content = a.content || '';
+          const truncated = content.length > maxFileLen;
+          const body = truncated ? content.slice(0, maxFileLen) : content;
+          const sizeNote = truncated
+            ? `\n[NOTE: File truncated to ${(maxFileLen / 1000).toFixed(0)}K of ${(content.length / 1000).toFixed(0)}K total — use sub_agent_call to analyze remaining chunks]`
+            : content.length > 30000
+              ? `\n[NOTE: Full file included (${(content.length / 1000).toFixed(0)}K) — use sub_agent_call for parallel chunk analysis if needed]`
+              : '';
+          return `\n[BEGIN FILE: ${a.name}]${sizeNote}\n${body}\n[END FILE]`;
+        })
         .join('\n\n');
       const imgContext = sentAttachments
         .filter(a => a.type.startsWith('image/'))

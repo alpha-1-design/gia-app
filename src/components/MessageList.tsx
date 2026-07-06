@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { Bot, User, AlertCircle, RotateCcw, Paperclip } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import { ThinkingStatus } from './ThinkingStatus';
+import GiaIcon from './GiaIcon';
+import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
 import MessageContextMenu from './MessageContextMenu';
 import { ChatSkeleton } from './feedback';
@@ -27,6 +29,7 @@ interface MessageListProps {
   onFork: (id: string) => void;
   onRetry: (id: string) => Promise<void>;
   onEditResend: (msgId: string) => void;
+  onTapThought?: () => void;
 }
 
 const formatTimeAgo = (ts: number) => {
@@ -56,8 +59,9 @@ const MessageList: React.FC<MessageListProps> = ({
   liveThoughts, thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
-  onFork, onRetry, onEditResend,
+  onFork, onRetry, onEditResend, onTapThought,
 }) => {
+  const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
   return (
     <>
@@ -67,7 +71,7 @@ const MessageList: React.FC<MessageListProps> = ({
       {messages.map((msg) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
-            {msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <Bot size={13} style={{ color: 'var(--gia-muted)' }} />}
+            {msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <Bot size={13} style={{ color: 'var(--gia-muted)' }} />}
           </div>
           <div className="flex-1 min-w-0 space-y-1">
             {msg.attachments?.some(a => a.preview) && (
@@ -106,7 +110,7 @@ const MessageList: React.FC<MessageListProps> = ({
               >
                 {msg.thinking ? (
                   <div>
-                    <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} />
+                    <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
                     {liveThoughts[msg.id] || msg.thoughts ? (
                       <ThinkingPanel
                         thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
@@ -168,7 +172,9 @@ const MessageList: React.FC<MessageListProps> = ({
                       <div className="token-reveal">
                         <MarkdownRenderer content={msg.content} />
                         {streamingMsgId === msg.id && msg.content && loading && (
-                          <span className="stream-cursor ml-0.5">▋</span>
+                          extThinking
+                            ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />
+                            : <span className="stream-cursor ml-0.5">▋</span>
                         )}
                         {expandedMsgs.has(msg.id) && (
                           <button onClick={() => setExpandedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
