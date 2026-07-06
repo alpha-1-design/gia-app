@@ -105,7 +105,7 @@ function formatReport(sections: { title: string; body: string }[]): string {
   return sections.map(s => `## ${s.title}\n${s.body}`).join('\n\n');
 }
 
-const securityInstallTools: Tool = {
+export const securityInstallTools: Tool = {
   id: 'security_install_tools',
   name: 'security_install_tools',
   description: 'Install all security tools (iptables, whois, nmap, lsof, tcpdump, bind-tools, strace, net-tools) into the sandbox. Run this once on first use so everything works.',
@@ -123,7 +123,7 @@ const securityInstallTools: Tool = {
   },
 };
 
-const securityScan: Tool = {
+export const securityScan: Tool = {
   id: 'security_scan',
   name: 'security_scan',
   description: 'Run a comprehensive security scan of the device. Checks for suspicious processes, open ports, unusual network connections, failed auth attempts, and known vulnerability indicators.',
@@ -283,7 +283,7 @@ const securityScan: Tool = {
   },
 };
 
-const securityFirewall: Tool = {
+export const securityFirewall: Tool = {
   id: 'security_firewall',
   name: 'security_firewall',
   description: 'Block or unblock all network traffic to/from this device. Uses iptables when available, otherwise falls back to /etc/hosts blocking and network namespace isolation. Always works.',
@@ -368,7 +368,7 @@ const securityFirewall: Tool = {
   },
 };
 
-const securityThreatIntel: Tool = {
+export const securityThreatIntel: Tool = {
   id: 'security_threat_intel',
   name: 'security_threat_intel',
   description: 'Check IP addresses, domain names, or file hashes against known threat databases (AbuseIPDB, ThreatFox, VirusTotal public). Returns reputation data.',
@@ -431,7 +431,7 @@ const securityThreatIntel: Tool = {
   },
 };
 
-const securityTrace: Tool = {
+export const securityTrace: Tool = {
   id: 'security_trace',
   name: 'security_trace',
   description: 'Trace an IP address or domain to its geographic location, ISP, and ASN. Also fetches WHOIS registration data. Auto-installs whois.',
