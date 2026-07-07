@@ -215,7 +215,8 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ctx.stroke();
     }
 
-    // ── Edges ──
+    // ── Edges (pulsing, brighter) ──
+    const edgeTime = Date.now();
     const drawn = new Set<string>();
     for (const rel of relationships) {
       const a = proj.find(n => n.id === rel.sourceId);
@@ -227,8 +228,14 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       const isSel = selId && (rel.sourceId === selId || rel.targetId === selId);
       const isHl = hl && (hl.has(rel.sourceId) || hl.has(rel.targetId));
-      const alpha = isSel ? 0.55 : isHl ? 0.25 : 0.06;
-      const lw = isSel ? 1.5 + rel.strength * 2 : 0.4;
+
+      // Per-edge pulse using edgeTime + index as phase offset
+      const edgePhase = drawn.size * 0.7;
+      const pulse = Math.sin(edgeTime * 0.0025 + edgePhase) * 0.25 + 0.75;
+
+      const baseAlpha = isSel ? 0.7 : isHl ? 0.4 : 0.15;
+      const alpha = baseAlpha * pulse;
+      const lw = isSel ? 2 + rel.strength * 2 : isHl ? 0.9 : 0.5;
       const color = EDGE_COLORS[rel.type] || '#94a3b8';
 
       // Quadratic bezier arc along sphere surface
@@ -243,18 +250,19 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ctx.beginPath();
       ctx.moveTo(cx + a.sx, cy + a.sy);
       ctx.quadraticCurveTo(cx + cpx, cy + cpy, cx + b.sx, cy + b.sy);
+
       ctx.strokeStyle = color;
       ctx.globalAlpha = alpha;
       ctx.lineWidth = lw;
       ctx.stroke();
 
-      // Glow on selected edges
-      if (isSel) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 6;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      }
+      // Glow on all edges (pulsing)
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isSel ? 12 : isHl ? 4 : 2;
+      ctx.globalAlpha = alpha * 0.5;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
     }
     ctx.globalAlpha = 1;
 

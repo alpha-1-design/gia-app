@@ -108,7 +108,7 @@ const MessageList: React.FC<MessageListProps> = ({
                   borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
                 }}
               >
-                {msg.thinking ? (
+                {msg.thinking && !(streamingMsgId === msg.id && msg.content) ? (
                   <div>
                     <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
                     {liveThoughts[msg.id] || msg.thoughts ? (
@@ -158,6 +158,23 @@ const MessageList: React.FC<MessageListProps> = ({
                           <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
                             {msg.tokenUsage.total} tok
                           </span>
+                        )}
+                      </div>
+                    )}
+                    {msg.thinking && streamingMsgId === msg.id && msg.content && (
+                      <div className="mb-2">
+                        <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
+                        {(liveThoughts[msg.id] || msg.thoughts) && (
+                          <ThinkingPanel
+                            thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                            isLive={!!liveThoughts[msg.id]}
+                            isExpanded={showThoughts.has(msg.id)}
+                            onToggle={() => setShowThoughts(prev => {
+                              const n = new Set(prev);
+                              if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
+                              return n;
+                            })}
+                          />
                         )}
                       </div>
                     )}

@@ -35,7 +35,7 @@ interface VisualCardProps {
 }
 
 export const VisualCard: React.FC<VisualCardProps> = ({ title, expanded, onToggle, onCopy, copied, children }) => (
-  <div className="my-3 rounded-xl overflow-hidden" style={{ border: '1px solid var(--gia-border)' }}>
+  <div className="my-3 rounded-xl" style={{ border: '1px solid var(--gia-border)' }}>
     <VisualHeader title={title} onCopy={onCopy} copied={copied} onExpand={onToggle} expanded={expanded} />
     <div className="p-4" style={{ background: 'var(--gia-surface)' }}>
       {children}

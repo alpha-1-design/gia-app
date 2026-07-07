@@ -17,16 +17,42 @@ const WIDGET_ICONS: Record<string, React.ReactNode> = {
   trend: <TrendingUp size={14} />,
 };
 
+function isFlatObject(v: unknown): v is Record<string, string | number | boolean> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v) &&
+    Object.values(v).every(val => typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean');
+}
+
+function normalizeMetrics(data: WidgetDef[] | WidgetDef): { label: string; value: string | number; unit?: string; change?: number; icon?: string; color?: string }[] {
+  const items = Array.isArray(data) ? data : [data];
+  const result: { label: string; value: string | number; unit?: string; change?: number; icon?: string; color?: string }[] = [];
+
+  for (const w of items) {
+    const inner = (w as { data?: unknown }).data || w;
+    if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
+      const obj = inner as Record<string, unknown>;
+      if ('label' in obj && 'value' in obj) {
+        result.push(obj as { label: string; value: string | number; unit?: string; change?: number; icon?: string; color?: string });
+      } else if (isFlatObject(obj)) {
+        for (const [key, val] of Object.entries(obj)) {
+          result.push({ label: key, value: typeof val === 'boolean' ? String(val) : val });
+        }
+      } else {
+        result.push(obj as { label: string; value: string | number; unit?: string; change?: number; icon?: string; color?: string });
+      }
+    }
+  }
+  return result;
+}
+
 export const MetricWidgetVisual: React.FC<{ data: WidgetDef[] | WidgetDef }> = ({ data }) => {
   const [copied, copy] = useCopy();
-  const widgets = useMemo(() => Array.isArray(data) ? data : [data], [data]);
+  const widgets = useMemo(() => normalizeMetrics(data), [data]);
   const copyData = useCallback(() => copy(JSON.stringify(widgets, null, 2)), [widgets, copy]);
 
   return (
     <VisualCard title="Metrics" onCopy={copyData} copied={copied}>
       <div className="grid grid-cols-2 gap-3">
-        {widgets.map((w, i) => {
-          const d = w.data || w;
+        {widgets.map((d, i) => {
           const color = d.color || CHART_COLORS[i % CHART_COLORS.length];
           return (
             <div key={i} className="rounded-xl p-3" style={{ background: `${color}08`, border: `1px solid ${color}20` }}>

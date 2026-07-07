@@ -153,7 +153,7 @@ const stripScripts = (html: string): string =>
     .replace(/javascript\s*:/gi, '');
 
 const InlineSvg: React.FC<{ svg: string }> = ({ svg }) => (
-  <div className="my-3 rounded-xl overflow-hidden" style={{ border: '1px solid var(--gia-border)', background: 'white' }} dangerouslySetInnerHTML={{ __html: stripScripts(svg) }} />
+  <div className="my-3 rounded-xl" style={{ border: '1px solid var(--gia-border)', background: 'white' }} dangerouslySetInnerHTML={{ __html: stripScripts(svg) }} />
 );
 
 const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => {

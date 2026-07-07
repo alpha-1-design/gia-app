@@ -1,5 +1,13 @@
 import { logger } from '../utils/logger';
 
+function supportsWasmThreads(): boolean {
+  try {
+    return typeof SharedArrayBuffer !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
 export interface VisionResult {
   description: string;
   model: string;
@@ -75,7 +83,11 @@ class VisionService {
     this._loading.add(key);
     try {
       const mod = await import('@huggingface/transformers');
-      const pipe = await (mod.pipeline as (task: string, modelId: string) => Promise<unknown>)(task, modelId);
+      const { env, pipeline } = mod as { env?: { backends?: { onnx?: { wasm?: { numThreads?: number } } } }; pipeline: (task: string, modelId: string) => Promise<unknown> };
+      if (!supportsWasmThreads() && env?.backends?.onnx?.wasm) {
+        env.backends.onnx.wasm.numThreads = 1;
+      }
+      const pipe = await pipeline(task, modelId);
       this.pipelineCache.set(key, pipe);
       logger.log(`[VisionService] Loaded: ${task} with ${modelId}`);
       return pipe;

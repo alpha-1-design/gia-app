@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
 import { useGiaStore } from '../store/useGiaStore';
@@ -55,6 +55,25 @@ export function useChatGeneration() {
   const [loading, setLoading] = useState(false);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
+
+  // Sync streaming state with store generationState (survives module switches)
+  useEffect(() => {
+    const genState = useGiaStore.getState().generationState;
+    if (genState.active && genState.module === 'chat' && genState.messageId && genState.sessionId) {
+      setLoading(true);
+      setStreamingMsgId(genState.messageId);
+      generationKeyRef.current = `chat-${genState.sessionId}-${genState.messageId}`;
+    }
+    const unsub = useGiaStore.subscribe((s) => {
+      const gs = s.generationState;
+      if (!gs.active || gs.module !== 'chat') {
+        setLoading(false);
+        setStreamingMsgId(null);
+        generationKeyRef.current = null;
+      }
+    });
+    return unsub;
+  }, []);
 
   const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const responseStartRef = useRef(0);
