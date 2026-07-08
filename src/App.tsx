@@ -15,6 +15,8 @@ import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
 import GiaConsole from './components/GiaConsole';
 import ProtocolPanel from './components/ProtocolPanel';
+import { TaskBoard } from './components/TaskBoard';
+import { NotesPanel } from './components/NotesPanel';
 import CommandPalette from './components/CommandPalette';
 import { SourcesPanel } from './components/SourcesPanel';
 import { RegionSelectorOverlay } from './components/RegionSelectorOverlay';
@@ -42,6 +44,7 @@ import giaForegroundService from './services/GIAForegroundService';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
+import { useAutomationBridge } from './hooks/useAutomationBridge';
 import { updateService } from './services/UpdateService';
 import type { UpdateInfo } from './services/UpdateService';
 import './styles/globals.css';
@@ -140,6 +143,8 @@ const App: React.FC = () => {
   })));
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [showTaskBoard, setShowTaskBoard] = useState(false);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [moduleOpen, setModuleOpen] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [updateNotification, setUpdateNotification] = useState<UpdateInfo | null>(null);
@@ -201,6 +206,7 @@ const App: React.FC = () => {
 
   // Native Android intent handling (ASSIST, deep links, share target)
   useNativeIntents();
+  useAutomationBridge();
 
   // Register service worker for PWA + deep link detection
   useEffect(() => {
@@ -952,17 +958,43 @@ const App: React.FC = () => {
         onClose={() => setPaletteOpen(false)}
         onNavigate={(action) => {
           if (action === 'task-board') {
-            // Task board is accessible via file browser or we can create a dedicated view
             setPaletteOpen(false);
-            // For now, just notify - could add a dedicated task board view later
-            useGiaStore.getState().addNotification('Task board: Use the folder icon in chat to access files, or create tasks via GIA');
+            setShowTaskBoard(true);
           } else if (action === 'notes-panel') {
             setPaletteOpen(false);
-            // For now, just notify - could add a dedicated notes view later
-            useGiaStore.getState().addNotification('Notes: Use GIA to create, read, and manage notes via conversation');
+            setShowNotesPanel(true);
           }
         }} 
       />
+
+      {showTaskBoard && (
+        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTaskBoard(false)}>
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl w-full max-w-4xl h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowTaskBoard(false)}
+              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors text-gray-500"
+              aria-label="Close task board"
+            >
+              <X size={16} />
+            </button>
+            <TaskBoard />
+          </div>
+        </div>
+      )}
+      {showNotesPanel && (
+        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowNotesPanel(false)}>
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowNotesPanel(false)}
+              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors text-gray-500"
+              aria-label="Close notes"
+            >
+              <X size={16} />
+            </button>
+            <NotesPanel />
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {showSetup && <SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} />}

@@ -16,9 +16,15 @@ describe('createStreamParser', () => {
       inThinkBlock: false,
       inToolBlock: false,
       inJsonBlock: false,
+      inArtifactBlock: false,
       jsonBlockBuffer: '',
       pendingBacktickCount: 0,
       toolBlockBuffer: '',
+      artifactBlockBuffer: '',
+      artifactConfigLine: '',
+      artifacts: [],
+      tasks: [],
+      pendingTaskMarker: '',
     });
   });
 });

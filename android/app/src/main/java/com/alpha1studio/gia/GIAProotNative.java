@@ -2,6 +2,8 @@ package com.alpha1studio.gia;
 
 import android.util.Log;
 
+import java.io.File;
+
 /**
  * JNI bridge to libproot.so — proot compiled as a shared native library.
  *
@@ -49,6 +51,24 @@ public class GIAProotNative {
      */
     public static boolean isAvailable() {
         return libraryLoaded;
+    }
+
+    /**
+     * Resolve the proot binary path, trying native library directory first,
+     * then falling back to asset extraction path. Mirrors the logic in
+     * GIATerminalService.resolveProotPath() but can be called without a Context
+     * if libraryLoaded is true (the JNI path).
+     *
+     * @param context Android context for fallback file resolution
+     * @return Absolute path to the proot binary, or "libproot.so" if JNI-loaded
+     */
+    public static String resolveProotPath(android.content.Context context) {
+        if (libraryLoaded) {
+            return "libproot.so";
+        }
+        // Fall back to extracted proot binary from assets
+        return new File(new File(context.getFilesDir(), "terminal"), "proot")
+                .getAbsolutePath();
     }
 
     /**

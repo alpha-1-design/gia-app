@@ -43,7 +43,19 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
     { id: 'terminal', label: 'Open Engine Room', description: 'Access the provider management terminal', icon: <Terminal {...iconStyle} />, category: 'System', execute: () => { useGiaStore.getState().setShowTerminal(true); onClose(); } },
     { id: 'pick-folder', label: 'Pick Project Folder', description: 'Select a local folder for file access', icon: <FolderOpen {...iconStyle} />, category: 'Files', execute: () => { import('../services/DesktopFS').then(m => m.default.pickDirectory().then(r => { if (r) useGiaStore.getState().addNotification(`Project folder: ${r.name}`); })); onClose(); } },
     { id: 'export-brain', label: 'Export Brain', description: 'Download GIA memories as JSON', icon: <Download {...iconStyle} />, category: 'Files', execute: () => { import('../services/BrainExport').then(m => { m.exportBrainToFile(); useGiaStore.getState().addNotification('Brain exported'); }).catch(() => useGiaStore.getState().addNotification('Export failed')); onClose(); } },
-    { id: 'import-brain', label: 'Import Brain', description: 'Restore GIA from a brain export file', icon: <Upload {...iconStyle} />, category: 'Files', execute: () => { useGiaStore.getState().addNotification('Go to Settings > Brain Export to import'); onClose(); } },
+    { id: 'import-brain', label: 'Import Brain', description: 'Restore GIA from a brain export file', icon: <Upload {...iconStyle} />, category: 'Files', execute: () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json,.json';
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        import('../services/BrainExport').then((m) => m.importBrainFromFile(file).then((r) => useGiaStore.getState().addNotification(r.message)).catch(() => useGiaStore.getState().addNotification('Import failed')))
+          .catch(() => useGiaStore.getState().addNotification('Import failed'));
+      };
+      input.click();
+      onClose();
+    } },
     { id: 'clear-session', label: 'Clear Current Chat', description: 'Remove all messages from current session', icon: <Eraser {...iconStyle} />, category: 'Chat', execute: () => { const s = useGiaStore.getState(); const sid = s.activeSessionId; if (sid) { s.clearSession(sid); s.addNotification('Session cleared'); } onClose(); } },
     { id: 'mcp-servers', label: 'Manage MCP Servers', description: 'Configure and connect to MCP servers', icon: <Wifi {...iconStyle} />, category: 'System', execute: () => { useGiaStore.getState().setModule('settings'); onClose(); } },
     { id: 'task-board', label: 'Open Task Board', description: 'View and manage your tasks', icon: <ClipboardList {...iconStyle} />, category: 'Co-Work', execute: () => { void onNavigate?.('task-board'); onClose(); } },

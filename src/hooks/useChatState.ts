@@ -55,9 +55,11 @@ export function useChatState() {
     extThinking, setExtThinking,
     handsOff, setHandsOff,
     localVision, setLocalVision,
+    localTranslate, setLocalTranslate,
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase,
     keepListening, currentTool,
+    pendingAction,
     clarification, setClarification,
   } = useGiaStore(useShallow(s => ({
     sessions: s.sessions,
@@ -73,11 +75,13 @@ export function useChatState() {
     extThinking: s.extThinking, setExtThinking: s.setExtThinking,
     handsOff: s.handsOff, setHandsOff: s.setHandsOff,
     localVision: s.localVision, setLocalVision: s.setLocalVision,
+    localTranslate: s.localTranslate, setLocalTranslate: s.setLocalTranslate,
     skills: s.skills, activeSkillId: s.activeSkillId, setSkill: s.setSkill,
     wakeWord: s.wakeWord, thinkingPhase: s.thinkingPhase, setThinkingPhase: s.setThinkingPhase,
     keepListening: s.keepListening, setKeepListening: s.setKeepListening,
     currentTool: s.currentTool,
     clarification: s.clarification, setClarification: s.setClarification,
+    pendingAction: s.pendingAction,
   })));
 
   const { providers, activeProvider } = useProviderStore(useShallow(s => ({
@@ -118,12 +122,13 @@ export function useChatState() {
     setInput,
   );
 
-  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
+  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate') => {
     let newFeatureState: boolean | undefined;
     if (feature === 'webSearch') { setWebSearch(!webSearch); newFeatureState = !webSearch; }
     if (feature === 'extThinking') { setExtThinking(!extThinking); newFeatureState = !extThinking; }
     if (feature === 'handsOff') { setHandsOff(!handsOff); newFeatureState = !handsOff; }
     if (feature === 'vision') { setLocalVision(!localVision); newFeatureState = !localVision; }
+    if (feature === 'translate') { setLocalTranslate(!localTranslate); newFeatureState = !localTranslate; }
     if (feature === 'listen') {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
@@ -157,7 +162,7 @@ export function useChatState() {
       }
     }
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
-  }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, voiceEnabled, voiceRef, setInput, addNotification]);
+  }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setLocalTranslate, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, localTranslate, voiceEnabled, voiceRef, setInput, addNotification]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
 
@@ -268,10 +273,21 @@ export function useChatState() {
         setInput('Analyze this image');
         useGiaStore.getState().addNotification('📷 Image received');
       }
+    } else if (action.type === 'send-message') {
+      const text = (action.data?.text as string) || '';
+      if (text) {
+        setInput(text);
+        useGiaStore.getState().setPendingAction(null);
+        setTimeout(() => genRef.current.handleSend(text, [], (v) => setInput(v), (v) => setAttachmentsRef.current(v as Attachment[])), 50);
+        return;
+      }
+    } else if (action.type === 'assist') {
+      useGiaStore.getState().setModule('chat');
+      setTimeout(() => { voiceRef.current?.startListening(true); }, 300);
     }
 
     useGiaStore.getState().setPendingAction(null);
-  }, [setAttachments]);
+  }, [setAttachments, pendingAction, voiceRef, setInput]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -421,6 +437,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     webSearch, setWebSearch, extThinking, setExtThinking,
     handsOff, setHandsOff,
     localVision, setLocalVision,
+    localTranslate, setLocalTranslate,
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase, currentTool,
     clarification, setClarification,

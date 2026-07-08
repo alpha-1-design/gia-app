@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNotesStore, GiaNote, randomNoteColor } from '../store/useNotesStore';
-import { StickyNote, Plus, Pin, Trash2, Search, X } from 'lucide-react';
+import { StickyNote, Plus, Pin, Trash2, Search, X, GitCompare } from 'lucide-react';
+import { DiffViewer } from './DiffViewer';
 
 function NoteCard({ note, onSelect, selected }: { note: GiaNote; onSelect: (n: GiaNote) => void; selected: boolean }) {
   const { togglePin, deleteNote } = useNotesStore();
@@ -46,6 +47,14 @@ function NoteEditor({ note, onClose }: { note: GiaNote; onClose: () => void }) {
   const { updateNote, addNote } = useNotesStore();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
+  const [showDiff, setShowDiff] = useState(false);
+  const [originalContent, setOriginalContent] = useState(note.content);
+
+  useEffect(() => {
+    setOriginalContent(note.content);
+    setTitle(note.title);
+    setContent(note.content);
+  }, [note.id, note.content, note.title]);
 
   const handleSave = () => {
     if (!title.trim()) return;
@@ -57,25 +66,51 @@ function NoteEditor({ note, onClose }: { note: GiaNote; onClose: () => void }) {
     onClose();
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-xs font-semibold">{note.id ? 'Edit Note' : 'New Note'}</span>
-        <div className="flex gap-1">
-          <button
-            onClick={handleSave}
-            className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-          >
-            Save
-          </button>
-          <button
-            onClick={onClose}
-            className="text-xs px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            Cancel
-          </button>
+  const hasChanges = note.id ? content !== originalContent || title !== note.title : (!!title.trim() || !!content);
+
+  if (showDiff && note.id) {
+    const oldText = note.title + '\n\n' + originalContent;
+    const newText = title + '\n\n' + content;
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+          <span className="text-xs font-semibold">Changes — {note.title}</span>
+          <button onClick={() => setShowDiff(false)} className="text-xs px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">Back to edit</button>
+        </div>
+        <div className="flex-1 overflow-auto p-2">
+          <DiffViewer oldText={oldText} newText={newText} oldFilename="original" newFilename="edited" height="100%" sideBySide={false} />
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+          <span className="text-xs font-semibold">{note.id ? 'Edit Note' : 'New Note'}</span>
+          <div className="flex gap-1">
+            {note.id && hasChanges && (
+              <button
+                onClick={() => setShowDiff(true)}
+                className="text-xs px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1"
+              >
+                <GitCompare size={12} /> Changes
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Save
+            </button>
+            <button
+              onClick={onClose}
+              className="text-xs px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       <div className="flex-1 flex flex-col p-3 gap-2">
         <input
           value={title}

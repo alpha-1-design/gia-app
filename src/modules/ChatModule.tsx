@@ -4,7 +4,7 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
-  Eye, CheckCircle2, Loader2, Upload,
+  Eye, CheckCircle2, Loader2, Upload, LayoutTemplate, Languages,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -26,6 +26,7 @@ import { EngineSheet } from '../components/chat/EngineSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
 import AgentMentionPicker from '../components/AgentMentionPicker';
+import { TemplateSelector } from '../components/TemplateSelector';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -51,7 +52,7 @@ const ChatModule: React.FC = () => {
     createSession, deleteSession, clearSession,
     addNotification,
     webSearch, extThinking, handsOff,
-    localVision,
+    localVision, localTranslate,
     activeSkillId, setSkill,
     skills, thinkingPhase, currentTool, showConsole, consoleLogs,
     messages, activeSession, providerConnected, providerLabel,
@@ -69,6 +70,7 @@ const ChatModule: React.FC = () => {
   } = useChatState();
 
   const [showEngine, setShowEngine] = React.useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
 
@@ -444,6 +446,9 @@ const ChatModule: React.FC = () => {
                 }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
                   <Camera size={11} /> Camera
                 </button>
+                <button type="button" onClick={() => setShowTemplateSelector(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-purple-400 hover:text-purple-300 transition-all shrink-0">
+                  <LayoutTemplate size={11} /> Templates
+                </button>
                 <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
                 {[
                   { label: 'Search', feature: 'webSearch' as const, icon: Globe, active: webSearch, color: '#3b82f6' },
@@ -451,6 +456,7 @@ const ChatModule: React.FC = () => {
                   { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
                   { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
                   { label: 'Vision', feature: 'vision' as const, icon: Eye, active: localVision, color: '#22c55e' },
+                  { label: 'Translate', feature: 'translate' as const, icon: Languages, active: localTranslate, color: '#14b8a6' },
                 ].map((tool: { label: string; feature: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string; action?: boolean }) => (
                   <button type="button" key={tool.label} onClick={() => tool.action ? useGiaStore.getState().setShowCircleSearch(true) : toggleFeature(tool.feature as 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision')} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
                     <tool.icon size={11} />
@@ -508,6 +514,10 @@ const ChatModule: React.FC = () => {
           onClose={() => setShowBranchView(false)}
         />
       )}
+      <TemplateSelector
+        isOpen={showTemplateSelector}
+        onClose={() => setShowTemplateSelector(false)}
+      />
       <GiaConsole
         logs={consoleLogs}
         isVisible={showConsole}
@@ -543,12 +553,11 @@ const SearchActivityButton: React.FC = () => {
 
 const RecentToolExecutions: React.FC<{ loading: boolean }> = ({ loading }) => {
   const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
-  const recentTools = consoleProtocols.slice(-6);
 
-  if (recentTools.length === 0) return null;
+  if (consoleProtocols.length === 0) return null;
 
-  const active = recentTools.filter(p => p.state === 'executing' || p.state === 'proposed');
-  const done = recentTools.filter(p => p.state === 'completed' || p.state === 'failed' || p.state === 'rejected').slice(-4);
+  const active = consoleProtocols.filter(p => p.state === 'executing' || p.state === 'proposed');
+  const done = consoleProtocols.filter(p => p.state === 'completed' || p.state === 'failed' || p.state === 'rejected').slice(-6);
 
   if (done.length === 0 && active.length === 0) return null;
 

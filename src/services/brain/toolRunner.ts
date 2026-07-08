@@ -19,6 +19,10 @@ interface ExecutionState {
 
 type ThoughtFn = (msg: string) => void;
 
+let _currentMessageId: string | null = null;
+export function setToolMessageId(id: string | null) { _currentMessageId = id; }
+export function getToolMessageId(): string | null { return _currentMessageId; }
+
 const FALLBACK_HINTS: Record<string, string> = {
   web_search: 'read_url',
   read_url: 'web_search',
@@ -161,6 +165,7 @@ async function executeSingleTool(
     state: 'proposed',
     createdAt: Date.now(),
     trace: [],
+    messageId: _currentMessageId || undefined,
   };
   useProtocolStore.getState().propose(protocol);
 

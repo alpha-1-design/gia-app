@@ -127,6 +127,7 @@ describe('buildGiaSystem', () => {
   it('includes memory context when provided', () => {
     mockGetState.memory = {
       ...mockMemoryState,
+      memories: [{ id: 'mem-1', key: 'user_name', value: 'Alice', category: 'profile', tier: 'core', confidence: 0.9, createdAt: 0, updatedAt: 0 }],
       getRelevantContext: vi.fn(() => '\n\n## What GIA remembers:\n- user_name: Alice\n'),
     };
     const result = buildGiaSystem();

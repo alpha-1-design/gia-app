@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, XCircle, Loader2, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Clock, AlertCircle, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { ToolIcon } from './ToolIcons';
 import type { ProtocolProposal } from '../types/protocol';
 
@@ -55,6 +55,8 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
   })();
 
   const [showContent, setShowContent] = useState(false);
+  const [expandInput, setExpandInput] = useState(false);
+  const [expandOutput, setExpandOutput] = useState(isCompleted || isFailed);
   useEffect(() => {
     const t = setTimeout(() => setShowContent(true), 100 + index * 80);
     return () => clearTimeout(t);
@@ -203,22 +205,69 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
           </motion.div>
         )}
 
-        {/* Result display */}
+        {/* Input args (collapsible) */}
+        {protocol.args && Object.keys(protocol.args).length > 0 && (
+          <div className="pt-1">
+            <button
+              onClick={() => setExpandInput(!expandInput)}
+              className="flex items-center gap-1.5 text-[9px] font-medium opacity-60 hover:opacity-100 transition-opacity"
+              style={{ color: 'var(--gia-muted)' }}
+            >
+              {expandInput ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+              {expandInput ? <EyeOff size={10} /> : <Eye size={10} />}
+              Input ({Object.keys(protocol.args).length} param{Object.keys(protocol.args).length !== 1 ? 's' : ''})
+            </button>
+            <AnimatePresence>
+              {expandInput && (
+                <motion.pre
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="text-[9px] leading-relaxed whitespace-pre-wrap font-mono p-2 rounded-lg mt-1 max-h-32 overflow-y-auto"
+                  style={{
+                    background: 'var(--gia-surface-2)',
+                    color: 'var(--gia-muted)',
+                    border: '1px solid var(--gia-border)',
+                  }}
+                >
+                  {JSON.stringify(protocol.args, null, 2)}
+                </motion.pre>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Result display (expandable, default expanded on completion) */}
         <AnimatePresence>
           {protocol.result && !isFailed && (
-            <motion.pre
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="text-[10px] leading-relaxed whitespace-pre-wrap font-mono p-2 rounded-lg max-h-20 overflow-y-auto"
-              style={{
-                background: 'var(--gia-surface-2)',
-                color: 'var(--gia-muted)',
-                border: '1px solid var(--gia-border)',
-              }}
-            >
-              {protocol.result.length > 200 ? protocol.result.slice(0, 200) + '...' : protocol.result}
-            </motion.pre>
+            <div className="pt-1">
+              <button
+                onClick={() => setExpandOutput(!expandOutput)}
+                className="flex items-center gap-1.5 text-[9px] font-medium transition-opacity"
+                style={{ color: toolColor, opacity: expandOutput ? 0.8 : 0.5 }}
+              >
+                {expandOutput ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                {expandOutput ? <EyeOff size={10} /> : <Eye size={10} />}
+                Result ({protocol.result.length} chars)
+              </button>
+              <AnimatePresence>
+                {expandOutput && (
+                  <motion.pre
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="text-[10px] leading-relaxed whitespace-pre-wrap font-mono p-2 rounded-lg mt-1 max-h-40 overflow-y-auto"
+                    style={{
+                      background: 'var(--gia-surface-2)',
+                      color: 'var(--gia-muted)',
+                      border: '1px solid var(--gia-border)',
+                    }}
+                  >
+                    {protocol.result}
+                  </motion.pre>
+                )}
+              </AnimatePresence>
+            </div>
           )}
 
           {protocol.error && (
@@ -226,7 +275,7 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="text-[10px] leading-relaxed whitespace-pre-wrap font-mono p-2 rounded-lg max-h-16 overflow-y-auto"
+              className="text-[10px] leading-relaxed whitespace-pre-wrap font-mono p-2 rounded-lg mt-1 max-h-24 overflow-y-auto"
               style={{
                 background: 'rgba(239,68,68,0.06)',
                 color: '#f87171',

@@ -319,6 +319,7 @@ public class GIATerminalService extends Service {
         // We'll capture stdout+stderr merged; use ProcessBuilder redirectErrorStream(true)
         ProcessBuilder pb = new ProcessBuilder();
         pb.command("sh", "-c", prootCmd);
+        pb.directory(new File(rootfsPath));
         pb.redirectErrorStream(true);
         pb.environment().put("TERM", "xterm-256color");
         pb.environment().put("HOME", "/root");

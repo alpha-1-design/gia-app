@@ -489,8 +489,16 @@ export const useGiaStore = create<GiaState>()(
 
       setModule: (module) => set((s) => {
         if (s.currentModule === module) return {};
-        // Show pending session indicator if generation is in progress on old module
-        return { currentModule: module };
+        // Preserve context across module switches so the next module can pick
+        // up where the previous left off (e.g. chat → planner with context).
+        const prevModule = s.currentModule;
+        const contextPayload: Record<string, unknown> = {
+          prevModule,
+          timestamp: Date.now(),
+          activeSessionId: s.activeSessionId,
+          ...(prevModule === 'chat' ? { lastTopic: s.sessions.find(se => se.id === s.activeSessionId)?.title || '' } : {}),
+        };
+        return { currentModule: module, sharedData: { ...s.sharedData, lastModuleSwitch: contextPayload } };
       }),
       setGenerationState: (generationState) => set({ generationState }),
       registerGenerationController: (key, controller) => set((s) => {

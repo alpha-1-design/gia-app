@@ -15,15 +15,34 @@ export function setSystemContext(ctx: string): void {
   _cachedSystemContext = ctx;
 }
 
+// Cache the expensive memory/graph relevance passes. These run synchronously
+// and dominate buildGiaSystem cost; within a single generation turn (including
+// every tool-loop iteration, which share the same query) and across quick
+// successive turns, the inputs rarely change — so we memoize for a short TTL.
+interface CtxCache { key: string; memory: string; neuraCtx: string; ts: number; }
+let _ctxCache: CtxCache | null = null;
+
+function getContextBlobs(query?: string): { memory: string; neuraCtx: string } {
+  const memStore = useMemoryStore.getState();
+  const gia = useGiaStore.getState();
+  const key = `${query ?? ''}|${memStore.memories.length}|${gia.pinnedMemories.length}|${gia.activeSkillId ?? ''}`;
+  if (_ctxCache && _ctxCache.key === key && Date.now() - _ctxCache.ts < 8000) {
+    return { memory: _ctxCache.memory, neuraCtx: _ctxCache.neuraCtx };
+  }
+  const memory = memStore.getRelevantContext(query);
+  const neuraCtx = useKnowledgeGraphStore.getState().getGraphContext(query || '');
+  _ctxCache = { key, memory, neuraCtx, ts: Date.now() };
+  return { memory, neuraCtx };
+}
+
 export const buildGiaSystem = (query?: string) => {
-    const { userProfile, activeSkillId, skills, customInstructions, pinnedMemories, handsOff } = useGiaStore.getState();
+    const { userProfile, activeSkillId, skills, customInstructions, pinnedMemories, handsOff, localTranslate } = useGiaStore.getState();
 const connectedSocials = socialManager.getPlatforms().filter(p => p.connected).map(p => `${p.name}${p.accountName ? ` (${p.accountName})` : ''}`);
 const connectedConnectors = connectorManager.getAll().filter(c => c.status === 'connected').map(c => `${c.name}`);
   const activeSkill = skills.find(s => s.id === activeSkillId);
   const memStore = useMemoryStore.getState();
-  const memory = memStore.getRelevantContext(query);
+  const { memory, neuraCtx } = getContextBlobs(query);
   const memoryCount = memStore.memories.length;
-  const neuraCtx = useKnowledgeGraphStore.getState().getGraphContext(query || '');
   const pinnedMems = pinnedMemories.length > 0
     ? memStore.memories.filter(m => pinnedMemories.includes(m.id))
     : [];
@@ -509,6 +528,7 @@ ${skillPrompt === 'Be concise, direct, and helpful. Use your tools when they add
 ## Language
 - Detect the language the user writes in and ALWAYS respond in the same language. If they write in Twi, French, Spanish, Arabic, etc. — answer in that language.
 - Never ask them to switch to English. Meet them where they are.
+${localTranslate ? '- Local on-device translation is enabled. For translation requests, use the local ML model (m2m100) via the LocalAI service in the sandbox rather than a cloud API. It supports 100+ language pairs.' : ''}
 
 ## Guidelines
 - Lead with the answer, then explain. Not the other way around.

@@ -100,6 +100,8 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const zoom = useRef(1);
   const tZoom = useRef(1);
   const isDrag = useRef(false);
+  const momentum = useRef(false);
+  const vel = useRef({ x: 0, y: 0 });
 
   const nodes = useRef<SphereNode[]>([]);
   const stars = useRef<{ x: number; y: number; r: number; a: number; phase: number; twinkleSpeed: number }[]>([]);
@@ -181,10 +183,10 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q) || e.aliases.some(a => a.toLowerCase().includes(q))
     ).map(e => e.id)) : null;
 
-    // ── Stars (twinkling) ──
-    const starTime = Date.now();
+    // Single timestamp for all pulses this frame — prevents phase desync
+    const now = Date.now();
     for (const s of stars.current) {
-      const twinkle = Math.sin(starTime * s.twinkleSpeed + s.phase) * 0.4 + 0.6;
+      const twinkle = Math.sin(now * s.twinkleSpeed + s.phase) * 0.4 + 0.6;
       ctx.beginPath();
       ctx.arc(cx + s.x, cy + s.y, s.r * (0.6 + twinkle * 0.4), 0, Math.PI * 2);
       ctx.fillStyle = `rgba(180,190,210,${s.a * twinkle})`;
@@ -192,7 +194,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
 
     // ── Hot core (pulsing center) ──
-    const corePulse = Math.sin(starTime * 0.003) * 0.2 + 0.8;
+    const corePulse = Math.sin(now * 0.003) * 0.2 + 0.8;
     const coreR = SPHERE_R * 0.08 * zoom.current * corePulse;
     const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3);
     core.addColorStop(0, 'rgba(255,255,255,0.4)');
@@ -226,10 +228,10 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     ctx.fill();
 
     // ── Energy rings (pulsing) ──
-    const ringPulse1 = Math.sin(starTime * 0.002) * 0.3 + 0.7;
-    const ringPulse2 = Math.sin(starTime * 0.0015 + 1.5) * 0.3 + 0.7;
+    const ringPulse1 = Math.sin(now * 0.002) * 0.3 + 0.7;
+    const ringPulse2 = Math.sin(now * 0.0015 + 1.5) * 0.3 + 0.7;
     for (let i = 0; i < 4; i++) {
-      const angle = (i / 4) * Math.PI + starTime * 0.0002;
+      const angle = (i / 4) * Math.PI + now * 0.0002;
       const rx = SPHERE_R * (0.7 + i * 0.12) * zoom.current;
       const ry = SPHERE_R * (0.15 + i * 0.06) * zoom.current;
       ctx.beginPath();
@@ -241,8 +243,8 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
     // ── Pulsing longitude arcs ──
     for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI + starTime * 0.0003;
-      const pulse = Math.sin(starTime * 0.001 + i) * 0.3 + 0.7;
+      const angle = (i / 8) * Math.PI + now * 0.0003;
+      const pulse = Math.sin(now * 0.001 + i) * 0.3 + 0.7;
       ctx.beginPath();
       ctx.ellipse(cx, cy, SPHERE_R * 0.65 * zoom.current, SPHERE_R * 0.65 * zoom.current, angle, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(139,92,246,${0.02 * pulse})`;
@@ -251,7 +253,6 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
 
     // ── Edges (pulsing, brighter) ──
-    const edgeTime = Date.now();
     const drawn = new Set<string>();
     for (const rel of relationships) {
       const a = proj.find(n => n.id === rel.sourceId);
@@ -264,9 +265,9 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const isSel = selId && (rel.sourceId === selId || rel.targetId === selId);
       const isHl = hl && (hl.has(rel.sourceId) || hl.has(rel.targetId));
 
-      // Per-edge pulse using edgeTime + index as phase offset
+      // Per-edge pulse using now + index as phase offset
       const edgePhase = drawn.size * 0.7;
-      const pulse = Math.sin(edgeTime * 0.0025 + edgePhase) * 0.25 + 0.75;
+      const pulse = Math.sin(now * 0.0025 + edgePhase) * 0.25 + 0.75;
 
       const baseAlpha = isSel ? 0.7 : isHl ? 0.4 : 0.15;
       const alpha = baseAlpha * pulse;
@@ -324,7 +325,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       if (isSel) {
         // Pulse ring
-        const pulse = Math.sin(Date.now() * 0.004) * 0.3 + 0.7;
+        const pulse = Math.sin(now * 0.004) * 0.3 + 0.7;
         ctx.beginPath();
         ctx.arc(sx, sy, sr * (2.5 + pulse * 0.5), 0, Math.PI * 2);
         ctx.strokeStyle = p.color;
@@ -333,7 +334,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         ctx.stroke();
 
         // Second wider pulse
-        const pulse2 = Math.sin(Date.now() * 0.0025 + 1) * 0.3 + 0.7;
+        const pulse2 = Math.sin(now * 0.0025 + 1) * 0.3 + 0.7;
         ctx.beginPath();
         ctx.arc(sx, sy, sr * (4 + pulse2), 0, Math.PI * 2);
         ctx.strokeStyle = p.color;
@@ -385,18 +386,38 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   function tick() {
     const r = rot.current;
     const tr = tRot.current;
-    const dt = isDrag.current ? 0.12 : 0.05;
-    r.x += (tr.x - r.x) * dt;
-    r.y += (tr.y - r.y) * dt;
 
-    // Auto-spin when idle (smoother ramp-up)
-    idle.current += 1;
-    if (idle.current > 120 && !isDrag.current) {
-      const speed = Math.min((idle.current - 120) / 200, 1) * 0.004;
-      tr.y += speed;
+    if (isDrag.current) {
+      // Direct follow with light smoothing during drag
+      r.x += (tr.x - r.x) * 0.12;
+      r.y += (tr.y - r.y) * 0.12;
+    } else if (momentum.current) {
+      // Decaying momentum after drag release — feels like inertia
+      r.x += vel.current.x;
+      r.y += vel.current.y;
+      vel.current.x *= 0.97;
+      vel.current.y *= 0.97;
+      if (Math.abs(vel.current.x) < 0.00005 && Math.abs(vel.current.y) < 0.00005) {
+        momentum.current = false;
+      }
+    } else {
+      // Gentle lerp toward target (idle / auto-spin)
+      r.x += (tr.x - r.x) * 0.05;
+      r.y += (tr.y - r.y) * 0.05;
     }
 
-    zoom.current += (tZoom.current - zoom.current) * (isDrag.current ? 0.35 : 0.18);
+    // Auto-spin when idle (smoother ramp-up)
+    if (!isDrag.current && !momentum.current) {
+      idle.current += 1;
+      if (idle.current > 120) {
+        const speed = Math.min((idle.current - 120) / 200, 1) * 0.004;
+        tr.y += speed;
+      }
+    } else {
+      idle.current = 0;
+    }
+
+    zoom.current += (tZoom.current - zoom.current) * (isDrag.current ? 0.3 : 0.12);
     render();
     raf.current = requestAnimationFrame(tick);
   }
@@ -448,6 +469,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const dy = e.clientY - drag.current.y;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
     tRot.current = { x: rot.current.x + dy * 0.008, y: rot.current.y + dx * 0.008 };
+    vel.current = { x: dx * 0.008, y: dy * 0.008 };
     drag.current = { x: e.clientX, y: e.clientY };
   }, []);
 
@@ -470,7 +492,11 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     isDrag.current = false;
     drag.current = null;
 
-    if (wasDrag) { idle.current = 0; return; }
+    if (wasDrag) {
+      momentum.current = true;
+      idle.current = 0;
+      return;
+    }
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;

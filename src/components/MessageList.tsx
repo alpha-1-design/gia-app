@@ -11,6 +11,8 @@ import ArtifactsPanel from './ArtifactsPanel';
 import MessageContextMenu from './MessageContextMenu';
 import { ChatSkeleton } from './feedback';
 import { resolveAgentIcon, resolveAgentColor } from '../utils/agentIcons';
+import InlineToolExecution from './InlineToolExecution';
+import { useProtocolStore } from '../store/useProtocolStore';
 import type { Message, ThinkingPhase } from '../store/useGiaStore';
 
 const AgentBadge: React.FC<{ agentName?: string; agentIcon?: string; agentTask?: string }> = ({ agentName, agentIcon, agentTask }) => {
@@ -81,6 +83,7 @@ const MessageList: React.FC<MessageListProps> = ({
 }) => {
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
+  const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
   return (
     <>
       {loading && messages.length === 0 && (
@@ -231,6 +234,19 @@ const MessageList: React.FC<MessageListProps> = ({
                     )}
                     {msg.artifacts && msg.artifacts.length > 0 && (
                       <ArtifactsPanel artifacts={msg.artifacts} />
+                    )}
+                    {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id).length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        <p className="text-[9px] font-semibold uppercase tracking-wider px-0.5" style={{ color: 'var(--gia-muted)' }}>
+                          Tool calls
+                        </p>
+                        {consoleProtocols
+                          .filter(p => p.messageId === msg.id)
+                          .sort((a, b) => a.createdAt - b.createdAt)
+                          .map((p, pi) => (
+                            <InlineToolExecution key={p.id} protocol={p} index={pi} />
+                          ))}
+                      </div>
                     )}
                     {(liveThoughts[msg.id] || msg.thoughts) && (
                       <ThinkingPanel

@@ -25,9 +25,16 @@ public class GIAWakeWordService extends Service {
     private static final int ERROR_NOTIFICATION_ID = 1002;
     private static volatile boolean isRunning = false;
     private static volatile GIAWakeWordPlugin pluginRef = null;
+    private static volatile String pendingKeyword = "";
 
     public static boolean isRunning() {
         return isRunning;
+    }
+
+    public static String getPendingKeyword() {
+        String kw = pendingKeyword;
+        pendingKeyword = "";
+        return kw;
     }
 
     public static void setPluginRef(GIAWakeWordPlugin plugin) {
@@ -183,6 +190,7 @@ public class GIAWakeWordService extends Service {
     }
 
     private void onWakeWordDetected() {
+        pendingKeyword = keyword;
         GIAWakeWordPlugin ref = pluginRef;
         if (ref != null) {
             try {

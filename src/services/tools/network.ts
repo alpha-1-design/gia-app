@@ -40,7 +40,7 @@ function parsePorts(input: string): number[] {
   return [...new Set(ports)].sort((a, b) => a - b);
 }
 
-const networkScan: Tool = {
+export const networkScan: Tool = {
   id: 'network_scan',
   name: 'network_scan',
   description: 'Scan TCP ports on a remote host to detect which services are open. Uses the sandbox environment for execution.',
@@ -96,7 +96,7 @@ const networkScan: Tool = {
   },
 };
 
-const networkConnectivity: Tool = {
+export const networkConnectivity: Tool = {
   id: 'network_connectivity',
   name: 'network_connectivity',
   description: 'Test whether a specific host:port endpoint is reachable over TCP or UDP.',

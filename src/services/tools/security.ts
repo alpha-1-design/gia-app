@@ -488,7 +488,7 @@ export const securityTrace: Tool = {
   },
 };
 
-const securityQuarantine: Tool = {
+export const securityQuarantine: Tool = {
   id: 'security_quarantine',
   name: 'security_quarantine',
   description: 'Emergency quarantine — immediately isolates the device. Kills suspicious processes, blocks all network traffic using every available method, and secures the system. Requires confirmation.',

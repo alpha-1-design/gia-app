@@ -1,7 +1,15 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAgentStore } from '../store/useAgentStore';
+import { useProviderStore } from '../store/useProviderStore';
+import { providerMonitor } from '../services/ProviderMonitor';
 import { resolveAgentIcon, resolveAgentColor } from '../utils/agentIcons';
+
+const HEALTH_DOT: Record<string, string> = {
+  healthy: '#22c55e',
+  degraded: '#eab308',
+  down: '#ef4444',
+};
 
 interface AgentMentionPickerProps {
   query: string;
@@ -10,11 +18,15 @@ interface AgentMentionPickerProps {
 
 const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect }) => {
   const agents = useAgentStore(s => s.agents);
+  const activeProvider = useProviderStore(s => s.activeProvider);
+  const providers = useProviderStore(s => s.providers);
   const filtered = query
     ? agents.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
     : agents;
 
   if (agents.length === 0 || filtered.length === 0) return null;
+
+  const health = providerMonitor.getHealth(activeProvider, providers[activeProvider]?.model || '');
 
   return (
     <AnimatePresence>
@@ -29,7 +41,7 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
           style={{ background: 'rgba(13, 13, 18, 0.98)', borderColor: 'rgba(255,255,255,0.08)' }}
         >
           <div className="px-3 py-2 text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'var(--gia-muted-2)' }}>
-            Agents
+            Agents — via {activeProvider}
           </div>
           {filtered.map(agent => {
             const IconComp = resolveAgentIcon(agent.icon);
@@ -47,8 +59,14 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
                   <IconComp size={13} style={{ color }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>
-                    @{agent.name}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>
+                      @{agent.name}
+                    </span>
+                    <span className="flex items-center gap-1 px-1 py-0.5 rounded text-[7px] font-medium uppercase tracking-wider" style={{ background: `${HEALTH_DOT[health.status]}12`, color: HEALTH_DOT[health.status] }}>
+                      <span className="w-1 h-1 rounded-full" style={{ background: HEALTH_DOT[health.status] }} />
+                      {activeProvider}
+                    </span>
                   </div>
                   {agent.description && (
                     <div className="text-[9px] truncate mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>

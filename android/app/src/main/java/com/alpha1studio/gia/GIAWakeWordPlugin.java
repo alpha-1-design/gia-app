@@ -64,6 +64,16 @@ public class GIAWakeWordPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getPendingWakeWord(PluginCall call) {
+        String keyword = GIAWakeWordService.getPendingKeyword();
+        boolean detected = keyword != null && !keyword.isEmpty();
+        JSObject ret = new JSObject();
+        ret.put("detected", detected);
+        ret.put("keyword", detected ? keyword : "");
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void isListening(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("listening", GIAWakeWordService.isRunning());
