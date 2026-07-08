@@ -7,42 +7,6 @@ import type { Tool } from './types';
 
 const isNative = isNativePlatform;
 
-const terminalRun: Tool = {
-  id: 'terminal_run',
-  name: 'terminal_run',
-  description: 'Execute scripts in a sandboxed container (Python, JS, C++).',
-  schema: {
-    type: 'object',
-    properties: {
-      command: { type: 'string', description: 'Code to execute' },
-      language: { type: 'string', description: 'Language: python/js/cpp', enum: ['python', 'js', 'cpp'] }
-    },
-    required: ['command']
-  },
-  execute: async ({ command, language = 'python' }) => {
-    const terminalSchema = z.object({
-      command: z.string().min(1, "Command is required").max(10000, "Command too long"),
-      language: z.enum(['python', 'js', 'cpp']).default('python')
-    });
-
-    const validationResult = terminalSchema.safeParse({ command, language });
-    if (!validationResult.success) {
-      return {
-        success: false,
-        content: '',
-        error: `Invalid terminal run parameters: ${validationResult.error.issues.map((e: z.ZodIssue) => (e instanceof Error ? e.message : String(e))).join(', ')}`
-      };
-    }
-
-    try {
-      const result = await CodeRunner.run({ language: language as string, code: command as string });
-      return result.error ? { success: false, content: result.output, error: result.error } : { success: true, content: result.output };
-    } catch (e: unknown) {
-      return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
-    }
-  }
-};
-
 const environmentInfo: Tool = {
   id: 'get_environment_info',
   name: 'get_environment_info',
@@ -258,4 +222,4 @@ const imageGeneration: Tool = {
   }
 };
 
-export const coreTools: Tool[] = [terminalRun, environmentInfo, github, wikipedia, weather, define, imageGeneration];
+export const coreTools: Tool[] = [environmentInfo, github, wikipedia, weather, define, imageGeneration];

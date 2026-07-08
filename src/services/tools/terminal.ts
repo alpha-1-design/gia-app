@@ -156,8 +156,40 @@ _Exit code: ${result.exitCode}_`,
       errors.push(`Code runner: ${e instanceof Error ? e.message : 'failed'}`);
     }
 
+    // ── Backend 4: Browser-native JS sandbox ────────────────────────────────
+    if (language === 'js') {
+      ctx?.onProgress?.(0.8, 'Running in browser…');
+      ctx?.onThought?.('Running JavaScript in browser sandbox...');
+      try {
+        const result = await CodeRunner.run({ language: 'javascript', code: command });
+        if (!result.error || result.output) {
+          ctx?.onProgress?.(1, 'Done');
+          return { success: !result.error, content: result.output || '(no output)', error: result.error || undefined };
+        }
+        errors.push(`Browser JS: ${result.error}`);
+      } catch (e) {
+        errors.push(`Browser JS: ${e instanceof Error ? e.message : 'failed'}`);
+      }
+    }
+
+    // ── Backend 5: Pyodide WASM Python (local, no server needed) ───────────
+    if (language === 'python') {
+      ctx?.onProgress?.(0.8, 'Loading Python runtime…');
+      ctx?.onThought?.('Loading Pyodide (WASM Python)...');
+      try {
+        const pyodideMod = await import('../PyodideRuntime');
+        if (pyodideMod.isReady()) {
+          const result = await pyodideMod.runPython(command);
+          ctx?.onProgress?.(1, 'Done');
+          return { success: true, content: result, error: undefined };
+        }
+        errors.push('Pyodide: runtime not loaded');
+      } catch (e) {
+        errors.push(`Pyodide: ${e instanceof Error ? e.message : 'failed'}`);
+      }
+    }
+
     // ── All backends exhausted ──────────────────────────────────────────────
-    // Give the user an honest, actionable error instead of letting the AI hallucinate success.
     const detail = errors.map((e, i) => `${i + 1}. ${e}`).join('\n');
     return {
       success: false,
@@ -171,6 +203,7 @@ _Exit code: ${result.exitCode}_`,
         'To fix:',
         '• On Android: ensure the GIATerminal native plugin is installed and the proot Alpine environment is set up.',
         '• For code execution: configure a Piston endpoint in Settings → Code Execution.',
+        '• JavaScript runs in-browser automatically.',
       ].join('\n'),
     };
   },
