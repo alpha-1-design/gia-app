@@ -242,9 +242,8 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **On-Device LLM** | Run Qwen2.5 generative LLMs (0.5B–3B) locally via Transformers WASM — full text generation offline |
 | **On-Device Python (Pyodide)** | Run Python code locally via Pyodide WASM — no server required |
 | **On-Device Vision** | Local image captioning, OCR, object detection, and classification + automatic provider fallback |
-| **Voice Overlay** | Animated full-screen voice UI with waveform visualization and ripple rings |
 | **Setup Wizard** | First-run onboarding with step-by-step provider setup, API key entry, and connection testing |
-| **Native Device Integration** | Make calls, send SMS/WhatsApp/email, share content, read/write clipboard, trigger vibration |
+| **Native Device Integration** 🧪 | Make calls, send SMS/WhatsApp/email, share content, read/write clipboard, trigger vibration — *calling/SMS experimental* |
 | **Social Media Manager** | Post, schedule, and analyze across 7 platforms (X, Instagram, Facebook, LinkedIn, TikTok, Telegram, WhatsApp) with OAuth |
 | **API Gateway** | Configurable HTTP proxy with route management, logging, rate limiting, and caching |
 | **Connector System** | 11 pre-built API connectors (OpenWeatherMap, GitHub, Twilio, Supabase, etc.) with key management |
@@ -256,7 +255,7 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **GitHub Integration** | Fetch GitHub user profiles, repos, files, and metadata directly from chat |
 | **Biometric Lock** | Optional fingerprint / face unlock via native biometric API |
 | **Device Health** | Storage, battery, memory monitoring with risk alerts |
-| **Directions & Maps** | Turn-by-turn routing (OSRM) with interactive map rendering |
+| **Directions & Maps** 🧪 | Turn-by-turn routing (OSRM) with interactive map rendering — *experimental* |
 | **Memory CRUD Tools** | `save_memory`, `forget_memory` with category filtering |
 | **Build Project** | Scaffold, build, and package code projects into download-ready ZIP |
 | **Install Skill** | Dynamically install skill definitions from URL or built-in registry |
@@ -264,7 +263,6 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Network-Aware Retry** | `generateWithRetry` detects offline state, waits for reconnection, provides clearer error messages with provider-switch hints |
 | **Scheduled Post Auto-Publish** | SchedulerService checks and publishes due social posts automatically |
 | **Autonomy Hanging Detection** | ProactiveEngine marks steps stuck >5min as failed, reduces check interval to 30s |
-| **CI Signed APK Builds** | Keystore generated during CI — release APK is ready to sideload |
 | **Granular Notifications** | Schedule, cancel, list, and check permissions for native push notifications |
 | **Geolocation Tools** | Watch position, clear watch, check/request permissions |
 | **Haptic Patterns** | Impact, notification, and vibration haptic feedback types |
@@ -288,12 +286,10 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 | **Calendar Integration** | Full Google Calendar CRUD via OAuth — list, create, update, delete events with 6 dedicated tools |
 | **Email Integration** | Full Gmail read/send via OAuth — connect, send, list, read, search with 7 dedicated tools |
 | **Messaging Platforms** | WhatsApp and Telegram messaging integration with mention-only mode and platform status monitoring |
-| **Bible & Devotion** | Verse of the day, Bible search, daily devotionals, and configurable morning briefing |
 | **Reminders & Music** | Set reminders and play music through tool commands |
 | **Plugin Management UI** | Install plugins from URL or file upload, enable/disable with manifest validation |
 | **Custom Skill Editor** | Create custom skills with editable name, system prompt, and tool assignment toggles |
 | **Memory Browser** | Inline memory viewer in settings with search, category color coding, and bulk delete |
-| **Install QR Code** | QR code generator for downloading latest APK from GitHub releases |
 | **Sandbox Package Management** | Install packages via apk, clone git repos, and manage sandbox filesystem |
 | **RAG Document Listing** | List all indexed RAG documents with `rag_list_docs` tool |
 | **File Editing** | Edit existing generated documents (PDF, DOCX, PPTX) |
@@ -626,17 +622,6 @@ Configure GIA's persona beyond the system prompt:
 
 Configured in Settings → Identity. All fields are injected into GIA's system prompt for consistent behavior.
 
-## 🎙 Voice & Wake Word Settings
-
-Full wake word configuration UI in Settings → Voice:
-
-- **Wake Word Access Key**: Picovoice Porcupine access key input
-- **Sensitivity Slider**: 0–1 sensitivity for native wake word detection
-- **Test Wake Word**: Button with detection event log (confidence %, timestamp)
-- **Service Status**: Badges showing running/idle/error state
-- **On-Device Whisper**: Download ~50MB ONNX model — toggle between local Whisper and browser STT
-- **Wake Word Diagnostics**: Mic permission indicator, model loaded status
-
 ## 👁 On-Device Vision Management
 
 Settings → Vision provides model lifecycle management:
@@ -699,18 +684,6 @@ Connect WhatsApp and Telegram for messaging automation:
 - **Disconnect**: Remove platform configuration
 
 Tools: `messaging_status`, `messaging_setup_telegram`, `messaging_setup_whatsapp`, `messaging_disconnect`, `messaging_send`, `messaging_set_mention_only`
-
-## 📖 Bible & Devotion Tools
-
-Personal faith integration tools:
-
-- **Bible Verse**: Verse of the day, chapter reading, or search by reference
-- **Daily Devotion**: Fetch daily devotional content
-- **Morning Briefing**: Configurable daily morning summary
-- **Set Reminder**: Schedule personalized reminders
-- **Play Music**: Play audio tracks via tool command
-
-Tools: `bible_verse`, `daily_devotion`, `setup_morning_briefing`, `set_reminder`, `play_music`
 
 ## 🧪 Developer Settings
 
