@@ -27,8 +27,7 @@ export default defineConfig({
     cssMinify: 'esbuild',
     // Ensure assets are bundled cleanly for WebView
     assetsDir: 'assets',
-    chunkSizeWarningLimit: 800,
-    // Empty dist folder before build
+    chunkSizeWarningLimit: 1000,
     emptyOutDir: true,
     rollupOptions: {
       output: {
@@ -36,6 +35,16 @@ export default defineConfig({
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'vendor-react';
           if (id.includes('node_modules/motion')) return 'vendor-motion';
           if (id.includes('node_modules/lucide-react')) return 'vendor-ui';
+          if (id.includes('node_modules/recharts')) return 'vendor-charts';
+          if (id.includes('node_modules/leaflet')) return 'vendor-maps';
+          if (id.includes('node_modules/mermaid')) return 'vendor-mermaid';
+          if (id.includes('node_modules/three')) return 'vendor-three';
+          if (id.includes('node_modules/pdfjs-dist')) return 'vendor-pdf';
+          if (id.includes('node_modules/pdf-lib')) return 'vendor-pdf-lib';
+          if (id.includes('node_modules/katex')) return 'vendor-katex';
+          if (id.includes('node_modules/zod')) return 'vendor-zod';
+          if (id.includes('node_modules/zustand')) return 'vendor-state';
+          if (id.includes('node_modules/qrcode')) return 'vendor-qrcode';
         },
       },
     },

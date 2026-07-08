@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import PDFService from '../services/PDFService';
+import { knowledgeGraphService } from '../services/KnowledgeGraphService';
 
 export type Attachment = { name: string; type: string; content: string; preview?: string };
 
@@ -27,6 +28,9 @@ export function useFileAttachments() {
             try {
               const text = await PDFService.extractTextFromBase64(reader.result as string);
               newAtts.push({ name: file.name, type: file.type, content: text });
+              if (text && text.length > 20) {
+                knowledgeGraphService.extractFromDocument(file.name, text, `doc-${Date.now()}`);
+              }
             } catch {
               newAtts.push({ name: file.name, type: file.type, content: 'Failed to extract PDF text.' });
             }
@@ -35,7 +39,14 @@ export function useFileAttachments() {
           reader.onerror = onError;
           reader.readAsDataURL(file);
         } else {
-          reader.onload = () => { newAtts.push({ name: file.name, type: file.type || 'text/plain', content: reader.result as string }); resolve(); };
+          reader.onload = () => {
+            const text = reader.result as string;
+            newAtts.push({ name: file.name, type: file.type || 'text/plain', content: text });
+            if (text && text.length > 20) {
+              knowledgeGraphService.extractFromDocument(file.name, text, `doc-${Date.now()}`);
+            }
+            resolve();
+          };
           reader.onerror = onError;
           reader.readAsText(file);
         }

@@ -25,6 +25,7 @@ import { ClarificationBottomSheet } from '../components/chat/ClarificationBottom
 import { EngineSheet } from '../components/chat/EngineSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
+import AgentMentionPicker from '../components/AgentMentionPicker';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -36,7 +37,7 @@ const QUICK_STARTS = [
 
 const ChatModule: React.FC = () => {
   const {
-    input, setInput, loading, streamingMsgId, voiceEnabled,
+    input, setInput, loading, streamingMsgId, streamingMsgIds, voiceEnabled,
     showHistory, setShowHistory, historySearch, setHistorySearch, attachments,
     processingFiles, processingFileName,
     showScrollBtn, undoMsg, showSkillPicker,
@@ -64,6 +65,7 @@ const ChatModule: React.FC = () => {
     setShowSkillPicker, setShowTools, setShowConsole,
     showBranchView, setShowBranchView,
     clarification, setClarification,
+    showAgentMention, agentMentionQuery, handleAgentMentionSelect,
   } = useChatState();
 
   const [showEngine, setShowEngine] = React.useState(false);
@@ -272,6 +274,7 @@ const ChatModule: React.FC = () => {
           messages={messages}
           loading={loading}
           streamingMsgId={streamingMsgId}
+          streamingMsgIds={streamingMsgIds}
           expandedMsgs={expandedMsgs}
           setExpandedMsgs={setExpandedMsgs}
           showThoughts={showThoughts}
@@ -360,6 +363,12 @@ const ChatModule: React.FC = () => {
       </AnimatePresence>
 
         <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
+        {showAgentMention && (
+          <AgentMentionPicker
+            query={agentMentionQuery}
+            onSelect={handleAgentMentionSelect}
+          />
+        )}
         <input ref={fileRef} type="file" className="hidden" multiple onChange={e => handleFile(e)} accept=".txt,.md,.pdf,.csv,.json,.js,.ts,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.env" />
         <input ref={imgRef} type="file" className="hidden" multiple accept="image/*" onChange={e => handleFile(e, true)} />
 

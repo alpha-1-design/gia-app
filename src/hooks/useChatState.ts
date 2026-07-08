@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useGiaStore } from '../store/useGiaStore';
+import { useAgentStore } from '../store/useAgentStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { useProtocolStore } from '../store/useProtocolStore';
@@ -27,6 +28,8 @@ export function useChatState() {
   const [showFileManager, setShowFileManager] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [inputContainerHeight, setInputContainerHeight] = useState(140);
+  const [showAgentMention, setShowAgentMention] = useState(false);
+  const [agentMentionQuery, setAgentMentionQuery] = useState('');
 
   const fileRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLInputElement>(null);
@@ -112,6 +115,7 @@ export function useChatState() {
     useCallback((text: string) => {
       genRef.current.handleSend(text, attachmentsRef.current, setInput, v => setAttachmentsRef.current(v as Attachment[]));
     }, [setInput]),
+    setInput,
   );
 
   const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision') => {
@@ -304,7 +308,31 @@ export function useChatState() {
   const handleInputChange = useCallback((value: string) => {
     setInput(value);
     if (value === '/') setShowSkillPicker(true);
+
+    // Detect @-mention for agents
+    const atIdx = value.lastIndexOf('@');
+    if (atIdx >= 0 && (atIdx === 0 || value[atIdx - 1] === ' ')) {
+      const afterAt = value.slice(atIdx + 1);
+      // Only show if no space after @ (user is still typing the name)
+      if (!afterAt.includes(' ')) {
+        setShowAgentMention(true);
+        setAgentMentionQuery(afterAt);
+        return;
+      }
+    }
+    setShowAgentMention(false);
+    setAgentMentionQuery('');
   }, []);
+
+  const handleAgentMentionSelect = useCallback((agentId: string, agentName: string) => {
+    const atIdx = input.lastIndexOf('@');
+    if (atIdx >= 0) {
+      const beforeAt = input.slice(0, atIdx);
+      setInput(`${beforeAt}@${agentName} `);
+    }
+    setShowAgentMention(false);
+    setAgentMentionQuery('');
+  }, [input]);
 
   const handleSend = useCallback(() => {
     if (input.trim() === '/') {
@@ -336,7 +364,21 @@ export function useChatState() {
       }
     }
 
-    gen.handleSend(input, attachments, setInput, v => setAttachments(v as Attachment[]));
+    setShowAgentMention(false);
+
+    // Parse @mentions and resolve agents
+    const agents = useAgentStore.getState().agents;
+    const mentionedAgents: { id: string; name: string; icon: string }[] = [];
+    let cleanedInput = input;
+    for (const a of agents) {
+      const pattern = `@${a.name}`;
+      if (cleanedInput.includes(pattern)) {
+        mentionedAgents.push({ id: a.id, name: a.name, icon: a.icon });
+        cleanedInput = cleanedInput.replace(pattern, '').trim();
+      }
+    }
+
+    gen.handleSend(input, attachments, setInput, v => setAttachments(v as Attachment[]), mentionedAgents, cleanedInput || input);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, attachments, gen.handleSend, setAttachments]);
 
@@ -348,7 +390,9 @@ export function useChatState() {
 
   return {
     input, setInput,
-    loading: gen.loading, streamingMsgId: gen.streamingMsgId,
+    loading: gen.loading, streamingMsgId: gen.streamingMsgId, streamingMsgIds: gen.streamingMsgIds,
+    showAgentMention, setShowAgentMention, agentMentionQuery,
+    handleAgentMentionSelect,
     voiceEnabled, setVoiceEnabled, showHistory, setShowHistory,
     historySearch, setHistorySearch, attachments, setAttachments,
     copiedId: msgOps.copiedId,

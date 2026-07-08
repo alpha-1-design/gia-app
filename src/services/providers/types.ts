@@ -15,6 +15,7 @@ export interface BrainRequest {
   signal?: AbortSignal;
   _skipNativeSchemas?: boolean;
   forceJson?: boolean;
+  providerId?: string;
 }
 
 export interface TokenUsage {

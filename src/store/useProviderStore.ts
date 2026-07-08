@@ -16,11 +16,23 @@ export interface ModelOption {
   vision?: boolean;
 }
 
-interface ProviderConfig {
+export interface ProviderConfig {
   apiKey: string;
   model: string;
   enabled: boolean;
   baseUrl?: string;
+  tokenBalance?: number;
+  tokenLimit?: number;
+}
+
+export interface PendingTask {
+  id: string;
+  agentId?: string;
+  agentName?: string;
+  prompt: string;
+  sessionId: string;
+  createdAt: number;
+  status: 'pending' | 'running' | 'completed' | 'failed';
 }
 
 interface GiaProviderState {
@@ -28,13 +40,41 @@ interface GiaProviderState {
   availableModels: Record<string, ModelOption[]>;
   activeProvider: string;
   initialised: boolean;
+  pendingTasks: PendingTask[];
   setProviderKey: (p: string, key: string) => void;
   setProviderModel: (p: string, model: string) => void;
   setActiveProvider: (p: string) => void;
   setProviderBaseUrl: (p: string, url: string) => void;
+  setProviderTokenBalance: (p: string, balance: number) => void;
+  setProviderTokenLimit: (p: string, limit: number) => void;
+  deductTokens: (p: string, amount: number) => void;
+  getActiveProviders: () => { id: string; config: ProviderConfig }[];
+  getBestProviderForTask: () => { id: string; config: ProviderConfig } | null;
   disconnectProvider: (p: string) => void;
   fetchModels: (p: string) => Promise<ModelOption[]>;
   loadProviders: () => Promise<void>;
+  addPendingTask: (task: Omit<PendingTask, 'id' | 'createdAt' | 'status'>) => string;
+  removePendingTask: (id: string) => void;
+  processPendingTasks: () => Promise<void>;
+}
+
+function getActiveProvidersFromState(providers: Record<string, ProviderConfig>): { id: string; config: ProviderConfig }[] {
+  return Object.entries(providers)
+    .filter(([, cfg]) => cfg.enabled && cfg.apiKey && cfg.apiKey.trim().length > 0)
+    .map(([id, config]) => ({ id, config }));
+}
+
+function getBestProviderFromState(providers: Record<string, ProviderConfig>): { id: string; config: ProviderConfig } | null {
+  const active = getActiveProvidersFromState(providers);
+  if (active.length === 0) return null;
+  // Sort by token balance descending — pick the one with most tokens left
+  active.sort((a, b) => {
+    const aBal = a.config.tokenBalance ?? Infinity;
+    const bBal = b.config.tokenBalance ?? Infinity;
+    if (aBal !== bBal) return bBal - aBal;
+    return 0;
+  });
+  return active[0];
 }
 
 export const useProviderStore = create<GiaProviderState>()(
@@ -44,6 +84,7 @@ export const useProviderStore = create<GiaProviderState>()(
       availableModels: {},
       activeProvider: 'opencode',
       initialised: false,
+      pendingTasks: [],
 
       loadProviders: async () => {
         await providerRegistry.ensureLoaded();
@@ -254,11 +295,52 @@ export const useProviderStore = create<GiaProviderState>()(
           return providerRegistry.getModels(p);
         }
       },
+
+      setProviderTokenBalance: (p, balance) =>
+        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenBalance: balance } } })),
+
+      setProviderTokenLimit: (p, limit) =>
+        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenLimit: limit } } })),
+
+      deductTokens: (p, amount) => {
+        const config = get().providers[p];
+        if (!config) return;
+        const current = config.tokenBalance ?? Infinity;
+        if (current === Infinity) return; // Unlimited — no tracking
+        const remaining = Math.max(0, current - amount);
+        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenBalance: remaining } } }));
+      },
+
+      getActiveProviders: () => getActiveProvidersFromState(get().providers),
+
+      getBestProviderForTask: () => getBestProviderFromState(get().providers),
+
+      addPendingTask: (task) => {
+        const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const pending: PendingTask = { ...task, id, createdAt: Date.now(), status: 'pending' };
+        set((s) => ({ pendingTasks: [...s.pendingTasks, pending] }));
+        return id;
+      },
+
+      removePendingTask: (id) =>
+        set((s) => ({ pendingTasks: s.pendingTasks.filter(t => t.id !== id) })),
+
+      processPendingTasks: async () => {
+        const { pendingTasks, getBestProviderForTask } = get();
+        const best = getBestProviderForTask();
+        if (!best || pendingTasks.length === 0) return;
+        // Process one task at a time — emit event for useChatGeneration to pick up
+        const task = pendingTasks.find(t => t.status === 'pending');
+        if (!task) return;
+        set((s) => ({ pendingTasks: s.pendingTasks.map(t => t.id === task.id ? { ...t, status: 'running' } : t) }));
+        // Dispatch a custom event for the UI to handle
+        window.dispatchEvent(new CustomEvent('gia:pending-task-ready', { detail: task }));
+      },
     }),
     {
       name: 'gia-provider-storage-v2',
       storage: createJSONStorage(() => idbStorage),
-      partialize: (s) => ({ providers: s.providers, activeProvider: s.activeProvider }),
+      partialize: (s) => ({ providers: s.providers, activeProvider: s.activeProvider, pendingTasks: s.pendingTasks }),
     }
   )
 );

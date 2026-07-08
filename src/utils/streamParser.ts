@@ -1,15 +1,34 @@
 import { findFenceClose } from './jsonRepair';
 
+export interface TaskData {
+  id: string;
+  label: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  details?: string;
+}
+
+export interface ArtifactData {
+  identifier: string;
+  type: string;
+  title: string;
+  content: string;
+}
+
 export interface StreamParserState {
   accumulated: string;
   thoughtsAccumulated: string;
   inThinkBlock: boolean;
   inToolBlock: boolean;
   inJsonBlock: boolean;
+  inArtifactBlock: boolean;
   jsonBlockBuffer: string;
   pendingBacktickCount: number;
-  /** Buffered content inside the current tool block (for recovery on stream end) */
   toolBlockBuffer: string;
+  artifactBlockBuffer: string;
+  artifactConfigLine: string;
+  artifacts: ArtifactData[];
+  tasks: TaskData[];
+  pendingTaskMarker: string;
 }
 
 export const createStreamParser = (): StreamParserState => ({
@@ -18,9 +37,15 @@ export const createStreamParser = (): StreamParserState => ({
   inThinkBlock: false,
   inToolBlock: false,
   inJsonBlock: false,
+  inArtifactBlock: false,
   jsonBlockBuffer: '',
   pendingBacktickCount: 0,
   toolBlockBuffer: '',
+  artifactBlockBuffer: '',
+  artifactConfigLine: '',
+  artifacts: [],
+  tasks: [],
+  pendingTaskMarker: '',
 });
 
 /** Check if the given string (body of a json block) looks like a tool call JSON.
@@ -46,9 +71,9 @@ export const processStreamChunk = (
   if (state.pendingBacktickCount > 0) {
     const needed = 3 - state.pendingBacktickCount;
     const chunkAfter = chunk.startsWith('`') ? chunk.slice(needed) : chunk;
-    if ((chunk.startsWith('tool') || chunk.startsWith('json') || chunk.startsWith('visual')) && needed <= 3) {
+    if ((chunk.startsWith('tool') || chunk.startsWith('json') || chunk.startsWith('visual') || chunk.startsWith('artifact')) && needed <= 3) {
       chunk = '```' + chunk;
-    } else if ((chunkAfter.startsWith('tool') || chunkAfter.startsWith('json') || chunkAfter.startsWith('visual')) && needed <= 3) {
+    } else if ((chunkAfter.startsWith('tool') || chunkAfter.startsWith('json') || chunkAfter.startsWith('visual') || chunkAfter.startsWith('artifact')) && needed <= 3) {
       chunk = '`'.repeat(state.pendingBacktickCount) + chunk;
     }
     state.pendingBacktickCount = 0;
@@ -85,15 +110,12 @@ export const processStreamChunk = (
         remaining = '';
       }
     } else if (state.inJsonBlock) {
-      // We're inside a ```json block — buffer content, look for closing fence
       const endIdx = findFenceClose(remaining, 0);
       if (endIdx >= 0) {
         let content = remaining.slice(0, endIdx);
         if (content.endsWith('\n')) content = content.slice(0, -1);
         state.jsonBlockBuffer += content;
-        // Block complete — check if it's a tool call
         if (!isToolCallJson(state.jsonBlockBuffer)) {
-          // Not a tool call — release the buffered content to display
           displayChunk += '```json' + state.jsonBlockBuffer + '\n```';
         }
         state.inJsonBlock = false;
@@ -107,21 +129,56 @@ export const processStreamChunk = (
         state.jsonBlockBuffer += remaining;
         remaining = '';
       }
+    } else if (state.inArtifactBlock) {
+      const endIdx = findFenceClose(remaining, 0);
+      if (endIdx >= 0) {
+        state.artifactBlockBuffer += remaining.slice(0, endIdx);
+        remaining = remaining.slice(endIdx + 3);
+        // Parse the completed artifact
+        const fullBlock = state.artifactBlockBuffer;
+        state.artifactBlockBuffer = '';
+        state.inArtifactBlock = false;
+        const lines = fullBlock.split('\n');
+        const configLine = lines.find(l => l.trim().startsWith('{'));
+        if (configLine) {
+          try {
+            const config = JSON.parse(configLine.trim());
+            const content = lines.filter(l => l !== configLine).join('\n').trim();
+            if (config.identifier && config.type) {
+              state.artifacts.push({
+                identifier: config.identifier,
+                type: config.type,
+                title: config.title || config.identifier,
+                content,
+              });
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      } else if (remaining.startsWith('```')) {
+        state.artifactBlockBuffer = '';
+        state.inArtifactBlock = false;
+        remaining = remaining.slice(3);
+      } else {
+        state.artifactBlockBuffer += remaining;
+        remaining = '';
+      }
     } else {
       const thinkStart = remaining.indexOf('<think>');
       let toolStart = remaining.indexOf('```tool');
       if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
 
-      // Also detect ```json blocks that may contain tool calls
       let jsonStart = remaining.indexOf('```json');
       if (jsonStart > 0 && remaining[jsonStart - 1] !== '\n') jsonStart = -1;
 
-      // Pick the earliest marker
+      let artifactStart = remaining.indexOf('```artifact');
+      if (artifactStart > 0 && remaining[artifactStart - 1] !== '\n') artifactStart = -1;
+
       const firstMarker = (() => {
         const candidates: { idx: number; type: string }[] = [];
         if (toolStart >= 0) candidates.push({ idx: toolStart, type: 'tool' });
         if (thinkStart >= 0) candidates.push({ idx: thinkStart, type: 'think' });
         if (jsonStart >= 0) candidates.push({ idx: jsonStart, type: 'json' });
+        if (artifactStart >= 0) candidates.push({ idx: artifactStart, type: 'artifact' });
         candidates.sort((a, b) => a.idx - b.idx);
         return candidates.length > 0 ? candidates[0] : null;
       })();
@@ -160,9 +217,39 @@ export const processStreamChunk = (
           // Empty json block
           remaining = afterFence.slice(3);
         } else {
-          // Block continues in next chunk
           state.inJsonBlock = true;
           state.jsonBlockBuffer = afterFence;
+          remaining = '';
+        }
+      } else if (firstMarker && firstMarker.type === 'artifact') {
+        const before = remaining.slice(0, firstMarker.idx);
+        displayChunk += before;
+        const afterFence = remaining.slice(firstMarker.idx + 11);
+        const closeIdx = findFenceClose(afterFence, 0);
+        if (closeIdx >= 0) {
+          const fullBlock = afterFence.slice(0, closeIdx);
+          const lines = fullBlock.split('\n');
+          const configLine = lines.find(l => l.trim().startsWith('{'));
+          if (configLine) {
+            try {
+              const config = JSON.parse(configLine.trim());
+              const content = lines.filter(l => l !== configLine).join('\n').trim();
+              if (config.identifier && config.type) {
+                state.artifacts.push({
+                  identifier: config.identifier,
+                  type: config.type,
+                  title: config.title || config.identifier,
+                  content,
+                });
+              }
+            } catch { /* ignore */ }
+          }
+          remaining = afterFence.slice(closeIdx + 3);
+        } else if (afterFence.startsWith('```')) {
+          remaining = afterFence.slice(3);
+        } else {
+          state.inArtifactBlock = true;
+          state.artifactBlockBuffer = afterFence;
           remaining = '';
         }
       } else if (thinkStart >= 0) {
@@ -183,6 +270,47 @@ export const processStreamChunk = (
     if (count < 3) {
       state.pendingBacktickCount = count;
       displayChunk = displayChunk.slice(0, -count);
+    }
+  }
+
+  // ── Task marker detection ──────────────────────────────────
+  if (state.pendingTaskMarker) {
+    displayChunk = state.pendingTaskMarker + displayChunk;
+    state.pendingTaskMarker = '';
+  }
+
+  const taskLineRegex = /^---TASK:\s*(.+)$/gm;
+  let taskMatch;
+  let lastEnd = 0;
+  while ((taskMatch = taskLineRegex.exec(displayChunk)) !== null) {
+    const label = taskMatch[1].trim();
+    if (label) {
+      const before = displayChunk.slice(lastEnd, taskMatch.index);
+      const active = state.tasks.find(t => t.status === 'in_progress');
+      if (active && before) active.details = (active.details || '') + before;
+
+      state.tasks.forEach(t => { if (t.status === 'in_progress') t.status = 'completed'; });
+
+      state.tasks.push({
+        id: `task-${state.tasks.length + 1}`,
+        label,
+        status: 'in_progress',
+      });
+    }
+    const nl = displayChunk.indexOf('\n', taskMatch.index);
+    lastEnd = nl >= 0 ? nl + 1 : displayChunk.length;
+  }
+
+  if (lastEnd > 0) {
+    const after = displayChunk.slice(lastEnd);
+    const active = state.tasks.find(t => t.status === 'in_progress');
+    if (active && after) active.details = (active.details || '') + after;
+
+    displayChunk = displayChunk.replace(taskLineRegex, '').trim();
+    const partialMatch = displayChunk.match(/(---TASK:\s*)$/);
+    if (partialMatch) {
+      state.pendingTaskMarker = partialMatch[1];
+      displayChunk = displayChunk.slice(0, -partialMatch[1].length).trim();
     }
   }
 
@@ -252,9 +380,24 @@ export const stripToolBlocks = (text: string): string => {
   return result.trim();
 };
 
+export const stripArtifactBlocks = (text: string): string => {
+  let result = '';
+  let pos = 0;
+  while (pos < text.length) {
+    const artIdx = text.indexOf('```artifact', pos);
+    if (artIdx < 0) { result += text.slice(pos); break; }
+    result += text.slice(pos, artIdx);
+    const closeIdx = findFenceClose(text, artIdx + 11);
+    if (closeIdx < 0) { pos = artIdx + 11; continue; }
+    pos = closeIdx + 3;
+    if (pos < text.length && text[pos] === '\n') { result += '\n'; pos++; }
+  }
+  return result.trim();
+};
+
 export const processStreamForDisplay = (accumulated: string): string => {
   const stripped = stripToolBlocks(accumulated);
-  return stripped;
+  return stripArtifactBlocks(stripped);
 };
 
 export const flushThinkBlock = (state: StreamParserState): string => {
@@ -273,4 +416,28 @@ export const flushToolBlock = (state: StreamParserState): string => {
     state.inToolBlock = false;
   }
   return state.accumulated;
+};
+
+export const flushArtifactBlock = (state: StreamParserState): void => {
+  if (state.inArtifactBlock && state.artifactBlockBuffer) {
+    const fullBlock = state.artifactBlockBuffer;
+    const lines = fullBlock.split('\n');
+    const configLine = lines.find(l => l.trim().startsWith('{'));
+    if (configLine) {
+      try {
+        const config = JSON.parse(configLine.trim());
+        const content = lines.filter(l => l !== configLine).join('\n').trim();
+        if (config.identifier && config.type) {
+          state.artifacts.push({
+            identifier: config.identifier,
+            type: config.type,
+            title: config.title || config.identifier,
+            content,
+          });
+        }
+      } catch { /* ignore */ }
+    }
+    state.artifactBlockBuffer = '';
+    state.inArtifactBlock = false;
+  }
 };

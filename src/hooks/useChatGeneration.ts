@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import GiaBrain from '../services/GiaBrain';
 import TTSService from '../services/TTSService';
 import { useGiaStore } from '../store/useGiaStore';
+import { useAgentStore } from '../store/useAgentStore';
 import { useProtocolStore } from '../store/useProtocolStore';
 import { useShallow } from 'zustand/react/shallow';
 import AnalyticsService from '../services/AnalyticsService';
@@ -54,7 +55,9 @@ async function notifyIfBackground(module: 'chat' | 'agents', sessionId: string, 
 export function useChatGeneration() {
   const [loading, setLoading] = useState(false);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
+  const [streamingMsgIds, setStreamingMsgIds] = useState<Set<string>>(new Set());
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
+  const activeStreamsRef = useRef<Set<string>>(new Set());
 
   // Sync streaming state with store generationState (survives module switches)
   useEffect(() => {
@@ -62,6 +65,7 @@ export function useChatGeneration() {
     if (genState.active && genState.module === 'chat' && genState.messageId && genState.sessionId) {
       setLoading(true);
       setStreamingMsgId(genState.messageId);
+      setStreamingMsgIds(new Set([genState.messageId]));
       generationKeyRef.current = `chat-${genState.sessionId}-${genState.messageId}`;
     }
     const unsub = useGiaStore.subscribe((s) => {
@@ -69,6 +73,7 @@ export function useChatGeneration() {
       if (!gs.active || gs.module !== 'chat') {
         setLoading(false);
         setStreamingMsgId(null);
+        setStreamingMsgIds(new Set());
         generationKeyRef.current = null;
       }
     });
@@ -125,16 +130,21 @@ export function useChatGeneration() {
     attachments: { name: string; type: string; content?: string; preview?: string }[],
     setInput: (v: string) => void,
     setAttachments: (v: unknown[]) => void,
+    agentInfo?: { id: string; name: string; icon: string }[],
+    cleanedInput?: string,
   ) => {
     if (input.trim().startsWith('/')) return;
-    let text = input.trim();
+    let text = (cleanedInput || input).trim();
+    const sentAttachments = [...attachments];
+
     if (text.length > 12000) {
       const fileName = `long-input-${Date.now()}.txt`;
-      setAttachments([...attachments, { name: fileName, type: 'text/plain', content: text }]);
+      sentAttachments.push({ name: fileName, type: 'text/plain', content: text });
+      setAttachments(sentAttachments);
       text = 'I have attached a long text file for you to analyze.';
     }
 
-    if ((!text && attachments.length === 0) || loading) return;
+    if (!text && sentAttachments.length === 0) return;
 
     const state = useGiaStore.getState();
 
@@ -163,7 +173,8 @@ export function useChatGeneration() {
 
     const userMsg: Message = {
       id: genId(), role: 'user', content: userContent, timestamp: Date.now(),
-      attachments: attachments.length > 0 ? attachments as { name: string; type: string; content: string; preview?: string }[] : undefined,
+      attachments: sentAttachments.length > 0 ? sentAttachments as { name: string; type: string; content: string; preview?: string }[] : undefined,
+      ...(agentInfo?.[0] ? { agentId: agentInfo[0].id, agentName: agentInfo[0].name, agentIcon: agentInfo[0].icon, agentTask: userContent } : {}),
     };
 
     // Auto-name session from first user message
@@ -177,14 +188,13 @@ export function useChatGeneration() {
     AnalyticsService.trackMessage('user');
     giaCoreServices.onMessage(userContent, userMsg.id, 'user');
     TTSService.stop();
-    const sentAttachments = [...attachments];
     setInput('');
     setAttachments([]);
     lastUserMsgRef.current = text || fileNames;
     responseStartRef.current = Date.now();
     // Clear old tool execution results from previous turns
     useProtocolStore.getState().clearConsoleProtocols();
-    setLoading(true);
+    if (!loading) setLoading(true);
     state.setIntentState('thinking');
     state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');
 
@@ -213,10 +223,13 @@ export function useChatGeneration() {
     }
 
     const asstId = genId();
+    activeStreamsRef.current.add(asstId);
     state.addMessage(sessionId, {
       id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
+      ...(agentInfo?.[0] ? { agentId: agentInfo[0].id, agentName: agentInfo[0].name, agentIcon: agentInfo[0].icon, agentTask: text } : {}),
     });
     setStreamingMsgId(asstId);
+    setStreamingMsgIds(prev => new Set(prev).add(asstId));
     const genKey = `chat-${sessionId}-${asstId}`;
     generationKeyRef.current = genKey;
     const ctrl = new AbortController();
@@ -259,11 +272,24 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 - Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}
 - Local Vision: ${localVision ? 'ON' : 'OFF'}]\n\n`;
 
+      // Resolve agent system prompt if routing to an agent
+      let agentSystemPrompt: string | undefined;
+      let systemPromptMode: 'append' | 'replace' | undefined;
+      if (agentInfo?.[0]) {
+        const agent = useAgentStore.getState().agents.find(a => a.id === agentInfo[0].id);
+        if (agent) {
+          agentSystemPrompt = `${agent.systemPrompt}\n\nYou are "${agent.name}" — embody this persona fully.\n${agent.description ? `Your purpose: ${agent.description}` : ''}\n\n## Thinking Protocol\nBefore you respond, reason step by step inside <think> tags. Show your chain of thought, analysis, and planning there. This is your internal reasoning — use it to think through the task before answering. After reasoning, provide your final response outside the tags.\n\n## Task Tracking\nBreak down your work into clear steps. Before each step, output a task marker on its own line like:\n---TASK: step description here\nThis helps track your progress. Start a new marker for each distinct step. The system will automatically mark previous steps as complete when you start a new one.\n\nWhen you complete the assigned task, clearly indicate what you did and provide proof of completion.`;
+          systemPromptMode = 'replace';
+        }
+      }
+
       const parserState = createStreamParser();
       let displayAccumulated = '';
       const res = await GiaBrain.generate({
         signal: ctrl.signal,
         prompt: stateContext + handsOffPrefix + prompt, history,
+        systemPrompt: agentSystemPrompt,
+        systemPromptMode,
         images: brainImages,
         localVision,
         useWebSearch: webSearch,
@@ -282,6 +308,16 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             state.updateMessage(sessionId, asstId, _c, _t);
           }, 0);
           streamTimeoutsRef.current.add(_timer);
+          // Sync tasks if any were detected in this chunk
+          if (parserState.tasks.length > 0) {
+            const _tasks = parserState.tasks.map(t => ({ ...t }));
+            const _timer2 = setTimeout(() => {
+              streamTimeoutsRef.current.delete(_timer2);
+              if (ctrl.signal.aborted) return;
+              state.updateMessageTasks(sessionId, asstId, _tasks);
+            }, 0);
+            streamTimeoutsRef.current.add(_timer2);
+          }
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -346,6 +382,16 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         (res.text || '').trim().slice(0, 200) ||
         '🤖 _Taking action..._';
       state.updateMessage(sessionId, asstId, finalText, parserState.thoughtsAccumulated || undefined);
+      if (parserState.artifacts.length > 0) {
+        state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts);
+      }
+      if (parserState.tasks.length > 0) {
+        const finalTasks = parserState.tasks.map(t => ({
+          ...t,
+          status: t.status === 'in_progress' ? 'completed' as const : t.status,
+        }));
+        state.updateMessageTasks(sessionId, asstId, finalTasks);
+      }
       giaCoreServices.onMessage(finalText, asstId, 'assistant');
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
@@ -401,11 +447,15 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             : sess
         ),
       }));
-      setLoading(false);
-      setStreamingMsgId(null);
-      useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
-      useGiaStore.getState().setIntentState('idle');
-      useGiaStore.getState().setThinkingPhase('idle');
+      activeStreamsRef.current.delete(asstId);
+      setStreamingMsgIds(prev => { const n = new Set(prev); n.delete(asstId); return n; });
+      if (activeStreamsRef.current.size === 0) {
+        setLoading(false);
+        setStreamingMsgId(null);
+        useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
+        useGiaStore.getState().setIntentState('idle');
+        useGiaStore.getState().setThinkingPhase('idle');
+      }
     }
   }, [loading, registerGenerationController]);
 
@@ -496,6 +546,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         const contValidation = OutputValidator.validate(contContent);
         if (contValidation.issues.length > 0 && contValidation.sanitized.length > 0) contContent = contValidation.sanitized;
         state.updateMessage(state.activeSessionId!, asstId, contContent, contParserState.thoughtsAccumulated || undefined);
+        if (contParserState.artifacts.length > 0) {
+          state.updateMessageArtifacts(state.activeSessionId!, asstId, contParserState.artifacts);
+        }
         if (contRes.model || contRes.tokenUsage) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
@@ -540,6 +593,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
+      // Haptic feedback on response completion
+      try {
+        navigator.vibrate?.(15);
+      } catch { /* not supported */ }
     }
   }, [loading, registerGenerationController, unregisterGenerationController]);
 
@@ -626,6 +683,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         const clarValidation = OutputValidator.validate(clarContent);
         if (clarValidation.issues.length > 0 && clarValidation.sanitized.length > 0) clarContent = clarValidation.sanitized;
         state.updateMessage(sessionId, asstId, clarContent, clarParserState.thoughtsAccumulated || undefined);
+        if (clarParserState.artifacts.length > 0) {
+          state.updateMessageArtifacts(sessionId, asstId, clarParserState.artifacts);
+        }
         notifyIfBackground('chat', sessionId, asstId);
       }
     } catch (err: unknown) {
@@ -722,7 +782,11 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       if (!ctrl.signal.aborted) {
         for (const _t of streamTimeoutsRef.current) clearTimeout(_t);
         streamTimeoutsRef.current.clear();
-        state.updateMessage(state.activeSessionId!, id, retryDisplayAccumulated || processStreamForDisplay(retryParserState.accumulated));
+        const retryFinal = retryDisplayAccumulated || processStreamForDisplay(retryParserState.accumulated);
+        state.updateMessage(state.activeSessionId!, id, retryFinal);
+        if (retryParserState.artifacts.length > 0) {
+          state.updateMessageArtifacts(state.activeSessionId!, id, retryParserState.artifacts);
+        }
         if (genRes.model || genRes.tokenUsage) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
@@ -775,6 +839,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
   return {
     loading, setLoading,
     streamingMsgId, setStreamingMsgId,
+    streamingMsgIds, setStreamingMsgIds,
     liveThoughts, setLiveThoughts,
     abortTimeoutRef,
     responseStartRef, responseTimesRef, lastUserMsgRef,

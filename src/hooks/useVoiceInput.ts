@@ -38,6 +38,7 @@ function parseBatchIntents(transcript: string): string[] {
 export function useVoiceInput(
   abortTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
   onAutoSend?: (text: string) => void,
+  setInput?: (val: string) => void,
 ) {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
 
@@ -156,7 +157,6 @@ export function useVoiceInput(
     wakeWord: voiceSettings.wakeWord,
     onWakeWord,
     onTranscript: (transcript: string) => {
-      const setInput = (useGiaStore.getState() as unknown as Record<string, unknown>).setInput as ((v: string) => void) | undefined;
       if (setInput) handleVoiceTranscript(transcript, setInput, (text) => onAutoSend?.(text));
     },
     keepListening: voiceSettings.keepListening,
