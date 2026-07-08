@@ -7,6 +7,20 @@ export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'e
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 
+export interface TaskItem {
+  id: string;
+  label: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  details?: string;
+}
+
+export interface Artifact {
+  identifier: string;
+  type: string;
+  title: string;
+  content: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -14,6 +28,7 @@ export interface Message {
   error?: boolean;
   timestamp: number;
   attachments?: { name: string; type: string; content: string; preview?: string }[];
+  artifacts?: Artifact[];
   sources?: (string | { url: string; title?: string })[];
   model?: string;
   thinking?: boolean;
@@ -21,6 +36,11 @@ export interface Message {
   tokenUsage?: { input: number; output: number; total: number };
   parentId?: string;
   branchId?: string;
+  agentId?: string;
+  agentName?: string;
+  agentTask?: string;
+  agentIcon?: string;
+  tasks?: TaskItem[];
 }
 
 export interface MessageNode {
@@ -68,6 +88,32 @@ function updateMessageInTree(nodes: MessageNode[], msgId: string, content: strin
     }
     if (Array.isArray(node.children) && node.children.length > 0) {
       return { ...node, children: updateMessageInTree(node.children, msgId, content, thoughts) };
+    }
+    return node;
+  });
+}
+
+function updateArtifactsInTree(nodes: MessageNode[], msgId: string, artifacts: Artifact[]): MessageNode[] {
+  if (!Array.isArray(nodes)) return [];
+  return nodes.map(node => {
+    if (node.message.id === msgId) {
+      return { ...node, message: { ...node.message, artifacts: [...(node.message.artifacts || []), ...artifacts] } };
+    }
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      return { ...node, children: updateArtifactsInTree(node.children, msgId, artifacts) };
+    }
+    return node;
+  });
+}
+
+function updateTasksInTree(nodes: MessageNode[], msgId: string, tasks: TaskItem[]): MessageNode[] {
+  if (!Array.isArray(nodes)) return [];
+  return nodes.map(node => {
+    if (node.message.id === msgId) {
+      return { ...node, message: { ...node.message, tasks } };
+    }
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      return { ...node, children: updateTasksInTree(node.children, msgId, tasks) };
     }
     return node;
   });
@@ -284,6 +330,8 @@ interface GiaState {
   setActiveSession: (id: string) => void;
   addMessage: (sessionId: string, msg: Message) => void;
   updateMessage: (sessionId: string, msgId: string, content: string, thoughts?: string) => void;
+  updateMessageArtifacts: (sessionId: string, msgId: string, artifacts: Artifact[]) => void;
+  updateMessageTasks: (sessionId: string, msgId: string, tasks: TaskItem[]) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
   forkSession: (sessionId: string, msgId: string) => string;
@@ -560,6 +608,24 @@ export const useGiaStore = create<GiaState>()(
           ),
         })),
 
+      updateMessageArtifacts: (sessionId, msgId, artifacts) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === sessionId
+              ? { ...sess, messages: updateArtifactsInTree(sess.messages, msgId, artifacts) }
+              : sess
+          ),
+        })),
+
+      updateMessageTasks: (sessionId, msgId, tasks) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === sessionId
+              ? { ...sess, messages: updateTasksInTree(sess.messages, msgId, tasks) }
+              : sess
+          ),
+        })),
+
       updateSessionTitle: (sessionId, title) =>
         set((s) => ({ sessions: s.sessions.map((sess) => (sess.id === sessionId ? { ...sess, title } : sess)) })),
 
@@ -800,7 +866,6 @@ export const useGiaStore = create<GiaState>()(
       },
       partialize: (s) => ({
         sessions: s.sessions,
-        activeSessionId: s.activeSessionId,
         scheduledTasks: s.scheduledTasks,
         userProfile: s.userProfile,
         skills: s.skills,

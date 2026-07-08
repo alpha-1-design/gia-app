@@ -19,12 +19,14 @@ interface KnowledgeGraphState {
   getEntity: (id: string) => Entity | undefined;
   findEntity: (name: string, type?: EntityType) => Entity | undefined;
   queryEntities: (query: string) => Entity[];
+  searchEntities: (query: string) => Entity[];
   getRelationships: (entityId: string) => Relationship[];
   getRelatedEntities: (entityId: string, maxDepth?: number) => Entity[];
   getGraphContext: (query: string) => string;
   deleteEntity: (id: string) => void;
   deleteRelationship: (id: string) => void;
   compact: () => void;
+  applyDecay: () => void;
   clear: () => void;
 }
 
@@ -140,6 +142,38 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>()(
           .slice(0, 20);
       },
 
+      searchEntities: (query) => {
+        const lower = query.toLowerCase().trim();
+        if (!lower) return get().entities.slice(0, 20);
+        const queryWords = lower.split(/\s+/).filter(w => w.length > 2);
+        if (queryWords.length === 0) return get().entities.slice(0, 20);
+
+        // Score each entity by semantic overlap with query
+        const scored = get().entities.map(e => {
+          const text = `${e.name} ${e.aliases.join(' ')} ${e.description}`.toLowerCase();
+          const wordMatches = queryWords.filter(w => text.includes(w)).length;
+          const semanticScore = wordMatches / Math.max(queryWords.length, 1);
+          // Boost for name prefix matches
+          const nameBoost = e.name.toLowerCase().startsWith(lower) ? 0.3 : 0;
+          // Boost for exact alias match
+          const aliasBoost = e.aliases.some(a => a.toLowerCase() === lower) ? 0.3 : 0;
+          // Cosine similarity using word overlap
+          const textWords = text.split(/\s+/).filter(w => w.length > 2);
+          const textSet = new Set(textWords);
+          const overlap = queryWords.filter(w => textSet.has(w)).length;
+          const cosSim = overlap / Math.sqrt(queryWords.length * textWords.length || 1);
+          return {
+            entity: e,
+            score: cosSim * 0.6 + semanticScore * 0.3 + nameBoost + aliasBoost + e.confidence * 0.1,
+          };
+        });
+
+        return scored
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 20)
+          .map(s => s.entity);
+      },
+
       getRelationships: (entityId) =>
         get().relationships.filter((r) => r.sourceId === entityId || r.targetId === entityId),
 
@@ -217,6 +251,24 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>()(
               .filter((r) => activeIds.has(r.sourceId) && activeIds.has(r.targetId))
               .slice(0, MAX_RELATIONSHIPS),
             mentions: s.mentions.slice(-MAX_MENTIONS),
+          };
+        }),
+
+      applyDecay: () =>
+        set((s) => {
+          const now = Date.now();
+          const dayMs = 86400000;
+          const decayFactor = 0.97;
+
+          return {
+            entities: s.entities.map((e) => {
+              const daysSinceMention = (now - e.lastMentioned) / dayMs;
+              if (daysSinceMention < 1) return e; // Recently mentioned — no decay
+              // Decay confidence: 3% per day since last mention, floor at 0.1
+              const decay = Math.pow(decayFactor, daysSinceMention);
+              const newConfidence = Math.max(0.1, e.confidence * decay);
+              return { ...e, confidence: Math.round(newConfidence * 1000) / 1000 };
+            }),
           };
         }),
 

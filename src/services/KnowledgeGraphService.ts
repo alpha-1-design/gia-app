@@ -86,6 +86,55 @@ export class KnowledgeGraphService {
   private extractionCache = new Map<string, ExtractionResult>();
   private extractionInProgress = false;
 
+  async extractFromDocument(title: string, text: string, messageId: string): Promise<void> {
+    if (!text || text.length < 20) return;
+    const store = useKnowledgeGraphStore.getState();
+
+    // Create a document entity
+    const docId = store.addEntity({
+      name: title,
+      type: 'document',
+      description: text.length > 300 ? text.slice(0, 300) + '...' : text,
+      aliases: [],
+      confidence: 0.7,
+      metadata: { source: 'document_upload', indexedAt: Date.now().toString() },
+    });
+
+    // Extract entities from the document text
+    const result = text.length < 500 ? extractBasicEntities(text) : await this.deepExtract(text);
+    if (!result) return;
+
+    // Link each extracted entity to the document and record mentions
+    for (const entityData of result.entities) {
+      const id = store.addEntity({ ...entityData, metadata: { source: 'document' } });
+      if (id && id !== docId) {
+        store.addMention({
+          entityId: id, messageId, timestamp: Date.now(),
+          context: `Extracted from document: ${title}`,
+        });
+        store.addRelationship({
+          sourceId: docId, targetId: id,
+          type: 'related_to', strength: 0.6,
+          context: `${title} mentions ${entityData.name}`,
+        });
+      }
+    }
+
+    // Link relationships between extracted entities
+    for (const rel of result.relationships) {
+      const source = store.findEntity(rel.source);
+      const target = store.findEntity(rel.target);
+      if (source && target) {
+        store.addRelationship({
+          sourceId: source.id, targetId: target.id,
+          type: rel.type, strength: rel.strength, context: rel.context,
+        });
+      }
+    }
+
+    logger.info(`[KnowledgeGraph] Ingested document "${title}" — ${result.entities.length} entities, ${result.relationships.length} relationships`);
+  }
+
   async extractFromText(text: string, messageId: string): Promise<void> {
     if (!text || text.length < 10) return;
 
@@ -185,6 +234,34 @@ If no entities found, return {"entities":[],"relationships":[]}`,
       }
     }
     return lines.join('\n');
+  }
+
+  async search(query: string, topK = 8): Promise<{
+    entities: Array<{ entity: Entity; score: number }>;
+    memories: Array<{ key: string; value: string; score: number }>;
+  }> {
+    const store = useKnowledgeGraphStore.getState();
+
+    // Semantic entity search using word vectors
+    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const querySet = new Set(queryWords);
+
+    const entityResults = store.searchEntities(query).slice(0, topK).map(e => {
+      const text = `${e.name} ${e.description}`.toLowerCase();
+      const textWords = text.split(/\s+/).filter(w => w.length > 2);
+      const textSet = new Set(textWords);
+      const overlap = [...querySet].filter(w => textSet.has(w)).length;
+      const cosSim = overlap / Math.sqrt(queryWords.length * textWords.length || 1);
+      return { entity: e, score: cosSim * 0.5 + e.confidence * 0.3 + Math.min(e.mentionCount / 10, 1) * 0.2 };
+    }).sort((a, b) => b.score - a.score);
+
+    // Memory search via store's query
+    const { useMemoryStore } = await import('../store/useMemoryStore');
+    const memResults = useMemoryStore.getState().queryMemories(query).slice(0, topK).map(m => ({
+      key: m.key, value: m.value, score: m.confidence,
+    }));
+
+    return { entities: entityResults, memories: memResults };
   }
 
   findPathBetween(sourceName: string, targetName: string): Entity[] | null {

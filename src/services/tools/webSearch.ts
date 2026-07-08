@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Tool, ToolContext } from './types';
 import { useSearchStore } from '../../store/useSearchStore';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useKnowledgeGraphStore } from '../../store/useKnowledgeGraphStore';
 
 function getSearchDescription(): string {
   const store = useSearchStore.getState();
@@ -57,6 +58,44 @@ const webSearchTool: Tool = {
       ).join('\n\n');
       ctx?.onProgress?.(1, 'Done');
       ctx?.onThought?.('✅ Web search complete');
+
+      // Auto-ingest into Neura knowledge graph
+      try {
+        const kg = useKnowledgeGraphStore.getState();
+        const searchQ = String(query).slice(0, 120);
+        const firstResult = results[0];
+        const desc = firstResult
+          ? `Web search result — ${firstResult.title}. ${firstResult.snippet?.slice(0, 200)}`
+          : `Searched for "${searchQ}"`;
+        const entityId = kg.addEntity({
+          name: searchQ,
+          type: 'topic',
+          description: desc,
+          aliases: [],
+          confidence: 0.6,
+          metadata: { source: 'web_search', query: searchQ },
+        });
+        // Add top results as related entities
+        for (const r of results.slice(0, 5)) {
+          const title = r.title?.slice(0, 100) || 'Untitled';
+          const resultId = kg.addEntity({
+            name: title,
+            type: 'document',
+            description: r.snippet?.slice(0, 300) || '',
+            aliases: [],
+            confidence: 0.4,
+            metadata: { source: 'web_search', url: r.url || '' },
+          });
+          kg.addRelationship({
+            sourceId: entityId, targetId: resultId,
+            type: 'related_to', strength: 0.5,
+            context: `Web search result for "${searchQ}"`,
+          });
+        }
+      } catch {
+        // Non-critical — don't fail the search if KG ingestion fails
+      }
+
       return {
         success: true,
         content: `WEB SEARCH RESULTS for "${query}":\n\n${content}\n\nUse these results to inform your response. Cite sources using [1], [2], etc.`,

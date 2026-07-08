@@ -34,8 +34,8 @@ class GiaBrain {
     return `${base}\n\n## Module-Specific Instructions\n${moduleSpecific}`;
   }
 
-  private async callProvider(req: BrainRequest): Promise<BrainResponse> {
-    const { activeProvider } = useProviderStore.getState();
+  private async callProvider(req: BrainRequest, overrideProvider?: string): Promise<BrainResponse> {
+    const providerId = overrideProvider ?? useProviderStore.getState().activeProvider;
     const ctx: import('./providers/types').BrainContext = {
       buildSystemPrompt: (p, m, mode) => this.buildSystemPrompt(p, m, mode),
       buildMessages: buildMessages as import('./providers/types').BrainContext['buildMessages'],
@@ -44,13 +44,13 @@ class GiaBrain {
       buildGeminiTools: (() => buildGeminiTools() as unknown as ReturnType<import('./providers/types').BrainContext['buildGeminiTools']>) as unknown as import('./providers/types').BrainContext['buildGeminiTools'],
       retryFetch, friendlyError,
     };
-    if (activeProvider === 'anthropic') {
+    if (providerId === 'anthropic') {
       return callAnthropic(req, ctx);
     }
-    if (activeProvider === 'gemini') {
+    if (providerId === 'gemini') {
       return callGeminiNative(req, ctx);
     }
-    if (activeProvider === 'local-llm') {
+    if (providerId === 'local-llm') {
       return callLocalLLM(req, ctx);
     }
     return callOpenAICompat(req, ctx);
@@ -58,12 +58,31 @@ class GiaBrain {
 
   async generate(req: BrainRequest): Promise<BrainResponse> {
     const { activeProvider, providers } = useProviderStore.getState();
-    const config = providers[activeProvider];
-    if (activeProvider !== 'local-llm' && (!config.enabled || !config.apiKey)) {
+    const state = useGiaStore.getState();
+
+    // Resolve effective provider: req.providerId > global activeProvider > best available
+    const resolvedId = (() => {
+      if (req.providerId && providers[req.providerId]?.enabled && providers[req.providerId]?.apiKey) {
+        return req.providerId;
+      }
+      if (req.providerId && req.providerId !== activeProvider) {
+        // Specified provider isn't active — try best available
+        const best = useProviderStore.getState().getBestProviderForTask();
+        if (best) return best.id;
+      }
+      if (providers[activeProvider]?.enabled && providers[activeProvider]?.apiKey) {
+        return activeProvider;
+      }
+      const best = useProviderStore.getState().getBestProviderForTask();
+      return best?.id || activeProvider;
+    })();
+
+    const config = providers[resolvedId];
+    if (resolvedId !== 'local-llm' && (!config || !config.enabled || !config.apiKey)) {
       throw new Error('No provider connected. Go to Settings → Engine Room and type: connect');
     }
 
-    const state = useGiaStore.getState();
+    const effectiveProvider = resolvedId;
     const effectiveModel = config.model;
 
     // ── ResponseCache: check for cached response ──────────────
@@ -71,22 +90,22 @@ class GiaBrain {
       const cached = ResponseCache.get({
         prompt: req.prompt,
         model: effectiveModel,
-        provider: activeProvider,
+        provider: effectiveProvider,
         systemPrompt: req.systemPrompt,
       });
       if (cached) {
         logger.log('[GiaBrain] Cache hit');
-        return { text: cached, provider: activeProvider, model: effectiveModel };
+        return { text: cached, provider: effectiveProvider, model: effectiveModel };
       }
     }
 
     // Auto-select best model for this request's feature needs
     // Skip vision-based model switching when local vision is enabled
     const needsVision = req.localVision ? false : !!(req.images && req.images.length > 0);
-    const selection = selectBestModel(activeProvider, config.model, needsVision);
+    const selection = selectBestModel(effectiveProvider, config.model, needsVision);
     const finalModel = selection.model;
     if (selection.switched) {
-      useProviderStore.getState().setProviderModel(activeProvider, finalModel);
+      useProviderStore.getState().setProviderModel(effectiveProvider, finalModel);
       useGiaStore.getState().addNotification(selection.reason || `Switched to ${finalModel}`);
     }
 
@@ -101,7 +120,7 @@ class GiaBrain {
 
     if (req.forceJson) {
       req.systemPrompt = (req.systemPrompt || '') + '\n\nCRITICAL: You MUST respond with ONLY valid JSON. No markdown fences, no code blocks, no explanations, no text before or after the JSON. The entire response must be parseable by JSON.parse(). Start directly with { or [ and end with } or ]. Do NOT use any tools or call any functions.';
-      if (activeProvider === 'anthropic') {
+      if (effectiveProvider === 'anthropic') {
         req.systemPrompt += '\n\nIMPORTANT: You MUST respond with ONLY valid JSON. No markdown, no code fences, no explanation. Just the raw JSON object.';
       }
       req.temperature = 0.1;
@@ -129,12 +148,12 @@ class GiaBrain {
       let res: BrainResponse | undefined;
 
       try {
-        res = await this.callProvider(loopReq);
-        ProviderMonitor.recordSuccess(activeProvider, finalModel, Math.round(performance.now() - callStart));
+        res = await this.callProvider(loopReq, effectiveProvider);
+        ProviderMonitor.recordSuccess(effectiveProvider, finalModel, Math.round(performance.now() - callStart));
       } catch (e: unknown) {
         const origError = e as Error;
         const msg = e instanceof Error ? e.message.toLowerCase() : '';
-        ProviderMonitor.recordFailure(activeProvider, finalModel, msg, Math.round(performance.now() - callStart));
+        ProviderMonitor.recordFailure(effectiveProvider, finalModel, msg, Math.round(performance.now() - callStart));
 
         // Retry once without native tool schemas
         if (!loopReq._skipNativeSchemas && (
@@ -144,19 +163,19 @@ class GiaBrain {
         )) {
           loopReq._skipNativeSchemas = true;
           try {
-            res = await this.callProvider(loopReq);
-            if (res) ProviderMonitor.recordSuccess(activeProvider, finalModel, Math.round(performance.now() - callStart));
+            res = await this.callProvider(loopReq, effectiveProvider);
+            if (res) ProviderMonitor.recordSuccess(effectiveProvider, finalModel, Math.round(performance.now() - callStart));
           } catch (e) {
             logger.error('[GiaBrain] Retry failed:', e);
           }
           if (res) continue;
         }
 
-        // Smart fallback using ProviderMonitor
+        // Smart fallback using ProviderMonitor — try other providers
         if (state.smartFallback) {
           const { providers } = useProviderStore.getState();
           const availableProviders = Object.entries(providers)
-            .filter(([p, cfg]) => p !== activeProvider && cfg.enabled && cfg.apiKey)
+            .filter(([p, cfg]) => p !== effectiveProvider && cfg.enabled && cfg.apiKey)
             .map(([p, cfg]) => ({ provider: p, model: cfg.model }));
 
           const best = ProviderMonitor.getBestProvider(availableProviders);
@@ -165,7 +184,7 @@ class GiaBrain {
             useGiaStore.getState().addNotification(`Failing over to ${best.provider}/${best.model}`);
             loopReq._skipNativeSchemas = false;
             try {
-              res = await this.callProvider(loopReq);
+              res = await this.callProvider(loopReq, best.provider);
               ProviderMonitor.recordSuccess(best.provider, best.model, Math.round(performance.now() - callStart));
             } catch (e) {
               logger.error('[GiaBrain] Smart fallback also failed:', e);
@@ -178,7 +197,7 @@ class GiaBrain {
           // Legacy fallback
           const { providers } = useProviderStore.getState();
           const fallbackProvider = (Object.entries(providers) as [string, { enabled: boolean; apiKey: string; model: string }][])
-            .find(([p, cfg]) => p !== activeProvider && cfg.enabled && cfg.apiKey);
+            .find(([p, cfg]) => p !== effectiveProvider && cfg.enabled && cfg.apiKey);
 
           if (fallbackProvider) {
             const [newProvider, newCfg] = fallbackProvider;
@@ -187,7 +206,7 @@ class GiaBrain {
             if (sel.switched) useProviderStore.getState().setProviderModel(newProvider, sel.model);
             loopReq._skipNativeSchemas = false;
             try {
-              res = await this.callProvider(loopReq);
+              res = await this.callProvider(loopReq, newProvider);
             } catch (e) {
               logger.error('[GiaBrain] Fallback also failed:', e);
               throw origError;
@@ -244,15 +263,20 @@ class GiaBrain {
 
         // Cache the final response
         if (state.responseCache && !req.onStream) {
-          ResponseCache.set({ prompt: req.prompt, model: finalModel, provider: activeProvider, systemPrompt: req.systemPrompt }, text);
+          ResponseCache.set({ prompt: req.prompt, model: finalModel, provider: effectiveProvider, systemPrompt: req.systemPrompt }, text);
         }
 
-        const finalResponse = await PluginManager.runAfterGenerate({ text, provider: activeProvider, model: config.model });
-        return { ...finalResponse, sources: sourcesAcc.length > 0 ? sourcesAcc : undefined, finishReason, wasTruncated, tokenUsage };
+        // Deduct tokens from provider
+        if (tokenUsage?.total) {
+          useProviderStore.getState().deductTokens(effectiveProvider, tokenUsage.total);
+        }
+
+        const finalResponse = await PluginManager.runAfterGenerate({ text, provider: effectiveProvider, model: config.model });
+        return { ...finalResponse, provider: effectiveProvider, sources: sourcesAcc.length > 0 ? sourcesAcc : undefined, finishReason, wasTruncated, tokenUsage };
       }
 
       if (toolResult.result === '__CLARIFICATION__') {
-        return { text: '__CLARIFICATION__', provider: activeProvider, model: config.model };
+        return { text: '__CLARIFICATION__', provider: effectiveProvider, model: config.model };
       }
 
       if (toolResult.result === 'malformed_json') {

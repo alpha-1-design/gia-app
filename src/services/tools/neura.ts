@@ -165,4 +165,119 @@ export const neuraTools: Tool[] = [
       return { success: true, content: lines.join('\n') };
     },
   },
+  {
+    id: 'neura_add',
+    name: 'neura_add',
+    description: 'Add a new entity or relationship to the knowledge graph (Neura). Use this when you discover new information, concepts, people, or connections during a conversation. Entities are stored permanently and can be queried later with neura_query.',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Entity name (e.g. "GPT-5", "Quantum Computing", "Alice Chen")' },
+        type: { type: 'string', enum: ['person', 'project', 'concept', 'location', 'organization', 'event', 'technology', 'tool', 'topic', 'habit', 'goal', 'preference'], description: 'Entity type' },
+        description: { type: 'string', description: 'What GIA knows about this entity — description, context, key facts' },
+        aliases: { type: 'string', description: 'Comma-separated alternative names' },
+        confidence: { type: 'number', description: 'Confidence level 0.0-1.0 (default 0.7)' },
+      },
+      required: ['name', 'type', 'description'],
+    },
+    execute: async ({ name, type, description, aliases, confidence }, _ctx?: ToolContext) => {
+      const n = String(name ?? '');
+      const t = String(type ?? 'concept') as import('../../types/knowledge').EntityType;
+      const d = String(description ?? '');
+      const al = String(aliases ?? '').split(',').map(s => s.trim()).filter(Boolean);
+      const conf = Math.min(1, Math.max(0, Number(confidence) || 0.7));
+
+      const store = useKnowledgeGraphStore.getState();
+      const existing = store.findEntity(n);
+      if (existing) {
+        store.addEntity({
+          name: n, type: t,
+          aliases: al.length > 0 ? al : existing.aliases,
+          description: d || existing.description,
+          confidence: Math.max(existing.confidence, conf),
+          metadata: { ...existing.metadata, lastUpdated: Date.now().toString() },
+        });
+        return { success: true, content: `✅ Updated existing entity "${n}" in Neura with new knowledge.` };
+      }
+
+      store.addEntity({
+        name: n, type: t,
+        aliases: al,
+        description: d,
+        confidence: conf,
+        metadata: { source: 'neura_add', addedAt: Date.now().toString() },
+      });
+      _ctx?.onThought?.(`🧠 Added "${n}" (${t}) to Neura knowledge graph`);
+      return { success: true, content: `✅ Added "${n}" (${t}) to Neura knowledge graph.\n  Description: ${d}` };
+    },
+  },
+  {
+    id: 'neura_evolve',
+    name: 'neura_evolve',
+    description: 'Show how the knowledge graph has evolved — recently added entities, confidence growth, new connections formed, and learning velocity. Use this to understand what GIA has been learning and how her understanding is deepening.',
+    schema: {
+      type: 'object',
+      properties: {
+        days: { type: 'number', description: 'How many days back to analyze (default 7)' },
+      },
+    },
+    execute: async ({ days }, ctx?: ToolContext) => {
+      const d = Math.max(1, Math.min(365, Number(days) || 7));
+      const cutoff = Date.now() - d * 86400000;
+      ctx?.onThought?.(`📈 Analyzing Neura evolution over the last ${d} days...`);
+      const store = useKnowledgeGraphStore.getState();
+      const { entities, relationships, mentions } = store;
+
+      const recentEntities = entities.filter(e => e.firstMentioned > cutoff);
+      const recentMentions = mentions.filter(m => m.timestamp > cutoff);
+
+      const grown = entities
+        .filter(e => {
+          const entMentions = mentions.filter(m => m.entityId === e.id && m.timestamp > cutoff);
+          return entMentions.length > 1;
+        })
+        .sort((a, b) => b.mentionCount - a.mentionCount)
+        .slice(0, 5);
+
+      const newRels = relationships.filter(r => r.firstObserved > cutoff);
+
+      ctx?.onThought?.(`${recentEntities.length} new entities, ${newRels.length} new connections, ${recentMentions.length} total mentions`);
+      ctx?.onThought?.('✅ Evolution analysis complete');
+
+      const lines: string[] = [
+        `## Neura Evolution (last ${d} days)\n`,
+        `**Growth:** ${recentEntities.length} new entities · ${newRels.length} new connections · ${recentMentions.length} mentions\n`,
+      ];
+
+      if (recentEntities.length > 0) {
+        lines.push('**New knowledge added:**');
+        for (const e of recentEntities.slice(0, 8)) {
+          const shortDesc = e.description ? e.description.slice(0, 80) : 'No description';
+          lines.push(`  • ${e.name} (${e.type}) — ${shortDesc}`);
+        }
+        lines.push('');
+      }
+
+      if (grown.length > 0) {
+        lines.push('**Deepening understanding:**');
+        for (const e of grown) {
+          lines.push(`  • ${e.name} — now at ${(e.confidence * 100).toFixed(0)}% confidence (${e.mentionCount} mentions)`);
+        }
+        lines.push('');
+      }
+
+      if (newRels.length > 0) {
+        lines.push('**New connections formed:**');
+        for (const r of newRels.slice(0, 8)) {
+          const source = store.getEntity(r.sourceId);
+          const target = store.getEntity(r.targetId);
+          if (source && target) {
+            lines.push(`  • ${source.name} → ${r.type.replace(/_/g, ' ')} → ${target.name}`);
+          }
+        }
+      }
+
+      return { success: true, content: lines.join('\n') };
+    },
+  },
 ];

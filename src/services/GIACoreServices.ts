@@ -12,6 +12,7 @@ import { useMemoryStore } from '../store/useMemoryStore';
 import { useMoodStore } from '../store/useMoodStore';
 import { useKnowledgeGraphStore } from '../store/useKnowledgeGraphStore';
 import { useSyncStore } from '../store/useSyncStore';
+import { neuraBridge } from './NeuraBridge';
 
 export class GIAFeatureFlags {
   private features: Map<string, boolean> = new Map([
@@ -104,6 +105,9 @@ class GIACoreServices {
       logger.info('[GIACoreServices] CrossDeviceMesh ready');
     }
 
+    neuraBridge.init();
+    logger.info('[GIACoreServices] NeuraBridge ready — Neura tools exposed for external MCP agents');
+
     this.initialized = true;
     logger.info('[GIACoreServices] All services initialized');
   }
@@ -117,7 +121,7 @@ class GIACoreServices {
       tasks.push(autoMemory.processMessage(text, messageId, role));
     }
 
-    if (featureFlags.isEnabled('knowledgeGraph') && role === 'user' && text.length > 30) {
+    if (featureFlags.isEnabled('knowledgeGraph') && text.length > 30) {
       tasks.push(knowledgeGraphService.extractFromText(text, messageId));
     }
 
@@ -129,7 +133,66 @@ class GIACoreServices {
       moodService.recordMood(text, 'message');
     }
 
+    if (role === 'user') {
+      tasks.push(this.extractPreferences(text));
+    }
+
     await Promise.allSettled(tasks);
+  }
+
+  private async extractPreferences(text: string): Promise<void> {
+    const preferences: { name: string; type: 'preference' | 'habit' | 'goal'; description: string; confidence: number }[] = [];
+
+    const patterns: { regex: RegExp; type: 'preference' | 'habit' | 'goal' }[] = [
+      // Preferences
+      { regex: /\bI (?:really\s+)?(?:like|love|enjoy|adore)\s+(\w+(?:\s+\w+){0,4})/gi, type: 'preference' },
+      { regex: /\bMy\s+favo(u?:rite|urite)\s+\w+\s+(?:is|are)\s+(\w+(?:\s+\w+){0,4})/gi, type: 'preference' },
+      { regex: /\bI\s+prefer\s+(\w+(?:\s+\w+){0,4})(?:\s+over\s+|\s+to\s+)/gi, type: 'preference' },
+      { regex: /\bI\s+(?:don't|dont|do not)\s+(?:like|enjoy)\s+(\w+(?:\s+\w+){0,4})/gi, type: 'preference' },
+      { regex: /\bI'm\s+(?:really\s+)?into\s+(\w+(?:\s+\w+){0,4})/gi, type: 'preference' },
+      { regex: /\bI\s+(?:love|like|enjoy)\s+(?:it\s+)?when\s+(\w+(?:\s+\w+){0,4})/gi, type: 'preference' },
+      // Habits
+      { regex: /\bI\s+(?:always|usually|typically|often|frequently)\s+(\w+(?:\s+\w+){0,5})/gi, type: 'habit' },
+      { regex: /\bI\s+(?:never|rarely|seldom)\s+(\w+(?:\s+\w+){0,4})/gi, type: 'habit' },
+      { regex: /\bI\s+(?:have\s+a\s+habit\s+of|tend\s+to)\s+(\w+(?:\s+\w+){0,4})/gi, type: 'habit' },
+      // Goals
+      { regex: /\bI\s+(?:want\s+to|would\s+love\s+to|wish\s+to|hope\s+to)\s+(\w+(?:\s+\w+){0,5})/gi, type: 'goal' },
+      { regex: /\bI'm?\s+(?:trying\s+to|working\s+on|learning\s+to|planning\s+to)\s+(\w+(?:\s+\w+){0,5})/gi, type: 'goal' },
+      { regex: /\b(?:My\s+goal|My\s+aim|My\s+objective)\s+(?:is|are)\s+(?:to\s+)?(\w+(?:\s+\w+){0,5})/gi, type: 'goal' },
+    ];
+
+    for (const { regex, type } of patterns) {
+      let match: RegExpExecArray | null;
+      const re = new RegExp(regex.source, regex.flags);
+      while ((match = re.exec(text)) !== null) {
+        const phrase = match[1] || match[2] || '';
+        if (!phrase || phrase.length < 3) continue;
+        const clean = phrase.replace(/[.,!?;:]+$/, '').trim();
+        if (!clean || clean.length < 3) continue;
+        const confidence = type === 'preference' ? 0.55 : type === 'habit' ? 0.5 : 0.6;
+        if (!preferences.some(p => p.name.toLowerCase() === clean.toLowerCase())) {
+          preferences.push({ name: clean, type, description: text.slice(Math.max(0, match.index - 10), match.index + match[0].length + 20).trim(), confidence });
+        }
+      }
+    }
+
+    if (preferences.length === 0) return;
+
+    const kg = useKnowledgeGraphStore.getState();
+    for (const p of preferences) {
+      try {
+        kg.addEntity({
+          name: p.name,
+          type: p.type,
+          description: p.description,
+          aliases: [],
+          confidence: p.confidence,
+          metadata: { source: 'preference_extraction', detected: Date.now().toString() },
+        });
+      } catch {
+        // non-critical
+      }
+    }
   }
 
   async onAppStart(): Promise<void> {
@@ -148,8 +211,9 @@ class GIACoreServices {
 
     this.maintenanceInterval = setInterval(() => {
       useMemoryStore.getState().compactMemories();
+      useKnowledgeGraphStore.getState().applyDecay();
       useKnowledgeGraphStore.getState().compact();
-      logger.debug('[GIACoreServices] Maintenance: compacted memories & knowledge graph');
+      logger.debug('[GIACoreServices] Maintenance: decay + compacted memories & knowledge graph');
     }, 3600000);
   }
 

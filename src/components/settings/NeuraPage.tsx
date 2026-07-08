@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Search, X, Maximize2, Minimize2, Network } from 'lucide-react';
+import { Search, X, Maximize2, Minimize2, Network, TrendingUp, Download, Upload } from 'lucide-react';
 import { useKnowledgeGraphStore } from '../../store/useKnowledgeGraphStore';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { SubPageHeader } from './SubPageHeader';
@@ -60,6 +60,19 @@ function rotateY(x: number, y: number, z: number, a: number) {
 }
 function rotateX(x: number, y: number, z: number, a: number) {
   return { x, y: y * Math.cos(a) - z * Math.sin(a), z: y * Math.sin(a) + z * Math.cos(a) };
+}
+
+function formatTimeAgo(ts: number): string {
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  if (d < 30) return `${d}d ago`;
+  const mo = Math.floor(d / 30);
+  return `${mo}mo ago`;
 }
 
 export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -178,39 +191,61 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ctx.fill();
     }
 
-    // ── Atmosphere ──
-    const atm = ctx.createRadialGradient(cx, cy, 0, cx, cy, SPHERE_R * 1.8 * zoom.current);
-    atm.addColorStop(0, 'rgba(168,85,247,0.08)');
-    atm.addColorStop(0.3, 'rgba(99,102,241,0.05)');
-    atm.addColorStop(0.6, 'rgba(139,92,246,0.02)');
+    // ── Hot core (pulsing center) ──
+    const corePulse = Math.sin(starTime * 0.003) * 0.2 + 0.8;
+    const coreR = SPHERE_R * 0.08 * zoom.current * corePulse;
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3);
+    core.addColorStop(0, 'rgba(255,255,255,0.4)');
+    core.addColorStop(0.3, 'rgba(168,85,247,0.2)');
+    core.addColorStop(0.6, 'rgba(99,102,241,0.08)');
+    core.addColorStop(1, 'transparent');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR * 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    const whiteCore = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+    whiteCore.addColorStop(0, 'rgba(255,255,255,0.6)');
+    whiteCore.addColorStop(0.5, 'rgba(200,150,255,0.15)');
+    whiteCore.addColorStop(1, 'transparent');
+    ctx.fillStyle = whiteCore;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Atmosphere (brighter) ──
+    const atm = ctx.createRadialGradient(cx, cy, 0, cx, cy, SPHERE_R * 2 * zoom.current);
+    atm.addColorStop(0, 'rgba(168,85,247,0.12)');
+    atm.addColorStop(0.2, 'rgba(139,92,246,0.08)');
+    atm.addColorStop(0.5, 'rgba(99,102,241,0.04)');
+    atm.addColorStop(0.8, 'rgba(59,130,246,0.02)');
     atm.addColorStop(1, 'transparent');
     ctx.fillStyle = atm;
     ctx.beginPath();
-    ctx.arc(cx, cy, SPHERE_R * 1.8 * zoom.current, 0, Math.PI * 2);
+    ctx.arc(cx, cy, SPHERE_R * 2 * zoom.current, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── Inner glow sphere ──
-    const innerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, SPHERE_R * 0.5 * zoom.current);
-    innerGlow.addColorStop(0, 'rgba(168,85,247,0.03)');
-    innerGlow.addColorStop(1, 'transparent');
-    ctx.fillStyle = innerGlow;
-    ctx.beginPath();
-    ctx.arc(cx, cy, SPHERE_R * 0.5 * zoom.current, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ── Equatorial ring ──
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, SPHERE_R * 0.9 * zoom.current, SPHERE_R * 0.15 * zoom.current, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(168,85,247,0.08)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // ── Longitude arcs ──
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI;
+    // ── Energy rings (pulsing) ──
+    const ringPulse1 = Math.sin(starTime * 0.002) * 0.3 + 0.7;
+    const ringPulse2 = Math.sin(starTime * 0.0015 + 1.5) * 0.3 + 0.7;
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI + starTime * 0.0002;
+      const rx = SPHERE_R * (0.7 + i * 0.12) * zoom.current;
+      const ry = SPHERE_R * (0.15 + i * 0.06) * zoom.current;
       ctx.beginPath();
-      ctx.ellipse(cx, cy, SPHERE_R * 0.6 * zoom.current, SPHERE_R * 0.6 * zoom.current, angle, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(168,85,247,0.03)';
+      ctx.ellipse(cx, cy, rx, ry, angle, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(168,85,247,${0.04 * (i === 0 ? ringPulse1 : ringPulse2)})`;
+      ctx.lineWidth = 0.6 + (3 - i) * 0.3;
+      ctx.stroke();
+    }
+
+    // ── Pulsing longitude arcs ──
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI + starTime * 0.0003;
+      const pulse = Math.sin(starTime * 0.001 + i) * 0.3 + 0.7;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, SPHERE_R * 0.65 * zoom.current, SPHERE_R * 0.65 * zoom.current, angle, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(139,92,246,${0.02 * pulse})`;
       ctx.lineWidth = 0.5;
       ctx.stroke();
     }
@@ -361,7 +396,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       tr.y += speed;
     }
 
-    zoom.current += (tZoom.current - zoom.current) * (isDrag.current ? 0.2 : 0.08);
+    zoom.current += (tZoom.current - zoom.current) * (isDrag.current ? 0.35 : 0.18);
     render();
     raf.current = requestAnimationFrame(tick);
   }
@@ -376,8 +411,8 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const hWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     idle.current = 0;
-    const inertia = e.deltaY * 0.003;
-    tZoom.current = Math.max(0.25, Math.min(5, tZoom.current * (1 - inertia)));
+    const factor = e.deltaY > 0 ? 0.88 : 1.14;
+    tZoom.current = Math.max(0.25, Math.min(5, tZoom.current * factor));
   }, []);
 
   const hDown = useCallback((e: React.PointerEvent) => {
@@ -404,7 +439,7 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const pts = Array.from(pointers.current.values());
       const dist = Math.sqrt((pts[1].x - pts[0].x) ** 2 + (pts[1].y - pts[0].y) ** 2);
       const scale = dist / pinch.current.dist;
-      tZoom.current = Math.max(0.25, Math.min(5, pinch.current.zoom * (0.7 + scale * 0.3)));
+      tZoom.current = Math.max(0.25, Math.min(5, pinch.current.zoom * scale));
       return;
     }
 
@@ -486,6 +521,75 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     return res.slice(0, 30);
   }, [query, entities, memories]);
 
+  async function handleExport() {
+    const kg = useKnowledgeGraphStore.getState();
+    const mem = useMemoryStore.getState();
+    const payload = {
+      exportedAt: Date.now(),
+      version: 1,
+      knowledgeGraph: { entities: kg.entities, relationships: kg.relationships, mentions: kg.mentions },
+      memories: mem.memories,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gia-neura-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImport() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data.knowledgeGraph || !data.memories) {
+          alert('Invalid Neura backup file');
+          return;
+        }
+        const kg = useKnowledgeGraphStore.getState();
+        // Merge: add each entity/relationship/mention from backup
+        for (const e of data.knowledgeGraph.entities) {
+          kg.addEntity({
+            name: e.name, type: e.type, aliases: e.aliases || [],
+            description: e.description || '', confidence: e.confidence || 0.5,
+            metadata: e.metadata || {},
+          });
+        }
+        for (const r of data.knowledgeGraph.relationships) {
+          kg.addRelationship({
+            sourceId: r.sourceId, targetId: r.targetId, type: r.type,
+            strength: r.strength || 0.5, context: r.context || '',
+          });
+        }
+        for (const m of data.knowledgeGraph.mentions) {
+          kg.addMention({
+            entityId: m.entityId, messageId: m.messageId,
+            timestamp: m.timestamp, context: m.context || '',
+          });
+        }
+        const memStore = useMemoryStore.getState();
+        for (const m of data.memories) {
+          memStore.addMemory({
+            key: m.key, value: m.value, category: m.category, tier: m.tier,
+            confidence: m.confidence || 0.5,
+          });
+        }
+      } catch {
+        alert('Failed to import Neura backup — file may be corrupted');
+      }
+    };
+    input.click();
+  }
+
   function focusEntity(id: string) {
     const entity = entities.find(e => e.id === id);
     if (!entity) return;
@@ -510,6 +614,22 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3 shrink-0">
         <SubPageHeader title="Neura" onBack={onBack} />
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleExport}
+            className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback shrink-0"
+            style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+            title="Export Neura state"
+          >
+            <Download size={13} style={{ color: 'var(--gia-muted)' }} />
+          </button>
+          <button
+            onClick={handleImport}
+            className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback shrink-0"
+            style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+            title="Import Neura state"
+          >
+            <Upload size={13} style={{ color: 'var(--gia-muted)' }} />
+          </button>
           <button
             onClick={() => { setShowSearch(s => !s); if (!showSearch) setTimeout(() => searchRef.current?.focus(), 100); }}
             className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback shrink-0"
@@ -701,16 +821,94 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           )}
 
           {entities.length > 0 && (
-            <div className="mt-auto px-1">
-              <p className="text-[9px] font-medium mb-2" style={{ color: 'rgba(148,163,184,0.4)' }}>Top referenced</p>
-              <div className="flex flex-col gap-1.5">
-                {[...entities].sort((a, b) => b.mentionCount - a.mentionCount).slice(0, 5).map(e => (
-                  <div key={e.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: COLORS[e.type] || '#94a3b8' }} />
-                    <span className="text-[11px] font-medium flex-1 truncate" style={{ color: 'var(--gia-text)' }}>{e.name}</span>
-                    <span className="text-[8px]" style={{ color: 'rgba(148,163,184,0.4)' }}>{e.type} · {e.mentionCount}m</span>
-                  </div>
-                ))}
+            <div className="px-1 space-y-4">
+              {/* ── Learning Velocity ── */}
+              <div className="flex items-center gap-4 px-2.5 py-2 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
+                <TrendingUp size={14} style={{ color: 'rgba(168,85,247,0.5)' }} />
+                {(() => {
+                  const now = Date.now();
+                  const dayMs = 86400000;
+                  const dayAgo = now - dayMs;
+                  const weekAgo = now - 7 * dayMs;
+                  const new24h = entities.filter(e => e.firstMentioned > dayAgo).length;
+                  const new7d = entities.filter(e => e.firstMentioned > weekAgo).length;
+                  const active7d = entities.filter(e => e.lastMentioned > weekAgo).length;
+                  const newRels = relationships.filter(r => r.firstObserved > weekAgo).length;
+                  return (
+                    <div className="flex items-center gap-3 text-[9px]" style={{ color: 'rgba(148,163,184,0.5)' }}>
+                      <span>+{new24h} today</span>
+                      <span className="opacity-30">·</span>
+                      <span>+{new7d}/7d</span>
+                      <span className="opacity-30">·</span>
+                      <span>{active7d} active</span>
+                      <span className="opacity-30">·</span>
+                      <span>+{newRels} links</span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── Knowledge Activity Feed ── */}
+              <div>
+                <p className="text-[9px] font-medium mb-2 flex items-center gap-1.5" style={{ color: 'rgba(148,163,184,0.4)' }}>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
+                  Recent knowledge
+                </p>
+                <div className="flex flex-col gap-1">
+                  {[...entities]
+                    .sort((a, b) => b.lastMentioned - a.lastMentioned)
+                    .slice(0, 8)
+                    .map(e => {
+                      const mentions = useKnowledgeGraphStore.getState().mentions
+                        .filter(m => m.entityId === e.id)
+                        .sort((a, b) => b.timestamp - a.timestamp);
+                      const last = mentions[0];
+                      const timeAgo = last ? formatTimeAgo(last.timestamp) : '';
+                                      return (
+                        <div key={e.id} className="flex items-start gap-2.5 px-2.5 py-2 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
+                          <div className="w-2 h-2 rounded-full shrink-0 mt-0.5" style={{ background: COLORS[e.type] || '#94a3b8' }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-medium truncate" style={{ color: 'var(--gia-text)' }}>{e.name}</span>
+                              <span className="text-[7px] uppercase tracking-wider shrink-0" style={{ color: COLORS[e.type] || '#94a3b8' }}>{e.type}</span>
+                              {timeAgo && <span className="text-[7px] shrink-0 ml-auto" style={{ color: 'rgba(148,163,184,0.3)' }}>{timeAgo}</span>}
+                            </div>
+                            {e.description && (
+                              <p className="text-[9px] mt-0.5 leading-relaxed line-clamp-2" style={{ color: 'rgba(148,163,184,0.55)' }}>
+                                {e.description}
+                              </p>
+                            )}
+                            {last && last.context && (
+                              <p className="text-[8px] mt-0.5 italic truncate" style={{ color: 'rgba(148,163,184,0.3)' }}>
+                                "{last.context.slice(0, 100)}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* ── Knowledge Depth ── */}
+              <div>
+                <p className="text-[9px] font-medium mb-2" style={{ color: 'rgba(148,163,184,0.4)' }}>Most understood</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[...entities]
+                    .sort((a, b) => b.mentionCount - a.mentionCount)
+                    .slice(0, 4)
+                    .map(e => (
+                      <div key={e.id} className="flex items-start gap-2 px-2.5 py-2 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
+                        <div className="w-2 h-2 rounded-full shrink-0 mt-0.5" style={{ background: COLORS[e.type] || '#94a3b8' }} />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-medium block truncate" style={{ color: 'var(--gia-text)' }}>{e.name}</span>
+                          <span className="text-[7px]" style={{ color: 'rgba(148,163,184,0.3)' }}>
+                            {e.type} · {(e.confidence * 100).toFixed(0)}% confidence · {e.mentionCount} mentions
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
               </div>
             </div>
           )}
