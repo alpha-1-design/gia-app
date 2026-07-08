@@ -65,18 +65,64 @@
 
 ---
 
+## 🧑‍🤝‍🧑 Agent Personas
+
+GIA ships with a bench of 20 distinct agent personas, each with its own reasoning style, tone, and role. You can toggle any combination on for a given task — e.g. `Onyx` (Skeptic) + `Ember` (Validator) to stress-test an idea, or `Flux` (Creative) + `Astra` (Strategist) to brainstorm and then structure a plan.
+
+| Persona | Role | Focus |
+| :--- | :--- | :--- |
+| **Atlas** | Researcher | Thorough, detail-oriented. Gathers comprehensive data and verifies sources. |
+| **Nova** | Analyst | Critical, logical. Breaks down problems and identifies patterns. |
+| **Onyx** | Skeptic | Challenges assumptions. Finds flaws and edge cases. |
+| **Flux** | Creative | Lateral thinking. Generates novel approaches and connections. |
+| **Vex** | Synthesizer | Merges ideas. Combines findings into cohesive insights. |
+| **Astra** | Strategist | Big-picture thinking. Prioritizes and plans. |
+| **Bolt** | Critic | Sharp but constructive. Finds weaknesses and improvements. |
+| **Cipher** | Technologist | Practical, implementation-focused. |
+| **Drift** | Explorer | Open-ended curiosity. Discovers hidden connections. |
+| **Ember** | Validator | Fact-checks everything. Cross-references sources. |
+| **Frost** | Realist | Practical, grounded. Focuses on feasibility. |
+| **Glimmer** | Optimist | Focuses on opportunities and positive outcomes. |
+| **Haven** | Ethicist | Considers implications, fairness, responsibility. |
+| **Iris** | Archivist | Tracks history and context. Finds relevant patterns. |
+| **Jade** | Diplomat | Finds common ground. Resolves conflicting viewpoints. |
+| **Krypton** | Deep Thinker | First-principles reasoning. Drills to fundamentals. |
+| **Lumen** | Teacher | Explains clearly. Breaks complex ideas down. |
+| **Mist** | Intuitionist | Quick pattern recognition. Instinctive assessments. |
+| **Nyx** | Philosopher | Questions assumptions. Explores deeper meaning. |
+| **Orbit** | Connector | Links disparate ideas across domains. |
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/agents-persona-1.png" width="100%"/>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/agents-persona-2.png" width="100%"/>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/agents-persona-3.png" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
 ## 🚀 Tech Stack
 
-| Category | Technologies |
-| :--- | :--- |
-| **Frontend** | React 18, TypeScript 5.7, Tailwind CSS, Framer Motion |
-| **State** | Zustand (persisted to IndexedDB via `idb-storage`) |
-| **Mobile Shell** | Capacitor (Android WebView) |
-| **Build** | Vite |
-| **Charts** | Recharts |
-| **Diagrams** | Mermaid (loaded on-demand from CDN) |
-| **Math** | KaTeX (loaded on-demand from CDN) |
-| **Wake Word** | Porcupine by Picovoice (on-device DNN, no audio leaves the phone) |
+| Category | Technologies | Status |
+| :--- | :--- | :--- |
+| **Frontend** | React 18, TypeScript 5.7, Tailwind CSS, Framer Motion | ✅ Stable |
+| **State** | Zustand (persisted to IndexedDB via `idb-storage`) | ✅ Stable |
+| **Mobile Shell** | Capacitor (Android WebView) | ✅ Stable |
+| **Build** | Vite | ✅ Stable |
+| **Charts** | Recharts | ✅ Stable |
+| **Diagrams** | Mermaid (loaded on-demand from CDN) | ✅ Stable |
+| **Math** | KaTeX (loaded on-demand from CDN) | ✅ Stable |
+| **Wake Word** | Porcupine by Picovoice (on-device DNN, no audio leaves the phone) | ✅ Stable |
+| **Circle-to-Search** | Native Android Accessibility Service bridge for system-wide screenshot capture | 🧪 In Development |
+| **Screen Agent** | Structured on-screen content reading (text, elements, app name, URL) | 🧪 In Development |
+| **Cross-Device Mesh** | P2P state sync across Electron / browser / Android / extension | 🧪 In Development |
 
 ---
 
@@ -801,6 +847,31 @@ GIA is architected for **zero-trust, no-backend security**. Every protection is 
     </domain-config>
 </network-security-config>
 ```
+
+---
+
+## 🧬 Additional Systems
+
+Features present in the codebase, not yet covered above.
+
+- **GiaTwin (Writing Style Twin)** — analyzes your messages (formality, tone, emoji use, technical vocabulary) to build a style profile GIA can write in.
+- **Mood Tracking** — lightweight sentiment detection across your messages, tracked over time.
+- **Knowledge Graph** — extracts entities and relationships from conversations into a persistent graph, feeding into memory.
+- **AutoMemory** — automatically extracts entities, preferences, facts, and emotions from chat above a confidence threshold, no manual "remember this" required.
+- **Template Learning** — tracks which prompt templates you click, use, or abandon, and adapts future suggestions.
+- **Tool Rate Limiter** — token-bucket rate limiting per tool, preventing a runaway tool call from hammering an API.
+- **Output Validator** — sanitizes and repairs malformed JSON and unclosed code fences in model output before rendering.
+- **Artifacts Panel** — renders structured, reusable outputs (code, documents, diagrams) in their own dedicated panel, separate from the chat stream.
+- **Agent Mention Picker** — `@mention` a specific agent persona mid-conversation to bring it into the thread.
+- **Ambient Input** — passive input capture component (behavior still being finalized).
+
+### ⚠️ Experimental — In Development
+
+These exist in the codebase but are early-stage, partially stubbed, or not yet reliable for production use:
+
+- **Circle-to-Search** — native Android Accessibility Service bridge for a system-wide gesture that captures screenshots for search. The web layer's contract is built, but the native plugin isn't fully wired yet.
+- **Screen Agent** — reads on-screen content as structured data (text, UI elements, app name, URL), not just raw screenshots.
+- **Cross-Device Mesh** — peer-to-peer state sync between an Electron app, browser, Android, and browser extension (ping/pong, command relay).
 
 ---
 
