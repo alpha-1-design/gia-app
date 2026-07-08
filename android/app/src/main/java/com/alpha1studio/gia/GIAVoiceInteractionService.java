@@ -9,7 +9,7 @@ import android.util.Log;
  * Makes GIA selectable as the device's default voice assistant
  * (Settings -> Apps -> Default apps -> Assistant). When the user triggers the
  * assistant (long-press home, swipe-up, "Hey Google" redirect, etc.) the
- * system calls {@link #onShowSession}; we delegate to MainActivity, which
+ * system calls {@link #onPrepareToShowSession}; we delegate to MainActivity, which
  * hosts the React/WebView UI, rather than rendering a separate native session
  * window. The assist is then surfaced to the web layer through GIAIntentPlugin
  * (ACTION_ASSIST -> onAssist listener -> chat voice input).
@@ -37,9 +37,9 @@ public class GIAVoiceInteractionService extends VoiceInteractionService {
     }
 
     @Override
-    public void onShowSession(Bundle args) {
+    public void onPrepareToShowSession(Bundle args, int flags) {
         // Delegate the assistant UI to the main activity (the React WebView).
-        // We intentionally do NOT call super.onShowSession() so no empty native
+        // We intentionally do NOT call super.onPrepareToShowSession() so no empty native
         // session window is shown.
         Intent intent = new Intent(this, MainActivity.class);
         intent.setAction(Intent.ACTION_ASSIST);
