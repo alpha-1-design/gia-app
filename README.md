@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="docs/screenshots/gia-icon-hero.png" alt="GIA app icon" width="160"/>
+
 [![CI](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml/badge.svg)](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.3.2.0-emerald.svg)](package.json)
@@ -19,6 +21,47 @@
 [Explore Manual](./manual.md) · [Report Bug](./gia-bug-report.md) · [Contributing](./CONTRIBUTING.md)
 
 </div>
+
+---
+
+## 📸 Screenshots
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/analyst-bar.png" width="100%"/><br/>
+<sub><b>Analyst — Bar View</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/analyst-line.png" width="100%"/><br/>
+<sub><b>Analyst — Line View</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/analyst-pie.png" width="100%"/><br/>
+<sub><b>Analyst — Pie View</b></sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/analyst-table.png" width="100%"/><br/>
+<sub><b>Analyst — Table View</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/exam-mode.png" width="100%"/><br/>
+<sub><b>Exam Mode — Results & Review</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="docs/screenshots/chat-agentic-tools.png" width="100%"/><br/>
+<sub><b>Chat — Agentic Tool Use</b></sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="docs/screenshots/terminal-execution.png" width="100%"/><br/>
+<sub><b>Live Terminal Execution</b></sub>
+</td>
+</tr>
+</table>
 
 ---
 
