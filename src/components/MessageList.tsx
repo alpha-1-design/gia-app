@@ -2,18 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Bot, User, AlertCircle, RotateCcw, Paperclip } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
+import TaskProgress from './TaskProgress';
 import { ThinkingStatus } from './ThinkingStatus';
 import GiaIcon from './GiaIcon';
 import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
+import ArtifactsPanel from './ArtifactsPanel';
 import MessageContextMenu from './MessageContextMenu';
 import { ChatSkeleton } from './feedback';
+import { resolveAgentIcon, resolveAgentColor } from '../utils/agentIcons';
 import type { Message, ThinkingPhase } from '../store/useGiaStore';
+
+const AgentBadge: React.FC<{ agentName?: string; agentIcon?: string; agentTask?: string }> = ({ agentName, agentIcon, agentTask }) => {
+  const IconComp = resolveAgentIcon(agentIcon || 'Bot');
+  const color = resolveAgentColor(agentIcon || 'Bot');
+  return (
+    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider" style={{ background: `${color}15`, color }}>
+      <IconComp size={10} />
+      {agentName || 'Agent'}
+      {agentTask && (
+        <span className="ml-0.5 text-[7px] opacity-60 font-normal normal-case max-w-[120px] truncate">{agentTask}</span>
+      )}
+    </span>
+  );
+};
 
 interface MessageListProps {
   messages: Message[];
   loading: boolean;
   streamingMsgId: string | null;
+  streamingMsgIds?: Set<string>;
   expandedMsgs: Set<string>;
   setExpandedMsgs: React.Dispatch<React.SetStateAction<Set<string>>>;
   showThoughts: Set<string>;
@@ -53,7 +71,7 @@ function useShowTokenUsage(): boolean {
 }
 
 const MessageList: React.FC<MessageListProps> = ({
-  messages, loading, streamingMsgId,
+  messages, loading, streamingMsgId, streamingMsgIds,
   expandedMsgs, setExpandedMsgs,
   showThoughts, setShowThoughts,
   liveThoughts, thinkingPhase, currentTool,
@@ -70,8 +88,8 @@ const MessageList: React.FC<MessageListProps> = ({
       )}
       {messages.map((msg) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-          <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
-            {msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <Bot size={13} style={{ color: 'var(--gia-muted)' }} />}
+          <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
+            {msg.agentId ? (() => { const A = resolveAgentIcon(msg.agentIcon || 'Bot'); return <A size={13} style={{ color: resolveAgentColor(msg.agentIcon || 'Bot') }} />; })() : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <Bot size={13} style={{ color: 'var(--gia-muted)' }} />}
           </div>
           <div className="flex-1 min-w-0 space-y-1">
             {msg.attachments?.some(a => a.preview) && (
@@ -82,8 +100,8 @@ const MessageList: React.FC<MessageListProps> = ({
               </div>
             )}
             <div className="flex items-center gap-2 mb-0.5 ml-1">
-              <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
-                {msg.role === 'user' ? 'You' : 'GIA'}
+              <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
+                {msg.agentId ? msg.agentName : msg.role === 'user' ? 'You' : 'GIA'}
               </span>
               <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -102,13 +120,13 @@ const MessageList: React.FC<MessageListProps> = ({
               onRetry={onRetry}
             >
               <div
-                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id ? 'streaming-message' : ''}`}
+                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}
                 style={{
                   borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                   borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
                 }}
               >
-                {msg.thinking && !(streamingMsgId === msg.id && msg.content) ? (
+                {msg.thinking && !((streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content) ? (
                   <div>
                     <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
                     {liveThoughts[msg.id] || msg.thoughts ? (
@@ -135,9 +153,13 @@ const MessageList: React.FC<MessageListProps> = ({
                   <>
                     {msg.role === 'assistant' && (
                       <div className="flex items-center gap-1.5 mb-1.5 ml-0.5">
-                        <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
-                          {msg.model ? `via ${msg.model}` : 'GIA'}
-                        </span>
+                        {msg.agentId ? (
+                          <AgentBadge agentName={msg.agentName} agentIcon={msg.agentIcon} agentTask={msg.agentTask} />
+                        ) : (
+                          <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
+                            {msg.model ? `via ${msg.model}` : 'GIA'}
+                          </span>
+                        )}
                         <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
                           {formatTimeAgo(msg.timestamp)}
                         </span>
@@ -145,7 +167,7 @@ const MessageList: React.FC<MessageListProps> = ({
                           <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
                             Thinking…
                           </span>
-                        ) : streamingMsgId === msg.id ? (
+                        ) : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? (
                           <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
                             Generating…
                           </span>
@@ -161,7 +183,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         )}
                       </div>
                     )}
-                    {msg.thinking && streamingMsgId === msg.id && msg.content && (
+                    {msg.thinking && (streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && (
                       <div className="mb-2">
                         <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
                         {(liveThoughts[msg.id] || msg.thoughts) && (
@@ -188,7 +210,7 @@ const MessageList: React.FC<MessageListProps> = ({
                     ) : (
                       <div className="token-reveal">
                         <MarkdownRenderer content={msg.content} />
-                        {streamingMsgId === msg.id && msg.content && loading && (
+                        {(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && loading && (
                           extThinking
                             ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />
                             : <span className="stream-cursor ml-0.5">▋</span>
@@ -203,9 +225,12 @@ const MessageList: React.FC<MessageListProps> = ({
                     {msg.role === 'assistant' && !msg.thinking && !msg.error && (
                       <div className="mt-1.5 text-[9px] text-right tracking-wider select-none" style={{ color: 'var(--gia-muted-3)' }}>
                         <span className="opacity-40">— </span>
-                        <span style={{ color: '#a855f766' }}>✦</span>
-                        <span className="font-medium ml-0.5" style={{ color: '#a855f744' }}>GIA</span>
+                        <span style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}66` : '#a855f766' }}>✦</span>
+                        <span className="font-medium ml-0.5" style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}44` : '#a855f744' }}>{msg.agentId ? msg.agentName : 'GIA'}</span>
                       </div>
+                    )}
+                    {msg.artifacts && msg.artifacts.length > 0 && (
+                      <ArtifactsPanel artifacts={msg.artifacts} />
                     )}
                     {(liveThoughts[msg.id] || msg.thoughts) && (
                       <ThinkingPanel
@@ -245,7 +270,7 @@ const MessageList: React.FC<MessageListProps> = ({
                                 </span>
                                 <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`} alt="" className="w-3.5 h-3.5 rounded shrink-0" loading="lazy" />
                                 <div className="min-w-0 flex-1">
-                                  <span className="block truncate font-medium" style={{ color: '#e2e8f0' }}>{title}</span>
+                                  <span className="block truncate font-medium" style={{ color: 'var(--gia-text)' }}>{title}</span>
                                   <span className="block text-[7px] truncate" style={{ color: '#64748b' }}>{domain}</span>
                                 </div>
                               </motion.a>
@@ -255,11 +280,14 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {msg.attachments?.filter(a => !a.preview).map(att => (
-                      <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                      <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
                         <Paperclip size={10} /> {att.name}
                       </div>
                     ))}
                   </>
+                )}
+                {msg.tasks && msg.tasks.length > 0 && (
+                  <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
                 )}
               </div>
             </MessageContextMenu>

@@ -118,7 +118,7 @@ const PdfViewer: React.FC<{ url: string; name?: string; pendingSaveKey?: string 
           ref={iframeRef}
           src={url}
           className="w-full rounded-lg"
-          style={{ height: '400px', border: '1px solid var(--gia-border)', background: 'white' }}
+          style={{ height: '400px', border: '1px solid var(--gia-border)', background: 'var(--gia-surface)' }}
           title="PDF Preview"
         />
       )}

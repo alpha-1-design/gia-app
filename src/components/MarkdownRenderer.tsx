@@ -153,7 +153,7 @@ const stripScripts = (html: string): string =>
     .replace(/javascript\s*:/gi, '');
 
 const InlineSvg: React.FC<{ svg: string }> = ({ svg }) => (
-  <div className="my-3 rounded-xl" style={{ border: '1px solid var(--gia-border)', background: 'white' }} dangerouslySetInnerHTML={{ __html: stripScripts(svg) }} />
+   <div className="my-3 rounded-xl" style={{ border: '1px solid var(--gia-border)', background: 'var(--gia-surface)' }} dangerouslySetInnerHTML={{ __html: stripScripts(svg) }} />
 );
 
 const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => {
@@ -236,8 +236,13 @@ const tryParseVisualBlock = (text: string): React.ReactNode | null => {
   return null;
 };
 
+const stripArtifactBlocks = (text: string): string => {
+  return text.replace(/```artifact[\s\S]*?```/g, '').trim();
+};
+
 const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
-  const processed = useMemo(() => wrapBareVisualBlocks(content), [content]);
+  const cleaned = useMemo(() => stripArtifactBlocks(content), [content]);
+  const processed = useMemo(() => wrapBareVisualBlocks(cleaned), [cleaned]);
   const visualFallback = useMemo(() => tryParseVisualBlock(processed), [processed]);
   if (visualFallback) return <div className={`gia-markdown ${className}`}>{visualFallback}</div>;
 
@@ -374,9 +379,9 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
     const h3 = line.match(/^### (.+)/);
     const h2 = line.match(/^## (.+)/);
     const h1 = line.match(/^# (.+)/);
-    if (h1) { nodes.push(<h1 key={`h1-${i}`} style={{ fontSize: '20px', fontWeight: 700, margin: '16px 0 8px', color: 'white' }}>{inlineRender(h1[1], footnotes)}</h1>); i++; continue; }
-    if (h2) { nodes.push(<h2 key={`h2-${i}`} style={{ fontSize: '16px', fontWeight: 600, margin: '14px 0 6px', color: 'white' }}>{inlineRender(h2[1], footnotes)}</h2>); i++; continue; }
-    if (h3) { nodes.push(<h3 key={`h3-${i}`} style={{ fontSize: '14px', fontWeight: 600, margin: '12px 0 4px', color: 'white' }}>{inlineRender(h3[1], footnotes)}</h3>); i++; continue; }
+    if (h1) { nodes.push(<h1 key={`h1-${i}`} style={{ fontSize: '20px', fontWeight: 700, margin: '16px 0 8px', color: 'var(--gia-text)' }}>{inlineRender(h1[1], footnotes)}</h1>); i++; continue; }
+    if (h2) { nodes.push(<h2 key={`h2-${i}`} style={{ fontSize: '16px', fontWeight: 600, margin: '14px 0 6px', color: 'var(--gia-text)' }}>{inlineRender(h2[1], footnotes)}</h2>); i++; continue; }
+    if (h3) { nodes.push(<h3 key={`h3-${i}`} style={{ fontSize: '14px', fontWeight: 600, margin: '12px 0 4px', color: 'var(--gia-text)' }}>{inlineRender(h3[1], footnotes)}</h3>); i++; continue; }
 
     // Blockquote
     if (line.startsWith('> ')) {
