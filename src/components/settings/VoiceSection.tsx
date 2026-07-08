@@ -12,6 +12,7 @@ interface DetectionEvent {
   timestamp: number;
   text: string;
   confidence: number;
+  simulated?: boolean;
 }
 
 interface ServiceStatus {
@@ -67,27 +68,17 @@ export const VoiceSection: React.FC = () => {
     }
   }, []);
 
+  const [hasNativeModule, setHasNativeModule] = useState(false);
+
+  useEffect(() => {
+    setHasNativeModule(typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined');
+  }, []);
+
   const testWakeWord = useCallback(async () => {
     setTesting(true);
     setDetectionLog([]);
     try {
-      const hasModule = typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined';
-      if (hasModule) {
-        await (window as unknown as { GIAWakeWord: { startTest: (n: number) => Promise<void> } }).GIAWakeWord.startTest(detectionLog.length);
-      } else {
-        // Simulate detection events for preview
-        const simPatterns = ['JARVIS', 'HEY GIA', 'ALEXA', 'OK GOOGLE'];
-        for (let i = 0; i < 5; i++) {
-          await new Promise(r => setTimeout(r, 800));
-          const e: DetectionEvent = {
-            id: didRef.current++,
-            timestamp: Date.now(),
-            text: simPatterns[Math.floor(Math.random() * simPatterns.length)],
-            confidence: 0.5 + Math.random() * 0.5,
-          };
-          setDetectionLog(prev => [...prev.slice(-49), e]);
-        }
-      }
+      await (window as unknown as { GIAWakeWord: { startTest: (n: number) => Promise<void> } }).GIAWakeWord.startTest(detectionLog.length);
     } catch (e) {
       setDetectionLog(prev => [...prev, {
         id: didRef.current++, timestamp: Date.now(),
@@ -98,6 +89,27 @@ export const VoiceSection: React.FC = () => {
       setTesting(false);
     }
   }, [detectionLog.length]);
+
+  // Explicit, separate action — never triggered by the real "Test" button.
+  // Every event it produces is tagged `simulated: true` so the log can never
+  // be mistaken for a genuine wake-word detection.
+  const previewSimulatedLog = useCallback(async () => {
+    setTesting(true);
+    setDetectionLog([]);
+    const simPatterns = ['JARVIS', 'HEY GIA', 'ALEXA', 'OK GOOGLE'];
+    for (let i = 0; i < 5; i++) {
+      await new Promise(r => setTimeout(r, 800));
+      const e: DetectionEvent = {
+        id: didRef.current++,
+        timestamp: Date.now(),
+        text: simPatterns[Math.floor(Math.random() * simPatterns.length)],
+        confidence: 0.5 + Math.random() * 0.5,
+        simulated: true,
+      };
+      setDetectionLog(prev => [...prev.slice(-49), e]);
+    }
+    setTesting(false);
+  }, []);
 
   useEffect(() => { checkService(); }, [checkService]);
   useEffect(() => { if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [detectionLog]);
@@ -362,17 +374,36 @@ export const VoiceSection: React.FC = () => {
         </div>
       )}
 
+      {/* Native module missing — explain why real testing isn't possible yet */}
+      {!hasNativeModule && (
+        <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
+          <AlertTriangle size={10} className="inline mr-1" />
+          Native wake word module isn't loaded on this build, so real detection can't be tested here. You can preview what the log UI looks like with clearly-labeled fake data below.
+        </div>
+      )}
+
       {/* Test Button */}
       <div className="flex gap-2">
         <button
           onClick={testWakeWord}
-          disabled={testing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-colors"
+          disabled={testing || !hasNativeModule}
+          title={!hasNativeModule ? 'Native wake word module not available on this build' : undefined}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: testing ? 'var(--gia-bg-2)' : '#a855f7', color: testing ? 'var(--gia-muted)' : 'white' }}
         >
           {testing ? <Square size={11} /> : <Play size={11} />}
           {testing ? 'Testing...' : 'Test Wake Word'}
         </button>
+        {!hasNativeModule && (
+          <button
+            onClick={previewSimulatedLog}
+            disabled={testing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium border border-dashed"
+            style={{ background: 'transparent', color: 'var(--gia-muted)', borderColor: 'var(--gia-muted)' }}
+          >
+            Preview UI (fake data)
+          </button>
+        )}
         <button
           onClick={() => setDetectionLog([])}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium"
@@ -389,8 +420,13 @@ export const VoiceSection: React.FC = () => {
             const confPct = Math.round(e.confidence * 100);
             const time = new Date(e.timestamp).toLocaleTimeString();
             return (
-              <div key={e.id} className="flex items-center gap-2 py-0.5">
+              <div key={e.id} className="flex items-center gap-2 py-0.5" style={e.simulated ? { opacity: 0.7 } : undefined}>
                 <span className="text-zinc-500 shrink-0">{time}</span>
+                {e.simulated && (
+                  <span className="shrink-0 px-1 rounded text-[8px] font-bold" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+                    SIMULATED
+                  </span>
+                )}
                 <span style={{ color: confPct > 80 ? '#34d399' : confPct > 50 ? '#fbbf24' : '#f87171' }}>
                   {e.text}
                 </span>

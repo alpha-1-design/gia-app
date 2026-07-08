@@ -151,9 +151,13 @@ export const SocialSection: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>{p.name}</span>
                   {p.connected && (
-                    <span className="flex items-center gap-1 text-[9px] text-emerald-400">
+                    <span
+                      className="flex items-center gap-1 text-[9px]"
+                      style={{ color: p.live ? '#34d399' : '#fbbf24' }}
+                      title={p.live ? 'Live credential connected — will post/fetch real data' : 'Config saved, but no live credential — posts and analytics will be simulated'}
+                    >
                       <CheckCircle2 size={9} />
-                      Connected
+                      {p.live ? 'Connected (Live)' : 'Saved (Simulated Only)'}
                     </span>
                   )}
                 </div>

@@ -152,10 +152,10 @@ const socialCreatePost: Tool = {
     const { platform, content, mediaUrls, scheduleTimestamp } = parsed.data;
     await socialManager.createPost(platform, content, mediaUrls, scheduleTimestamp);
     const statusLabel = scheduleTimestamp ? `scheduled for ${new Date(scheduleTimestamp).toLocaleString()}` : 'saved as draft';
-    const tokens = socialManager.getPlatform(platform)?.tokens;
+    const platformState = socialManager.getPlatform(platform);
     return {
       success: true,
-      content: `## 📝 Post Created\n\n**Platform:** ${platform}\n**Status:** ${statusLabel}\n**API Ready:** ${tokens?.accessToken ? '✅ Yes — will post live' : '⚠️ No token — simulated post'}\n\n**Content:**\n> ${content.slice(0, 300)}${content.length > 300 ? '...' : ''}${mediaUrls?.length ? `\n**Media:** ${mediaUrls.length} file(s) attached` : ''}\n\nUse \`social_publish\` with post index 0 to publish when ready.`,
+      content: `## 📝 Post Created\n\n**Platform:** ${platform}\n**Status:** ${statusLabel}\n**API Ready:** ${platformState?.live ? '✅ Yes — will post live' : '⚠️ No live credential connected — this will be a SIMULATED post, not sent to the platform'}\n\n**Content:**\n> ${content.slice(0, 300)}${content.length > 300 ? '...' : ''}${mediaUrls?.length ? `\n**Media:** ${mediaUrls.length} file(s) attached` : ''}\n\nUse \`social_publish\` with post index 0 to publish when ready.`,
     };
   },
 };
@@ -177,13 +177,15 @@ const socialPublish: Tool = {
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const post = await socialManager.publishPost(parsed.data.postIndex);
-      let extra = '';
-      if (post.status === 'failed') {
-        extra = `\n\n⚠️ Real API call failed: ${post.error}. Falling back to simulated post.`;
+      if (post.status === 'simulated') {
+        return {
+          success: true,
+          content: `## ⚠️ Post Simulated (Not Actually Published)\n\n**Platform:** ${post.platform}\n**Status:** No live credential connected — this post was NOT sent to ${post.platform}. Connect a real access token in Settings → Social to publish for real.\n\n**Content:**\n> ${post.content.slice(0, 300)}`,
+        };
       }
       return {
         success: true,
-        content: `## ✅ Post Published\n\n**Platform:** ${post.platform}\n**Posted:** ${new Date(post.postedAt!).toLocaleString()}\n**URL:** ${post.postUrl}${extra}\n\n**Content:**\n> ${post.content.slice(0, 300)}`,
+        content: `## ✅ Post Published\n\n**Platform:** ${post.platform}\n**Posted:** ${new Date(post.postedAt!).toLocaleString()}\n**URL:** ${post.postUrl}\n\n**Content:**\n> ${post.content.slice(0, 300)}`,
       };
     } catch (e) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
@@ -284,10 +286,15 @@ const socialAnalytics: Tool = {
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const stats = await socialManager.getAnalytics(parsed.data.platform);
-      const tokens = socialManager.getPlatform(parsed.data.platform)?.tokens;
+      if (!stats.live) {
+        return {
+          success: true,
+          content: `## 📊 ${stats.platform} Analytics\n\n⚠️ No live credential connected for this platform — real analytics aren't available. Connect a real access token/API token in Settings → Social to fetch actual followers, engagement, and impressions. GIA won't fabricate numbers here.`,
+        };
+      }
       return {
         success: true,
-        content: `## 📊 ${stats.platform} Analytics\n\n- **Followers:** ${stats.followers.toLocaleString()}\n- **Engagement Rate:** ${stats.engagement.toFixed(2)}%\n- **Impressions:** ${stats.impressions.toLocaleString()}\n- **Posts This Month:** ${stats.postsThisMonth}\n\n${tokens?.accessToken ? '✅ Real data (authenticated)' : '⚠️ Simulated data (connect with OAuth or token for real stats)'}`,
+        content: `## 📊 ${stats.platform} Analytics\n\n- **Followers:** ${stats.followers.toLocaleString()}\n- **Engagement Rate:** ${stats.engagement.toFixed(2)}%\n- **Impressions:** ${stats.impressions.toLocaleString()}\n- **Posts This Month:** ${stats.postsThisMonth}\n\n✅ Real data (authenticated)`,
       };
     } catch (e) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };

@@ -7,8 +7,19 @@ export interface SocialPlatform {
   name: string;
   icon: string;
   connected: boolean;
+  /** True only when a credential capable of real API calls is present.
+   *  `connected` can be true (config saved) while `live` is false
+   *  (posts/analytics will be simulated until a real token is added). */
+  live: boolean;
   accountName?: string;
   tokens?: OAuthTokens;
+}
+
+const LIVE_TOKEN_KEYS = ['accessToken', 'apiToken', 'botToken', 'bearerToken'] as const;
+
+function computeLive(tokens?: OAuthTokens): boolean {
+  if (!tokens) return false;
+  return LIVE_TOKEN_KEYS.some(k => Boolean((tokens as Record<string, unknown>)[k]));
 }
 
 export interface SocialPost {
@@ -16,7 +27,7 @@ export interface SocialPost {
   content: string;
   mediaUrls?: string[];
   scheduledAt?: number;
-  status: 'draft' | 'scheduled' | 'posted' | 'failed';
+  status: 'draft' | 'scheduled' | 'posted' | 'simulated' | 'failed';
   postedAt?: number;
   postUrl?: string;
   error?: string;
@@ -28,6 +39,8 @@ export interface SocialAnalytics {
   engagement: number;
   impressions: number;
   postsThisMonth: number;
+  /** False when no real API data could be fetched — numbers are zeroed, not guessed. */
+  live: boolean;
 }
 
 class SocialManager {
@@ -44,13 +57,13 @@ class SocialManager {
 
   private registerDefaults() {
     const defaults: SocialPlatform[] = [
-      { id: 'twitter', name: 'X (Twitter)', icon: 'message-circle', connected: false },
-      { id: 'instagram', name: 'Instagram', icon: 'camera', connected: false },
-      { id: 'facebook', name: 'Facebook', icon: 'thumbs-up', connected: false },
-      { id: 'linkedin', name: 'LinkedIn', icon: 'briefcase', connected: false },
-      { id: 'tiktok', name: 'TikTok', icon: 'music', connected: false },
-      { id: 'telegram', name: 'Telegram', icon: 'send', connected: false },
-      { id: 'whatsapp', name: 'WhatsApp', icon: 'message-circle', connected: false },
+      { id: 'twitter', name: 'X (Twitter)', icon: 'message-circle', connected: false, live: false },
+      { id: 'instagram', name: 'Instagram', icon: 'camera', connected: false, live: false },
+      { id: 'facebook', name: 'Facebook', icon: 'thumbs-up', connected: false, live: false },
+      { id: 'linkedin', name: 'LinkedIn', icon: 'briefcase', connected: false, live: false },
+      { id: 'tiktok', name: 'TikTok', icon: 'music', connected: false, live: false },
+      { id: 'telegram', name: 'Telegram', icon: 'send', connected: false, live: false },
+      { id: 'whatsapp', name: 'WhatsApp', icon: 'message-circle', connected: false, live: false },
     ];
     for (const p of defaults) this.platforms.set(p.id, p);
   }
@@ -65,6 +78,7 @@ class SocialManager {
           if (platform) {
             platform.tokens = t;
             platform.connected = true;
+            platform.live = computeLive(t);
             if (t.expiresAt && t.expiresAt > Date.now()) {
               platform.connected = true;
             }
@@ -115,6 +129,7 @@ class SocialManager {
     platform.connected = true;
     platform.accountName = config.accountName || config.accessToken || config.botToken || config.clientId || platformId;
     platform.tokens = { ...(platform.tokens || {}), ...config } as OAuthTokens;
+    platform.live = computeLive(platform.tokens);
     this.saveTokens();
     return true;
   }
@@ -123,6 +138,7 @@ class SocialManager {
     const platform = this.platforms.get(platformId);
     if (!platform) return false;
     platform.connected = false;
+    platform.live = false;
     platform.accountName = undefined;
     platform.tokens = undefined;
     this.saveTokens();
@@ -142,6 +158,7 @@ class SocialManager {
 
       platform.tokens = tokens;
       platform.connected = true;
+      platform.live = computeLive(tokens);
 
       try {
         const profile = await getProfileInfo(platformId, tokens);
@@ -162,6 +179,7 @@ class SocialManager {
     if (!platform) return false;
     platform.tokens = { accessToken };
     platform.connected = true;
+    platform.live = computeLive(platform.tokens);
     platform.accountName = accountName || 'token-user';
     this.saveTokens();
     return true;
@@ -191,10 +209,11 @@ class SocialManager {
 
     const platform = this.platforms.get(post.platform);
     const tokens = platform?.tokens;
+    const live = computeLive(tokens);
 
     try {
-      if (tokens?.accessToken) {
-        const result = await postToPlatform(post.platform, post.content, tokens);
+      if (live) {
+        const result = await postToPlatform(post.platform, post.content, tokens!);
         if (result.success) {
           post.status = 'posted';
           post.postedAt = Date.now();
@@ -206,9 +225,11 @@ class SocialManager {
           throw new Error(result.error);
         }
       } else {
-        post.status = 'posted';
+        // No live credential — do NOT fabricate a plausible-looking URL or
+        // claim 'posted'. Nothing was actually sent to the platform.
+        post.status = 'simulated';
         post.postedAt = Date.now();
-        post.postUrl = `https://${post.platform}.com/status/${Date.now()}`;
+        post.postUrl = undefined;
       }
       this.savePosts();
       return post;
@@ -249,15 +270,18 @@ class SocialManager {
     if (tokens?.accessToken) {
       try {
         const real = await getPlatformAnalytics(platform, tokens);
-        if (real.followers > 0) return real;
-      } catch { /* fallback to simulated */ }
+        if (real.followers > 0) return { ...real, live: true };
+      } catch { /* fall through to unavailable state below */ }
     }
+    // No live credential, or the real API call failed — report unavailable
+    // rather than inventing plausible-looking numbers.
     return {
       platform,
-      followers: Math.floor(Math.random() * 10000),
-      engagement: Math.random() * 5,
-      impressions: Math.floor(Math.random() * 50000),
-      postsThisMonth: Math.floor(Math.random() * 30),
+      followers: 0,
+      engagement: 0,
+      impressions: 0,
+      postsThisMonth: 0,
+      live: false,
     };
   }
 }
