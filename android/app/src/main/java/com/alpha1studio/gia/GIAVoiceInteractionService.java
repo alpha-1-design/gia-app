@@ -37,7 +37,7 @@ public class GIAVoiceInteractionService extends VoiceInteractionService {
     }
 
     @Override
-    public void onShowSession(Bundle args, int flags) {
+    public void onShowSession(Bundle args) {
         // Delegate the assistant UI to the main activity (the React WebView).
         // We intentionally do NOT call super.onShowSession() so no empty native
         // session window is shown.

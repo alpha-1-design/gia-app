@@ -23,17 +23,4 @@ public class GIAVoiceInteractionSession extends VoiceInteractionSession {
     public void onCreate() {
         super.onCreate();
     }
-
-    @Override
-    public void onHandleAssist(Bundle args) {
-        Log.i(TAG, "Session assist — forwarding to MainActivity");
-        Intent intent = new Intent(getContext(), MainActivity.class);
-        intent.setAction(Intent.ACTION_ASSIST);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (args != null) {
-            intent.putExtras(args);
-        }
-        intent.putExtra("source", "voice_assist");
-        getContext().startActivity(intent);
-    }
 }
