@@ -131,7 +131,7 @@ export function useChatGeneration() {
     attachments: { name: string; type: string; content?: string; preview?: string }[],
     setInput: (v: string) => void,
     setAttachments: (v: unknown[]) => void,
-    agentInfo?: { id: string; name: string; icon: string }[],
+    agentInfo?: { id: string; name: string; icon: string; task?: string }[],
     cleanedInput?: string,
   ) => {
     if (input.trim().startsWith('/')) return;
@@ -175,7 +175,7 @@ export function useChatGeneration() {
     const userMsg: Message = {
       id: genId(), role: 'user', content: userContent, timestamp: Date.now(),
       attachments: sentAttachments.length > 0 ? sentAttachments as { name: string; type: string; content: string; preview?: string }[] : undefined,
-      ...(agentInfo?.length === 1 ? { agentId: agentInfo[0].id, agentName: agentInfo[0].name, agentIcon: agentInfo[0].icon, agentTask: userContent } : {}),
+      ...(agentInfo?.length === 1 ? { agentId: agentInfo[0].id, agentName: agentInfo[0].name, agentIcon: agentInfo[0].icon, agentTask: agentInfo[0].task || userContent } : {}),
     };
 
     // Auto-name session from first user message
@@ -223,12 +223,12 @@ export function useChatGeneration() {
       prompt = `${fileContext}\n\n${imgContext}\n\nUSER: ${text}`;
     }
 
-    const runAgentTurn = async (agent?: { id: string; name: string; icon: string }) => {
+    const runAgentTurn = async (agent?: { id: string; name: string; icon: string; task?: string }) => {
     const asstId = genId();
     activeStreamsRef.current.add(asstId);
     state.addMessage(sessionId, {
       id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
-      ...(agent ? { agentId: agent.id, agentName: agent.name, agentIcon: agent.icon, agentTask: text } : {}),
+      ...(agent ? { agentId: agent.id, agentName: agent.name, agentIcon: agent.icon, agentTask: agent.task || text } : {}),
     });
     setStreamingMsgId(asstId);
     setStreamingMsgIds(prev => new Set(prev).add(asstId));
@@ -279,10 +279,17 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       // Resolve agent system prompt if routing to an agent
       let agentSystemPrompt: string | undefined;
       let systemPromptMode: 'append' | 'replace' | undefined;
+      let agentPrompt = stateContext + handsOffPrefix + prompt;
       if (agent) {
         const agentDef = useAgentStore.getState().agents.find(a => a.id === agent.id);
         if (agentDef) {
-          agentSystemPrompt = `${agentDef.systemPrompt}\n\nYou are "${agentDef.name}" — embody this persona fully.\n${agentDef.description ? `Your purpose: ${agentDef.description}` : ''}\n\n## Thinking Protocol\nBefore you respond, reason step by step inside <think> tags. Show your chain of thought, analysis, and planning there. This is your internal reasoning — use it to think through the task before answering. After reasoning, provide your final response outside the tags.\n\n## Task Tracking\nBreak down your work into clear steps. Before each step, output a task marker on its own line like:\n---TASK: step description here\nThis helps track your progress. Start a new marker for each distinct step. The system will automatically mark previous steps as complete when you start a new one.\n\nWhen you complete the assigned task, clearly indicate what you did and provide proof of completion.`;
+          // Each mentioned agent gets its own instruction when one was given via
+          // the @Name{task} picker, instead of silently sharing one blob of text
+          // with every other mentioned agent.
+          if (agent.task) {
+            agentPrompt = stateContext + handsOffPrefix + agent.task;
+          }
+          agentSystemPrompt = `${agentDef.systemPrompt}\n\nYou are "${agentDef.name}" — embody this persona fully.\n${agentDef.description ? `Your purpose: ${agentDef.description}` : ''}\n\n## Thinking Protocol\nBefore you respond, reason step by step inside <think> tags. Show your chain of thought, analysis, and planning there. This is your internal reasoning — use it to think through the task before answering. After reasoning, provide your final response outside the tags.\n\n## Task Tracking\nBreak down your work into clear steps. Before each step, output a task marker on its own line like:\n---TASK: step description here\nThis helps track your progress. Start a new marker for each distinct step. The system will automatically mark previous steps as complete when you start a new one.\n\n## Honesty About Completion\nDo NOT claim a task is "done", "complete", or "finished" unless you actually called a tool that performed it and you can see a successful result in your own tool observations. If you did not call a tool for part of the task, say so explicitly (e.g. "I did not create the file — no filesystem tool was called") rather than describing the outcome as if it happened. A confident-sounding claim with no corresponding tool call is worse than admitting the step wasn't done.`;
           systemPromptMode = 'replace';
         }
       }
@@ -293,7 +300,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       streamKey = `${sessionId}:${asstId}`;
       const res = await GiaBrain.generate({
         signal: ctrl.signal,
-        prompt: stateContext + handsOffPrefix + prompt, history,
+        prompt: agentPrompt, history,
         systemPrompt: agentSystemPrompt,
         systemPromptMode,
         images: brainImages,

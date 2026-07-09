@@ -340,11 +340,15 @@ export function useChatState() {
     setAgentMentionQuery('');
   }, []);
 
-  const handleAgentMentionSelect = useCallback((agentId: string, agentName: string) => {
+  const handleAgentMentionSelect = useCallback((agentId: string, agentName: string, task?: string) => {
     const atIdx = input.lastIndexOf('@');
     if (atIdx >= 0) {
       const beforeAt = input.slice(0, atIdx);
-      setInput(`${beforeAt}@${agentName} `);
+      // Task-carrying mention syntax: @Name{specific task}. Keeps each
+      // agent's instruction distinct instead of every mentioned agent
+      // silently sharing the same free-text blob.
+      const mentionText = task ? `@${agentName}{${task}} ` : `@${agentName} `;
+      setInput(`${beforeAt}${mentionText}`);
     }
     setShowAgentMention(false);
     setAgentMentionQuery('');
@@ -382,15 +386,24 @@ export function useChatState() {
 
     setShowAgentMention(false);
 
-    // Parse @mentions and resolve agents
+    // Parse @mentions and resolve agents. Supports two forms:
+    //   @Name{specific task}  — explicit, agent-specific instruction
+    //   @Name                 — falls back to the shared message text (legacy behavior)
     const agents = useAgentStore.getState().agents;
-    const mentionedAgents: { id: string; name: string; icon: string }[] = [];
+    const mentionedAgents: { id: string; name: string; icon: string; task?: string }[] = [];
     let cleanedInput = input;
     for (const a of agents) {
-      const pattern = `@${a.name}`;
-      if (cleanedInput.includes(pattern)) {
+      const taskPattern = new RegExp(`@${a.name}\\{([^}]*)\\}`);
+      const taskMatch = cleanedInput.match(taskPattern);
+      if (taskMatch) {
+        mentionedAgents.push({ id: a.id, name: a.name, icon: a.icon, task: taskMatch[1].trim() });
+        cleanedInput = cleanedInput.replace(taskMatch[0], '').trim();
+        continue;
+      }
+      const plainPattern = `@${a.name}`;
+      if (cleanedInput.includes(plainPattern)) {
         mentionedAgents.push({ id: a.id, name: a.name, icon: a.icon });
-        cleanedInput = cleanedInput.replace(pattern, '').trim();
+        cleanedInput = cleanedInput.replace(plainPattern, '').trim();
       }
     }
 
