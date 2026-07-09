@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Bot, User, AlertCircle, RotateCcw, Paperclip } from 'lucide-react';
+import { Bot, User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import TaskProgress from './TaskProgress';
 import { ThinkingStatus } from './ThinkingStatus';
@@ -130,7 +130,12 @@ const MessageList: React.FC<MessageListProps> = ({
                 }}
               >
                 {msg.thinking && !((streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content) ? (
-                  <div>
+                  <div className="rounded-xl overflow-hidden transition-all duration-300" style={{
+                    border: `1px solid ${liveThoughts[msg.id] ? 'rgba(168,85,247,0.2)' : 'rgba(251,191,36,0.12)'}`,
+                    background: liveThoughts[msg.id]
+                      ? 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.03))'
+                      : 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
+                  }}>
                     <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
                     {liveThoughts[msg.id] || msg.thoughts ? (
                       <ThinkingPanel
@@ -187,7 +192,12 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {msg.thinking && (streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && (
-                      <div className="mb-2">
+                      <div className="mb-2 rounded-xl overflow-hidden transition-all duration-300" style={{
+                        border: `1px solid ${liveThoughts[msg.id] ? 'rgba(168,85,247,0.2)' : 'rgba(251,191,36,0.12)'}`,
+                        background: liveThoughts[msg.id]
+                          ? 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.03))'
+                          : 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
+                      }}>
                         <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
                         {(liveThoughts[msg.id] || msg.thoughts) && (
                           <ThinkingPanel
@@ -249,16 +259,36 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {(liveThoughts[msg.id] || msg.thoughts) && (
-                      <ThinkingPanel
-                        thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                        isLive={!!liveThoughts[msg.id]}
-                        isExpanded={showThoughts.has(msg.id)}
-                        onToggle={() => setShowThoughts(prev => {
-                          const n = new Set(prev);
-                          if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                          return n;
-                        })}
-                      />
+                      <div className="rounded-xl overflow-hidden transition-all duration-300" style={{
+                        border: '1px solid rgba(251,191,36,0.12)',
+                        background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
+                      }}>
+                        <button
+                          onClick={() => setShowThoughts(prev => {
+                            const n = new Set(prev);
+                            if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
+                            return n;
+                          })}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
+                          style={{ color: '#f59e0b' }}
+                        >
+                          <Brain size={12} />
+                          <span className="text-[11px] font-medium flex-1">
+                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} reasoning ({(msg.thoughts || '').split(' ').length} words)
+                          </span>
+                          {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        </button>
+                        <ThinkingPanel
+                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                          isLive={!!liveThoughts[msg.id]}
+                          isExpanded={showThoughts.has(msg.id)}
+                          onToggle={() => setShowThoughts(prev => {
+                            const n = new Set(prev);
+                            if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
+                            return n;
+                          })}
+                        />
+                      </div>
                     )}
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-4 space-y-1.5">

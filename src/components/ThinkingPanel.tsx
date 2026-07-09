@@ -129,16 +129,12 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
   const lines = thoughts.split('\n').filter(Boolean);
   const accent = isLive ? '#a855f7' : '#f59e0b';
 
+  // No header/box of its own — ThinkingStatus is the single header for the
+  // merged thinking UI. This only renders the scrollable content body.
+  if (!isExpanded && !isLive) return null;
+
   return (
-    <div className="mt-2 rounded-xl overflow-hidden transition-all duration-300"
-      style={{
-        border: `1px solid ${isLive ? 'rgba(168,85,247,0.2)' : 'rgba(251,191,36,0.12)'}`,
-        background: isLive
-          ? 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.03))'
-          : 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
-        boxShadow: isLive ? '0 0 20px rgba(168,85,247,0.08)' : 'none',
-      }}>
-      {/* Animated progress bar */}
+    <div>
       {showProgress && (
         <div className="h-0.5 w-full overflow-hidden" style={{ background: isLive ? 'rgba(168,85,247,0.08)' : 'transparent' }}>
           {isLive && (
@@ -153,52 +149,16 @@ export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
           )}
         </div>
       )}
-
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
-        style={{ color: accent }}
+      <div
+        ref={scrollRef}
+        className="px-3 pb-3 pt-2 max-h-44 overflow-y-auto scroll-smooth space-y-0.5"
       >
-        <Brain size={12} />
-        <span className="text-[11px] font-medium flex-1">
-          {isLive ? (
-            <span className="flex items-center gap-1.5">
-              Thinking
-              {extThinking
-                ? <GiaIcon size={12} animate color={accent} speed={1.3} />
-                : <span className="flex gap-0.5">
-                    {[0,1,2].map(i => (
-                      <span key={i} className="thinking-dot"
-                        style={{
-                          animationDelay: `${i * 0.16}s`,
-                          background: accent,
-                          width: 4, height: 4, borderRadius: '50%', display: 'inline-block',
-                          animation: 'thinking-pulse 1.2s ease-in-out infinite',
-                        }}
-                      />
-                    ))}
-                  </span>
-              }
-            </span>
-          ) : (
-            `${isExpanded ? 'Hide' : 'Show'} reasoning  (${thoughts.split(' ').length} words)`
-          )}
-        </span>
-        {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-      </button>
-
-      {(isExpanded || isLive) && thoughts && (
-        <div
-          ref={scrollRef}
-          className="px-3 pb-3 max-h-44 overflow-y-auto scroll-smooth space-y-0.5"
-        >
-          {lines.map((line, i) => renderLine(line, i, isLive))}
-          {isLive && (extThinking
-            ? <GiaIcon size={11} animate color={accent} className="ml-0.5" speed={1.4} />
-            : <span className="animate-pulse ml-0.5 text-[11px]" style={{ color: accent }}>▋</span>
-          )}
-        </div>
-      )}
+        {lines.map((line, i) => renderLine(line, i, isLive))}
+        {isLive && (extThinking
+          ? <GiaIcon size={11} animate color={accent} className="ml-0.5" speed={1.4} />
+          : <span className="animate-pulse ml-0.5 text-[11px]" style={{ color: accent }}>▋</span>
+        )}
+      </div>
     </div>
   );
 };

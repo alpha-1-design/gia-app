@@ -288,6 +288,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
 
       const parserState = createStreamParser();
+      let lastFlushedArtifactCount = 0;
       let displayAccumulated = '';
       streamKey = `${sessionId}:${asstId}`;
       const res = await GiaBrain.generate({
@@ -305,6 +306,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, parserState);
           if (newDisplay) displayAccumulated += newDisplay;
           streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
+          // Live artifact reveal: as soon as a code/artifact fence closes mid-stream,
+          // push it to the panel immediately instead of waiting for the full response.
+          if (parserState.artifacts.length > lastFlushedArtifactCount) {
+            lastFlushedArtifactCount = parserState.artifacts.length;
+            state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
+          }
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -485,6 +492,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
 
       const contParserState = createStreamParser();
+      let contLastFlushedArtifactCount = 0;
       let contDisplayAccumulated = '';
       streamKey = `${state.activeSessionId!}:${asstId}`;
       state.setIntentState('responding');
@@ -499,6 +507,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, contParserState);
           if (newDisplay) contDisplayAccumulated += newDisplay;
           streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated || undefined, null, () => ctrl.signal.aborted);
+          if (contParserState.artifacts.length > contLastFlushedArtifactCount) {
+            contLastFlushedArtifactCount = contParserState.artifacts.length;
+            state.updateMessageArtifacts(state.activeSessionId!, asstId, contParserState.artifacts.slice());
+          }
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -607,6 +619,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       const clarParserState = createStreamParser();
+      let clarLastFlushedArtifactCount = 0;
       let clarDisplayAccumulated = '';
       streamKey = `${sessionId}:${asstId}`;
       setToolMessageId(asstId);
@@ -621,6 +634,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, clarParserState);
           if (newDisplay) clarDisplayAccumulated += newDisplay;
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated || undefined, null, () => ctrl.signal.aborted);
+          if (clarParserState.artifacts.length > clarLastFlushedArtifactCount) {
+            clarLastFlushedArtifactCount = clarParserState.artifacts.length;
+            state.updateMessageArtifacts(sessionId, asstId, clarParserState.artifacts.slice());
+          }
           const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
           if (lastChunk.length > 1) {
             TTSService.speak(lastChunk, true);
@@ -718,6 +735,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       const retryParserState = createStreamParser();
+      let retryLastFlushedArtifactCount = 0;
       let retryDisplayAccumulated = '';
       streamKey = `${state.activeSessionId!}:${id}`;
       state.setIntentState('responding');
@@ -732,6 +750,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, retryParserState);
           if (newDisplay) retryDisplayAccumulated += newDisplay;
           streamPush(streamKey, state.activeSessionId!, id, retryDisplayAccumulated, undefined, null, () => ctrl.signal.aborted);
+          if (retryParserState.artifacts.length > retryLastFlushedArtifactCount) {
+            retryLastFlushedArtifactCount = retryParserState.artifacts.length;
+            state.updateMessageArtifacts(state.activeSessionId!, id, retryParserState.artifacts.slice());
+          }
         },
       });
       if (!ctrl.signal.aborted) {
