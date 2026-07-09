@@ -26,6 +26,7 @@ import { EngineSheet } from '../components/chat/EngineSheet';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
 import AgentMentionPicker from '../components/AgentMentionPicker';
+import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
 
 const QUICK_STARTS = [
@@ -271,6 +272,8 @@ const ChatModule: React.FC = () => {
             <SummaryBanner sessionId={activeSession.id} branchId={activeSession.currentBranchId} />
           </div>
         )}
+
+        <AgentSwarmDashboard />
 
         <MessageList
           messages={messages}
