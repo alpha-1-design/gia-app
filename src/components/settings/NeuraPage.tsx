@@ -106,11 +106,14 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const nodes = useRef<SphereNode[]>([]);
   const stars = useRef<{ x: number; y: number; r: number; a: number; phase: number; twinkleSpeed: number }[]>([]);
 
-  // Init stars once
+  // Init stars once — fewer on lower-end / low-memory devices so the
+  // background twinkle doesn't compete with real rendering work for frame time.
   useEffect(() => {
     if (stars.current.length > 0) return;
+    const deviceMemory = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
+    const starCount = deviceMemory && deviceMemory <= 4 ? 80 : 200;
     const s: typeof stars.current = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < starCount; i++) {
       s.push({
         x: (Math.random() - 0.5) * 2500,
         y: (Math.random() - 0.5) * 2500,
@@ -419,12 +422,22 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
     zoom.current += (tZoom.current - zoom.current) * (isDrag.current ? 0.3 : 0.12);
     render();
-    raf.current = requestAnimationFrame(tick);
+    if (!document.hidden) raf.current = requestAnimationFrame(tick);
   }
 
   useEffect(() => {
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
+    const startLoop = () => { raf.current = requestAnimationFrame(tick); };
+    const stopLoop = () => { if (raf.current) cancelAnimationFrame(raf.current); };
+    const onVisibility = () => {
+      if (document.hidden) stopLoop();
+      else startLoop();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    if (!document.hidden) startLoop();
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      stopLoop();
+    };
     // tick uses refs intentionally — no external deps needed
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entities, relationships, selected, query]);
