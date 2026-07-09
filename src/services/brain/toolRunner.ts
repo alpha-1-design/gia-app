@@ -316,6 +316,10 @@ export async function executeToolBlocks(
     // Sub-agent batch — run all in parallel via SubAgentManager
     if (group.length > 0 && group[0].id === 'sub_agent_call') {
       const manager = new SubAgentManager(isGodMode ? 8 : 5, isGodMode);
+      // Note: SubAgentManager selects its own personas (AGENT_ROLES, keyword-matched
+      // or role-assigned per identity) rather than using the caller-specified `agent`
+      // param — that param is only meaningful for single delegateTask() calls outside
+      // a batch. See SubAgentManager.executeOne, which now passes identity.name through.
       const tasks = group.map((call) => ({
         provider: (call.args.provider as string) || 'openai',
         prompt: (call.args.prompt as string) || '',
@@ -323,6 +327,7 @@ export async function executeToolBlocks(
       onThought?.(`Spawning ${group.length} sub-agents in parallel${isGodMode ? ' [GOD MODE]' : ''}...`);
       await manager.runAll(tasks, signal);
       const results = manager.synthesize();
+      manager.markFinished();
       allObservations.push(`SUB-AGENT RESULTS:\n${results}`);
       state.history.push({ role: 'assistant', content: text });
       state.history.push({ role: 'user', content: allObservations.join('\n') });

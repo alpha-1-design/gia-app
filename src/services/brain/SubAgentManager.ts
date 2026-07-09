@@ -1,5 +1,6 @@
 import { delegateTask } from './subAgent';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useNexusStore } from '../../store/useNexusStore';
 
 export interface SubAgentIdentity {
   id: string;
@@ -91,6 +92,7 @@ export class SubAgentManager {
   private agents: Map<string, SubAgentProgress> = new Map();
   private maxConcurrency: number;
   private isGodMode: boolean;
+  private runId: string = '';
 
   constructor(maxConcurrency = 5, isGodMode = false) {
     this.maxConcurrency = maxConcurrency;
@@ -134,17 +136,38 @@ export class SubAgentManager {
       });
     }
 
+    this.runId = `nexus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    useNexusStore.getState().startRun(
+      this.runId,
+      this.isGodMode,
+      identities.map((identity, i) => ({
+        id: identity.id,
+        name: identity.name,
+        color: identity.color,
+        icon: identity.icon,
+        role: identity.role,
+        task: tasks.length > 1 ? (tasks[i % tasks.length]?.prompt || tasks[0]?.prompt || '') : (tasks[0]?.prompt || ''),
+        startedAt: Date.now(),
+      }))
+    );
+
     const agentList = Array.from(this.agents.values());
     const modeLabel = this.isGodMode ? ' [GOD MODE]' : '';
     emit('tool', `Spawning ${agentList.length} sub-agents${modeLabel}: ${agentList.map(a => `${a.name} (${a.role})`).join(', ')}`);
 
-    const sharedTask = tasks[0];
+    // When GIA issued a single sub_agent_call, all selected personas tackle
+    // that one prompt from their own angle (intentional multi-perspective
+    // debate — see synthesize()'s cross-evaluation). But when GIA issued
+    // multiple sub_agent_calls with genuinely different prompts, each one
+    // must actually reach its own agent — previously every agent silently
+    // ran only tasks[0], discarding every other distinct task.
     const chunks: { task: SubAgentTask; identity: SubAgentIdentity }[][] = [];
     for (let i = 0; i < identities.length; i += this.maxConcurrency) {
-      chunks.push(identities.slice(i, i + this.maxConcurrency).map(identity => ({
-        task: sharedTask,
-        identity,
-      })));
+      chunks.push(identities.slice(i, i + this.maxConcurrency).map((identity, offset) => {
+        const idx = i + offset;
+        const task = tasks.length > 1 ? (tasks[idx % tasks.length] || tasks[0]) : tasks[0];
+        return { task, identity };
+      }));
     }
 
     for (const chunk of chunks) {
@@ -155,6 +178,7 @@ export class SubAgentManager {
     }
 
     emit('result', `All ${agentList.length} sub-agents finished. Synthesizing findings...`);
+    useNexusStore.getState().setSynthesizing(this.runId, true);
 
     return Array.from(this.agents.values());
   }
@@ -165,21 +189,35 @@ export class SubAgentManager {
 
     agent.status = 'running';
     emit('tool', `[${identity.name}] ${identity.role} — starting...`);
+    useNexusStore.getState().updateAgent(this.runId, identity.id, { status: 'running', currentActivity: 'Starting…' });
 
     const enrichedPrompt = `You are a sub-agent named ${identity.name} with the role of ${identity.role}.\n\nYour thinking style: ${identity.style}\n\nYour task:\n${task.prompt}\n\nProvide your findings based on your unique perspective. Be thorough.${this.isGodMode ? '\n\nYou are operating in GOD MODE. Go deeper than usual. Challenge every assumption. Leave no stone unturned.' : ''}`;
 
     try {
-      const result = await delegateTask(task.provider, enrichedPrompt, signal);
+      const result = await delegateTask(task.provider, enrichedPrompt, signal, identity.name, (statusMsg) => {
+        useNexusStore.getState().updateAgent(this.runId, identity.id, { currentActivity: statusMsg });
+        emit('tool', `[${identity.name}] ${statusMsg}`);
+      });
       agent.status = 'completed';
       agent.result = result;
       agent.duration = Date.now() - agent.startedAt;
       emit('result', `[${identity.name}] ${identity.role} — done (${(agent.duration / 1000).toFixed(1)}s)`);
+      useNexusStore.getState().updateAgent(this.runId, identity.id, {
+        status: 'completed', result, duration: agent.duration, currentActivity: undefined,
+      });
     } catch (e: unknown) {
       agent.status = 'failed';
       agent.error = e instanceof Error ? e.message : 'Unknown error';
       agent.duration = Date.now() - agent.startedAt;
       emit('error', `[${identity.name}] Failed: ${agent.error}`);
+      useNexusStore.getState().updateAgent(this.runId, identity.id, {
+        status: 'failed', error: agent.error, duration: agent.duration, currentActivity: undefined,
+      });
     }
+  }
+
+  markFinished() {
+    if (this.runId) useNexusStore.getState().finishRun(this.runId);
   }
 
   synthesize(): string {

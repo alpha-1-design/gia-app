@@ -12,6 +12,10 @@ import { buildOpenAITools, buildAnthropicTools, buildGeminiTools } from './brain
 import { executeToolBlocks } from './brain/toolRunner';
 import { extractMemories } from './brain/memoryExtractor';
 import { retryFetch, friendlyError } from './brain/network';
+import {
+  saveCheckpoint, clearCheckpoint, pickFallbackProvider,
+  isRateLimitOrQuotaError, isRetryableServerError, backoffDelay,
+} from './brain/ResilientRelay';
 import PluginManager from './PluginManager';
 import { isVisionCapable as _isVisionCapable } from './brain/modelUtils';
 import ResponseCache from './ResponseCache';
@@ -138,11 +142,22 @@ class GiaBrain {
     })();
     const loopReq: BrainRequest = { ...req, temperature: finalTemp };
 
+    let carryOverText = ''; // text already streamed to the user across failed attempts this turn
+
     while (iterations < maxIterations) {
       if (req.signal?.aborted) throw new Error('Request aborted');
       iterations++;
       loopReq.prompt = currentPrompt;
       loopReq.history = history;
+
+      // Capture everything streamed THIS attempt so a mid-stream failure
+      // doesn't discard tokens the user already saw — they get folded into
+      // the continuation prompt for whichever provider picks up next.
+      let attemptStreamed = '';
+      const userOnStream = req.onStream;
+      if (userOnStream) {
+        loopReq.onStream = (chunk: string) => { attemptStreamed += chunk; userOnStream(chunk); };
+      }
 
       const callStart = performance.now();
       let res: BrainResponse | undefined;
@@ -150,12 +165,14 @@ class GiaBrain {
       try {
         res = await this.callProvider(loopReq, effectiveProvider);
         ProviderMonitor.recordSuccess(effectiveProvider, finalModel, Math.round(performance.now() - callStart));
+        if (req.checkpointKey) clearCheckpoint(req.checkpointKey);
+        carryOverText = '';
       } catch (e: unknown) {
         const origError = e as Error;
         const msg = e instanceof Error ? e.message.toLowerCase() : '';
         ProviderMonitor.recordFailure(effectiveProvider, finalModel, msg, Math.round(performance.now() - callStart));
 
-        // Retry once without native tool schemas
+        // Retry once without native tool schemas (not a rate-limit issue — a schema/format issue)
         if (!loopReq._skipNativeSchemas && (
           msg.includes('tools') || msg.includes('tool') ||
           msg.includes('function') || msg.includes('functions') ||
@@ -171,49 +188,134 @@ class GiaBrain {
           if (res) continue;
         }
 
-        // Smart fallback using ProviderMonitor — try other providers
-        if (state.smartFallback) {
-          const { providers } = useProviderStore.getState();
-          const availableProviders = Object.entries(providers)
-            .filter(([p, cfg]) => p !== effectiveProvider && cfg.enabled && cfg.apiKey)
-            .map(([p, cfg]) => ({ provider: p, model: cfg.model }));
+        const rateLimited = isRateLimitOrQuotaError(msg) || isRetryableServerError(msg);
+        carryOverText += attemptStreamed;
 
-          const best = ProviderMonitor.getBestProvider(availableProviders);
-          if (best) {
-            useProviderStore.getState().setActiveProvider(best.provider);
-            useGiaStore.getState().addNotification(`Failing over to ${best.provider}/${best.model}`);
+        // Persist a durable checkpoint the moment something recoverable goes
+        // wrong — this is what makes "nothing must get lost" actually true
+        // even if the app is closed mid-failover, not just in this session.
+        if (req.checkpointKey) {
+          saveCheckpoint({
+            key: req.checkpointKey,
+            sessionId: req.checkpointKey.split(':')[0],
+            messageId: req.checkpointKey.split(':')[1],
+            originalPrompt: req.prompt,
+            accumulatedText: carryOverText,
+            history: history as { role: string; content: string }[],
+            failedProvider: effectiveProvider,
+            failedModel: finalModel,
+            reason: msg,
+            attempt: iterations,
+            savedAt: Date.now(),
+          });
+        }
+
+        // If we'd already streamed real content this attempt before it broke,
+        // don't replay the same prompt from scratch on the next provider —
+        // continue from exactly where the user's screen left off.
+        const buildContinuationPrompt = () => {
+          if (!carryOverText.trim()) return currentPrompt;
+          history.push({ role: 'assistant', content: carryOverText });
+          return `Continue exactly where you left off. Do not repeat or restate anything above — pick up mid-thought if needed. Here is what you'd written so far (for your own context, do not repeat it):\n\n"""${carryOverText.slice(-2000)}"""`;
+        };
+
+        const triedProviders = [effectiveProvider];
+
+        if (rateLimited && state.smartFallback !== false) {
+          // Try every other configured provider, healthiest first, before
+          // giving up — each attempt also gets its own onStream capture so
+          // a SECOND mid-stream failure still checkpoints correctly.
+          let recovered = false;
+          for (let hop = 0; hop < 3 && !recovered; hop++) {
+            const fallback = pickFallbackProvider(triedProviders);
+            if (!fallback) break;
+            triedProviders.push(fallback.provider);
+
+            useGiaStore.getState().addNotification(
+              carryOverText.trim()
+                ? `⚡ ${effectiveProvider} rate-limited mid-response — continuing on ${fallback.provider}/${fallback.model}, nothing lost`
+                : `⚡ ${effectiveProvider} rate-limited — switching to ${fallback.provider}/${fallback.model}`
+            );
+            req.onThought?.(`Rate limit on ${effectiveProvider} — failing over to ${fallback.provider}...`);
+
+            useProviderStore.getState().setActiveProvider(fallback.provider);
             loopReq._skipNativeSchemas = false;
-            try {
-              res = await this.callProvider(loopReq, best.provider);
-              ProviderMonitor.recordSuccess(best.provider, best.model, Math.round(performance.now() - callStart));
-            } catch (e) {
-              logger.error('[GiaBrain] Smart fallback also failed:', e);
-              throw origError;
+            loopReq.prompt = buildContinuationPrompt();
+            loopReq.history = history;
+            let hopStreamed = '';
+            if (userOnStream) {
+              loopReq.onStream = (chunk: string) => { hopStreamed += chunk; userOnStream(chunk); };
             }
-          } else {
-            throw origError;
+            const hopStart = performance.now();
+            try {
+              res = await this.callProvider(loopReq, fallback.provider);
+              ProviderMonitor.recordSuccess(fallback.provider, fallback.model, Math.round(performance.now() - hopStart));
+              recovered = true;
+              if (req.checkpointKey) clearCheckpoint(req.checkpointKey);
+              carryOverText = '';
+            } catch (hopErr) {
+              const hopMsg = hopErr instanceof Error ? hopErr.message.toLowerCase() : '';
+              ProviderMonitor.recordFailure(fallback.provider, fallback.model, hopMsg, Math.round(performance.now() - hopStart));
+              carryOverText += hopStreamed;
+              logger.error(`[GiaBrain] Fallback to ${fallback.provider} also failed:`, hopErr);
+            }
           }
+
+          if (!recovered) {
+            // No configured provider currently has capacity — wait it out
+            // instead of losing the request. The checkpoint above already
+            // guarantees the partial work survives even a full app close.
+            useGiaStore.getState().addNotification(`All providers rate-limited — waiting to retry (your progress is saved)...`);
+            req.onThought?.('All providers busy — waiting to retry, nothing will be lost...');
+            let waitRecovered = false;
+            for (let attempt = 1; attempt <= 5 && !waitRecovered; attempt++) {
+              const delay = backoffDelay(attempt);
+              req.onThought?.(`Retrying in ${Math.round(delay / 1000)}s (attempt ${attempt}/5)...`);
+              await new Promise<void>((resolve, reject) => {
+                const t = setTimeout(resolve, delay);
+                req.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+              });
+              loopReq.prompt = buildContinuationPrompt();
+              loopReq.history = history;
+              let waitStreamed = '';
+              if (userOnStream) {
+                loopReq.onStream = (chunk: string) => { waitStreamed += chunk; userOnStream(chunk); };
+              }
+              try {
+                res = await this.callProvider(loopReq, effectiveProvider);
+                ProviderMonitor.recordSuccess(effectiveProvider, finalModel, 0);
+                waitRecovered = true;
+                if (req.checkpointKey) clearCheckpoint(req.checkpointKey);
+                carryOverText = '';
+              } catch (waitErr) {
+                carryOverText += waitStreamed;
+                if (req.checkpointKey) {
+                  saveCheckpoint({
+                    key: req.checkpointKey,
+                    sessionId: req.checkpointKey.split(':')[0],
+                    messageId: req.checkpointKey.split(':')[1],
+                    originalPrompt: req.prompt,
+                    accumulatedText: carryOverText,
+                    history: history as { role: string; content: string }[],
+                    failedProvider: effectiveProvider,
+                    failedModel: finalModel,
+                    reason: waitErr instanceof Error ? waitErr.message : 'unknown',
+                    attempt: iterations + attempt,
+                    savedAt: Date.now(),
+                  });
+                }
+              }
+            }
+            if (!waitRecovered) {
+              throw new Error(`${friendlyError(effectiveProvider, origError)} — your progress up to this point is saved and won't be lost. Try again shortly or switch providers.`);
+            }
+          }
+        } else if (!rateLimited) {
+          // Non-rate-limit error (bad request, auth, etc.) — same-provider
+          // failover doesn't make sense here, surface it directly.
+          throw origError;
         } else {
-          // Legacy fallback
-          const { providers } = useProviderStore.getState();
-          const fallbackProvider = (Object.entries(providers) as [string, { enabled: boolean; apiKey: string; model: string }][])
-            .find(([p, cfg]) => p !== effectiveProvider && cfg.enabled && cfg.apiKey);
-
-          if (fallbackProvider) {
-            const [newProvider, newCfg] = fallbackProvider;
-            useProviderStore.getState().setActiveProvider(newProvider);
-            const sel = selectBestModel(newProvider, newCfg.model, false);
-            if (sel.switched) useProviderStore.getState().setProviderModel(newProvider, sel.model);
-            loopReq._skipNativeSchemas = false;
-            try {
-              res = await this.callProvider(loopReq, newProvider);
-            } catch (e) {
-              logger.error('[GiaBrain] Fallback also failed:', e);
-              throw origError;
-            }
-          } else {
-            throw origError;
-          }
+          throw origError;
         }
       }
 

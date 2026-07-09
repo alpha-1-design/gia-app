@@ -16,6 +16,11 @@ export interface BrainRequest {
   _skipNativeSchemas?: boolean;
   forceJson?: boolean;
   providerId?: string;
+  /** Stable key identifying this generation (e.g. `${sessionId}:${messageId}`)
+   *  used to persist a resumable checkpoint if a rate limit or outage hits
+   *  mid-stream. Without it, resilience still works but can't survive a
+   *  full app restart. */
+  checkpointKey?: string;
 }
 
 export interface TokenUsage {

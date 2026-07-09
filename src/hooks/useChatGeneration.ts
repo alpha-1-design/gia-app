@@ -300,6 +300,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       streamKey = `${sessionId}:${asstId}`;
       const res = await GiaBrain.generate({
         signal: ctrl.signal,
+        checkpointKey: streamKey,
         prompt: agentPrompt, history,
         systemPrompt: agentSystemPrompt,
         systemPromptMode,
@@ -507,6 +508,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       setToolMessageId(asstId);
       const contRes = await GiaBrain.generate({
         signal: ctrl.signal,
+        checkpointKey: streamKey,
         prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
         history: [...history, { role: 'assistant', content: lastContent }],
         onStream: (chunk) => {
@@ -632,6 +634,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       setToolMessageId(asstId);
       await GiaBrain.generate({
         signal: ctrl.signal,
+        checkpointKey: streamKey,
         prompt: answer, history,
         useWebSearch: state.webSearch,
         useExtendedThinking: state.extThinking,
@@ -749,6 +752,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       setToolMessageId(id);
       const genRes = await GiaBrain.generate({
         signal: ctrl.signal,
+        checkpointKey: streamKey,
         prompt: originalPrompt, history,
         useWebSearch: webSearch,
         useExtendedThinking: extThinking,
