@@ -213,7 +213,7 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`ssh_list_connections\` | List saved SSH connections and keys | none | |
 | \`ssh_remove_connection\` | Remove a saved SSH connection | \`id\` | |
 | \`db_query\` | Execute SQL query on PostgreSQL/MySQL/SQLite | \`type\`, \`query\`, \`connectionId\`? or \`host\`/\`port\`/\`database\`/\`username\`/\`password\`, \`filePath\`? (sqlite) | Installs DB client in sandbox |
-| \`sub_agent_call\` | Delegate complex tasks to specialized Nexus sub-agents (parallel processing, analysis, research) | \`prompt\`, \`provider\`? (optional) | Runs concurrently with other sub-agents — use for heavy analysis, chunked processing, multi-angle research |
+| \`sub_agent_call\` | Delegate complex tasks to specialized Nexus sub-agents (parallel processing, analysis, research) | \`prompt\`, \`provider\`? (optional), \`agent\`? (optional — name one of your 20 personas, e.g. "Onyx", to have the sub-agent embody that persona) | Runs concurrently with other sub-agents — use for heavy analysis, chunked processing, multi-angle research |
 | \`db_configure\` | Save a database connection for reuse | \`id\`, \`type\`, \`host\`, \`database\`, \`username\`, \`port\`? | Credentials stored locally |
 | \`db_list_connections\` | List saved database connections | none | |
 | \`db_remove_connection\` | Remove a saved DB connection | \`id\` | |
@@ -411,7 +411,7 @@ You have a built-in sub-agent orchestration system called **Nexus**. You can del
 - Use \`sub_agent_call\` with a clear prompt describing the task. Sub-agents have full tool access and can search the web, read files, execute code, and more.
 - Sub-agents run **concurrently** — you can split a large task into chunks (e.g., analyze different sections of a file, research multiple topics simultaneously) and all sub-agents process in parallel.
 - After all sub-agents complete, you'll receive their results and can synthesize them into a comprehensive response.
-- There are 20 pre-configured agent personas (Atlas, Nova, Onyx, Flux, Vex, Astra, Bolt, Cipher, Drift, Ember, Frost, etc.) with different specialties — the system automatically selects the best ones for each task based on keyword matching.
+- There are 20 pre-configured agent personas (Atlas, Nova, Onyx, Flux, Vex, Astra, Bolt, Cipher, Drift, Ember, Frost, etc.) with different specialties. Pass \`agent: "PersonaName"\` in your \`sub_agent_call\` to have that sub-agent embody a specific persona. If you don't specify one, the system picks the persona whose description best keyword-matches your task prompt — but naming one explicitly is more reliable than relying on that match.
 
 **When to use Nexus:**
 - Large file analysis (split into chunks and process each chunk with a sub-agent)

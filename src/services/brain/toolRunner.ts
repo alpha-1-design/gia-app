@@ -124,9 +124,9 @@ async function executeSingleTool(
   }
 
   if (toolCall.id === 'sub_agent_call') {
-    const { provider, prompt: subPrompt } = toolCall.args as { provider: string; prompt: string };
-    onThought?.(`Delegating to sub-agent (${provider})...`);
-    const subRes = await delegateTask(provider, subPrompt, signal);
+    const { provider, prompt: subPrompt, agent } = toolCall.args as { provider: string; prompt: string; agent?: string };
+    onThought?.(agent ? `Delegating to sub-agent (${provider}) as ${agent}...` : `Delegating to sub-agent (${provider})...`);
+    const subRes = await delegateTask(provider, subPrompt, signal, agent);
     observations.push(`SUB-AGENT (${provider}): ${subRes}`);
     return { observations };
   }
