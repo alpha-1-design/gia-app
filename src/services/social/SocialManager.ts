@@ -19,7 +19,7 @@ const LIVE_TOKEN_KEYS = ['accessToken', 'apiToken', 'botToken', 'bearerToken'] a
 
 function computeLive(tokens?: OAuthTokens): boolean {
   if (!tokens) return false;
-  return LIVE_TOKEN_KEYS.some(k => Boolean((tokens as Record<string, unknown>)[k]));
+  return LIVE_TOKEN_KEYS.some(k => Boolean((tokens as unknown as Record<string, unknown>)[k]));
 }
 
 export interface SocialPost {

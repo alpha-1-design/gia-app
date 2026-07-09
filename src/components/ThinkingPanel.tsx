@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Brain, Search, Globe, FileText, MapPin, ImageIcon,
-  ChevronDown, ChevronRight, Loader, Network, Terminal, Archive,
+  Search, Globe, FileText, MapPin, ImageIcon,
+  Loader, Network, Terminal, Archive,
   Zap, CheckCircle, AlertCircle, Activity,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -102,7 +102,7 @@ const renderLine = (line: string, i: number, isLive: boolean) => {
 };
 
 export const ThinkingPanel: React.FC<ThinkingPanelProps> = ({
-  thoughts, isLive, isExpanded, onToggle,
+  thoughts, isLive, isExpanded,
 }) => {
   const extThinking = useGiaStore(s => s.extThinking);
   const scrollRef = useRef<HTMLDivElement>(null);
