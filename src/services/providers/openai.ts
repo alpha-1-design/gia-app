@@ -48,7 +48,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   if (req.onStream) {
     if (req.signal?.aborted) return { text: '', provider: activeProvider, model: config.model };
 
-    return new Promise<BrainResponse>((resolve, reject) => {
+    const runStream = (url: string) => new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       let fullText = '';
       let lastProcessed = 0;
@@ -57,7 +57,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       let partialLine = '';
       const toolCallAccum: Map<number, { id?: string; name?: string; args: string }> = new Map();
 
-      xhr.open('POST', `${baseUrl}/chat/completions`);
+      xhr.open('POST', url);
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
       xhr.timeout = 120000;
@@ -183,7 +183,16 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         }
       };
 
-      xhr.onerror = () => reject(new Error(ctx.friendlyError(label, `${label} network error`)));
+      xhr.onerror = () => {
+        const err = new Error(ctx.friendlyError(label, `${label} network error`)) as Error & { retryable?: boolean };
+        // Only safe to retry through the CORS proxy if no content reached the
+        // user yet — this fires almost instantly for a blocked cross-origin
+        // request, before any bytes arrive. If we'd already streamed partial
+        // text and then lost the connection, retrying from scratch would
+        // duplicate/corrupt what's already on screen, so we don't.
+        err.retryable = fullText.length === 0 && lastProcessed === 0;
+        reject(err);
+      };
       xhr.ontimeout = () => reject(new Error(ctx.friendlyError(label, `${label} timed out after 120s`)));
       xhr.onabort = () => {
         const e = new Error('Request aborted');
@@ -214,6 +223,15 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
 
       xhr.send(JSON.stringify(body));
     });
+
+    try {
+      return await runStream(`${baseUrl}/chat/completions`);
+    } catch (e) {
+      const err = e as Error & { retryable?: boolean };
+      if (err.name === 'AbortError' || !err.retryable) throw err;
+      logger.warn('[openai] Direct streaming request failed, retrying via CORS proxy:', err.message);
+      return await runStream(corsProxy.proxyUrl(`${baseUrl}/chat/completions`));
+    }
   }
 
   const attemptFetch = async (url: string) => ctx.retryFetch(url, {
