@@ -16,6 +16,12 @@ export interface BrainRequest {
   _skipNativeSchemas?: boolean;
   forceJson?: boolean;
   providerId?: string;
+  /** Chat message id the assistant's reply (and any tool calls it makes)
+   *  belongs to. Passed explicitly through to executeToolBlocks so tool
+   *  proposal cards attach to the right message even when more than one
+   *  generation is in flight at once (e.g. a new message sent while a
+   *  previous turn's tool execution is still finishing). */
+  messageId?: string;
   /** Stable key identifying this generation (e.g. `${sessionId}:${messageId}`)
    *  used to persist a resumable checkpoint if a rate limit or outage hits
    *  mid-stream. Without it, resilience still works but can't survive a

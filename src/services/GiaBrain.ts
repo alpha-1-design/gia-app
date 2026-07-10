@@ -344,7 +344,7 @@ class GiaBrain {
       const toolState = { history: history as { role: string; content: string }[], currentPrompt, clarificationAttempts };
       const toolResult = req.forceJson
         ? { didExecute: false }
-        : await executeToolBlocks(text, toolState, req.onThought, req.signal, sourcesAcc);
+        : await executeToolBlocks(text, toolState, req.onThought, req.signal, sourcesAcc, req.messageId);
       currentPrompt = toolState.currentPrompt;
       clarificationAttempts = toolState.clarificationAttempts;
 

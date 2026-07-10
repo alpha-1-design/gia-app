@@ -19,10 +19,6 @@ interface ExecutionState {
 
 type ThoughtFn = (msg: string) => void;
 
-let _currentMessageId: string | null = null;
-export function setToolMessageId(id: string | null) { _currentMessageId = id; }
-export function getToolMessageId(): string | null { return _currentMessageId; }
-
 const FALLBACK_HINTS: Record<string, string> = {
   web_search: 'read_url',
   read_url: 'web_search',
@@ -110,6 +106,7 @@ async function executeSingleTool(
   onThought?: ThoughtFn,
   signal?: AbortSignal,
   sourcesAcc?: string[],
+  messageId?: string,
 ): Promise<{ result?: string; observations: string[] }> {
   const observations: string[] = [];
 
@@ -165,7 +162,7 @@ async function executeSingleTool(
     state: 'proposed',
     createdAt: Date.now(),
     trace: [],
-    messageId: _currentMessageId || undefined,
+    messageId,
   };
   useProtocolStore.getState().propose(protocol);
 
@@ -296,6 +293,7 @@ export async function executeToolBlocks(
   onThought?: ThoughtFn,
   signal?: AbortSignal,
   sourcesAcc?: string[],
+  messageId?: string,
 ): Promise<{ didExecute: boolean; result?: string }> {
   const toolCalls = extractToolCalls(text);
   if (!toolCalls.length) return { didExecute: false };
@@ -338,7 +336,7 @@ export async function executeToolBlocks(
     if (group.length === 1) {
       const call = group[0];
       try {
-        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal, sourcesAcc);
+        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId);
         allObservations.push(...observations);
         if (result === '__CLARIFICATION__') {
           const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
@@ -362,7 +360,7 @@ export async function executeToolBlocks(
       try {
         onThought?.(`⚡ Running ${group.length} tools in parallel...`);
         const results = await Promise.all(
-          group.map((call) => executeSingleTool(call, text, state, onThought, signal, sourcesAcc))
+          group.map((call) => executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId))
         );
 
         for (const { result, observations } of results) {

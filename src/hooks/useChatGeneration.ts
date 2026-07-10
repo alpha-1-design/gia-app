@@ -13,7 +13,6 @@ import { streamPush, streamCancel } from '../utils/streamThrottle';
 import OutputValidator from '../services/OutputValidator';
 import InputGuardrails from '../services/InputGuardrails';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { setToolMessageId } from '../services/brain/toolRunner';
 import { giaCoreServices } from '../services/GIACoreServices';
 import type { Message } from '../store/useGiaStore';
 import { isNativePlatform } from '../utils/helpers';
@@ -265,7 +264,6 @@ export function useChatGeneration() {
 
       state.setIntentState('responding');
       state.setThinkingPhase('writing');
-      setToolMessageId(asstId);
 
       const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
 To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the file contents in \`[FILE:path] content [FILE]\` format.]\n\n` : '';
@@ -301,6 +299,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       const res = await GiaBrain.generate({
         signal: ctrl.signal,
         checkpointKey: streamKey,
+        messageId: asstId,
         prompt: agentPrompt, history,
         systemPrompt: agentSystemPrompt,
         systemPromptMode,
@@ -430,7 +429,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
-      setToolMessageId(null);
       streamCancel(streamKey);
       setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
       useGiaStore.setState(s => ({
@@ -505,10 +503,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       streamKey = `${state.activeSessionId!}:${asstId}`;
       state.setIntentState('responding');
       state.setThinkingPhase('writing');
-      setToolMessageId(asstId);
       const contRes = await GiaBrain.generate({
         signal: ctrl.signal,
         checkpointKey: streamKey,
+        messageId: asstId,
         prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
         history: [...history, { role: 'assistant', content: lastContent }],
         onStream: (chunk) => {
@@ -567,7 +565,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
       } finally {
-      setToolMessageId(null);
       streamCancel(streamKey);
       if (generationKeyRef.current) {
         unregisterGenerationController(generationKeyRef.current);
@@ -631,10 +628,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let clarLastFlushedArtifactCount = 0;
       let clarDisplayAccumulated = '';
       streamKey = `${sessionId}:${asstId}`;
-      setToolMessageId(asstId);
       await GiaBrain.generate({
         signal: ctrl.signal,
         checkpointKey: streamKey,
+        messageId: asstId,
         prompt: answer, history,
         useWebSearch: state.webSearch,
         useExtendedThinking: state.extThinking,
@@ -688,7 +685,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
-      setToolMessageId(null);
       streamCancel(streamKey);
       if (generationKeyRef.current) {
         unregisterGenerationController(generationKeyRef.current);
@@ -749,10 +745,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let retryDisplayAccumulated = '';
       streamKey = `${state.activeSessionId!}:${id}`;
       state.setIntentState('responding');
-      setToolMessageId(id);
       const genRes = await GiaBrain.generate({
         signal: ctrl.signal,
         checkpointKey: streamKey,
+        messageId: id,
         prompt: originalPrompt, history,
         useWebSearch: webSearch,
         useExtendedThinking: extThinking,
@@ -801,7 +797,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         });
       }
     } finally {
-      setToolMessageId(null);
       streamCancel(streamKey);
       if (generationKeyRef.current) {
         unregisterGenerationController(generationKeyRef.current);
