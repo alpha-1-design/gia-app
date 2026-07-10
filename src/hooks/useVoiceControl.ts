@@ -334,9 +334,14 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           return;
         }
 
+        // NOTE: partialResults must be false here. When partialResults is true, this
+        // plugin resolves `start()` immediately with no matches and instead streams
+        // results through a `partialResults` event listener. Since nothing here
+        // subscribed to that event, every call resolved empty and the loop below
+        // restarted the microphone every ~3s without ever capturing speech.
         const result = await SpeechRecognition.start({
           language: langRef.current,
-          partialResults: true,
+          partialResults: false,
           popup: false,
         });
 

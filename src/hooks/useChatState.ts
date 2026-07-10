@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useGiaStore } from '../store/useGiaStore';
+import { useDraftStore } from '../store/useDraftStore';
 import { useAgentStore } from '../store/useAgentStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { providerRegistry } from '../services/ProviderRegistry';
@@ -15,7 +16,21 @@ import { AudioRecorder } from '../services/audioRecorder';
 import WhisperService from '../services/WhisperService';
 
 export function useChatState() {
-  const [input, setInput] = useState('');
+  // Lazy-init from whatever session was active last time this hook mounted, so a
+  // draft typed before switching modules (which unmounts ChatModule) survives the
+  // round trip. Falls back to '' the very first time there's no session yet.
+  const [input, setInputRaw] = useState<string>(() => {
+    const sid = useGiaStore.getState().activeSessionId;
+    return sid ? useDraftStore.getState().getDraft(sid) : '';
+  });
+  const currentSessionIdRef = useRef<string | null>(useGiaStore.getState().activeSessionId ?? null);
+
+  // Keep local input state in sync with the persisted draft for whichever
+  // session is active, and persist keystrokes as they happen.
+  const setInput = useCallback((value: string) => {
+    setInputRaw(value);
+    useDraftStore.getState().setDraft(currentSessionIdRef.current, value);
+  }, []);
   const [showHistory, setShowHistory] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -83,6 +98,16 @@ export function useChatState() {
     clarification: s.clarification, setClarification: s.setClarification,
     pendingAction: s.pendingAction,
   })));
+
+  // When the active session changes (new chat, switched chat, or coming back
+  // from another module after a session change elsewhere), swap the composer
+  // draft to match: stash whatever was typed for the old session, load
+  // whatever was saved for the new one.
+  useEffect(() => {
+    if (currentSessionIdRef.current === activeSessionId) return;
+    currentSessionIdRef.current = activeSessionId ?? null;
+    setInputRaw(activeSessionId ? useDraftStore.getState().getDraft(activeSessionId) : '');
+  }, [activeSessionId]);
 
   const { providers, activeProvider } = useProviderStore(useShallow(s => ({
     providers: s.providers,
