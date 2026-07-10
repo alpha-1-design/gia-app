@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="glyph" x1="180" y1="180" x2="844" y2="844" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="0.5" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="glyph-soft" x1="180" y1="180" x2="844" y2="844" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Scaled ~0.92x about center so the glyph sits inside Android's adaptive-icon safe zone -->
+  <g transform="translate(512,512) scale(0.92) translate(-512,-512)">
+    <path
+      d="M 772.5 293.5 A 340 340 0 1 0 772.5 730.5 L 661.4 637.3 A 195 195 0 1 1 661.4 386.7 Z"
+      fill="url(#glyph)"
+    />
+    <rect x="552" y="467" width="270" height="90" rx="45" ry="45" fill="url(#glyph)"/>
+    <path
+      d="M 748 320 A 300 300 0 1 0 748 704"
+      fill="none" stroke="url(#glyph-soft)" stroke-width="10" stroke-linecap="round" opacity="0.55"
+    />
+  </g>
+</svg>
