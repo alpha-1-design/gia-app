@@ -7,6 +7,8 @@
  * Includes a web fallback that logs a warning instead of crashing.
  */
 
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -45,10 +47,8 @@ export interface StatusInfo {
  */
 function getPlugin(): unknown {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Capacitor } = require('@capacitor/core');
     if (Capacitor.isPluginAvailable('GIATerminal')) {
-      return Capacitor.Plugins.GIATerminal;
+      return registerPlugin('GIATerminal');
     }
     console.warn('[TerminalService] GIATerminal plugin not available');
     return null;
