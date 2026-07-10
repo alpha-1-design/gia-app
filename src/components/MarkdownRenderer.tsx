@@ -177,13 +177,13 @@ const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers,
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr>{headers.map((h, hi) =>
-              <th key={hi} style={{ background: 'var(--gia-surface-3)', padding: '7px 10px', textAlign: 'left', fontWeight: 600, border: '1px solid var(--gia-border)', color: 'var(--gia-muted)', whiteSpace: 'nowrap' }}>{h}</th>
+              <th key={hi} style={{ background: 'var(--gia-surface-3)', padding: '7px 10px', textAlign: 'left', fontWeight: 600, border: '1px solid var(--gia-border)', color: 'var(--gia-muted)', whiteSpace: 'nowrap' }}>{inlineRender(h, new Map())}</th>
             )}</tr>
           </thead>
           <tbody>{rows.map((row, ri) =>
             <tr key={ri} className="hover-row" style={{ background: ri % 2 === 1 ? 'var(--gia-surface-2)' : 'transparent', transition: 'background 0.15s' }}>
               {row.map((cell, ci) =>
-                <td key={ci} style={{ padding: '5px 10px', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}>{cell}</td>
+                <td key={ci} style={{ padding: '5px 10px', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}>{inlineRender(cell, new Map())}</td>
               )}
             </tr>
           )}</tbody>
