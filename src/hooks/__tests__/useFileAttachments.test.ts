@@ -23,7 +23,7 @@ vi.mock('../../store/useGiaStore', () => ({
   ),
 }));
 
-const { useFileAttachments } = await import('../useFileAttachments');
+const { useFileAttachments, shouldWrapPastedTextAsFile } = await import('../useFileAttachments');
 
 function createMockFile(name: string, type: string, content: string): File {
   const blob = new Blob([content], { type });
@@ -114,5 +114,48 @@ describe('useFileAttachments', () => {
     expect(result.current.isDragging).toBe(false);
     expect(result.current.attachments).toHaveLength(1);
     expect(result.current.attachments[0].content).toBe('dropped content');
+  });
+
+  it('shouldWrapPastedTextAsFile is false for a short one-line paste', () => {
+    expect(shouldWrapPastedTextAsFile('just a quick note')).toBe(false);
+  });
+
+  it('shouldWrapPastedTextAsFile is true for very long text', () => {
+    expect(shouldWrapPastedTextAsFile('x'.repeat(600))).toBe(true);
+  });
+
+  it('shouldWrapPastedTextAsFile is true for many short lines', () => {
+    const text = Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n');
+    expect(shouldWrapPastedTextAsFile(text)).toBe(true);
+  });
+
+  function createClipboardEvent(text: string, hasImage = false) {
+    const items = hasImage ? [{ type: 'image/png', getAsFile: () => createMockFile('x.png', 'image/png', '') }] : [];
+    return {
+      preventDefault: vi.fn(),
+      clipboardData: { items, getData: () => text },
+    } as unknown as React.ClipboardEvent;
+  }
+
+  it('handlePaste wraps a long text paste into a .txt attachment instead of letting it hit the composer', async () => {
+    const { result } = renderHook(() => useFileAttachments());
+    const longText = 'y'.repeat(1000);
+    const e = createClipboardEvent(longText);
+    await act(async () => {
+      result.current.handlePaste(e);
+      await new Promise(r => setTimeout(r, 0));
+    });
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(result.current.attachments).toHaveLength(1);
+    expect(result.current.attachments[0].name).toMatch(/^pasted-text-.*\.txt$/);
+    expect(result.current.attachments[0].content).toBe(longText);
+  });
+
+  it('handlePaste leaves a short text paste alone (default browser paste applies)', () => {
+    const { result } = renderHook(() => useFileAttachments());
+    const e = createClipboardEvent('hi there');
+    act(() => { result.current.handlePaste(e); });
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(result.current.attachments).toHaveLength(0);
   });
 });

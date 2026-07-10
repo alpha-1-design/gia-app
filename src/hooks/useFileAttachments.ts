@@ -4,6 +4,23 @@ import { knowledgeGraphService } from '../services/KnowledgeGraphService';
 
 export type Attachment = { name: string; type: string; content: string; preview?: string };
 
+// Pasting a long block of text (e.g. logs, an article, a big code dump)
+// straight into the composer used to just dump the raw text into the input.
+// On top of being unwieldy, a paste containing several newlines pasted into
+// the single-line composer input could reach the input's Enter-to-send
+// handler and auto-send before the user meant to. Past this size, treat the
+// paste like a dropped file instead: attach it as a .txt file and leave the
+// composer alone.
+const PASTE_TO_FILE_CHAR_THRESHOLD = 500;
+const PASTE_TO_FILE_LINE_THRESHOLD = 8;
+
+export function shouldWrapPastedTextAsFile(text: string): boolean {
+  if (!text) return false;
+  if (text.length > PASTE_TO_FILE_CHAR_THRESHOLD) return true;
+  const lineCount = text.split('\n').length;
+  return lineCount > PASTE_TO_FILE_LINE_THRESHOLD;
+}
+
 export function useFileAttachments() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -71,19 +88,32 @@ export function useFileAttachments() {
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith('image/')) { hasImage = true; break; }
     }
-    if (!hasImage) return;
-    e.preventDefault();
-    const imageFiles: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) {
-          imageFiles.push(new File([file], `pasted-image-${Date.now()}.png`, { type: file.type }));
+    if (hasImage) {
+      e.preventDefault();
+      const imageFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            imageFiles.push(new File([file], `pasted-image-${Date.now()}.png`, { type: file.type }));
+          }
         }
       }
+      if (imageFiles.length > 0) addFiles(imageFiles, true);
+      return;
     }
-    if (imageFiles.length > 0) addFiles(imageFiles, true);
+
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    if (shouldWrapPastedTextAsFile(text)) {
+      // Stop the browser from inserting the raw text into the composer —
+      // this both keeps the input clean and avoids the pasted newlines ever
+      // reaching the input's Enter-to-send key handler.
+      e.preventDefault();
+      const file = new File([text], `pasted-text-${Date.now()}.txt`, { type: 'text/plain' });
+      addFiles([file]);
+    }
+    // Short pastes fall through to the default browser paste behavior.
   }, [addFiles]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {

@@ -51,7 +51,18 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
     }
   }, [value, multiline]);
 
+  const justPastedRef = useRef(false);
+
+  const handlePasteCapture = () => {
+    justPastedRef.current = true;
+    // Some Android WebView keyboards emit a synthetic Enter keydown while
+    // committing pasted multi-line text. Give that a moment to land before
+    // trusting Enter again, so a paste can never masquerade as "send".
+    setTimeout(() => { justPastedRef.current = false; }, 150);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (justPastedRef.current) return;
     const isCmdEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
     const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey;
     if (isPlainEnter || isCmdEnter) {
@@ -75,6 +86,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
     value,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(e.target.value),
     onKeyDown: handleKeyDown,
+    onPasteCapture: handlePasteCapture,
     placeholder,
     disabled: disabled || isLoading,
     autoComplete: 'on',
