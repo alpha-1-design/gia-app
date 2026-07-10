@@ -18,6 +18,10 @@ export interface NexusAgentState {
 
 export interface NexusRun {
   id: string;
+  /** Chat session this run was launched from. Used so a run started in one
+   *  session never gets rendered on top of a different session the user has
+   *  since switched to. */
+  sessionId: string | null;
   isGodMode: boolean;
   agents: NexusAgentState[];
   startedAt: number;
@@ -29,7 +33,7 @@ interface NexusStore {
   activeRun: NexusRun | null;
   /** Keep the last run around briefly after completion so the dashboard
    *  doesn't just vanish the instant agents finish. */
-  startRun: (id: string, isGodMode: boolean, agents: Omit<NexusAgentState, 'status' | 'duration'>[]) => void;
+  startRun: (id: string, sessionId: string | null, isGodMode: boolean, agents: Omit<NexusAgentState, 'status' | 'duration'>[]) => void;
   updateAgent: (runId: string, agentId: string, patch: Partial<NexusAgentState>) => void;
   setSynthesizing: (runId: string, v: boolean) => void;
   finishRun: (runId: string) => void;
@@ -39,10 +43,11 @@ interface NexusStore {
 export const useNexusStore = create<NexusStore>((set, get) => ({
   activeRun: null,
 
-  startRun: (id, isGodMode, agents) => {
+  startRun: (id, sessionId, isGodMode, agents) => {
     set({
       activeRun: {
         id,
+        sessionId,
         isGodMode,
         startedAt: Date.now(),
         synthesizing: false,

@@ -139,6 +139,7 @@ export class SubAgentManager {
     this.runId = `nexus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     useNexusStore.getState().startRun(
       this.runId,
+      useGiaStore.getState().activeSessionId ?? null,
       this.isGodMode,
       identities.map((identity, i) => ({
         id: identity.id,

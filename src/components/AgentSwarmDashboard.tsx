@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, Clock, Layers, Crown, X,
 } from 'lucide-react';
 import { useNexusStore, NexusAgentState } from '../store/useNexusStore';
+import { useGiaStore } from '../store/useGiaStore';
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
   Search, TrendingUp, AlertTriangle, Lightbulb, GitMerge, Compass, Zap, Code2,
@@ -140,8 +141,14 @@ const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; onToggle:
 };
 
 const AgentSwarmDashboard: React.FC = () => {
-  const activeRun = useNexusStore(s => s.activeRun);
+  const rawActiveRun = useNexusStore(s => s.activeRun);
   const clearRun = useNexusStore(s => s.clearRun);
+  const activeSessionId = useGiaStore(s => s.activeSessionId);
+  // A run belongs to the session that launched it. Without this check, an
+  // in-flight or just-finished Nexus run from a session the user has since
+  // left would keep rendering on top of whatever session (including a brand
+  // new chat) they switched to next.
+  const activeRun = rawActiveRun && rawActiveRun.sessionId === (activeSessionId ?? null) ? rawActiveRun : null;
   const [collapsed, setCollapsed] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
