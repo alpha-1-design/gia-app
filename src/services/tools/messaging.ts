@@ -66,7 +66,7 @@ const messagingSetupTelegram: Tool = {
 
     return {
       success: true,
-      content: `## ✅ Telegram Bot Connected\n\nYour bot is active! Here's how to use it:\n\n**1. Private Chat** — Just message your bot on Telegram. GIA will reply directly.\n\n**2. Group Chat** — Add the bot to any Telegram group. Use \`messaging_set_mention_only\` to control whether GIA responds to all messages or only when @mentioned.\n\n**3. Proactive Updates** — GIA can message you when long tasks complete or need attention.\n\n**Important:** Enable **Long-Running Mode** in Settings → Power & Background so the bot keeps polling even when the tab is in the background.\n\nTry sending a message to your bot now!`,
+      content: `## ✅ Telegram Bot Connected\n\nYour bot is active! Here's how to use it:\n\n**1. Private Chat** — Just message your bot on Telegram. GIA will reply directly.\n\n**2. Group Chat** — Add the bot to any Telegram group. Use \`messaging_set_mention_only\` to control whether GIA responds to all messages or only when @mentioned.\n\n**3. Proactive Updates** — GIA can message you when long tasks complete or need attention.\n\nBackground delivery now turns on automatically when you connect Telegram — you don't need to separately enable Long-Running Mode just for this (that toggle is for other always-on features like faster autonomy and idle-model unload).\n\nTry sending a message to your bot now!`,
     };
   },
 };

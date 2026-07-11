@@ -32,7 +32,7 @@ const STORE_KEY = 'gia-messaging-channels';
 class MessagingBridge {
   private channels: Map<string, MessagingChannel> = new Map();
   private handlers: MessageHandler[] = [];
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private lastUpdateId = 0;
   private active = false;
   private polling = false;
@@ -221,17 +221,50 @@ class MessagingBridge {
     this.active = true;
     logger.log('[MessagingBridge] Starting Telegram long polling for groups & DMs');
 
-    this.pollTimer = setInterval(async () => {
-      if (!this.active || this.polling) return;
+    // Connecting Telegram is a clear signal the user wants GIA to receive
+    // messages even when the app isn't in the foreground. Previously that
+    // required separately discovering and enabling "Long-Running Mode" in
+    // Settings — without it, Android suspends the WebView's JS timers as
+    // soon as the app is backgrounded, this loop silently stops, and
+    // messages only get picked up once the user reopens the app (exactly
+    // "doesn't see it until I remind her to check"). Engage the native
+    // foreground keep-alive here too so background delivery works out of
+    // the box, not just when that separate toggle happens to also be on.
+    try {
+      const { default: giaForegroundService } = await import('./GIAForegroundService');
+      await giaForegroundService.start(true);
+    } catch (e) {
+      logger.warn('[MessagingBridge] Could not start foreground keep-alive for polling:', e);
+    }
+
+    this.scheduleNextPoll(0);
+  }
+
+  private scheduleNextPoll(delayMs: number): void {
+    if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.pollTimer = setTimeout(async () => {
+      if (!this.active) return;
       this.polling = true;
+      let delayForNext = 1000;
       try {
         await this.pollTelegram();
+        // Telegram's getUpdates already blocks server-side for up to 25s
+        // (long polling) and returns immediately once a message arrives —
+        // there's no need to also wait out a fixed client-side interval on
+        // top of that. Re-poll right away so new messages are picked up as
+        // fast as possible, instead of the old fixed-3s-tick pattern that
+        // woke the JS timer ~8-10x more often than the actual work required.
+        delayForNext = 0;
       } catch (e) {
         logger.warn('[MessagingBridge] Poll error:', e);
+        // Back off briefly on failure so a persistent error (bad token,
+        // offline, etc.) can't hot-loop and burn battery/requests.
+        delayForNext = 5000;
       } finally {
         this.polling = false;
       }
-    }, 3000);
+      if (this.active) this.scheduleNextPoll(delayForNext);
+    }, delayMs);
   }
 
   private async pollTelegram(): Promise<void> {
@@ -306,7 +339,7 @@ class MessagingBridge {
   stopPolling(): void {
     this.active = false;
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
     logger.log('[MessagingBridge] Polling stopped');
