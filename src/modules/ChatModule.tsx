@@ -13,6 +13,7 @@ import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import { ThinkingStatus } from '../components/ThinkingStatus';
+import GiaIcon from '../components/GiaIcon';
 import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
@@ -188,7 +189,7 @@ const ChatModule: React.FC = () => {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
-              <Bot size={26} style={{ color: '#a855f7' }} />
+              <GiaIcon size={30} animate={false} color="#a855f7" />
             </div>
             <div>
               <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{useGiaStore.getState().userProfile.name ? `Hey ${useGiaStore.getState().userProfile.name}` : greeting.emoji + ' ' + greeting.text}</p>
