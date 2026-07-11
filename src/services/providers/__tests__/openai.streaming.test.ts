@@ -45,7 +45,7 @@ class FakeXHR {
   constructor() { FakeXHR.instances.push(this); }
   open(_method: string, url: string) { this.url = url; }
   setRequestHeader(k: string, v: string) { this.headers[k] = v; }
-  send(_body: string) { /* test drives events manually */ }
+  send() { /* test drives events manually */ }
   abort() { this.onabort?.(); }
 
   // test helpers
