@@ -3,7 +3,29 @@ import type { Tool } from './types';
 
 async function ensureSandbox() {
   const ok = await SandboxService.ensureAvailable();
-  if (!ok) throw new Error('Alpine sandbox not available. Start: node server/sandbox-server.cjs');
+  if (!ok) throw new Error('No sandbox available — neither the remote sandbox server (node server/sandbox-server.cjs) nor the on-device Alpine terminal could be reached.');
+}
+
+/** Markdown line describing how to get a generated file, honest about
+ *  whether a real clickable download link is available (remote sandbox
+ *  server) or not (on-device native fallback — no HTTP server to link to). */
+export function describeDownload(filename: string, dlUrl: string | null): string {
+  return dlUrl
+    ? `[⬇ Download ${filename}](${dlUrl})`
+    : `Saved to \`${filename}\` in the on-device sandbox. Ask me to \`download_file\` it to save it to your device.`;
+}
+
+/** Gets a file's bytes regardless of which sandbox backend is active. */
+export async function getFileBlob(path: string, dlUrl: string | null): Promise<Blob> {
+  if (dlUrl) {
+    const response = await fetch(dlUrl);
+    if (!response.ok) throw new Error(`File not found or inaccessible: ${path} (HTTP ${response.status})`);
+    return response.blob();
+  }
+  // Native fallback has no HTTP server to fetch from — read the file's
+  // content directly through the terminal instead.
+  const content = await SandboxService.readFile(path);
+  return new Blob([content]);
 }
 
 const generate_file: Tool = {
@@ -75,7 +97,7 @@ const generate_file: Tool = {
         const dlUrl = SandboxService.downloadUrl(filename);
         return {
           success: true,
-          content: [``, `[⬇ Download ${filename}](${dlUrl})`, '', '```visual', JSON.stringify({ type: 'file_preview', data: { url: dlUrl, name: filename, format: 'zip', files: files } }), '```', ''].join('\n'),
+          content: [``, describeDownload(filename, dlUrl), '', '```visual', JSON.stringify({ type: 'file_preview', data: { url: dlUrl, name: filename, format: 'zip', files: files } }), '```', ''].join('\n'),
         };
       }
 
@@ -110,7 +132,7 @@ const generate_file: Tool = {
         success: true,
         content: [
           `Generated **${filename}**`,
-          `[⬇ Download ${filename}](${dlUrl})`,
+          describeDownload(filename, dlUrl),
           '',
           '```visual',
           visualBlock,
@@ -152,7 +174,7 @@ const edit_document: Tool = {
         await SandboxService.writeFile(filePath, newContent);
         return {
           success: true,
-          content: `Updated \`${filePath}\` (full content replacement).\n\n[⬇ Download edited file](${SandboxService.downloadUrl(filePath)})`,
+          content: `Updated \`${filePath}\` (full content replacement).\n\n${describeDownload(filePath, SandboxService.downloadUrl(filePath))}`,
         };
       }
 
@@ -205,12 +227,7 @@ const download_file: Tool = {
       const dlUrl = SandboxService.downloadUrl(path);
       const filename = args.filename ? String(args.filename) : path.split('/').pop() || 'file';
 
-      const response = await fetch(dlUrl);
-      if (!response.ok) {
-        return { success: false, content: '', error: `File not found or inaccessible: ${path} (HTTP ${response.status})` };
-      }
-
-      const blob = await response.blob();
+      const blob = await getFileBlob(path, dlUrl);
       const { triggerDownload } = await import('./helpers');
       triggerDownload(blob, filename);
 

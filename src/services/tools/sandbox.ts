@@ -26,7 +26,7 @@ const sandboxExec: Tool = {
       return {
         success: false,
         content: '',
-        error: 'Alpine sandbox is not available. Make sure the sandbox server is running (node server/sandbox-server.js)',
+        error: 'No sandbox available — neither the remote sandbox server (node server/sandbox-server.cjs) nor the on-device Alpine terminal could be reached.',
       };
     }
 
