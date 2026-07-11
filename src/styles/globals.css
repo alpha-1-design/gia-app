@@ -78,6 +78,353 @@
 }
 
 /* ============================================================
+   OBSIDIAN AURORA — OLED true black + living gradient accents
+   ============================================================ */
+@keyframes aurora-gradient {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes aurora-border-flow {
+  0%   { --aurora-angle: 0deg; }
+  100% { --aurora-angle: 360deg; }
+}
+@keyframes aurora-glow-breathe {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  33%       { opacity: 0.6; transform: scale(1.05); }
+  66%       { opacity: 0.45; transform: scale(1.02); }
+}
+@keyframes aurora-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+[data-theme="obsidian-aurora"] {
+  /* Core — true OLED black */
+  --gia-bg:          #000000;
+  --gia-surface:     #08080c;
+  --gia-surface-2:   #0e0e14;
+  --gia-surface-3:   #16161e;
+  --gia-border:      rgba(255,255,255,0.06);
+  --gia-border-2:    rgba(255,255,255,0.10);
+  --gia-text:        #f0f0f5;
+  --gia-muted:       #7a7a95;
+  --gia-muted-2:     #4a4a60;
+
+  /* Accent — aurora gradient (teal → violet → pink) */
+  --gia-accent:      #06b6d4;
+  --gia-accent-rgb:  6, 182, 212;
+  --gia-accent-dim:  rgba(6, 182, 212, 0.12);
+  --gia-accent-glow: rgba(6, 182, 212, 0.25);
+
+  /* Module colors — aurora palette */
+  --mod-chat:     6, 182, 212;    /* cyan */
+  --mod-analyst:  59, 130, 246;   /* blue */
+  --mod-writer:   236, 72, 153;   /* pink */
+  --mod-planner:  16, 185, 129;   /* emerald */
+  --mod-settings: 148, 163, 184;  /* slate */
+  --mod-exam:     245, 158, 11;   /* amber */
+  --mod-autonomy: 20, 184, 166;   /* teal */
+  --mod-agents:   139, 92, 246;   /* violet */
+
+  /* Glow — aurora tinted */
+  --glow-color:   var(--mod-chat);
+  --glow-opacity: 0.30;
+  --glow-size:    50px;
+  --glow-speed:   5s;
+
+  /* Aurora-specific tokens */
+  --aurora-1:     #06b6d4;
+  --aurora-2:     #8b5cf6;
+  --aurora-3:     #ec4899;
+  --aurora-gradient: linear-gradient(135deg, var(--aurora-1), var(--aurora-2), var(--aurora-3));
+}
+
+/* Aurora mesh background — faint color in corners */
+[data-theme="obsidian-aurora"] body {
+  background:
+    radial-gradient(ellipse 50% 40% at 0% 0%, rgba(6,182,212,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 100% 100%, rgba(139,92,246,0.03) 0%, transparent 60%),
+    radial-gradient(ellipse 30% 30% at 80% 10%, rgba(236,72,153,0.02) 0%, transparent 50%),
+    #000000;
+}
+
+/* Aurora glass — tinted */
+[data-theme="obsidian-aurora"] .gia-card-glass {
+  background: rgba(6, 182, 212, 0.03);
+  border: 1px solid rgba(6, 182, 212, 0.08);
+}
+[data-theme="obsidian-aurora"] .gia-card-glass:hover {
+  border-color: rgba(6, 182, 212, 0.15);
+}
+
+/* Aurora gradient buttons */
+[data-theme="obsidian-aurora"] .gia-btn-primary {
+  background: var(--aurora-gradient);
+  background-size: 200% 200%;
+  animation: aurora-gradient 4s ease infinite;
+}
+[data-theme="obsidian-aurora"] .gia-btn-primary:hover {
+  box-shadow: 0 0 20px rgba(6,182,212,0.3), 0 0 40px rgba(139,92,246,0.15);
+}
+
+/* Aurora user messages — gradient bubble */
+[data-theme="obsidian-aurora"] .msg-user {
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6, #ec4899);
+  background-size: 200% 200%;
+  animation: aurora-gradient 6s ease infinite;
+}
+
+/* Aurora code inline */
+[data-theme="obsidian-aurora"] .gia-markdown code {
+  background: rgba(6, 182, 212, 0.10);
+  color: #22d3ee;
+}
+
+/* Aurora focus ring */
+[data-theme="obsidian-aurora"] .gia-input:focus {
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.06), 0 0 20px rgba(6, 182, 212, 0.08);
+}
+
+/* Aurora streaming glow */
+@keyframes aurora-streaming-glow {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(6,182,212,0.08); }
+  50% { box-shadow: inset 0 0 0 1px rgba(139,92,246,0.25), 0 0 20px rgba(6,182,212,0.06); }
+}
+[data-theme="obsidian-aurora"] .streaming-message {
+  animation: aurora-streaming-glow 2s ease-in-out infinite;
+}
+
+/* Aurora thinking dots — gradient colored */
+[data-theme="obsidian-aurora"] .thinking-dot {
+  background: var(--aurora-gradient);
+  background-size: 200% 200%;
+  animation: thinking-pulse 1.4s ease-in-out infinite, aurora-gradient 3s ease infinite;
+}
+[data-theme="obsidian-aurora"] .thinking-dot:nth-child(2) {
+  animation-delay: 0.16s, 0.5s;
+}
+[data-theme="obsidian-aurora"] .thinking-dot:nth-child(3) {
+  animation-delay: 0.32s, 1s;
+}
+
+/* Aurora stream cursor */
+[data-theme="obsidian-aurora"] .stream-cursor {
+  background: var(--aurora-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Aurora nav indicator */
+[data-theme="obsidian-aurora"] .nav-indicator {
+  background: var(--aurora-gradient);
+  background-size: 200% 200%;
+  animation: aurora-gradient 3s ease infinite;
+  box-shadow: 0 0 8px rgba(6,182,212,0.3);
+}
+
+/* Aurora exam correct/wrong — gradient borders */
+[data-theme="obsidian-aurora"] .exam-option.correct {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
+}
+[data-theme="obsidian-aurora"] .exam-option.wrong {
+  border-color: #f43f5e;
+  background: rgba(244, 63, 94, 0.06);
+}
+
+/* Aurora agent core glow — multicolor */
+[data-theme="obsidian-aurora"] @keyframes agent-core-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(6,182,212,0.15), 0 0 50px rgba(139,92,246,0.08), 0 0 80px rgba(236,72,153,0.03); }
+  50% { box-shadow: 0 0 30px rgba(6,182,212,0.25), 0 0 60px rgba(139,92,246,0.12), 0 0 100px rgba(236,72,153,0.06); }
+}
+
+/* Aurora agent cosmic background */
+[data-theme="obsidian-aurora"] .agent-cosmic-bg::before {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(6,182,212,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 50% at 30% 60%, rgba(139,92,246,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 70% 30%, rgba(236,72,153,0.03) 0%, transparent 50%);
+}
+
+/* Aurora portal rings — gradient border */
+[data-theme="obsidian-aurora"] .agent-portal-ring {
+  border-color: rgba(6,182,212,0.10);
+}
+[data-theme="obsidian-aurora"] .agent-portal-ring-inner {
+  border-color: rgba(139,92,246,0.08);
+}
+
+/* Aurora particles — multicolor */
+[data-theme="obsidian-aurora"] .agent-particle {
+  background: rgba(6,182,212,0.5);
+}
+
+/* Aurora ambient glow — animated gradient */
+[data-theme="obsidian-aurora"] .ambient-glow {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(6,182,212,0.15) 0%,
+    rgba(139,92,246,0.08) 40%,
+    rgba(236,72,153,0.04) 60%,
+    transparent 70%
+  );
+  animation: aurora-glow-breathe var(--glow-speed) ease-in-out infinite;
+}
+
+/* Aurora phase badge */
+@keyframes aurora-phase-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(6,182,212,0.2); }
+  50% { box-shadow: 0 0 10px rgba(139,92,246,0.35); }
+}
+[data-theme="obsidian-aurora"] .phase-badge {
+  animation: aurora-phase-pulse 1.5s ease-in-out infinite;
+}
+
+/* Aurora source chips */
+[data-theme="obsidian-aurora"] .agent-source-chip:hover {
+  box-shadow: 0 4px 16px rgba(6,182,212,0.15);
+}
+
+/* Aurora button breathing */
+@keyframes aurora-button-breathing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(6,182,212,0); }
+  50% { box-shadow: 0 0 0 12px rgba(6,182,212,0.06); }
+}
+[data-theme="obsidian-aurora"] .agent-empty-btn:hover {
+  animation: text-reveal-word 0.4s cubic-bezier(0.16, 1, 0.3, 1) 1.6s both, aurora-button-breathing 2.5s ease-in-out infinite;
+}
+
+/* Aurora cosmic rays — multicolor */
+[data-theme="obsidian-aurora"] .agent-cosmic-ray {
+  background: linear-gradient(to top, rgba(6,182,212,0), rgba(139,92,246,0.04));
+}
+
+/* Aurora markdown strong — brighter */
+[data-theme="obsidian-aurora"] .gia-markdown strong {
+  color: #ffffff;
+}
+
+/* Aurora markdown links */
+[data-theme="obsidian-aurora"] .gia-markdown a {
+  color: #22d3ee;
+}
+
+/* Aurora scrollbar */
+[data-theme="obsidian-aurora"] ::-webkit-scrollbar-thumb {
+  background: rgba(6,182,212,0.2);
+}
+[data-theme="obsidian-aurora"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(6,182,212,0.35);
+}
+
+/* Aurora skeleton loader */
+[data-theme="obsidian-aurora"] .skeleton-pulse {
+  background: linear-gradient(110deg, var(--gia-surface-2) 30%, rgba(6,182,212,0.04) 50%, var(--gia-surface-2) 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ============================================================
+   OBSIDIAN AURORA — Global Hardcoded Color Overrides
+   Catches hardcoded violet in components without touching each file
+   ============================================================ */
+
+/* Tailwind violet-500/400/600 text overrides */
+[data-theme="obsidian-aurora"] .text-violet-400,
+[data-theme="obsidian-aurora"] .text-violet-500,
+[data-theme="obsidian-aurora"] .hover\:text-violet-300:hover,
+[data-theme="obsidian-aurora"] .hover\:text-violet-400:hover {
+  color: #22d3ee !important;
+}
+[data-theme="obsidian-aurora"] .text-purple-400,
+[data-theme="obsidian-aurora"] .hover\:text-purple-300:hover {
+  color: #22d3ee !important;
+}
+
+/* Tailwind violet/purple bg overrides */
+[data-theme="obsidian-aurora"] .bg-violet-500\/10,
+[data-theme="obsidian-aurora"] .bg-violet-500\/20,
+[data-theme="obsidian-aurora"] .bg-violet-600\/10,
+[data-theme="obsidian-aurora"] .bg-violet-900\/20,
+[data-theme="obsidian-aurora"] .bg-violet-900\/30,
+[data-theme="obsidian-aurora"] .bg-purple-500\/20 {
+  background-color: rgba(6,182,212,0.10) !important;
+}
+[data-theme="obsidian-aurora"] .bg-violet-500 {
+  background-color: #06b6d4 !important;
+}
+[data-theme="obsidian-aurora"] .bg-violet-600 {
+  background-color: #0891b2 !important;
+}
+[data-theme="obsidian-aurora"] .bg-purple-500 {
+  background-color: #06b6d4 !important;
+}
+
+/* Tailwind violet/purple border overrides */
+[data-theme="obsidian-aurora"] .border-violet-500\/10,
+[data-theme="obsidian-aurora"] .border-violet-500\/20,
+[data-theme="obsidian-aurora"] .border-violet-500\/30,
+[data-theme="obsidian-aurora"] .border-purple-400\/10,
+[data-theme="obsidian-aurora"] .border-purple-500\/20,
+[data-theme="obsidian-aurora"] .border-purple-500\/30 {
+  border-color: rgba(6,182,212,0.15) !important;
+}
+[data-theme="obsidian-aurora"] .border-violet-500 {
+  border-color: #06b6d4 !important;
+}
+
+/* Tailwind violet focus/accent */
+[data-theme="obsidian-aurora"] .focus\:border-violet-400\/40:focus,
+[data-theme="obsidian-aurora"] .focus\:border-violet-500\/40:focus,
+[data-theme="obsidian-aurora"] .focus\:border-violet-500:focus {
+  border-color: rgba(6,182,212,0.4) !important;
+}
+[data-theme="obsidian-aurora"] .accent-violet-500 {
+  accent-color: #06b6d4 !important;
+}
+
+/* Tailwind violet gradient classes */
+[data-theme="obsidian-aurora"] .from-violet-500 {
+  --tw-gradient-from: #06b6d4 !important;
+}
+[data-theme="obsidian-aurora"] .from-violet-600 {
+  --tw-gradient-from: #0891b2 !important;
+}
+[data-theme="obsidian-aurora"] .to-violet-500 {
+  --tw-gradient-to: #8b5cf6 !important;
+}
+[data-theme="obsidian-aurora"] .to-violet-400 {
+  --tw-gradient-to: #a78bfa !important;
+}
+[data-theme="obsidian-aurora"] .to-violet-700 {
+  --tw-gradient-to: #6d28d9 !important;
+}
+[data-theme="obsidian-aurora"] .from-purple-500 {
+  --tw-gradient-from: #06b6d4 !important;
+}
+[data-theme="obsidian-aurora"] .to-purple-500 {
+  --tw-gradient-to: #8b5cf6 !important;
+}
+
+/* Tailwind violet shadow overrides */
+[data-theme="obsidian-aurora"] .shadow-violet-500\/20,
+[data-theme="obsidian-aurora"] .shadow-violet-500\/25 {
+  --tw-shadow-color: rgba(6,182,212,0.2) !important;
+}
+
+/* Aurora gradient text utility */
+[data-theme="obsidian-aurora"] .aurora-text {
+  background: var(--aurora-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
    BASE RESET
    ============================================================ */
 *, *::before, *::after { box-sizing: border-box; }

@@ -277,7 +277,7 @@ interface GiaState {
   setUseWhisper: (v: boolean) => void;
   customInstructions: string;
   pinnedMemories: string[];
-  theme: 'dark' | 'light' | 'system';
+  theme: 'dark' | 'light' | 'system' | 'obsidian-aurora';
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
@@ -365,7 +365,7 @@ interface GiaState {
   autoModelUnload: boolean;
   setLongRunningMode: (v: boolean) => void;
   setAutoModelUnload: (v: boolean) => void;
-  setTheme: (theme: 'dark' | 'light' | 'system') => void;
+  setTheme: (theme: 'dark' | 'light' | 'system' | 'obsidian-aurora') => void;
   setConnectionStatus: (status: 'online' | 'offline') => void;
   setProviderConnected: (connected: boolean) => void;
 }

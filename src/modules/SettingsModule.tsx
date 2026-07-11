@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { motion } from 'motion/react';
 import {
   Terminal, User, Save, ChevronRight,
-  Zap, Smartphone, Sun, Moon,
+  Zap, Smartphone, Sun, Moon, Sparkles,
   UserCircle, PlugZap, Battery, Cpu,   Puzzle, Info,
   Network, Bot, Activity, Download, CheckCircle, XCircle, Shield,
 } from 'lucide-react';
@@ -329,22 +329,29 @@ const SettingsModule: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
-              {theme === 'light' ? <Sun size={18} style={{ color: '#a855f7' }} /> : <Moon size={18} style={{ color: '#a855f7' }} />}
+              {theme === 'light' ? <Sun size={18} style={{ color: '#a855f7' }} /> : theme === 'obsidian-aurora' ? <Sparkles size={18} style={{ color: '#06b6d4' }} /> : <Moon size={18} style={{ color: '#a855f7' }} />}
             </div>
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Theme</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>{theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System default'}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>{theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : theme === 'obsidian-aurora' ? 'Obsidian Aurora' : 'System default'}</p>
             </div>
           </div>
-          <div className="flex gap-1">
-            {(['dark', 'light', 'system'] as const).map(t => (
+          <div className="flex gap-1 flex-wrap justify-end">
+            {(['dark', 'light', 'obsidian-aurora', 'system'] as const).map(t => (
               <button key={t} onClick={() => setTheme(t)}
-                className="px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all capitalize"
+                className="px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all"
                 style={{
-                  background: theme === t ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.04)',
-                  color: theme === t ? '#a855f7' : 'var(--gia-muted)',
-                  border: `1px solid ${theme === t ? 'rgba(168,85,247,0.25)' : 'transparent'}`,
-                }}>{t}</button>
+                  background: theme === t
+                    ? t === 'obsidian-aurora' ? 'rgba(6,182,212,0.15)' : 'rgba(168,85,247,0.15)'
+                    : 'rgba(255,255,255,0.04)',
+                  color: theme === t
+                    ? t === 'obsidian-aurora' ? '#06b6d4' : '#a855f7'
+                    : 'var(--gia-muted)',
+                  border: `1px solid ${theme === t
+                    ? t === 'obsidian-aurora' ? 'rgba(6,182,212,0.25)' : 'rgba(168,85,247,0.25)'
+                    : 'transparent'}`,
+                  textTransform: 'capitalize',
+                }}>{t.replace('-', ' ')}</button>
             ))}
           </div>
         </div>

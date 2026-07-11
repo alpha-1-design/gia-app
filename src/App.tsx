@@ -315,7 +315,7 @@ const App: React.FC = () => {
     const applyTheme = (mode: string) => {
       const effective = mode === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : mode;
       document.documentElement.setAttribute('data-theme', effective);
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'light' ? '#f2f2f7' : '#0a0a0f');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'light' ? '#f2f2f7' : effective === 'obsidian-aurora' ? '#000000' : '#0a0a0f');
     };
     applyTheme(theme);
     const mq = window.matchMedia('(prefers-color-scheme: light)');
