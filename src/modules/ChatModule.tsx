@@ -234,7 +234,7 @@ const ChatModule: React.FC = () => {
             </div>
             )}
             {providerConnected && (
-            <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
+            <div className="grid grid-cols-1 gap-3 w-full max-w-xs mt-1 max-h-[52vh] overflow-y-auto pb-1 pr-0.5">
               {QUICK_STARTS.map((qs, i) => (
                   <motion.button
                     key={qs.label}
@@ -244,13 +244,13 @@ const ChatModule: React.FC = () => {
                     transition={{ delay: i * 0.07, type: 'spring', stiffness: 200, damping: 20 }}
                     whileHover={{ scale: 1.02, borderColor: `${qs.color}60`, boxShadow: `0 0 20px ${qs.color}15` }}
                     whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all"
-                    style={{ background: `linear-gradient(135deg, ${qs.color}0a, ${qs.color}03)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 0 12px ${qs.color}06` }}
+                    className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left transition-all shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${qs.color}0a, ${qs.color}03)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 4px 16px -4px ${qs.color}12` }}
                   >
-                    <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={14} style={{ color: qs.color }} /></div>
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={15} style={{ color: qs.color }} /></div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
-                      <p className="text-[10px] truncate" style={{ color: qs.color, opacity: 0.7 }}>{qs.prompt}</p>
+                      <p className="text-[10px] truncate mt-0.5" style={{ color: qs.color, opacity: 0.7 }}>{qs.prompt}</p>
                     </div>
                   </motion.button>
                 ))}
