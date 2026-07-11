@@ -81,6 +81,11 @@ class TerminalService {
     return this.plugin as GiaTerminalPlugin;
   }
 
+  /** True when the native GIATerminal plugin (on-device Alpine sandbox) is reachable. */
+  isAvailable(): boolean {
+    return !!this.plugin;
+  }
+
   /**
    * Execute a command inside a proot+Alpine terminal session.
    *

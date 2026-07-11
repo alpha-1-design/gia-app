@@ -309,11 +309,21 @@ const MicalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)' }}>
           <p className="font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠️ Sandbox not available</p>
           <p style={{ color: 'var(--gia-muted)' }}>
-            The Alpine sandbox server isn't running. Start it with{' '}
+            Neither the on-device Alpine terminal nor a remote sandbox server could be reached. If you're on
+            desktop/web, start one with{' '}
             <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 4 }}>
               node server/sandbox-server.cjs
             </code>{' '}
             in the project root, or use chat commands like <em>security_scan</em>.
+          </p>
+        </div>
+      )}
+      {sandboxOk === true && SandboxService.isUsingNativeFallback() && (
+        <div className="px-3 py-3 rounded-xl text-xs leading-relaxed"
+          style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.15)' }}>
+          <p style={{ color: 'var(--gia-muted)' }}>
+            Running on the on-device Alpine terminal (no remote sandbox server needed). File downloads will
+            save directly to your device instead of a browser link.
           </p>
         </div>
       )}

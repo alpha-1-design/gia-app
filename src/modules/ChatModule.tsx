@@ -13,6 +13,7 @@ import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import { ThinkingStatus } from '../components/ThinkingStatus';
+import GiaIcon from '../components/GiaIcon';
 import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
@@ -188,7 +189,7 @@ const ChatModule: React.FC = () => {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
-              <Bot size={26} style={{ color: '#a855f7' }} />
+              <GiaIcon size={30} animate={false} color="#a855f7" />
             </div>
             <div>
               <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{useGiaStore.getState().userProfile.name ? `Hey ${useGiaStore.getState().userProfile.name}` : greeting.emoji + ' ' + greeting.text}</p>
@@ -234,7 +235,7 @@ const ChatModule: React.FC = () => {
             </div>
             )}
             {providerConnected && (
-            <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
+            <div className="grid grid-cols-1 gap-3 w-full max-w-xs mt-1 max-h-[52vh] overflow-y-auto pb-1 pr-0.5">
               {QUICK_STARTS.map((qs, i) => (
                   <motion.button
                     key={qs.label}
@@ -244,13 +245,13 @@ const ChatModule: React.FC = () => {
                     transition={{ delay: i * 0.07, type: 'spring', stiffness: 200, damping: 20 }}
                     whileHover={{ scale: 1.02, borderColor: `${qs.color}60`, boxShadow: `0 0 20px ${qs.color}15` }}
                     whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all"
-                    style={{ background: `linear-gradient(135deg, ${qs.color}0a, ${qs.color}03)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 0 12px ${qs.color}06` }}
+                    className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left transition-all shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${qs.color}0a, ${qs.color}03)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 4px 16px -4px ${qs.color}12` }}
                   >
-                    <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={14} style={{ color: qs.color }} /></div>
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={15} style={{ color: qs.color }} /></div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
-                      <p className="text-[10px] truncate" style={{ color: qs.color, opacity: 0.7 }}>{qs.prompt}</p>
+                      <p className="text-[10px] truncate mt-0.5" style={{ color: qs.color, opacity: 0.7 }}>{qs.prompt}</p>
                     </div>
                   </motion.button>
                 ))}

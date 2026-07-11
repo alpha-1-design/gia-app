@@ -47,4 +47,16 @@ describe('AgentSwarmDashboard — session scoping', () => {
     const { container } = render(<AgentSwarmDashboard />);
     expect(container.textContent).toContain('Nexus');
   });
+
+  it('stacks agent cards vertically at full width instead of a horizontal-scroll strip', () => {
+    useGiaStore.setState({ activeSessionId: 'session-A' });
+    useNexusStore.getState().startRun('run-1', 'session-A', false, [makeAgent('a1'), makeAgent('a2')]);
+
+    const { container } = render(<AgentSwarmDashboard />);
+    // The old horizontal-scroll strip class should be gone entirely.
+    expect(container.querySelector('.overflow-x-auto')).toBeNull();
+
+    const cards = container.querySelectorAll('[style*="width: 100%"]');
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+  });
 });

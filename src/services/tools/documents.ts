@@ -7,7 +7,7 @@ let sandboxChecked = false;
 async function ensureSandbox() {
   if (sandboxChecked) return;
   const ok = await SandboxService.ensureAvailable();
-  if (!ok) throw new Error('Alpine sandbox not available. Start: node server/sandbox-server.cjs');
+  if (!ok) throw new Error('No sandbox available — neither the remote sandbox server (node server/sandbox-server.cjs) nor the on-device Alpine terminal could be reached.');
   sandboxChecked = true;
 }
 

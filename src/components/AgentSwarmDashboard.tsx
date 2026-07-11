@@ -50,13 +50,13 @@ const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; onToggle:
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-      className="rounded-2xl overflow-hidden shrink-0"
+      className="rounded-2xl overflow-hidden"
       style={{
-        width: expanded ? 260 : 148,
+        width: '100%',
         background: `linear-gradient(160deg, ${agent.color}14, rgba(13,13,18,0.9))`,
         border: `1px solid ${isLive ? agent.color + '55' : agent.color + '22'}`,
         boxShadow: isLive ? `0 0 18px ${agent.color}30` : 'none',
-        transition: 'width 0.25s ease, box-shadow 0.3s ease',
+        transition: 'box-shadow 0.3s ease',
       }}
     >
       <button onClick={onToggle} className="w-full text-left p-3 flex flex-col gap-2">
@@ -270,9 +270,9 @@ const AgentSwarmDashboard: React.FC = () => {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
+              className="overflow-hidden max-h-[60vh]"
             >
-              <div className="flex gap-2 px-3 pb-3 pt-1 overflow-x-auto">
+              <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
                 {activeRun.agents.map(agent => (
                   <AgentCard
                     key={agent.id}
