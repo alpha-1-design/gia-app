@@ -22,6 +22,11 @@ export interface BrainRequest {
    *  generation is in flight at once (e.g. a new message sent while a
    *  previous turn's tool execution is still finishing). */
   messageId?: string;
+  /** Force a specific model on the current provider for this call, bypassing
+   *  the provider's stored default model. Used for same-provider failover
+   *  (e.g. one OpenCode Zen key that offers several models) without
+   *  permanently changing the person's configured model. */
+  modelOverride?: string;
   /** Stable key identifying this generation (e.g. `${sessionId}:${messageId}`)
    *  used to persist a resumable checkpoint if a rate limit or outage hits
    *  mid-stream. Without it, resilience still works but can't survive a

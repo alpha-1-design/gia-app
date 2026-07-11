@@ -1,6 +1,7 @@
 import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
 import ProviderMonitor from '../ProviderMonitor';
+import { providerRegistry } from '../ProviderRegistry';
 
 export interface GenerationCheckpoint {
   key: string;
@@ -80,6 +81,61 @@ export function pickFallbackProvider(exclude: string[]): { provider: string; mod
     .map(([id, cfg]) => ({ provider: id, model: cfg.model }));
   if (candidates.length === 0) return null;
   return ProviderMonitor.getBestProvider(candidates) || candidates[0];
+}
+
+/** Number of providers the person has actually connected (enabled + credentialed). */
+export function countConnectedProviders(): number {
+  const { providers } = useProviderStore.getState();
+  return Object.entries(providers).filter(([id, cfg]) => cfg.enabled && (id === 'local-llm' || cfg.apiKey)).length;
+}
+
+/**
+ * Picks the healthiest untried model offered by the given provider (e.g. an
+ * OpenCode Zen key unlocks several models — deepseek, nemotron, hy3, ...).
+ * Used to fail over within a single connected provider instead of having
+ * nowhere to go.
+ */
+export function pickFallbackModel(provider: string, currentModel: string, excludeModels: string[]): string | null {
+  const known = providerRegistry.getModels(provider);
+  const candidates = known
+    .map(m => m.id)
+    .filter(id => id !== currentModel && !excludeModels.includes(id));
+  if (candidates.length === 0) return null;
+
+  const scored = candidates.map(model => ({
+    model,
+    health: ProviderMonitor.getHealth(provider, model),
+  }));
+  scored.sort((a, b) => {
+    const statusRank = (s: string) => (s === 'healthy' ? 0 : s === 'degraded' ? 1 : 2);
+    return statusRank(a.health.status) - statusRank(b.health.status);
+  });
+  return scored[0]?.model ?? candidates[0];
+}
+
+/**
+ * Single entry point for failover decisions: only reaches across to a
+ * different *provider* when the person genuinely has more than one
+ * connected. With just one provider configured (the common case — e.g. a
+ * single OpenCode Zen key), it instead tries other *models* that same
+ * provider/key already has access to before giving up, rather than
+ * switching providers on a single-provider setup or simply failing.
+ */
+export function pickFallback(
+  currentProvider: string,
+  currentModel: string,
+  triedProviders: string[],
+  triedModels: string[],
+): { provider: string; model: string; sameProvider: boolean } | null {
+  if (countConnectedProviders() > 1) {
+    const fallback = pickFallbackProvider(triedProviders);
+    if (fallback) return { ...fallback, sameProvider: false };
+  }
+
+  const fallbackModel = pickFallbackModel(currentProvider, currentModel, triedModels);
+  if (fallbackModel) return { provider: currentProvider, model: fallbackModel, sameProvider: true };
+
+  return null;
 }
 
 /**

@@ -13,7 +13,7 @@ import { executeToolBlocks } from './brain/toolRunner';
 import { extractMemories } from './brain/memoryExtractor';
 import { retryFetch, friendlyError } from './brain/network';
 import {
-  saveCheckpoint, clearCheckpoint, pickFallbackProvider,
+  saveCheckpoint, clearCheckpoint, pickFallback,
   isRateLimitOrQuotaError, isRetryableServerError, backoffDelay,
 } from './brain/ResilientRelay';
 import PluginManager from './PluginManager';
@@ -106,9 +106,9 @@ class GiaBrain {
     // Auto-select best model for this request's feature needs
     // Skip vision-based model switching when local vision is enabled
     const needsVision = req.localVision ? false : !!(req.images && req.images.length > 0);
-    const selection = selectBestModel(effectiveProvider, config.model, needsVision);
+    const selection = selectBestModel(effectiveProvider, req.modelOverride || config.model, needsVision);
     const finalModel = selection.model;
-    if (selection.switched) {
+    if (selection.switched && !req.modelOverride) {
       useProviderStore.getState().setProviderModel(effectiveProvider, finalModel);
       useGiaStore.getState().addNotification(selection.reason || `Switched to ${finalModel}`);
     }
@@ -220,26 +220,39 @@ class GiaBrain {
         };
 
         const triedProviders = [effectiveProvider];
+        const triedModels = [finalModel];
 
         if (rateLimited && state.smartFallback !== false) {
-          // Try every other configured provider, healthiest first, before
-          // giving up — each attempt also gets its own onStream capture so
-          // a SECOND mid-stream failure still checkpoints correctly.
+          // Try every other configured provider (if more than one is
+          // actually connected), or another model on this same provider
+          // (e.g. a single OpenCode Zen key that offers several models),
+          // healthiest first, before giving up — each attempt also gets its
+          // own onStream capture so a SECOND mid-stream failure still
+          // checkpoints correctly.
           let recovered = false;
           for (let hop = 0; hop < 3 && !recovered; hop++) {
-            const fallback = pickFallbackProvider(triedProviders);
+            const fallback = pickFallback(effectiveProvider, triedModels[triedModels.length - 1], triedProviders, triedModels);
             if (!fallback) break;
-            triedProviders.push(fallback.provider);
+            if (fallback.sameProvider) {
+              triedModels.push(fallback.model);
+            } else {
+              triedProviders.push(fallback.provider);
+            }
 
             useGiaStore.getState().addNotification(
               carryOverText.trim()
                 ? `⚡ ${effectiveProvider} rate-limited mid-response — continuing on ${fallback.provider}/${fallback.model}, nothing lost`
                 : `⚡ ${effectiveProvider} rate-limited — switching to ${fallback.provider}/${fallback.model}`
             );
-            req.onThought?.(`Rate limit on ${effectiveProvider} — failing over to ${fallback.provider}...`);
+            req.onThought?.(fallback.sameProvider
+              ? `Rate limit on ${effectiveProvider}/${triedModels[triedModels.length - 2]} — trying ${fallback.model} on the same provider...`
+              : `Rate limit on ${effectiveProvider} — failing over to ${fallback.provider}...`);
 
-            useProviderStore.getState().setActiveProvider(fallback.provider);
+            if (!fallback.sameProvider) {
+              useProviderStore.getState().setActiveProvider(fallback.provider);
+            }
             loopReq._skipNativeSchemas = false;
+            loopReq.modelOverride = fallback.sameProvider ? fallback.model : undefined;
             loopReq.prompt = buildContinuationPrompt();
             loopReq.history = history;
             let hopStreamed = '';
@@ -257,7 +270,7 @@ class GiaBrain {
               const hopMsg = hopErr instanceof Error ? hopErr.message.toLowerCase() : '';
               ProviderMonitor.recordFailure(fallback.provider, fallback.model, hopMsg, Math.round(performance.now() - hopStart));
               carryOverText += hopStreamed;
-              logger.error(`[GiaBrain] Fallback to ${fallback.provider} also failed:`, hopErr);
+              logger.error(`[GiaBrain] Fallback to ${fallback.provider}/${fallback.model} also failed:`, hopErr);
             }
           }
 

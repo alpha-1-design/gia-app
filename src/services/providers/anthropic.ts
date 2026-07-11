@@ -6,6 +6,7 @@ import type { BrainRequest, BrainResponse, BrainContext } from './types';
 export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { providers } = useProviderStore.getState();
   const config = providers.anthropic;
+  const effectiveModel = req.modelOverride || config.model;
   const useThinking = !!req.useExtendedThinking;
 
   const messages = (await ctx.buildMessages(req)).map(m => {
@@ -34,7 +35,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   });
 
   const body: Record<string, unknown> = {
-    model: config.model,
+    model: effectiveModel,
     max_tokens: useThinking ? 16000 : (req.maxTokens ?? 2048),
     system: ctx.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode),
     messages,
@@ -56,7 +57,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   };
 
   if (req.onStream) {
-    if (req.signal?.aborted) return { text: '', provider: 'anthropic', model: config.model };
+    if (req.signal?.aborted) return { text: '', provider: 'anthropic', model: effectiveModel };
 
     let finishReason = '';
     let streamTokenUsage: { input_tokens: number; output_tokens: number } | undefined;
@@ -178,7 +179,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
         else {
           const wasTruncated = finishReason === 'max_tokens';
           const tokenUsage = streamTokenUsage ? { input: streamTokenUsage.input_tokens || 0, output: streamTokenUsage.output_tokens || 0, total: (streamTokenUsage.input_tokens || 0) + (streamTokenUsage.output_tokens || 0) } : undefined;
-          resolve({ text: fullText, provider: 'anthropic', model: config.model, finishReason, wasTruncated, tokenUsage });
+          resolve({ text: fullText, provider: 'anthropic', model: effectiveModel, finishReason, wasTruncated, tokenUsage });
         }
       };
 
@@ -238,5 +239,5 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   if (!text.trim()) throw new Error(ctx.friendlyError('Anthropic', 'Anthropic returned empty response'));
   const finishReason = data.stop_reason || 'stop';
   const wasTruncated = finishReason === 'max_tokens';
-  return { text, provider: 'anthropic', model: config.model, finishReason, wasTruncated, tokenUsage };
+  return { text, provider: 'anthropic', model: effectiveModel, finishReason, wasTruncated, tokenUsage };
 }

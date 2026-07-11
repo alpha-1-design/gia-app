@@ -8,6 +8,7 @@ import type { BrainRequest, BrainResponse, BrainContext } from './types';
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { activeProvider, providers } = useProviderStore.getState();
   const config = providers[activeProvider];
+  const effectiveModel = req.modelOverride || config.model;
   const baseUrl = providerRegistry.getBaseUrl(activeProvider);
   const label = providerRegistry.getLabel(activeProvider);
   if (!baseUrl) throw new Error(`Unknown provider: ${activeProvider}`);
@@ -16,7 +17,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     ...(await ctx.buildMessages(req))
   ];
   const body: Record<string, unknown> = {
-    model: config.model,
+    model: effectiveModel,
     messages,
     temperature: req.temperature ?? 0.7,
     max_tokens: req.maxTokens ?? 2048,
@@ -29,7 +30,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     body.tools = ctx.buildOpenAITools();
   }
   if (req.useExtendedThinking) {
-    const modelLower = config.model.toLowerCase();
+    const modelLower = effectiveModel.toLowerCase();
     if (modelLower.startsWith('o1') || modelLower.startsWith('o3') || modelLower.startsWith('o4')) {
       body.reasoning_effort = 'high';
     } else {
@@ -46,7 +47,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   }
 
   if (req.onStream) {
-    if (req.signal?.aborted) return { text: '', provider: activeProvider, model: config.model };
+    if (req.signal?.aborted) return { text: '', provider: activeProvider, model: effectiveModel };
 
     const runStream = (url: string) => new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -179,7 +180,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         } else {
           const wasTruncated = finishReason === 'length';
           const tokenUsage = streamTokenUsage ? { input: streamTokenUsage.prompt_tokens || 0, output: streamTokenUsage.completion_tokens || 0, total: streamTokenUsage.total_tokens || 0 } : undefined;
-          resolve({ text: fullText, provider: activeProvider, model: config.model, finishReason, wasTruncated, tokenUsage });
+          resolve({ text: fullText, provider: activeProvider, model: effectiveModel, finishReason, wasTruncated, tokenUsage });
         }
       };
 
@@ -274,5 +275,5 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   if (!content?.trim()) throw new Error(ctx.friendlyError(label, `${label} returned empty response`));
   const finishReason = choice?.finish_reason || 'stop';
   const wasTruncated = finishReason === 'length';
-  return { text: content, provider: activeProvider, model: config.model, finishReason, wasTruncated, tokenUsage };
+  return { text: content, provider: activeProvider, model: effectiveModel, finishReason, wasTruncated, tokenUsage };
 }
