@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useDraftStore } from '../store/useDraftStore';
-import { useAgentStore } from '../store/useAgentStore';
+import { getMentionableAgents } from '../utils/mentionableAgents';
 import { useProviderStore } from '../store/useProviderStore';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { useProtocolStore } from '../store/useProtocolStore';
@@ -414,7 +414,7 @@ export function useChatState() {
     // Parse @mentions and resolve agents. Supports two forms:
     //   @Name{specific task}  — explicit, agent-specific instruction
     //   @Name                 — falls back to the shared message text (legacy behavior)
-    const agents = useAgentStore.getState().agents;
+    const agents = getMentionableAgents();
     const mentionedAgents: { id: string; name: string; icon: string; task?: string }[] = [];
     let cleanedInput = input;
     for (const a of agents) {

@@ -29,7 +29,7 @@ export interface SubAgentProgress {
   startedAt: number;
 }
 
-interface AgentRole {
+export interface AgentRole {
   name: string;
   color: string;
   icon: string;
@@ -38,7 +38,7 @@ interface AgentRole {
   keywords: string[];
 }
 
-const AGENT_ROLES: AgentRole[] = [
+export const AGENT_ROLES: AgentRole[] = [
   { name: 'Atlas',  color: '#a855f7', icon: 'Search',       role: 'Researcher',      style: 'Thorough, detail-oriented. Gather comprehensive data and verify sources.',             keywords: ['research', 'search', 'find', 'information', 'data', 'source'] },
   { name: 'Nova',   color: '#f59e0b', icon: 'TrendingUp',   role: 'Analyst',         style: 'Critical, logical. Break down problems and identify patterns.',                        keywords: ['analyze', 'analysis', 'pattern', 'trend', 'statistics', 'breakdown'] },
   { name: 'Onyx',   color: '#3b82f6', icon: 'AlertTriangle', role: 'Skeptic',        style: 'Challenge assumptions. Find flaws, edge cases, and counterarguments.',                 keywords: ['verify', 'check', 'flaw', 'edge', 'risk', 'problem', 'bug'] },

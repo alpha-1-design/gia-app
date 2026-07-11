@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Send } from 'lucide-react';
-import { useAgentStore } from '../store/useAgentStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { providerMonitor } from '../services/ProviderMonitor';
 import { resolveAgentIcon, resolveAgentColor } from '../utils/agentIcons';
+import { getMentionableAgents } from '../utils/mentionableAgents';
 
 const HEALTH_DOT: Record<string, string> = {
   healthy: '#22c55e',
@@ -20,7 +20,7 @@ interface AgentMentionPickerProps {
 }
 
 const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect }) => {
-  const agents = useAgentStore(s => s.agents);
+  const agents = getMentionableAgents();
   const activeProvider = useProviderStore(s => s.activeProvider);
   const providers = useProviderStore(s => s.providers);
   const [pickedAgent, setPickedAgent] = useState<{ id: string; name: string; icon: string } | null>(null);
