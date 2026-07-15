@@ -58,6 +58,7 @@ export function useChatGeneration() {
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [streamingMsgIds, setStreamingMsgIds] = useState<Set<string>>(new Set());
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
+  const [providerStatuses, setProviderStatuses] = useState<{ provider: string; model: string; status: 'thinking' | 'responding' | 'done' | 'error' }[]>([]);
   const activeStreamsRef = useRef<Set<string>>(new Set());
 
   // Sync streaming state with store generationState (survives module switches)
@@ -200,7 +201,7 @@ export function useChatGeneration() {
 
     let prompt = text;
     if (sentAttachments.length > 0) {
-      const maxFileLen = extThinking ? 150000 : 30000;
+      const maxFileLen = extThinking ? 500000 : 200000;
       const fileContext = sentAttachments
         .filter(a => !a.type.startsWith('image/'))
         .map(a => {
@@ -296,41 +297,94 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let lastFlushedArtifactCount = 0;
       let displayAccumulated = '';
       streamKey = `${sessionId}:${asstId}`;
-      const res = await GiaBrain.generate({
-        signal: ctrl.signal,
-        checkpointKey: streamKey,
-        messageId: asstId,
-        prompt: agentPrompt, history,
-        systemPrompt: agentSystemPrompt,
-        systemPromptMode,
-        images: brainImages,
-        localVision,
-        useWebSearch: webSearch,
-        useExtendedThinking: extThinking,
-        temperature: extThinking ? undefined : 0.7,
-        onStream: (chunk) => {
-          if (ctrl.signal.aborted) return;
-          const newDisplay = sharedProcessStreamChunk(chunk, parserState);
-          if (newDisplay) displayAccumulated += newDisplay;
-          streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
-          // Live artifact reveal: as soon as a code/artifact fence closes mid-stream,
-          // push it to the panel immediately instead of waiting for the full response.
-          if (parserState.artifacts.length > lastFlushedArtifactCount) {
-            lastFlushedArtifactCount = parserState.artifacts.length;
-            state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
-          }
-          const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
-          if (lastChunk.length > 1) {
-            TTSService.speak(lastChunk, true);
-          }
-        },
-        onThought: (thought) => {
-          parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
-          setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-          streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
-          useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
-        }
-      });
+
+      const multiProviderEnabled = useGiaStore.getState().multiProvider;
+      const { providers: allProviders } = await import('../store/useProviderStore').then(m => m.useProviderStore.getState());
+      const connectedCount = Object.values(allProviders).filter(cfg => cfg.enabled && cfg.apiKey).length;
+      const useCollaborative = multiProviderEnabled && connectedCount >= 2;
+
+      if (useCollaborative) {
+        setProviderStatuses([]);
+      }
+
+      const generateFn = useCollaborative
+        ? () => GiaBrain.generateCollaborative(
+            {
+              signal: ctrl.signal,
+              checkpointKey: streamKey,
+              messageId: asstId,
+              prompt: agentPrompt, history,
+              systemPrompt: agentSystemPrompt,
+              systemPromptMode,
+              images: brainImages,
+              localVision,
+              useWebSearch: webSearch,
+              useExtendedThinking: extThinking,
+              temperature: extThinking ? undefined : 0.7,
+              onStream: (chunk) => {
+                if (ctrl.signal.aborted) return;
+                const newDisplay = sharedProcessStreamChunk(chunk, parserState);
+                if (newDisplay) displayAccumulated += newDisplay;
+                streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
+                if (parserState.artifacts.length > lastFlushedArtifactCount) {
+                  lastFlushedArtifactCount = parserState.artifacts.length;
+                  state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
+                }
+                const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
+                if (lastChunk.length > 1) {
+                  TTSService.speak(lastChunk, true);
+                }
+              },
+              onThought: (thought) => {
+                parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
+                setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+                useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+              },
+            },
+            (status) => {
+              setProviderStatuses(prev => {
+                const next = prev.filter(s => !(s.provider === status.provider && s.model === status.model));
+                next.push(status);
+                return next;
+              });
+            },
+          )
+        : () => GiaBrain.generate({
+            signal: ctrl.signal,
+            checkpointKey: streamKey,
+            messageId: asstId,
+            prompt: agentPrompt, history,
+            systemPrompt: agentSystemPrompt,
+            systemPromptMode,
+            images: brainImages,
+            localVision,
+            useWebSearch: webSearch,
+            useExtendedThinking: extThinking,
+            temperature: extThinking ? undefined : 0.7,
+            onStream: (chunk) => {
+              if (ctrl.signal.aborted) return;
+              const newDisplay = sharedProcessStreamChunk(chunk, parserState);
+              if (newDisplay) displayAccumulated += newDisplay;
+              streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
+              if (parserState.artifacts.length > lastFlushedArtifactCount) {
+                lastFlushedArtifactCount = parserState.artifacts.length;
+                state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
+              }
+              const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
+              if (lastChunk.length > 1) {
+                TTSService.speak(lastChunk, true);
+              }
+            },
+            onThought: (thought) => {
+              parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
+              setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+              streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+              useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+            },
+          });
+
+      const res = await generateFn();
 
       if (ctrl.signal.aborted) return;
 
@@ -446,6 +500,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
         useGiaStore.getState().setIntentState('idle');
         useGiaStore.getState().setThinkingPhase('idle');
+        if (useGiaStore.getState().hapticFeedback) { try { navigator.vibrate?.(15); } catch { /* not supported */ } }
       }
     }
     };
@@ -582,10 +637,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
-      // Haptic feedback on response completion
-      try {
-        navigator.vibrate?.(15);
-      } catch { /* not supported */ }
+      if (useGiaStore.getState().hapticFeedback) {
+        try { navigator.vibrate?.(15); } catch { /* not supported */ }
+      }
     }
   }, [loading, registerGenerationController, unregisterGenerationController]);
 
@@ -822,6 +876,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     streamingMsgId, setStreamingMsgId,
     streamingMsgIds, setStreamingMsgIds,
     liveThoughts, setLiveThoughts,
+    providerStatuses,
     abortTimeoutRef,
     responseStartRef, responseTimesRef, lastUserMsgRef,
     handleSend, handleContinue, handleClarificationAnswer,

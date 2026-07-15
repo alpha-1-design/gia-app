@@ -77,6 +77,31 @@ const filesystemWrite: Tool = {
     const pathErr = isPathSafe(path as string);
     if (pathErr) return { success: false, content: '', error: pathErr };
     if ((content as string) && (content as string).length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+
+    const ext = (path as string).split('.').pop()?.toLowerCase() || 'txt';
+    const isPdf = ext === 'pdf';
+    const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
+
+    const editState = useGiaStore.getState().liveFileEdit;
+    const isEditingExisting = editState && editState.path === path;
+    if (!isEditingExisting) {
+      useGiaStore.getState().setLiveFileEdit({
+        path: path as string,
+        name: (path as string).split('/').pop() || 'file.txt',
+        type: mimeMap[ext] || 'text/plain',
+        oldContent: editState?.newContent || '',
+        newContent: content as string,
+        isPdf,
+        timestamp: Date.now(),
+      });
+    } else {
+      useGiaStore.getState().setLiveFileEdit({
+        ...editState,
+        newContent: content as string,
+        timestamp: Date.now(),
+      });
+    }
+
     if (isNative()) {
       try {
         await Filesystem.writeFile({ path: path as string, data: content as string, directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
@@ -86,8 +111,6 @@ const filesystemWrite: Tool = {
         return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
       }
     }
-    const ext = (path as string).split('.').pop()?.toLowerCase() || 'txt';
-    const mimeMap: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', css: 'text/css', js: 'text/javascript', ts: 'text/typescript', py: 'text/x-python', json: 'application/json', csv: 'text/csv', xml: 'text/xml', yaml: 'text/yaml', yml: 'text/yaml', pdf: 'application/pdf' };
     const blob = new Blob([content as string], { type: mimeMap[ext] || 'text/plain' });
     triggerDownload(blob, (path as string).split('/').pop() || 'file.txt');
     return { success: true, content: `File "${path}" ready for download.` };

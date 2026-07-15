@@ -7,6 +7,17 @@ export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'e
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 
+export interface LiveFileEdit {
+  path: string;
+  name: string;
+  type: string;
+  oldContent: string;
+  newContent: string;
+  isPdf: boolean;
+  timestamp: number;
+  messageId?: string | null;
+}
+
 export interface TaskItem {
   id: string;
   label: string;
@@ -264,6 +275,8 @@ interface GiaState {
   inputGuardrails: boolean;
   outputValidation: boolean;
   smartFallback: boolean;
+  multiProvider: boolean;
+  hapticFeedback: boolean;
   thinkingPhase: ThinkingPhase;
   clarification: Clarification | null;
   wakeWord: string;
@@ -295,6 +308,8 @@ interface GiaState {
   setPendingAction: (v: { type: string; data: Record<string, unknown> } | null) => void;
   deepLinkQueue: string[];
   setDeepLinkQueue: (v: string[]) => void;
+  liveFileEdit: LiveFileEdit | null;
+  setLiveFileEdit: (edit: LiveFileEdit | null) => void;
 
   setModule: (module: Module) => void;
   setGenerationState: (state: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal }) => void;
@@ -316,6 +331,8 @@ interface GiaState {
   setInputGuardrails: (enabled: boolean) => void;
   setOutputValidation: (enabled: boolean) => void;
   setSmartFallback: (enabled: boolean) => void;
+  setMultiProvider: (enabled: boolean) => void;
+  setHapticFeedback: (enabled: boolean) => void;
   setThinkingPhase: (phase: ThinkingPhase) => void;
   setWakeWord: (word: string) => void;
   setKeepListening: (on: boolean) => void;
@@ -460,6 +477,8 @@ export const useGiaStore = create<GiaState>()(
       inputGuardrails: true,
       outputValidation: true,
       smartFallback: true,
+      multiProvider: false,
+      hapticFeedback: true,
       thinkingPhase: 'idle',
       clarification: null,
       wakeWord: (() => { try { return localStorage.getItem('gia-wake-word') || 'hey gia'; } catch { return 'hey gia'; } })(),
@@ -484,6 +503,7 @@ export const useGiaStore = create<GiaState>()(
       pendingFiles: [],
       pendingAction: null,
       deepLinkQueue: [],
+      liveFileEdit: null,
       longRunningMode: false,
       autoModelUnload: true,
 
@@ -532,6 +552,8 @@ export const useGiaStore = create<GiaState>()(
       setInputGuardrails: (enabled) => set({ inputGuardrails: enabled }),
       setOutputValidation: (enabled) => set({ outputValidation: enabled }),
       setSmartFallback: (enabled) => set({ smartFallback: enabled }),
+      setMultiProvider: (enabled) => set({ multiProvider: enabled }),
+      setHapticFeedback: (enabled) => set({ hapticFeedback: enabled }),
       setThinkingPhase: (phase) => set({ thinkingPhase: phase }),
       setWakeWord: (word) => {
         localStorage.setItem('gia-wake-word', word);
@@ -571,6 +593,7 @@ export const useGiaStore = create<GiaState>()(
       setPendingFiles: (v) => set({ pendingFiles: v }),
       setPendingAction: (v) => set({ pendingAction: v }),
       setDeepLinkQueue: (v) => set({ deepLinkQueue: v }),
+      setLiveFileEdit: (edit) => set({ liveFileEdit: edit }),
       setLongRunningMode: (v) => { localStorage.setItem('gia-long-running', String(v)); set({ longRunningMode: v }); },
       setAutoModelUnload: (v) => { localStorage.setItem('gia-auto-model-unload', String(v)); set({ autoModelUnload: v }); },
       setCustomInstructions: (text) => {
@@ -888,6 +911,8 @@ export const useGiaStore = create<GiaState>()(
         inputGuardrails: s.inputGuardrails,
         outputValidation: s.outputValidation,
         smartFallback: s.smartFallback,
+        multiProvider: s.multiProvider,
+        hapticFeedback: s.hapticFeedback,
         customInstructions: s.customInstructions,
         theme: s.theme,
         wakeWord: s.wakeWord,

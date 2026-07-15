@@ -114,24 +114,17 @@ export function pickFallbackModel(provider: string, currentModel: string, exclud
 }
 
 /**
- * Single entry point for failover decisions: only reaches across to a
- * different *provider* when the person genuinely has more than one
- * connected. With just one provider configured (the common case — e.g. a
- * single OpenCode Zen key), it instead tries other *models* that same
- * provider/key already has access to before giving up, rather than
- * switching providers on a single-provider setup or simply failing.
+ * Single entry point for failover decisions: tries other models on the
+ * SAME provider first — never jumps to a different provider. If the
+ * current provider is rate-limited, it cycles through other models that
+ * same key/provider offers before giving up.
  */
 export function pickFallback(
   currentProvider: string,
   currentModel: string,
-  triedProviders: string[],
+  _triedProviders: string[],
   triedModels: string[],
 ): { provider: string; model: string; sameProvider: boolean } | null {
-  if (countConnectedProviders() > 1) {
-    const fallback = pickFallbackProvider(triedProviders);
-    if (fallback) return { ...fallback, sameProvider: false };
-  }
-
   const fallbackModel = pickFallbackModel(currentProvider, currentModel, triedModels);
   if (fallbackModel) return { provider: currentProvider, model: fallbackModel, sameProvider: true };
 
@@ -139,11 +132,12 @@ export function pickFallback(
 }
 
 /**
- * Exponential backoff with a cap — used when NO fallback provider is available
- * and we have to wait out the current one's rate limit rather than lose the request.
+ * Exponential backoff with a cap — used when NO fallback model is available
+ * on the same provider and we have to wait out the rate limit rather than
+ * lose the request. Starts gentle (1s) and ramps slowly.
  */
 export function backoffDelay(attempt: number): number {
-  const base = Math.min(2000 * Math.pow(1.8, attempt), 60000); // caps at 60s
-  const jitter = base * 0.2 * Math.random();
+  const base = Math.min(1000 * Math.pow(1.5, attempt), 45000); // caps at 45s
+  const jitter = base * 0.15 * Math.random();
   return Math.round(base + jitter);
 }

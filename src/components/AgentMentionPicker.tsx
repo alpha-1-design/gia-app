@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Send } from 'lucide-react';
 import { useProviderStore } from '../store/useProviderStore';
 import { providerMonitor } from '../services/ProviderMonitor';
-import { resolveAgentIcon, resolveAgentColor } from '../utils/agentIcons';
+import { resolveAgentColor } from '../utils/agentIcons';
 import { getMentionableAgents } from '../utils/mentionableAgents';
+import OrbAvatar from './OrbAvatar';
 
 const HEALTH_DOT: Record<string, string> = {
   healthy: '#22c55e',
@@ -63,11 +64,10 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
               </button>
               <div className="flex items-center gap-2 mb-2">
                 {(() => {
-                  const IconComp = resolveAgentIcon(pickedAgent.icon);
                   const color = resolveAgentColor(pickedAgent.icon);
                   return (
                     <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}20`, border: `1px solid ${color}30` }}>
-                      <IconComp size={12} style={{ color }} />
+                      <OrbAvatar color={color} size={16} animate={false} glow={false} />
                     </div>
                   );
                 })()}
@@ -104,7 +104,6 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
                 Agents — via {activeProvider}
               </div>
               {filtered.map(agent => {
-                const IconComp = resolveAgentIcon(agent.icon);
                 const color = resolveAgentColor(agent.icon);
                 return (
                   <button
@@ -116,7 +115,7 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
                       className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
                       style={{ background: `${color}20`, border: `1px solid ${color}30` }}
                     >
-                      <IconComp size={13} style={{ color }} />
+                      <OrbAvatar color={color} size={18} animate={false} glow={false} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">

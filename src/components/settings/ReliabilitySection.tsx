@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Brain, Repeat, Wifi, FileCheck } from 'lucide-react';
+import { ShieldCheck, Brain, Repeat, Wifi, FileCheck, Users } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 
 interface ToggleRowProps {
@@ -37,6 +37,7 @@ export const ReliabilitySection: React.FC = () => {
     outputValidation, setOutputValidation,
     responseCache, setResponseCache,
     smartFallback, setSmartFallback,
+    multiProvider, setMultiProvider,
     localSummarize, setLocalSummarize,
   } = useGiaStore();
 
@@ -52,6 +53,12 @@ export const ReliabilitySection: React.FC = () => {
         Local AI fallbacks + safety nets when providers are flaky
       </p>
       <div className="mt-1 space-y-0.5">
+        <ToggleRow
+          label="Multi-Provider Collaboration"
+          desc="All connected providers work together on the same prompt — results are synthesized"
+          icon={<Users size={13} style={{ color: multiProvider ? '#34d399' : 'var(--gia-muted)' }} />}
+          enabled={multiProvider} onToggle={setMultiProvider}
+        />
         <ToggleRow
           label="Smart Fallback"
           desc="Auto-route to healthiest provider on failure"

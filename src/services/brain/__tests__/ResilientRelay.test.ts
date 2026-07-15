@@ -65,7 +65,7 @@ describe('ResilientRelay — model routing', () => {
       expect(fallback!.model).toBe('gpt-4o-mini');
     });
 
-    it('with multiple providers connected, crosses to a different provider instead', () => {
+    it('with multiple providers connected, still fails over to another model on the SAME provider (never crosses providers)', () => {
       useProviderStore.setState({
         providers: {
           opencode: baseConfig(),
@@ -76,8 +76,9 @@ describe('ResilientRelay — model routing', () => {
 
       const fallback = pickFallback('opencode', 'deepseek-v4-flash-free', ['opencode'], ['deepseek-v4-flash-free']);
       expect(fallback).not.toBeNull();
-      expect(fallback!.sameProvider).toBe(false);
-      expect(fallback!.provider).toBe('anthropic');
+      expect(fallback!.sameProvider).toBe(true);
+      expect(fallback!.provider).toBe('opencode');
+      expect(fallback!.model).toBe('gpt-4o-mini');
     });
 
     it('returns null when a single provider has no other models left to try', () => {

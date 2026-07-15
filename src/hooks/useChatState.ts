@@ -11,6 +11,7 @@ import { useFileAttachments } from './useFileAttachments';
 import type { Attachment } from './useFileAttachments';
 import { useChatGeneration } from './useChatGeneration';
 import { useChatMessages } from './useChatMessages';
+import { processSlashCommand } from '../services/SlashCommands';
 import AnalyticsService from '../services/AnalyticsService';
 import { AudioRecorder } from '../services/audioRecorder';
 import WhisperService from '../services/WhisperService';
@@ -380,13 +381,34 @@ export function useChatState() {
   }, [input]);
 
   const handleSend = useCallback(() => {
-    if (input.trim() === '/') {
+    // ── Slash commands ──────────────────────────────────────
+    if (input.trim().startsWith('/')) {
+      const result = processSlashCommand(input);
+      if (result.handled) {
+        if (result.message) {
+          const state = useGiaStore.getState();
+          const sid = state.activeSessionId || state.createSession();
+          state.addMessage(sid, {
+            id: Math.random().toString(36).slice(2),
+            role: 'assistant',
+            content: result.message,
+            timestamp: Date.now(),
+          });
+        }
+        if (result.action === 'clear') {
+          setInput('');
+          return;
+        }
+        if (result.action === 'show-skills') {
+          setShowSkillPicker(true);
+          setInput('');
+          return;
+        }
+        setInput('');
+        return;
+      }
       setShowSkillPicker(true);
       setInput('');
-      return;
-    }
-    if (input.trim().startsWith('/')) {
-      setShowSkillPicker(true);
       return;
     }
 
@@ -495,5 +517,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     copyMessage: msgOps.copyMessage, exportChat: msgOps.exportChat,
     showBranchView: msgOps.showBranchView, setShowBranchView: msgOps.setShowBranchView,
     handleCreateBranch: msgOps.handleCreateBranch,
+    liveFileEdit: useGiaStore(s => s.liveFileEdit),
+    setLiveFileEdit: useGiaStore(s => s.setLiveFileEdit),
   };
 }

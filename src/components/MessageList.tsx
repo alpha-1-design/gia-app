@@ -1,26 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Bot, User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
+import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
-import { ThinkingStatus } from './ThinkingStatus';
 import GiaIcon from './GiaIcon';
+import OrbAvatar from './OrbAvatar';
 import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
 import MessageContextMenu from './MessageContextMenu';
 import { ChatSkeleton } from './feedback';
-import { resolveAgentIcon, resolveAgentColor } from '../utils/agentIcons';
+import { resolveAgentColor } from '../utils/agentIcons';
 import InlineToolExecution from './InlineToolExecution';
 import { useProtocolStore } from '../store/useProtocolStore';
 import type { Message, ThinkingPhase } from '../store/useGiaStore';
 
 const AgentBadge: React.FC<{ agentName?: string; agentIcon?: string; agentTask?: string }> = ({ agentName, agentIcon, agentTask }) => {
-  const IconComp = resolveAgentIcon(agentIcon || 'Bot');
   const color = resolveAgentColor(agentIcon || 'Bot');
   return (
     <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider" style={{ background: `${color}15`, color }}>
-      <IconComp size={10} />
+      <OrbAvatar color={color} size={10} animate={false} glow={false} />
       {agentName || 'Agent'}
       {agentTask && (
         <span className="ml-0.5 text-[7px] opacity-60 font-normal normal-case max-w-[120px] truncate">{agentTask}</span>
@@ -49,7 +49,6 @@ interface MessageListProps {
   onFork: (id: string) => void;
   onRetry: (id: string) => Promise<void>;
   onEditResend: (msgId: string) => void;
-  onTapThought?: () => void;
 }
 
 const formatTimeAgo = (ts: number) => {
@@ -79,7 +78,7 @@ const MessageList: React.FC<MessageListProps> = ({
   liveThoughts, thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
-  onFork, onRetry, onEditResend, onTapThought,
+  onFork, onRetry, onEditResend,
 }) => {
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
@@ -92,7 +91,7 @@ const MessageList: React.FC<MessageListProps> = ({
       {messages.map((msg) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
-            {msg.agentId ? (() => { const A = resolveAgentIcon(msg.agentIcon || 'Bot'); return <A size={13} style={{ color: resolveAgentColor(msg.agentIcon || 'Bot') }} />; })() : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
+            {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
           </div>
           <div className="flex-1 min-w-0 space-y-1">
             {msg.attachments?.some(a => a.preview) && (
@@ -130,25 +129,20 @@ const MessageList: React.FC<MessageListProps> = ({
                 }}
               >
                 {msg.thinking && !((streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content) ? (
-                  <div className="rounded-xl overflow-hidden transition-all duration-300" style={{
-                    border: `1px solid ${liveThoughts[msg.id] ? 'rgba(168,85,247,0.2)' : 'rgba(251,191,36,0.12)'}`,
-                    background: liveThoughts[msg.id]
-                      ? 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.03))'
-                      : 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
-                  }}>
-                    <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
-                    {liveThoughts[msg.id] || msg.thoughts ? (
-                      <ThinkingPanel
-                        thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                        isLive={!!liveThoughts[msg.id]}
-                        isExpanded={showThoughts.has(msg.id) || !!liveThoughts[msg.id]}
-                        onToggle={() => setShowThoughts(prev => {
-                          const n = new Set(prev);
-                          if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                          return n;
-                        })}
-                      />
-                    ) : null}
+                  <div>
+                    <WorkLog
+                      thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                      isLive={!!liveThoughts[msg.id]}
+                      isExpanded={showThoughts.has(msg.id) || !!liveThoughts[msg.id]}
+                      onToggle={() => setShowThoughts(prev => {
+                        const n = new Set(prev);
+                        if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
+                        return n;
+                      })}
+                      currentTool={currentTool}
+                      thinkingPhase={thinkingPhase}
+                      startTime={msg.timestamp}
+                    />
                   </div>
                 ) : msg.error ? (
                   <div className="flex flex-col gap-2">
@@ -192,25 +186,20 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {msg.thinking && (streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && (
-                      <div className="mb-2 rounded-xl overflow-hidden transition-all duration-300" style={{
-                        border: `1px solid ${liveThoughts[msg.id] ? 'rgba(168,85,247,0.2)' : 'rgba(251,191,36,0.12)'}`,
-                        background: liveThoughts[msg.id]
-                          ? 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.03))'
-                          : 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
-                      }}>
-                        <ThinkingStatus phase={thinkingPhase !== 'idle' ? thinkingPhase : 'reasoning'} toolName={currentTool} onTap={onTapThought} />
-                        {(liveThoughts[msg.id] || msg.thoughts) && (
-                          <ThinkingPanel
-                            thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                            isLive={!!liveThoughts[msg.id]}
-                            isExpanded={showThoughts.has(msg.id)}
-                            onToggle={() => setShowThoughts(prev => {
-                              const n = new Set(prev);
-                              if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                              return n;
-                            })}
-                          />
-                        )}
+                      <div className="mb-2">
+                        <WorkLog
+                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                          isLive={!!liveThoughts[msg.id]}
+                          isExpanded={showThoughts.has(msg.id)}
+                          onToggle={() => setShowThoughts(prev => {
+                            const n = new Set(prev);
+                            if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
+                            return n;
+                          })}
+                          currentTool={currentTool}
+                          thinkingPhase={thinkingPhase}
+                          startTime={msg.timestamp}
+                        />
                       </div>
                     )}
                     {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (

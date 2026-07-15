@@ -12,7 +12,6 @@ import { useProtocolStore } from '../store/useProtocolStore';
 import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
-import { ThinkingStatus } from '../components/ThinkingStatus';
 import GiaIcon from '../components/GiaIcon';
 import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
@@ -29,6 +28,7 @@ import { SummaryBanner } from '../components/chat/SummaryBanner';
 import AgentMentionPicker from '../components/AgentMentionPicker';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
+import { LiveFileEditor } from '../components/LiveFileEditor';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -69,6 +69,7 @@ const ChatModule: React.FC = () => {
     showBranchView, setShowBranchView,
     clarification, setClarification,
     showAgentMention, agentMentionQuery, handleAgentMentionSelect,
+    liveFileEdit, setLiveFileEdit,
   } = useChatState();
 
   const [showEngine, setShowEngine] = React.useState(false);
@@ -296,7 +297,6 @@ const ChatModule: React.FC = () => {
           onFork={handleFork}
           onRetry={handleRetry}
           onEditResend={handleEditResend}
-          onTapThought={loading && extThinking ? () => setShowEngine(true) : undefined}
         />
 
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
@@ -313,6 +313,15 @@ const ChatModule: React.FC = () => {
           />
         )}
         <EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />
+
+        <AnimatePresence>
+          {liveFileEdit && (
+            <LiveFileEditor
+              edit={liveFileEdit}
+              onClose={() => setLiveFileEdit(null)}
+            />
+          )}
+        </AnimatePresence>
         </div>
         {isDragging && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(168,85,247,0.08)' }}>
@@ -332,17 +341,12 @@ const ChatModule: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Inline thinking indicator — compact, doesn't block the chat */}
-      {loading && (
-        <div className="px-4 pb-2">
-          <div className="flex items-center justify-between">
-            <ThinkingStatus phase={thinkingPhase} toolName={currentTool} />
-            {handleStop && (
-              <button onClick={handleStop} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors" title="Stop" style={{ color: 'var(--gia-muted-2)' }}>
-                <svg width="10" height="10" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
-              </button>
-            )}
-          </div>
+      {/* Stop button — floats above input when loading */}
+      {loading && handleStop && (
+        <div className="absolute bottom-[72px] right-6 z-10">
+          <button onClick={handleStop} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors" title="Stop" style={{ color: 'var(--gia-muted-2)' }}>
+            <svg width="10" height="10" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
+          </button>
         </div>
       )}
 

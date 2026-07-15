@@ -1,20 +1,37 @@
 import { logger } from '../utils/logger';
-import * as pdfjsLib from 'pdfjs-dist';
 
-const pdfVersion = pdfjsLib.version;
-try {
-  // Try Vite-bundled worker first, fall back to CDN
-  const viteWorkerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
-  fetch(viteWorkerUrl, { method: 'HEAD' }).then(res => {
-    if (res.ok) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = viteWorkerUrl;
-    } else {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
-    }
-  }).catch(() => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
-  });
-} catch (e) { logger.error('[PDFService] Failed to initialize Vite worker, falling back to CDN:', e); }
+// pdfjs-dist is loaded lazily — its canvas backend touches `DOMMatrix` at
+// module-eval time, which isn't available under jsdom (tests). Importing it
+// only when we actually parse a PDF keeps the module side-effect-free.
+type PdfJsLib = typeof import('pdfjs-dist');
+let pdfjsLib: PdfJsLib | null = null;
+let pdfInitPromise: Promise<PdfJsLib> | null = null;
+
+async function getPdfJs(): Promise<PdfJsLib> {
+  if (pdfjsLib) return pdfjsLib;
+  if (!pdfInitPromise) {
+    pdfInitPromise = (async () => {
+      const lib = (await import('pdfjs-dist')) as PdfJsLib;
+      const pdfVersion = lib.version;
+      try {
+        // Try Vite-bundled worker first, fall back to CDN
+        const viteWorkerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+        const res = await fetch(viteWorkerUrl, { method: 'HEAD' });
+        if (res.ok) {
+          lib.GlobalWorkerOptions.workerSrc = viteWorkerUrl;
+        } else {
+          lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+        }
+      } catch (e) {
+        logger.error('[PDFService] Failed to initialize Vite worker, falling back to CDN:', e);
+        lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+      }
+      pdfjsLib = lib;
+      return lib;
+    })();
+  }
+  return pdfInitPromise;
+}
 
 const extractPageText = (textContent: { items: { str?: string; transform?: number[]; width?: number }[] }): string => {
   const items: { str: string; x: number; y: number; width: number }[] = textContent.items
@@ -74,7 +91,8 @@ export class PDFService {
 
   async extractFromBuffer(buffer: ArrayBuffer): Promise<string> {
     try {
-      const loadingTask = pdfjsLib.getDocument({ data: buffer, useSystemFonts: true });
+      const lib = await getPdfJs();
+      const loadingTask = lib.getDocument({ data: buffer, useSystemFonts: true });
       const pdf = await loadingTask.promise;
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {

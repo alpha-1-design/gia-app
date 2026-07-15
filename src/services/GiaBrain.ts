@@ -223,36 +223,25 @@ class GiaBrain {
         const triedModels = [finalModel];
 
         if (rateLimited && state.smartFallback !== false) {
-          // Try every other configured provider (if more than one is
-          // actually connected), or another model on this same provider
-          // (e.g. a single OpenCode Zen key that offers several models),
-          // healthiest first, before giving up — each attempt also gets its
-          // own onStream capture so a SECOND mid-stream failure still
-          // checkpoints correctly.
+          // Try other models on the SAME provider first — never jump to a
+          // different provider. If no other model works, wait it out with
+          // exponential backoff. Each attempt gets its own onStream capture
+          // so a mid-stream failure still checkpoints correctly.
           let recovered = false;
-          for (let hop = 0; hop < 3 && !recovered; hop++) {
+          for (let hop = 0; hop < 5 && !recovered; hop++) {
             const fallback = pickFallback(effectiveProvider, triedModels[triedModels.length - 1], triedProviders, triedModels);
             if (!fallback) break;
-            if (fallback.sameProvider) {
-              triedModels.push(fallback.model);
-            } else {
-              triedProviders.push(fallback.provider);
-            }
+            triedModels.push(fallback.model);
 
             useGiaStore.getState().addNotification(
               carryOverText.trim()
-                ? `⚡ ${effectiveProvider} rate-limited mid-response — continuing on ${fallback.provider}/${fallback.model}, nothing lost`
-                : `⚡ ${effectiveProvider} rate-limited — switching to ${fallback.provider}/${fallback.model}`
+                ? `⚡ ${effectiveProvider} rate-limited mid-response — trying ${fallback.model}, nothing lost`
+                : `⚡ ${effectiveProvider} rate-limited — switching to ${fallback.model}`
             );
-            req.onThought?.(fallback.sameProvider
-              ? `Rate limit on ${effectiveProvider}/${triedModels[triedModels.length - 2]} — trying ${fallback.model} on the same provider...`
-              : `Rate limit on ${effectiveProvider} — failing over to ${fallback.provider}...`);
+            req.onThought?.(`Rate limit on ${effectiveProvider}/${triedModels[triedModels.length - 2]} — trying ${fallback.model}...`);
 
-            if (!fallback.sameProvider) {
-              useProviderStore.getState().setActiveProvider(fallback.provider);
-            }
             loopReq._skipNativeSchemas = false;
-            loopReq.modelOverride = fallback.sameProvider ? fallback.model : undefined;
+            loopReq.modelOverride = fallback.model;
             loopReq.prompt = buildContinuationPrompt();
             loopReq.history = history;
             let hopStreamed = '';
@@ -261,35 +250,37 @@ class GiaBrain {
             }
             const hopStart = performance.now();
             try {
-              res = await this.callProvider(loopReq, fallback.provider);
-              ProviderMonitor.recordSuccess(fallback.provider, fallback.model, Math.round(performance.now() - hopStart));
+              res = await this.callProvider(loopReq, effectiveProvider);
+              ProviderMonitor.recordSuccess(effectiveProvider, fallback.model, Math.round(performance.now() - hopStart));
               recovered = true;
               if (req.checkpointKey) clearCheckpoint(req.checkpointKey);
               carryOverText = '';
             } catch (hopErr) {
               const hopMsg = hopErr instanceof Error ? hopErr.message.toLowerCase() : '';
-              ProviderMonitor.recordFailure(fallback.provider, fallback.model, hopMsg, Math.round(performance.now() - hopStart));
+              ProviderMonitor.recordFailure(effectiveProvider, fallback.model, hopMsg, Math.round(performance.now() - hopStart));
               carryOverText += hopStreamed;
-              logger.error(`[GiaBrain] Fallback to ${fallback.provider}/${fallback.model} also failed:`, hopErr);
+              triedModels.push(fallback.model);
+              logger.error(`[GiaBrain] Fallback to ${fallback.model} also failed:`, hopErr);
             }
           }
 
           if (!recovered) {
-            // No configured provider currently has capacity — wait it out
-            // instead of losing the request. The checkpoint above already
-            // guarantees the partial work survives even a full app close.
-            useGiaStore.getState().addNotification(`All providers rate-limited — waiting to retry (your progress is saved)...`);
-            req.onThought?.('All providers busy — waiting to retry, nothing will be lost...');
+            // All models on this provider exhausted — wait it out with
+            // backoff instead of losing the request. The checkpoint above
+            // already guarantees partial work survives even a full app close.
+            useGiaStore.getState().addNotification(`All models on ${effectiveProvider} rate-limited — waiting to retry (your progress is saved)...`);
+            req.onThought?.('Rate limited on all models — waiting to retry, nothing will be lost...');
             let waitRecovered = false;
-            for (let attempt = 1; attempt <= 5 && !waitRecovered; attempt++) {
+            for (let attempt = 1; attempt <= 8 && !waitRecovered; attempt++) {
               const delay = backoffDelay(attempt);
-              req.onThought?.(`Retrying in ${Math.round(delay / 1000)}s (attempt ${attempt}/5)...`);
+              req.onThought?.(`Retrying in ${Math.round(delay / 1000)}s (attempt ${attempt}/8)...`);
               await new Promise<void>((resolve, reject) => {
                 const t = setTimeout(resolve, delay);
                 req.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
               });
               loopReq.prompt = buildContinuationPrompt();
               loopReq.history = history;
+              loopReq.modelOverride = undefined;
               let waitStreamed = '';
               if (userOnStream) {
                 loopReq.onStream = (chunk: string) => { waitStreamed += chunk; userOnStream(chunk); };
@@ -320,12 +311,11 @@ class GiaBrain {
               }
             }
             if (!waitRecovered) {
-              throw new Error(`${friendlyError(effectiveProvider, origError)} — your progress up to this point is saved and won't be lost. Try again shortly or switch providers.`);
+              throw new Error(`${friendlyError(effectiveProvider, origError)} — your progress up to this point is saved and won't be lost. Try again shortly or switch models in Settings.`);
             }
           }
         } else if (!rateLimited) {
-          // Non-rate-limit error (bad request, auth, etc.) — same-provider
-          // failover doesn't make sense here, surface it directly.
+          // Non-rate-limit error (bad request, auth, etc.) — surface it directly.
           throw origError;
         } else {
           throw origError;
@@ -433,6 +423,107 @@ class GiaBrain {
       const page = await wf.fetch(url, { format: 'markdown', maxChars: 60000 });
       return `# ${page.title}\n\n${page.content}`;
     } catch (e: unknown) { throw new Error(`Failed to fetch ${url}: ${e instanceof Error ? e.message : 'Unknown error'}`); }
+  }
+
+  /**
+   * Collaborative multi-provider generation: sends the same prompt to all
+   * connected providers in parallel, collects their responses, then uses
+   * the primary provider to synthesize an agreed-upon answer.
+   *
+   * onProviderStatus is called with { provider, model, status } for each
+   * provider so the UI can show animated orbs/indicators.
+   */
+  async generateCollaborative(
+    req: BrainRequest,
+    onProviderStatus?: (status: { provider: string; model: string; status: 'thinking' | 'responding' | 'done' | 'error' }) => void,
+  ): Promise<BrainResponse> {
+    const { providers } = useProviderStore.getState();
+    const connected = Object.entries(providers)
+      .filter(([id, cfg]) => cfg.enabled && (id === 'local-llm' || cfg.apiKey))
+      .map(([id, cfg]) => ({ id, model: cfg.model }));
+
+    if (connected.length < 2) {
+      return this.generate(req);
+    }
+
+    const primary = connected[0];
+    const others = connected.slice(1);
+
+    onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'thinking' });
+
+    const peerResults: { provider: string; model: string; text: string }[] = [];
+    const peerErrors: { provider: string; model: string; error: string }[] = [];
+
+    const peerPromises = others.map(async (p) => {
+      onProviderStatus?.({ provider: p.id, model: p.model, status: 'thinking' });
+      try {
+        const peerReq: BrainRequest = {
+          ...req,
+          providerId: p.id,
+          modelOverride: p.model,
+          onStream: undefined,
+          onThought: undefined,
+        };
+        const res = await this.generate(peerReq);
+        onProviderStatus?.({ provider: p.id, model: p.model, status: 'done' });
+        return { provider: p.id, model: p.model, text: res.text };
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : 'unknown error';
+        onProviderStatus?.({ provider: p.id, model: p.model, status: 'error' });
+        peerErrors.push({ provider: p.id, model: p.model, error: errMsg });
+        return null;
+      }
+    });
+
+    const primaryPromise = (async () => {
+      onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'responding' });
+      try {
+        const res = await this.generate({ ...req, providerId: primary.id });
+        onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'done' });
+        return { provider: primary.id, model: primary.model, text: res.text };
+      } catch {
+        onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'error' });
+        return null;
+      }
+    })();
+
+    const allResults = await Promise.all([primaryPromise, ...peerPromises]);
+    const validResults = allResults.filter((r): r is { provider: string; model: string; text: string } => r !== null);
+
+    if (validResults.length === 0) {
+      throw new Error('All providers failed during collaborative generation');
+    }
+
+    if (validResults.length === 1) {
+      return { text: validResults[0].text, provider: validResults[0].provider, model: validResults[0].model };
+    }
+
+    peerResults.push(...validResults);
+
+    const synthesisPrompt = `You are a synthesis agent. Multiple AI models have responded to the same user query. Your job is to combine their perspectives into one clear, comprehensive, agreed-upon answer.
+
+USER QUERY:
+${req.prompt}
+
+--- RESPONSES ---
+${peerResults.map((r, i) => `[${i + 1}] ${r.provider}/${r.model}:\n${r.text}`).join('\n\n')}
+--- END RESPONSES ---
+
+Synthesize these into ONE coherent response. Use the strongest parts from each. If they disagree, acknowledge the different perspectives but provide the most well-reasoned conclusion. Do NOT list them separately — produce a single unified answer.`;
+
+    const synthesisRes = await this.generate({
+      ...req,
+      providerId: primary.id,
+      prompt: synthesisPrompt,
+      onStream: req.onStream,
+      onThought: (t) => req.onThought?.(`[Synthesis] ${t}`),
+    });
+
+    return {
+      ...synthesisRes,
+      provider: primary.id,
+      model: primary.model,
+    };
   }
 }
 

@@ -2,13 +2,9 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, Trash2, Upload, FileText,
-  ChevronLeft, Send, Loader2, Bot, Sparkles, Settings2,
-  Code2, Brain, Wand2, Star, Rocket, Zap, Globe, BookOpen,
-  GraduationCap, Palette, Music, Camera, PenLine, BarChart2,
-  Search, Target, Shield, Compass, Cpu, Database, Image,
-  Mic, MessageCircle, Eye, Feather, Lightbulb, Cloud,
-  Download, Share2, Link, Hash, Flag, Award, Gem, Crown,
-  Flame, Sun, Moon, Wind, Leaf, Folder, AlertTriangle, RefreshCw,
+  ChevronLeft, Send, Loader2, Settings2,
+  Code2, Brain, Compass, Cpu, Cloud, BookOpen, Target, Image, PenLine,
+  Folder, AlertTriangle, RefreshCw, Search, Globe, Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -17,55 +13,56 @@ import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import OrbAvatar from '../components/OrbAvatar';
 
 // ── Max messages per agent chat session stored in IDB ──────────────────────
 const MAX_MESSAGES_PER_SESSION = 100;
 
 type ViewState = 'list' | 'chat';
 
-const AGENT_ICONS: { name: string; icon: LucideIcon; color: string }[] = [
-  { name: 'Bot', icon: Bot, color: '#a855f7' },
-  { name: 'Brain', icon: Brain, color: '#ec4899' },
-  { name: 'Code2', icon: Code2, color: '#3b82f6' },
-  { name: 'Wand2', icon: Wand2, color: '#f59e0b' },
-  { name: 'Sparkles', icon: Sparkles, color: '#fbbf24' },
-  { name: 'Star', icon: Star, color: '#fbbf24' },
-  { name: 'Rocket', icon: Rocket, color: '#ef4444' },
-  { name: 'Zap', icon: Zap, color: '#f59e0b' },
-  { name: 'Globe', icon: Globe, color: '#34d399' },
-  { name: 'BookOpen', icon: BookOpen, color: '#6366f1' },
-  { name: 'GraduationCap', icon: GraduationCap, color: '#f59e0b' },
-  { name: 'Palette', icon: Palette, color: '#ec4899' },
-  { name: 'PenLine', icon: PenLine, color: '#06b6d4' },
-  { name: 'BarChart2', icon: BarChart2, color: '#3b82f6' },
-  { name: 'Search', icon: Search, color: '#8b5cf6' },
-  { name: 'Target', icon: Target, color: '#ef4444' },
-  { name: 'Shield', icon: Shield, color: '#34d399' },
-  { name: 'Compass', icon: Compass, color: '#10b981' },
-  { name: 'Cpu', icon: Cpu, color: '#a855f7' },
-  { name: 'Database', icon: Database, color: '#6366f1' },
-  { name: 'Lightbulb', icon: Lightbulb, color: '#fbbf24' },
-  { name: 'Cloud', icon: Cloud, color: '#3b82f6' },
-  { name: 'Gem', icon: Gem, color: '#ec4899' },
-  { name: 'Crown', icon: Crown, color: '#f59e0b' },
-  { name: 'Flame', icon: Flame, color: '#ef4444' },
-  { name: 'Feather', icon: Feather, color: '#a855f7' },
-  { name: 'Mic', icon: Mic, color: '#06b6d4' },
-  { name: 'MessageCircle', icon: MessageCircle, color: '#34d399' },
-  { name: 'Image', icon: Image, color: '#8b5cf6' },
-  { name: 'Music', icon: Music, color: '#ec4899' },
-  { name: 'Camera', icon: Camera, color: '#6366f1' },
-  { name: 'Eye', icon: Eye, color: '#10b981' },
-  { name: 'Share2', icon: Share2, color: '#3b82f6' },
-  { name: 'Link', icon: Link, color: '#a855f7' },
-  { name: 'Award', icon: Award, color: '#f59e0b' },
-  { name: 'Sun', icon: Sun, color: '#fbbf24' },
-  { name: 'Moon', icon: Moon, color: '#6366f1' },
-  { name: 'Wind', icon: Wind, color: '#34d399' },
-  { name: 'Leaf', icon: Leaf, color: '#10b981' },
-  { name: 'Download', icon: Download, color: '#3b82f6' },
-  { name: 'Hash', icon: Hash, color: '#a855f7' },
-  { name: 'Flag', icon: Flag, color: '#ef4444' },
+const AGENT_ICONS: { name: string; color: string }[] = [
+  { name: 'Bot', color: '#a855f7' },
+  { name: 'Brain', color: '#ec4899' },
+  { name: 'Code2', color: '#3b82f6' },
+  { name: 'Wand2', color: '#f59e0b' },
+  { name: 'Sparkles', color: '#fbbf24' },
+  { name: 'Star', color: '#fbbf24' },
+  { name: 'Rocket', color: '#ef4444' },
+  { name: 'Zap', color: '#f59e0b' },
+  { name: 'Globe', color: '#34d399' },
+  { name: 'BookOpen', color: '#6366f1' },
+  { name: 'GraduationCap', color: '#f59e0b' },
+  { name: 'Palette', color: '#ec4899' },
+  { name: 'PenLine', color: '#06b6d4' },
+  { name: 'BarChart2', color: '#3b82f6' },
+  { name: 'Search', color: '#8b5cf6' },
+  { name: 'Target', color: '#ef4444' },
+  { name: 'Shield', color: '#34d399' },
+  { name: 'Compass', color: '#10b981' },
+  { name: 'Cpu', color: '#a855f7' },
+  { name: 'Database', color: '#6366f1' },
+  { name: 'Lightbulb', color: '#fbbf24' },
+  { name: 'Cloud', color: '#3b82f6' },
+  { name: 'Gem', color: '#ec4899' },
+  { name: 'Crown', color: '#f59e0b' },
+  { name: 'Flame', color: '#ef4444' },
+  { name: 'Feather', color: '#a855f7' },
+  { name: 'Mic', color: '#06b6d4' },
+  { name: 'MessageCircle', color: '#34d399' },
+  { name: 'Image', color: '#8b5cf6' },
+  { name: 'Music', color: '#ec4899' },
+  { name: 'Camera', color: '#6366f1' },
+  { name: 'Eye', color: '#10b981' },
+  { name: 'Share2', color: '#3b82f6' },
+  { name: 'Link', color: '#a855f7' },
+  { name: 'Award', color: '#f59e0b' },
+  { name: 'Sun', color: '#fbbf24' },
+  { name: 'Moon', color: '#6366f1' },
+  { name: 'Wind', color: '#34d399' },
+  { name: 'Leaf', color: '#10b981' },
+  { name: 'Download', color: '#3b82f6' },
+  { name: 'Hash', color: '#a855f7' },
+  { name: 'Flag', color: '#ef4444' },
 ];
 
 const AVAILABLE_TOOLS: { id: string; label: string; icon: LucideIcon; description: string }[] = [
@@ -86,10 +83,6 @@ const AVAILABLE_TOOLS: { id: string; label: string; icon: LucideIcon; descriptio
   { id: 'clipboard', label: 'Clipboard', icon: FileText, description: 'Read/write system clipboard' },
   { id: 'device_info', label: 'Device Info', icon: Cpu, description: 'Device battery, OS, network info' },
 ];
-
-function getIconComponent(name: string): LucideIcon {
-  return AGENT_ICONS.find(i => i.name === name)?.icon || Bot;
-}
 
 function getIconColor(name: string): string {
   return AGENT_ICONS.find(i => i.name === name)?.color || '#a855f7';
@@ -314,7 +307,6 @@ const AgentListView: React.FC<{
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2.5">
         <AnimatePresence mode="popLayout">
           {agents.map((agent, i) => {
-            const IconComp = getIconComponent(agent.icon);
             return (
               <motion.div
                 key={agent.id}
@@ -329,7 +321,7 @@ const AgentListView: React.FC<{
               >
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(agent.icon)}15` }}>
-                    <IconComp size={18} style={{ color: getIconColor(agent.icon) }} />
+                    <OrbAvatar color={getIconColor(agent.icon)} size={32} animate={false} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -534,8 +526,6 @@ ${toolSection}
     }
   };
 
-  const IconComp = getIconComponent(agent.icon);
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -544,7 +534,7 @@ ${toolSection}
           <ChevronLeft size={16} />
         </button>
         <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(agent.icon)}15` }}>
-          <IconComp size={16} style={{ color: getIconColor(agent.icon) }} />
+          <OrbAvatar color={getIconColor(agent.icon)} size={24} animate={false} />
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</h2>
@@ -581,7 +571,7 @@ ${toolSection}
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${getIconColor(agent.icon)}08` }}>
-              <IconComp size={26} style={{ color: `${getIconColor(agent.icon)}80` }} />
+              <OrbAvatar color={getIconColor(agent.icon)} size={44} animate glow={false} />
             </div>
             <p className="text-xs font-medium" style={{ color: 'var(--gia-muted)' }}>Ask {agent.name} anything</p>
             <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
@@ -707,7 +697,6 @@ const CreateAgentModal: React.FC<{
   if (!isOpen) return null;
 
   const isEditing = editAgent !== null;
-  const IconPreview = getIconComponent(icon);
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -803,16 +792,15 @@ const CreateAgentModal: React.FC<{
             <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Avatar</label>
             <div className="flex items-center gap-3 mt-2">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(icon)}15` }}>
-                <IconPreview size={20} style={{ color: getIconColor(icon) }} />
+                <OrbAvatar color={getIconColor(icon)} size={32} animate glow={false} />
               </div>
               <div className="flex-1 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                 {AGENT_ICONS.map(a => {
-                  const I = a.icon;
                   return (
                     <button key={a.name} onClick={() => setIcon(a.name)}
                       className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback"
                       style={{ background: icon === a.name ? `${a.color}20` : 'var(--gia-surface-2)', border: icon === a.name ? `1px solid ${a.color}40` : '1px solid var(--gia-border)' }}>
-                      <I size={14} style={{ color: icon === a.name ? a.color : 'var(--gia-muted)' }} />
+                      <OrbAvatar color={a.color} size={16} animate={false} glow={icon === a.name} />
                     </button>
                   );
                 })}

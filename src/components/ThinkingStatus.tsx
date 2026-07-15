@@ -127,7 +127,7 @@ export function ThinkingStatus({ phase, toolName, onTap }: { phase?: ThinkingPha
     gap: 10,
     padding: '6px 14px',
     borderRadius: 20,
-    cursor: extThinking && onTap ? 'pointer' : 'default',
+    cursor: onTap ? 'pointer' : 'default',
     transition: 'all 0.25s ease',
   };
 

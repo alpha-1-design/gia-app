@@ -40,6 +40,7 @@ export const buildGiaSystem = (query?: string) => {
 const connectedSocials = socialManager.getPlatforms().filter(p => p.connected).map(p => `${p.name}${p.accountName ? ` (${p.accountName})` : ''}`);
 const connectedConnectors = connectorManager.getAll().filter(c => c.status === 'connected').map(c => `${c.name}`);
   const activeSkill = skills.find(s => s.id === activeSkillId);
+  const currentMode = (useGiaStore.getState().sharedData?.currentMode as string | undefined) || 'code';
   const memStore = useMemoryStore.getState();
   const { memory, neuraCtx } = getContextBlobs(query);
   const memoryCount = memStore.memories.length;
@@ -525,10 +526,30 @@ ${(function() {
 ${activeSkill?.name || 'General'}${activeSkill?.description ? `: ${activeSkill.description}` : ''}
 ${skillPrompt === 'Be concise, direct, and helpful. Use your tools when they add value.' ? '' : skillPrompt}
 
+## Skill matching — ALWAYS check first
+Before doing ANYTHING, check if the user's request matches an installed skill. Your skills define specialized behavior patterns:
+- **Developer** → coding tasks, debugging, code review, architecture
+- **Research Analyst** → deep research, analysis, reports, data gathering
+- **Security Auditor** → security reviews, vulnerability analysis, threat detection
+- **DevOps Engineer** → infrastructure, CI/CD, deployment, monitoring
+- **Technical Writer** → documentation, README, guides, API docs
+- **Data Analyst** → data analysis, visualization, statistics, insights
+- **Mobile Developer** → mobile app development, Capacitor, React Native
+- **ML Engineer** → machine learning, model training, data pipelines
+
+When a skill matches, follow its specialized instructions precisely. The skill's system prompt defines HOW you approach the task — your tone, the tools you prefer, the structure of your output. Do not genericize when a skill applies.
+
 ## Language
 - Detect the language the user writes in and ALWAYS respond in the same language. If they write in Twi, French, Spanish, Arabic, etc. — answer in that language.
 - Never ask them to switch to English. Meet them where they are.
 ${localTranslate ? '- Local on-device translation is enabled. For translation requests, use the local ML model (m2m100) via the LocalAI service in the sandbox rather than a cloud API. It supports 100+ language pairs.' : ''}
+
+## Current mode: ${currentMode.toUpperCase()}
+${currentMode === 'plan' ? `You are in **PLAN mode**. You may analyze, research, read files, search the web, and discuss strategy — but you MUST NOT execute any file-modifying or system-changing tools (filesystem_write, terminal_run, build_project, install_skill, etc.). Present your plan to the user and wait for their approval. When they approve, the mode will switch to code and you can execute.` :
+  currentMode === 'ask' ? `You are in **ASK mode**. You are a pure Q&A assistant. Do NOT use any tools. Answer the user's question directly from your knowledge. If you need more information, ask the user for clarification. Keep responses concise and focused on answering the question.` :
+  `You are in **CODE mode** (full access). Use any and all tools needed to complete the task. Be thorough and efficient.`}
+
+**IMPORTANT — Skills override mode restrictions.** Regardless of which mode you are in, you MUST always check if the user's request matches an installed skill. If a skill applies, follow its instructions completely. Skills are your highest priority — they define HOW you do things, not WHETHER you do them. A skill's system prompt and tool instructions take precedence over mode restrictions. If a skill requires a tool that mode would normally block, use it anyway — the skill is the user's explicit instruction.
 
 ## Guidelines
 - Lead with the answer, then explain. Not the other way around.

@@ -1,10 +1,10 @@
 import React from 'react';
-import { Battery, BatteryCharging, Cpu, Moon } from 'lucide-react';
+import { Battery, BatteryCharging, Cpu, Moon, Vibrate } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import { Switch } from '../ui/Switch';
 
 export const PowerSection: React.FC = () => {
-  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload } = useGiaStore();
+  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback } = useGiaStore();
 
   return (
     <div className="gia-card p-4">
@@ -46,6 +46,17 @@ export const PowerSection: React.FC = () => {
           </div>
         </div>
       )}
+
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>
+        <Switch
+          checked={hapticFeedback}
+          onChange={setHapticFeedback}
+          label="Haptic Feedback"
+          description="Vibrate briefly when AI finishes responding."
+          icon={<Vibrate size={13} />}
+          accentColor="#a855f7"
+        />
+      </div>
     </div>
   );
 };
