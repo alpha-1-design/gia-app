@@ -157,7 +157,7 @@ const AgentSwarmDashboard: React.FC = () => {
   useLiveTick(isRunning);
 
   // Reset dismissed state whenever a genuinely new run starts
-  useEffect(() => { if (activeRun) setDismissed(false); }, [activeRun?.id]);
+  useEffect(() => { if (activeRun) setDismissed(false); }, [activeRun]);
 
   // Auto-collapse to a slim summary bar a few seconds after everything finishes
   useEffect(() => {

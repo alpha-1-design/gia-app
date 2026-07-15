@@ -35,7 +35,6 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ isOpen, onCl
 
   useEffect(() => {
     if (isOpen) initializeTemplates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const initializeTemplates = () => {

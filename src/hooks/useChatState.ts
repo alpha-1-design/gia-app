@@ -364,7 +364,7 @@ export function useChatState() {
     }
     setShowAgentMention(false);
     setAgentMentionQuery('');
-  }, []);
+  }, [setInput]);
 
   const handleAgentMentionSelect = useCallback((agentId: string, agentName: string, task?: string) => {
     const atIdx = input.lastIndexOf('@');
@@ -378,7 +378,7 @@ export function useChatState() {
     }
     setShowAgentMention(false);
     setAgentMentionQuery('');
-  }, [input]);
+  }, [input, setInput]);
 
   const handleSend = useCallback(() => {
     // ── Slash commands ──────────────────────────────────────
