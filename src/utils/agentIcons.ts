@@ -64,7 +64,11 @@ export function getAgentColor(name: string): string {
 }
 
 export function resolveAgentIcon(iconName: string): LucideIcon {
-  return ICON_MAP.get(iconName)?.icon || Bot;
+  const found = ICON_MAP.get(iconName);
+  if (!found && import.meta.env.DEV && iconName !== 'Bot') {
+    console.warn(`[agentIcons] unknown icon "${iconName}" — falling back to Bot`);
+  }
+  return found?.icon || Bot;
 }
 
 export function resolveAgentColor(iconName: string): string {

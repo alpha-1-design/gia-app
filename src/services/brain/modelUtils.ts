@@ -23,29 +23,29 @@ export function selectBestModel(
 
   const userCfg = toolCapable.find((m: ModelOption) => m.id === userModel);
 
-  if (userCfg) {
-    const missing: string[] = [];
-    if (needsVision && !userCfg.vision) missing.push('vision');
-    if (!missing.length) return { model: userModel, switched: false };
-  }
+  // The user's chosen model isn't in the (dynamically fetched) list. Trust the
+  // user's explicit selection instead of treating it as "unavailable" and
+  // silently switching on every message — the fetched list can be incomplete,
+  // stale, or formatted differently, and the model is usually perfectly valid.
+  if (!userCfg) return { model: userModel, switched: false };
 
-  const best: ModelOption | undefined = toolCapable
-    .filter((m: ModelOption) => m.free && (!needsVision || m.vision))
-    .sort((a: ModelOption, b: ModelOption) => ((b.context?.length || 0) - (a.context?.length || 0)))[0]
-    || toolCapable
-      .filter((m: ModelOption) => !needsVision || m.vision)
+  // Only auto-switch when the model genuinely lacks a capability this request
+  // needs (vision) and a capable alternative exists.
+  if (needsVision && !userCfg.vision) {
+    const best = toolCapable
+      .filter((m: ModelOption) => m.vision)
       .sort((a: ModelOption, b: ModelOption) => (b.free ? 1 : 0) - (a.free ? 1 : 0))[0];
-
-  if (best && best.id !== userModel) {
-    return {
-      model: best.id,
-      switched: true,
-      previousModel: userCfg?.id || userModel,
-      reason: userCfg ? `${userCfg.label} can't ${needsVision ? 'see images' : 'use tools'} — using ${best.label}` : `${userModel} unavailable`,
-    };
+    if (best) {
+      return {
+        model: best.id,
+        switched: true,
+        previousModel: userCfg.id,
+        reason: `${userCfg.label} can't see images — using ${best.label}`,
+      };
+    }
   }
 
-  return { model: userCfg?.id || userModel, switched: false };
+  return { model: userModel, switched: false };
 }
 
 export async function buildMessages(req: BrainRequest): Promise<{ role: string; content: unknown }[]> {

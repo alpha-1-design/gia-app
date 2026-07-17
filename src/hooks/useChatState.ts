@@ -108,6 +108,15 @@ export function useChatState() {
     if (currentSessionIdRef.current === activeSessionId) return;
     currentSessionIdRef.current = activeSessionId ?? null;
     setInputRaw(activeSessionId ? useDraftStore.getState().getDraft(activeSessionId) : '');
+    // Reset transient generation/UI state for the new session
+    gen.setLoading(false);
+    gen.setStreamingMsgId(null);
+    gen.setStreamingMsgIds(new Set());
+    gen.setLiveThoughts({});
+    setExpandedMsgs(new Set());
+    setShowThoughts(new Set());
+    msgOps.setUndoMsg(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId]);
 
   const { providers, activeProvider } = useProviderStore(useShallow(s => ({
@@ -224,52 +233,58 @@ export function useChatState() {
     return () => ro.disconnect();
   }, []);
 
-  // Circle-to-search: watch for pending image from screen region capture
+  // External inputs (templates, share target, voice overlay, clipboard monitor,
+  // circle-to-search) land in the store and must be consumed even when ChatModule
+  // is already mounted — a mount-only effect misses them, which is why tapping a
+  // template did nothing. Subscribe so any pending value is always picked up.
+  // autoSend:false (templates) drops the text into the composer for editing;
+  // autoSend:true (voice/share/overlay) sends it immediately.
   useEffect(() => {
-    const pending = useGiaStore.getState().pendingCircleImage;
-    if (!pending) return;
+    const consume = () => {
+      const store = useGiaStore.getState();
 
-    const overlayText = useGiaStore.getState().pendingInput || '';
-    useGiaStore.getState().setPendingInput(null);
-
-    const query = overlayText || 'What is in this area?';
-    const attachment: Attachment = { name: 'screen-region.png', type: 'image/png', content: '', preview: pending };
-    setAttachments(prev => [...prev, attachment]);
-    setInput(query);
-    useGiaStore.getState().setPendingCircleImage(null);
-
-    const t = setTimeout(() => {
-      if (input.trim() || pending) {
-        gen.handleSend(query, [...attachments, attachment], setInput, v => setAttachments(v as Attachment[]));
+      const circle = store.pendingCircleImage;
+      if (circle) {
+        const query = store.pendingInput || 'What is in this area?';
+        const attachment: Attachment = { name: 'screen-region.png', type: 'image/png', content: '', preview: circle };
+        setAttachments(prev => [...prev, attachment]);
+        setInput(query);
+        store.setPendingCircleImage(null);
+        store.setPendingInput(null);
+        setTimeout(() => {
+          if (query.trim()) {
+            genRef.current.handleSend(query, [...attachmentsRef.current, attachment], setInput, v => setAttachmentsRef.current(v as Attachment[]));
+          }
+        }, 300);
+        return;
       }
-    }, 300);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // Share target: watch for pending input/files from PWA share target
-  useEffect(() => {
-    const pendingInput = useGiaStore.getState().pendingInput;
-    const pendingFiles = useGiaStore.getState().pendingFiles;
-    if (!pendingInput && pendingFiles.length === 0) return;
-
-    if (pendingInput) {
-      setInput(pendingInput);
-      useGiaStore.getState().setPendingInput(null);
-
-      // Auto-send for hands-free voice commands from overlay
-      setTimeout(() => {
-        const curInput = useGiaStore.getState().pendingInput;
-        useGiaStore.getState().setPendingInput(null);
-        if (curInput || pendingInput) {
-          gen.handleSend(pendingInput, attachments, setInput, v => setAttachments(v as Attachment[]));
+      const pendingInput = store.pendingInput;
+      if (pendingInput) {
+        setInput(pendingInput);
+        const autoSend = store.pendingInputAutoSend;
+        store.setPendingInput(null);
+        if (autoSend) {
+          setTimeout(() => {
+            genRef.current.handleSend(pendingInput, attachmentsRef.current, setInput, v => setAttachmentsRef.current(v as Attachment[]));
+          }, 400);
         }
-      }, 400);
-    }
-    if (pendingFiles.length > 0) {
-      setAttachments(prev => [...prev, ...pendingFiles.map(f => ({ name: f.name, type: f.type, content: f.content || '', preview: f.preview }))]);
-      useGiaStore.getState().setPendingFiles([]);
-    }
+      }
+
+      const pendingFiles = store.pendingFiles;
+      if (pendingFiles.length > 0) {
+        setAttachments(prev => [...prev, ...pendingFiles.map(f => ({ name: f.name, type: f.type, content: f.content || '', preview: f.preview }))]);
+        store.setPendingFiles([]);
+      }
+    };
+
+    consume(); // handle anything already queued (e.g. share target on first load)
+    const unsub = useGiaStore.subscribe((state) => {
+      if (state.pendingInput !== null || state.pendingFiles.length > 0 || state.pendingCircleImage) {
+        consume();
+      }
+    });
+    return unsub;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

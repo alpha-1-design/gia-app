@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, XCircle, Loader2, Clock, AlertCircle, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { ToolIcon } from './ToolIcons';
 import type { ProtocolProposal } from '../types/protocol';
+import { TOOL_LABELS } from '../utils/toolLabels';
 
 const STATE_CFG: Record<string, { label: string; color: string }> = {
   proposed:  { label: 'Proposed',  color: '#3b82f6' },
@@ -11,14 +12,6 @@ const STATE_CFG: Record<string, { label: string; color: string }> = {
   completed: { label: 'Done',     color: '#22c55e' },
   failed:    { label: 'Failed',   color: '#ef4444' },
   rejected:  { label: 'Skipped',  color: '#6b7280' },
-};
-
-const TOOL_LABELS: Record<string, string> = {
-  send_whatsapp: 'WhatsApp', send_email: 'Email', send_sms: 'SMS',
-  make_phone_call: 'Phone Call', share: 'Share', clipboard: 'Clipboard',
-  vibrate: 'Vibrate', screen_brightness: 'Brightness', device_info: 'Device Info',
-  get_contacts: 'Contacts', open_url: 'Open URL', web_search: 'Web Search',
-  web_scrape: 'Web Scrape', http_request: 'HTTP Request',
 };
 
 const STATUS_LABELS: Record<string, string> = {

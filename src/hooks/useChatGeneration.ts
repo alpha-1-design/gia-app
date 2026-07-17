@@ -186,16 +186,18 @@ export function useChatGeneration() {
     }
 
     state.addMessage(sessionId, userMsg);
-    AnalyticsService.trackMessage('user');
-    giaCoreServices.onMessage(userContent, userMsg.id, 'user');
-    TTSService.stop();
+    try {
+      AnalyticsService.trackMessage('user');
+      giaCoreServices.onMessage(userContent, userMsg.id, 'user');
+      TTSService.stop();
+    } catch { /* non-critical */ }
     setInput('');
     setAttachments([]);
     lastUserMsgRef.current = text || fileNames;
     responseStartRef.current = Date.now();
     // Clear old tool execution results from previous turns
     useProtocolStore.getState().clearConsoleProtocols();
-    if (!loading) setLoading(true);
+    setLoading(true);
     state.setIntentState('thinking');
     state.setThinkingPhase(webSearch ? 'searching' : 'reasoning');
 
@@ -460,7 +462,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         useGiaStore.setState({
           sessions: useGiaStore.getState().sessions.map(s =>
             s.id === sessionId
-              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: res.model || m.message.model, tokenUsage: res.tokenUsage || m.message.tokenUsage } } : m) }
+              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: res.model || m.message.model, tokenUsage: res.tokenUsage || m.message.tokenUsage, source: res.provider === 'local-llm' ? 'on-device' : 'cloud' } } : m) }
               : s
           ),
         });
@@ -509,7 +511,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     // own message, avatar and visible thoughts. No mention → a single GIA turn.
     const agentsToRun = agentInfo && agentInfo.length > 0 ? agentInfo : [undefined];
     await Promise.all(agentsToRun.map((a) => runAgentTurn(a)));
-  }, [loading, registerGenerationController]);
+  }, [registerGenerationController]);
 
   const handleContinue = useCallback(async (msgId: string) => {
     const state = useGiaStore.getState();
@@ -599,7 +601,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
               s.id === state.activeSessionId
-                ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: contRes.model || m.message.model, tokenUsage: contRes.tokenUsage || m.message.tokenUsage } } : m) }
+                ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, model: contRes.model || m.message.model, tokenUsage: contRes.tokenUsage || m.message.tokenUsage, source: contRes.provider === 'local-llm' ? 'on-device' : 'cloud' } } : m) }
                 : s
             ),
           });
@@ -828,7 +830,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
               s.id === state.activeSessionId
-                ? { ...s, messages: s.messages.map(m => m.message.id === id ? { ...m, message: { ...m.message, model: genRes.model || m.message.model, tokenUsage: genRes.tokenUsage || m.message.tokenUsage } } : m) }
+                ? { ...s, messages: s.messages.map(m => m.message.id === id ? { ...m, message: { ...m.message, model: genRes.model || m.message.model, tokenUsage: genRes.tokenUsage || m.message.tokenUsage, source: genRes.provider === 'local-llm' ? 'on-device' : 'cloud' } } : m) }
                 : s
             ),
           });

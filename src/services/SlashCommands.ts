@@ -7,7 +7,7 @@ export type SlashCommandResult = {
   action?: 'clear' | 'compact' | 'mode-switch' | 'new-session' | 'show-skills' | 'show-help';
 };
 
-export type Giamode = 'code' | 'plan' | 'ask';
+export type Giamode = 'code' | 'plan' | 'ask' | 'build';
 
 const COMMANDS: Record<string, { description: string; alias?: string[] }> = {
   help:     { description: 'Show all available commands', alias: ['?'] },
@@ -15,7 +15,7 @@ const COMMANDS: Record<string, { description: string; alias?: string[] }> = {
   compact:  { description: 'Summarize & compress context window', alias: ['summarize'] },
   cost:     { description: 'Show token usage and estimated cost this session', alias: ['usage'] },
   tokens:   { description: 'Display current context window usage', alias: ['ctx'] },
-  mode:     { description: 'Switch mode: /mode code|plan|ask', alias: [] },
+  mode:     { description: 'Switch mode: /mode code|plan|ask|build', alias: [] },
   session:  { description: 'Start a new session', alias: ['new', 'reset'] },
   skills:   { description: 'Open the skills marketplace', alias: ['marketplace', 'store'] },
   status:   { description: 'Show provider, model, and feature status', alias: ['info'] },
@@ -169,17 +169,23 @@ export function processSlashCommand(input: string): SlashCommandResult {
 
     case 'mode': {
       const mode = (args[0] || '').toLowerCase() as Giamode;
-      if (!['code', 'plan', 'ask'].includes(mode)) {
+      if (!['code', 'plan', 'ask', 'build'].includes(mode)) {
         return {
           handled: true,
-          message: `Current mode: **${state.sharedData['gia-mode'] || 'code'}**\n\nUsage: \`/mode code\`, \`/mode plan\`, or \`/mode ask\``,
+          message: `Current mode: **${state.sharedData['gia-mode'] || 'code'}**\n\nUsage: \`/mode code\`, \`/mode plan\`, \`/mode ask\`, or \`/mode build\``,
         };
       }
       useGiaStore.setState({ sharedData: { ...state.sharedData, 'gia-mode': mode } });
+      if (mode === 'build') {
+        useGiaStore.getState().setBuildMode(true);
+      } else {
+        useGiaStore.getState().setBuildMode(false);
+      }
       const modeDescriptions: Record<string, string> = {
         code: '🔧 **Code Mode** — GIA reads, writes, and executes code freely.',
         plan: '📋 **Plan Mode** — GIA generates plans without making changes. Edits blocked until approval.',
         ask: '💬 **Ask Mode** — GIA answers questions only. No file modifications.',
+        build: '🏗️ **Build Mode** — GIA scaffolds, builds, and deploys full applications. Watch it build in real time.',
       };
       return { handled: true, message: modeDescriptions[mode], action: 'mode-switch' };
     }

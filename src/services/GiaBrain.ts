@@ -6,6 +6,7 @@ import { callOpenAICompat } from './providers/openai';
 import { callAnthropic } from './providers/anthropic';
 import { callGeminiNative } from './providers/gemini';
 import { callLocalLLM } from './providers/local';
+import LocalLLMServiceInstance from './LocalLLMService';
 import { buildGiaSystem, setSystemContext } from './buildGiaSystem';
 import { buildMessages, selectBestModel } from './brain/modelUtils';
 import { buildOpenAITools, buildAnthropicTools, buildGeminiTools } from './brain/toolSchemas';
@@ -13,8 +14,8 @@ import { executeToolBlocks } from './brain/toolRunner';
 import { extractMemories } from './brain/memoryExtractor';
 import { retryFetch, friendlyError } from './brain/network';
 import {
-  saveCheckpoint, clearCheckpoint, pickFallback,
-  isRateLimitOrQuotaError, isRetryableServerError, backoffDelay,
+  saveCheckpoint, clearCheckpoint,
+  isRateLimitOrQuotaError, isRetryableServerError,
 } from './brain/ResilientRelay';
 import PluginManager from './PluginManager';
 import { isVisionCapable as _isVisionCapable } from './brain/modelUtils';
@@ -65,7 +66,7 @@ class GiaBrain {
     const state = useGiaStore.getState();
 
     // Resolve effective provider: req.providerId > global activeProvider > best available
-    const resolvedId = (() => {
+    let resolvedId = (() => {
       if (req.providerId && providers[req.providerId]?.enabled && providers[req.providerId]?.apiKey) {
         return req.providerId;
       }
@@ -80,6 +81,18 @@ class GiaBrain {
       const best = useProviderStore.getState().getBestProviderForTask();
       return best?.id || activeProvider;
     })();
+
+    // On-Device Mode: prefer the local LLM when it's actually loaded, so the
+    // whole conversation runs on-device. Falls back to the user's provider
+    // (shown as "cloud" on the response) when the local model isn't ready.
+    if (state.onDeviceMode) {
+      const localReady = Object.values(LocalLLMServiceInstance.getStatus()).some(
+        (s) => s.status === 'ready'
+      );
+      if (localReady && resolvedId !== 'local-llm') {
+        resolvedId = 'local-llm';
+      }
+    }
 
     const config = providers[resolvedId];
     if (resolvedId !== 'local-llm' && (!config || !config.enabled || !config.apiKey)) {
@@ -219,105 +232,52 @@ class GiaBrain {
           return `Continue exactly where you left off. Do not repeat or restate anything above — pick up mid-thought if needed. Here is what you'd written so far (for your own context, do not repeat it):\n\n"""${carryOverText.slice(-2000)}"""`;
         };
 
-        const triedProviders = [effectiveProvider];
-        const triedModels = [finalModel];
-
+        // Simple, bounded retry for transient rate-limit / 5xx errors. We
+        // deliberately do NOT hop across models or providers, nor wait out long
+        // backoff windows — if it's still failing after a couple of short
+        // retries, surface a clear error and let the user switch models/providers.
+        // The checkpoint saved above already guarantees partial work survives.
         if (rateLimited && state.smartFallback !== false) {
-          // Try other models on the SAME provider first — never jump to a
-          // different provider. If no other model works, wait it out with
-          // exponential backoff. Each attempt gets its own onStream capture
-          // so a mid-stream failure still checkpoints correctly.
           let recovered = false;
-          for (let hop = 0; hop < 5 && !recovered; hop++) {
-            const fallback = pickFallback(effectiveProvider, triedModels[triedModels.length - 1], triedProviders, triedModels);
-            if (!fallback) break;
-            triedModels.push(fallback.model);
-
+          for (let attempt = 1; attempt <= 2 && !recovered; attempt++) {
+            const delay = 1500 * attempt; // 1.5s, then 3s
             useGiaStore.getState().addNotification(
               carryOverText.trim()
-                ? `⚡ ${effectiveProvider} rate-limited mid-response — trying ${fallback.model}, nothing lost`
-                : `⚡ ${effectiveProvider} rate-limited — switching to ${fallback.model}`
+                ? `⚡ ${effectiveProvider} rate-limited mid-response — retrying in ${Math.round(delay / 1000)}s (your progress is saved)`
+                : `⚡ ${effectiveProvider} rate-limited — retrying in ${Math.round(delay / 1000)}s`
             );
-            req.onThought?.(`Rate limit on ${effectiveProvider}/${triedModels[triedModels.length - 2]} — trying ${fallback.model}...`);
-
-            loopReq._skipNativeSchemas = false;
-            loopReq.modelOverride = fallback.model;
+            req.onThought?.(`Rate limit on ${effectiveProvider} — retrying in ${Math.round(delay / 1000)}s (attempt ${attempt}/2)...`);
+            await new Promise<void>((resolve, reject) => {
+              const t = setTimeout(resolve, delay);
+              req.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+            });
             loopReq.prompt = buildContinuationPrompt();
             loopReq.history = history;
-            let hopStreamed = '';
+            let retryStreamed = '';
             if (userOnStream) {
-              loopReq.onStream = (chunk: string) => { hopStreamed += chunk; userOnStream(chunk); };
+              loopReq.onStream = (chunk: string) => { retryStreamed += chunk; userOnStream(chunk); };
             }
-            const hopStart = performance.now();
+            const retryStart = performance.now();
             try {
               res = await this.callProvider(loopReq, effectiveProvider);
-              ProviderMonitor.recordSuccess(effectiveProvider, fallback.model, Math.round(performance.now() - hopStart));
+              ProviderMonitor.recordSuccess(effectiveProvider, finalModel, Math.round(performance.now() - retryStart));
               recovered = true;
               if (req.checkpointKey) clearCheckpoint(req.checkpointKey);
               carryOverText = '';
-            } catch (hopErr) {
-              const hopMsg = hopErr instanceof Error ? hopErr.message.toLowerCase() : '';
-              ProviderMonitor.recordFailure(effectiveProvider, fallback.model, hopMsg, Math.round(performance.now() - hopStart));
-              carryOverText += hopStreamed;
-              triedModels.push(fallback.model);
-              logger.error(`[GiaBrain] Fallback to ${fallback.model} also failed:`, hopErr);
+            } catch (retryErr) {
+              const retryMsg = retryErr instanceof Error ? retryErr.message.toLowerCase() : '';
+              ProviderMonitor.recordFailure(effectiveProvider, finalModel, retryMsg, Math.round(performance.now() - retryStart));
+              carryOverText += retryStreamed;
+              logger.error(`[GiaBrain] Retry ${attempt} also failed:`, retryErr);
+              // Stop retrying if the failure is no longer a transient rate/server error.
+              if (!isRateLimitOrQuotaError(retryMsg) && !isRetryableServerError(retryMsg)) break;
             }
           }
-
           if (!recovered) {
-            // All models on this provider exhausted — wait it out with
-            // backoff instead of losing the request. The checkpoint above
-            // already guarantees partial work survives even a full app close.
-            useGiaStore.getState().addNotification(`All models on ${effectiveProvider} rate-limited — waiting to retry (your progress is saved)...`);
-            req.onThought?.('Rate limited on all models — waiting to retry, nothing will be lost...');
-            let waitRecovered = false;
-            for (let attempt = 1; attempt <= 8 && !waitRecovered; attempt++) {
-              const delay = backoffDelay(attempt);
-              req.onThought?.(`Retrying in ${Math.round(delay / 1000)}s (attempt ${attempt}/8)...`);
-              await new Promise<void>((resolve, reject) => {
-                const t = setTimeout(resolve, delay);
-                req.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
-              });
-              loopReq.prompt = buildContinuationPrompt();
-              loopReq.history = history;
-              loopReq.modelOverride = undefined;
-              let waitStreamed = '';
-              if (userOnStream) {
-                loopReq.onStream = (chunk: string) => { waitStreamed += chunk; userOnStream(chunk); };
-              }
-              try {
-                res = await this.callProvider(loopReq, effectiveProvider);
-                ProviderMonitor.recordSuccess(effectiveProvider, finalModel, 0);
-                waitRecovered = true;
-                if (req.checkpointKey) clearCheckpoint(req.checkpointKey);
-                carryOverText = '';
-              } catch (waitErr) {
-                carryOverText += waitStreamed;
-                if (req.checkpointKey) {
-                  saveCheckpoint({
-                    key: req.checkpointKey,
-                    sessionId: req.checkpointKey.split(':')[0],
-                    messageId: req.checkpointKey.split(':')[1],
-                    originalPrompt: req.prompt,
-                    accumulatedText: carryOverText,
-                    history: history as { role: string; content: string }[],
-                    failedProvider: effectiveProvider,
-                    failedModel: finalModel,
-                    reason: waitErr instanceof Error ? waitErr.message : 'unknown',
-                    attempt: iterations + attempt,
-                    savedAt: Date.now(),
-                  });
-                }
-              }
-            }
-            if (!waitRecovered) {
-              throw new Error(`${friendlyError(effectiveProvider, origError)} — your progress up to this point is saved and won't be lost. Try again shortly or switch models in Settings.`);
-            }
+            throw new Error(`${friendlyError(effectiveProvider, origError)} — your progress up to this point is saved and won't be lost. Try again shortly or switch models in Settings.`);
           }
-        } else if (!rateLimited) {
-          // Non-rate-limit error (bad request, auth, etc.) — surface it directly.
-          throw origError;
         } else {
+          // Non-rate-limit error (bad request, auth, etc.) — surface it directly.
           throw origError;
         }
       }
@@ -358,7 +318,7 @@ class GiaBrain {
           currentPrompt = 'Continue from where you left off. Do not repeat. Just continue naturally.';
           continue;
         }
-        extractMemories(req.prompt, text);
+        extractMemories(req.prompt, text).catch((e) => logger.error('[GiaBrain] Memory extraction failed:', e));
 
         // ── Raw output detection ─────────────────────────────
         this._detectRawOutput(text);

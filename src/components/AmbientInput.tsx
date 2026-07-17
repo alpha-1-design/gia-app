@@ -16,6 +16,7 @@ interface AmbientInputProps {
   isLoading?: boolean;
   multiline?: boolean;
   autoFocus?: boolean;
+  prefix?: React.ReactNode;
 }
 
 const STATE_GLOW: Record<IntentState, string> = {
@@ -35,6 +36,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   disabled = false,
   isLoading = false,
   multiline = false,
+  prefix,
 }) => {
   const intentState = useGiaStore(s => s.intentState);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -117,6 +119,11 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
       />
 
       <div className="relative flex items-end gap-2">
+        {prefix && (
+          <div className="absolute left-3 bottom-2.5 z-10 flex items-center">
+            {prefix}
+          </div>
+        )}
         {multiline ? (
           <textarea
             ref={textareaRef}
@@ -129,6 +136,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
               maxHeight: '120px',
               overflow: 'auto',
               overflowWrap: 'break-word',
+              paddingLeft: prefix ? '60px' : undefined,
             }}
           />
         ) : (
@@ -137,6 +145,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
             {...sharedInputProps}
             type="text"
             className="flex-1 py-3.5 pl-11 pr-14 text-sm outline-none placeholder:opacity-40"
+            style={{ paddingLeft: prefix ? '60px' : undefined }}
           />
         )}
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Brain, Repeat, Wifi, FileCheck, Users } from 'lucide-react';
+import { ShieldCheck, Brain, Repeat, Wifi, FileCheck, Users, Lock } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 
 interface ToggleRowProps {
@@ -39,6 +39,7 @@ export const ReliabilitySection: React.FC = () => {
     smartFallback, setSmartFallback,
     multiProvider, setMultiProvider,
     localSummarize, setLocalSummarize,
+    onDeviceMode, setOnDeviceMode,
   } = useGiaStore();
 
   return (
@@ -88,6 +89,12 @@ export const ReliabilitySection: React.FC = () => {
           desc="Summarize long contexts on-device (HuggingFace)"
           icon={<Brain size={13} style={{ color: localSummarize ? '#34d399' : 'var(--gia-muted)' }} />}
           enabled={localSummarize} onToggle={setLocalSummarize}
+        />
+        <ToggleRow
+          label="On-Device Mode"
+          desc="Prefer the on-device LLM for every response when it's loaded — nothing leaves your device"
+          icon={<Lock size={13} style={{ color: onDeviceMode ? '#34d399' : 'var(--gia-muted)' }} />}
+          enabled={onDeviceMode} onToggle={setOnDeviceMode}
         />
       </div>
     </div>

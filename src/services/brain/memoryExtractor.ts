@@ -2,6 +2,7 @@ import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { providerRegistry } from '../ProviderRegistry';
+import { corsProxy } from '../CorsProxy';
 
 export async function extractMemories(userMessage: string, assistantResponse: string): Promise<void> {
   if (!userMessage || !assistantResponse || assistantResponse.length < 100) return;
@@ -29,7 +30,7 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
 
   try {
     if (activeProvider === 'anthropic') {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await corsProxy.fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': config.apiKey,
@@ -50,9 +51,9 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
       const data: { content?: { type: string; text?: string }[] } = await res.json();
       text = data.content?.find(b => b.type === 'text')?.text || '';
     } else if (activeProvider === 'gemini') {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+      const res = await corsProxy.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: extractionPrompt }] }],
           system_instruction: { parts: [{ text: 'You are a memory extraction assistant. Return only valid JSON arrays. Never include markdown.' }] },
@@ -66,7 +67,7 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
     } else {
       const baseUrl = providerRegistry.getBaseUrl(activeProvider);
       if (!baseUrl) return;
-      const res = await fetch(`${baseUrl}/chat/completions`, {
+      const res = await corsProxy.fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,

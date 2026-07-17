@@ -222,9 +222,12 @@ export const useProviderStore = create<GiaProviderState>()(
             return providerRegistry.getModels(p);
           }
 
-          // Gemini listing
+          // Gemini listing — use header auth to avoid exposing API key through CORS proxy
           if (listingType === 'gemini') {
-            const res = await corsProxy.fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${config.apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const res = await corsProxy.fetch(`https://generativelanguage.googleapis.com/v1beta/models`, {
+              signal: AbortSignal.timeout(8000),
+              headers: { 'x-goog-api-key': config.apiKey },
+            });
             if (!res.ok) throw new Error(`${res.status}`);
             const json: { models?: { name: string; displayName?: string; supportedGenerationMethods?: string[]; inputTokenLimit?: number }[] } = await res.json();
             const data = (json.models || []).filter((m) => m.supportedGenerationMethods?.includes('generateContent'));

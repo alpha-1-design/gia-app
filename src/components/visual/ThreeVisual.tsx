@@ -162,23 +162,30 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
     };
 
     const el = renderer.domElement;
-    el.addEventListener('mousedown', (e: MouseEvent) => { orbit.dragging = true; orbit.px = e.clientX; orbit.py = e.clientY; });
-    window.addEventListener('mousemove', (e: MouseEvent) => {
+    const onMouseDown = (e: MouseEvent) => { orbit.dragging = true; orbit.px = e.clientX; orbit.py = e.clientY; };
+    const onMouseMove = (e: MouseEvent) => {
       if (!orbit.dragging) return;
       orbit.theta -= (e.clientX - orbit.px) * 0.005;
       orbit.phi = Math.max(-1.5, Math.min(1.5, orbit.phi + (e.clientY - orbit.py) * 0.005));
       orbit.px = e.clientX; orbit.py = e.clientY; updateCam();
-    });
-    window.addEventListener('mouseup', () => { orbit.dragging = false; });
-    el.addEventListener('wheel', (e: WheelEvent) => { e.preventDefault(); orbit.radius = Math.max(1, Math.min(50, orbit.radius + e.deltaY * 0.01)); updateCam(); }, { passive: false });
-    el.addEventListener('touchstart', (e: TouchEvent) => { if (e.touches.length === 1) { orbit.dragging = true; orbit.px = e.touches[0].clientX; orbit.py = e.touches[0].clientY; } }, { passive: true });
-    el.addEventListener('touchmove', (e: TouchEvent) => {
+    };
+    const onMouseUp = () => { orbit.dragging = false; };
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); orbit.radius = Math.max(1, Math.min(50, orbit.radius + e.deltaY * 0.01)); updateCam(); };
+    const onTouchStart = (e: TouchEvent) => { if (e.touches.length === 1) { orbit.dragging = true; orbit.px = e.touches[0].clientX; orbit.py = e.touches[0].clientY; } };
+    const onTouchMove = (e: TouchEvent) => {
       if (!orbit.dragging || e.touches.length !== 1) return;
       orbit.theta -= (e.touches[0].clientX - orbit.px) * 0.005;
       orbit.phi = Math.max(-1.5, Math.min(1.5, orbit.phi + (e.touches[0].clientY - orbit.py) * 0.005));
       orbit.px = e.touches[0].clientX; orbit.py = e.touches[0].clientY; updateCam();
-    }, { passive: true });
-    el.addEventListener('touchend', () => { orbit.dragging = false; }, { passive: true });
+    };
+    const onTouchEnd = () => { orbit.dragging = false; };
+    el.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
 
     let frameId: number;
     const start = Date.now();
@@ -212,6 +219,13 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
 
     return () => {
       cancelAnimationFrame(frameId); ro.disconnect();
+      el.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
       if (container.contains(el)) container.removeChild(el);
       renderer.dispose();
     };

@@ -1,5 +1,7 @@
 import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
+import { providerRegistry } from '../ProviderRegistry';
+import { corsProxy } from '../CorsProxy';
 import { useGiaStore } from '../../store/useGiaStore';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
 
@@ -49,6 +51,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   }
   if (!useThinking && req.temperature !== undefined) body.temperature = req.temperature;
   if (useThinking) body.thinking = { type: 'enabled', budget_tokens: 10000 };
+  const baseUrl = providerRegistry.getBaseUrl('anthropic') || 'https://api.anthropic.com/v1';
   const anthropicHeaders: Record<string, string> = {
     'x-api-key': config.apiKey,
     'anthropic-version': '2023-06-01',
@@ -62,7 +65,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
     let finishReason = '';
     let streamTokenUsage: { input_tokens: number; output_tokens: number } | undefined;
 
-    return new Promise<BrainResponse>((resolve, reject) => {
+    const runStream = (streamUrl: string) => new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       let fullText = '';
       let lastProcessed = 0;
@@ -82,7 +85,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
         toolUseBlocks.clear();
       };
 
-      xhr.open('POST', 'https://api.anthropic.com/v1/messages');
+      xhr.open('POST', streamUrl);
       Object.entries(anthropicHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
       xhr.timeout = 120000;
@@ -183,7 +186,11 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
         }
       };
 
-      xhr.onerror = () => reject(new Error('Anthropic network error'));
+      xhr.onerror = () => {
+        const err = new Error('Anthropic network error') as Error & { retryable?: boolean };
+        err.retryable = fullText.length === 0 && lastProcessed === 0;
+        reject(err);
+      };
       xhr.ontimeout = () => reject(new Error('Anthropic timed out after 120s'));
       xhr.onabort = () => {
         const e = new Error('Request aborted');
@@ -214,16 +221,42 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
 
       xhr.send(JSON.stringify(body));
     });
+
+    try {
+      return await runStream(`${baseUrl}/messages`);
+    } catch (e) {
+      const err = e as Error & { retryable?: boolean };
+      if (err.name === 'AbortError' || !err.retryable) throw err;
+      logger.warn('[anthropic] Direct streaming request failed, retrying via CORS proxy:', err.message);
+      return await runStream(corsProxy.proxyUrl(`${baseUrl}/messages`));
+    }
   }
 
-  const res = await ctx.retryFetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: anthropicHeaders,
-    body: JSON.stringify(body), signal: req.signal,
-  }).catch((e: { name?: string }) => {
-    if (e.name === 'AbortError') throw e;
-    throw new Error(ctx.friendlyError('Anthropic', e));
-  });
+  const doRequest = async (url: string): Promise<Response> => {
+    try {
+      return await ctx.retryFetch(url, {
+        method: 'POST', headers: anthropicHeaders, body: JSON.stringify(body), signal: req.signal,
+      });
+    } catch (e) {
+      if ((e as { name?: string }).name === 'AbortError') throw e;
+      throw new Error(ctx.friendlyError('Anthropic', e));
+    }
+  };
+
+  let res: Response;
+  let usedProxy = false;
+  try {
+    res = await doRequest(`${baseUrl}/messages`);
+  } catch (e) {
+    // CORS / network errors throw instead of returning a non-ok response, so
+    // retry through the CORS proxy here (mirrors the OpenAI-compat path).
+    logger.warn('[anthropic] Direct fetch failed, trying CORS proxy:', (e as Error).message);
+    res = await doRequest(corsProxy.proxyUrl(`${baseUrl}/messages`));
+    usedProxy = true;
+  }
+  if (!res.ok && !usedProxy) {
+    res = await doRequest(corsProxy.proxyUrl(`${baseUrl}/messages`));
+  }
   if (!res.ok) {
     const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
     throw new Error(ctx.friendlyError('Anthropic', e?.error?.message || `Anthropic error ${res.status}`));

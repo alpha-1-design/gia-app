@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 
 vi.mock('../../services/GiaBrain', () => ({
   default: {
@@ -143,10 +143,9 @@ describe('useFileAttachments', () => {
     const e = createClipboardEvent(longText);
     await act(async () => {
       result.current.handlePaste(e);
-      await new Promise(r => setTimeout(r, 0));
     });
     expect(e.preventDefault).toHaveBeenCalled();
-    expect(result.current.attachments).toHaveLength(1);
+    await waitFor(() => expect(result.current.attachments).toHaveLength(1));
     expect(result.current.attachments[0].name).toMatch(/^pasted-text-.*\.txt$/);
     expect(result.current.attachments[0].content).toBe(longText);
   });

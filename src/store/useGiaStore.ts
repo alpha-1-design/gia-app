@@ -52,6 +52,7 @@ export interface Message {
   agentTask?: string;
   agentIcon?: string;
   tasks?: TaskItem[];
+  source?: 'on-device' | 'cloud';
 }
 
 export interface MessageNode {
@@ -271,6 +272,7 @@ interface GiaState {
   localVision: boolean;
   localSummarize: boolean;
   localTranslate: boolean;
+  onDeviceMode: boolean;
   responseCache: boolean;
   inputGuardrails: boolean;
   outputValidation: boolean;
@@ -301,7 +303,8 @@ interface GiaState {
   pendingCircleImage: string | null;
   setPendingCircleImage: (v: string | null) => void;
   pendingInput: string | null;
-  setPendingInput: (v: string | null) => void;
+  pendingInputAutoSend: boolean;
+  setPendingInput: (v: string | null, opts?: { autoSend?: boolean }) => void;
   pendingFiles: { name: string; type: string; content: string; preview?: string }[];
   setPendingFiles: (v: { name: string; type: string; content: string; preview?: string }[]) => void;
   pendingAction: { type: string; data: Record<string, unknown> } | null;
@@ -327,6 +330,7 @@ interface GiaState {
   setLocalVision: (enabled: boolean) => void;
   setLocalSummarize: (enabled: boolean) => void;
   setLocalTranslate: (enabled: boolean) => void;
+  setOnDeviceMode: (enabled: boolean) => void;
   setResponseCache: (enabled: boolean) => void;
   setInputGuardrails: (enabled: boolean) => void;
   setOutputValidation: (enabled: boolean) => void;
@@ -378,6 +382,11 @@ interface GiaState {
   setShowConsole: (show: boolean) => void;
   clearConsole: () => void;
   setShowProtocols: (show: boolean) => void;
+  buildMode: boolean;
+  setBuildMode: (v: boolean) => void;
+  buildSessionId: string | null;
+  buildPreviewUrl: string | null;
+  setBuildPreview: (url: string | null) => void;
   longRunningMode: boolean;
   autoModelUnload: boolean;
   setLongRunningMode: (v: boolean) => void;
@@ -473,6 +482,7 @@ export const useGiaStore = create<GiaState>()(
       localVision: false,
       localSummarize: true,
       localTranslate: false,
+      onDeviceMode: false,
       responseCache: true,
       inputGuardrails: true,
       outputValidation: true,
@@ -500,13 +510,19 @@ export const useGiaStore = create<GiaState>()(
       showCircleSearch: false,
       pendingCircleImage: null,
       pendingInput: null,
+      pendingInputAutoSend: true,
       pendingFiles: [],
       pendingAction: null,
       deepLinkQueue: [],
       liveFileEdit: null,
+      buildMode: false,
+      buildSessionId: null,
+      buildPreviewUrl: null,
       longRunningMode: false,
       autoModelUnload: true,
 
+      setBuildMode: (v) => set((s) => ({ buildMode: v, buildSessionId: v ? s.activeSessionId : s.buildSessionId })),
+      setBuildPreview: (url) => set({ buildPreviewUrl: url }),
       setModule: (module) => set((s) => {
         if (s.currentModule === module) return {};
         // Preserve context across module switches so the next module can pick
@@ -548,6 +564,7 @@ export const useGiaStore = create<GiaState>()(
       setLocalVision: (enabled) => set({ localVision: enabled }),
       setLocalSummarize: (enabled) => set({ localSummarize: enabled }),
       setLocalTranslate: (enabled) => set({ localTranslate: enabled }),
+      setOnDeviceMode: (enabled) => set({ onDeviceMode: enabled }),
       setResponseCache: (enabled) => set({ responseCache: enabled }),
       setInputGuardrails: (enabled) => set({ inputGuardrails: enabled }),
       setOutputValidation: (enabled) => set({ outputValidation: enabled }),
@@ -589,7 +606,7 @@ export const useGiaStore = create<GiaState>()(
       },
       setShowCircleSearch: (v) => set({ showCircleSearch: v }),
       setPendingCircleImage: (v) => set({ pendingCircleImage: v }),
-      setPendingInput: (v) => set({ pendingInput: v }),
+      setPendingInput: (v, opts) => set({ pendingInput: v, pendingInputAutoSend: opts?.autoSend ?? true }),
       setPendingFiles: (v) => set({ pendingFiles: v }),
       setPendingAction: (v) => set({ pendingAction: v }),
       setDeepLinkQueue: (v) => set({ deepLinkQueue: v }),
@@ -619,7 +636,14 @@ export const useGiaStore = create<GiaState>()(
         }));
         return id;
       },
-      setActiveSession: (id) => set({ activeSessionId: id }),
+      setActiveSession: (id) => set({
+        activeSessionId: id,
+        intentState: 'idle',
+        thinkingPhase: 'idle',
+        currentTool: null,
+        clarification: null,
+        consoleLogs: [],
+      }),
 
       addMessage: (sessionId, msg) =>
         set((s) => ({
@@ -897,6 +921,7 @@ export const useGiaStore = create<GiaState>()(
       },
       partialize: (s) => ({
         sessions: s.sessions,
+        activeSessionId: s.activeSessionId,
         scheduledTasks: s.scheduledTasks,
         userProfile: s.userProfile,
         skills: s.skills,
@@ -923,6 +948,9 @@ export const useGiaStore = create<GiaState>()(
         nativeSensitivity: s.nativeSensitivity,
         wakeWordAccessKey: s.wakeWordAccessKey,
         useWhisper: s.useWhisper,
+        buildMode: s.buildMode,
+        buildSessionId: s.buildSessionId,
+        buildPreviewUrl: s.buildPreviewUrl,
       }),
     }
   )

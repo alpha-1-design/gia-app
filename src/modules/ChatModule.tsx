@@ -4,7 +4,7 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
-  Eye, CheckCircle2, Loader2, Upload, LayoutTemplate, Languages,
+  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -16,11 +16,10 @@ import GiaIcon from '../components/GiaIcon';
 import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
-import GiaConsole from '../components/GiaConsole';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 import FileBrowser from '../components/FileBrowser';
 import FileManager from '../components/FileManager';
-import InlineToolExecution from '../components/InlineToolExecution';
+import ToolTray from '../components/ToolTray';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { EngineSheet } from '../components/chat/EngineSheet';
 import { BranchView } from '../components/chat/BranchView';
@@ -29,6 +28,7 @@ import AgentMentionPicker from '../components/AgentMentionPicker';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { LiveFileEditor } from '../components/LiveFileEditor';
+import { ThinkingStatus } from '../components/ThinkingStatus';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -37,6 +37,12 @@ const QUICK_STARTS = [
   { icon: Sparkles, label: 'Summarize URL', prompt: 'Summarize this URL: https://', color: '#10b981', category: 'tools' },
   { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b', category: 'productivity' },
 ];
+
+const LOCALHOST_RE = /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/[^\s<]*)?/i;
+const extractLocalhostUrl = (text: string): string | null => {
+  const m = text?.match(LOCALHOST_RE);
+  return m ? m[0] : null;
+};
 
 const ChatModule: React.FC = () => {
   const {
@@ -56,7 +62,7 @@ const ChatModule: React.FC = () => {
     webSearch, extThinking, handsOff,
     localVision, localTranslate,
     activeSkillId, setSkill,
-    skills, thinkingPhase, currentTool, showConsole, consoleLogs,
+    skills, thinkingPhase, currentTool,
     messages, activeSession, providerConnected, providerLabel,
     activeModel,
     toggleFeature, handleStop, handleUndoDelete,
@@ -65,15 +71,30 @@ const ChatModule: React.FC = () => {
     handlePaste, handleDragEnter, handleDragLeave,
     handleDragOver, handleDrop, handleFile, removeAttachment, addFiles,
     copyMessage, scrollToBottom, handleScroll, exportChat,
-    setShowSkillPicker, setShowTools, setShowConsole,
+    setShowSkillPicker, setShowTools,
     showBranchView, setShowBranchView,
     clarification, setClarification,
     showAgentMention, agentMentionQuery, handleAgentMentionSelect,
     liveFileEdit, setLiveFileEdit,
   } = useChatState();
 
+  const buildMode = useGiaStore((s) => s.buildMode);
+  const setBuildMode = useGiaStore((s) => s.setBuildMode);
+  const buildPreviewUrl = useGiaStore((s) => s.buildPreviewUrl);
+  const setBuildPreview = useGiaStore((s) => s.setBuildPreview);
+
+  React.useEffect(() => {
+    if (!buildMode) return;
+    const last = messages[messages.length - 1];
+    if (last && last.role === 'assistant' && !last.error) {
+      const url = extractLocalhostUrl(last.content);
+      if (url && url !== buildPreviewUrl) setBuildPreview(url);
+    }
+  }, [buildMode, messages, buildPreviewUrl, setBuildPreview]);
+
   const [showEngine, setShowEngine] = React.useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
+  const [showPreview, setShowPreview] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
 
@@ -187,7 +208,33 @@ const ChatModule: React.FC = () => {
       </div>
 
       <div ref={scrollRef} onScroll={handleScroll} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop} className="flex-1 overflow-y-auto pt-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight + 120}px` }}>
-        {messages.length === 0 && (
+        {messages.length === 0 && buildMode && (
+          <div className="flex flex-col items-center justify-center h-full gap-5 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
+            <div className="w-20 h-20 rounded-3xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.25), rgba(234,88,12,0.1))', border: '1px solid rgba(249,115,22,0.3)', boxShadow: '0 0 40px rgba(249,115,22,0.25)' }}>
+              <Hammer size={38} style={{ color: '#f97316' }} />
+            </div>
+            <div>
+              <p className="text-lg font-semibold" style={{ color: 'var(--gia-text)' }}>Build Mode</p>
+              <p className="text-xs mt-1 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>Describe the app you want to build. GIA scaffolds it, runs a dev server, and you can preview it live right here.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
+              {[
+                { label: 'To-do app', prompt: 'Build a simple to-do app with add, complete, and delete.' },
+                { label: 'Quiz game', prompt: 'Build a quiz game with multiple-choice questions and a live score.' },
+                { label: 'Landing page', prompt: 'Build a landing page for a fictional product with hero, features, and CTA.' },
+              ].map((ex) => (
+                <button key={ex.label} onClick={() => setInput(ex.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback" style={{ background: 'linear-gradient(135deg, #f973160a, #f9731603)', border: '1px solid #f9731640', backdropFilter: 'blur(8px)' }}>
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#f9731620', border: '1px solid #f9731630' }}><Hammer size={13} style={{ color: '#f97316' }} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{ex.label}</p>
+                    <p className="text-[10px] truncate mt-0.5" style={{ color: '#f97316', opacity: 0.7 }}>{ex.prompt}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.length === 0 && !buildMode && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
               <GiaIcon size={30} animate={false} color="#a855f7" />
@@ -471,6 +518,15 @@ const ChatModule: React.FC = () => {
                     {tool.label}
                   </button>
                 ))}
+                <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
+                <button type="button" onClick={() => {
+                  const next = !buildMode;
+                  setBuildMode(next);
+                  useGiaStore.getState().updateSharedData({ currentMode: next ? 'build' : 'code' });
+                }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: buildMode ? '#f9731620' : 'var(--gia-surface)', border: `1px solid ${buildMode ? '#f9731640' : 'var(--gia-border)'}`, color: buildMode ? '#f97316' : 'var(--gia-muted)', fontWeight: 500 }}>
+                  <Hammer size={11} />
+                  Build
+                </button>
                 </motion.div>
 
               ) : (
@@ -480,13 +536,14 @@ const ChatModule: React.FC = () => {
                   className="flex items-center gap-2"
                 >
                   <div className="flex -space-x-1.5">
+                    {buildMode && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-orange-500/20 text-orange-400"><Hammer size={10} /></div>}
                     {webSearch && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-blue-500/20 text-blue-400"><Globe size={10} /></div>}
                     {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
                     {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
                     {localVision && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-emerald-500/20 text-emerald-400"><Eye size={10} /></div>}
                   </div>
                   <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                    {(!webSearch && !extThinking && !handsOff && !localVision && !voiceEnabled) ? 'No active tools' : 'Tools active'}
+                    {buildMode ? 'Build mode' : (!webSearch && !extThinking && !handsOff && !localVision && !voiceEnabled) ? 'No active tools' : 'Tools active'}
                   </span>
                 </motion.div>
               )}
@@ -494,7 +551,41 @@ const ChatModule: React.FC = () => {
           </div>
         </div>
 
-        <AmbientInput value={input} onChange={handleInputChange} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} />
+        {buildMode && !loading && (
+          <div className="flex flex-col gap-2 mb-2 px-1">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setShowPreview(p => !p)} className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-all font-medium shrink-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                {showPreview ? 'Hide Preview' : 'Preview App'}
+              </button>
+              {buildPreviewUrl && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0" style={{ background: '#22c55e20', color: '#22c55e' }}>● live</span>
+              )}
+              <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{buildPreviewUrl ? 'dev server detected — tap Preview App' : 'or say "preview it" after building'}</span>
+            </div>
+            {showPreview && (
+              <div className="rounded-xl overflow-hidden border" style={{ borderColor: '#f9731640', background: '#000' }}>
+                <div className="flex items-center justify-between px-3 py-1.5" style={{ background: '#f9731615' }}>
+                  <span className="text-[10px] font-medium truncate" style={{ color: '#f97316' }}>Preview · {buildPreviewUrl || 'no server'}</span>
+                  <button type="button" onClick={() => setShowPreview(false)} className="p-0.5 shrink-0"><X size={12} style={{ color: '#f97316' }} /></button>
+                </div>
+                {buildPreviewUrl ? (
+                  <iframe src={buildPreviewUrl} title="App preview" className="w-full block" style={{ height: '240px', border: 'none', background: '#fff' }} />
+                ) : (
+                  <div className="flex items-center justify-center h-[240px] text-[11px] px-4 text-center" style={{ color: 'var(--gia-muted)' }}>No dev server detected yet. Build your app, then say "preview it" and GIA will start it.</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {loading && (
+          <div className="mb-1 px-1">
+            <ThinkingStatus phase={thinkingPhase} toolName={currentTool} />
+          </div>
+        )}
+
+        <AmbientInput value={input} onChange={handleInputChange} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={buildMode ? 'Describe what to build…' : webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} prefix={buildMode ? <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium shrink-0 mr-1"><Hammer size={10} />Build</span> : undefined} />
       </div>
 
       <AnimatePresence>
@@ -525,11 +616,6 @@ const ChatModule: React.FC = () => {
       <TemplateSelector
         isOpen={showTemplateSelector}
         onClose={() => setShowTemplateSelector(false)}
-      />
-      <GiaConsole
-        logs={consoleLogs}
-        isVisible={showConsole}
-        onClose={() => setShowConsole(false)}
       />
     </div>
   );
@@ -569,37 +655,15 @@ const RecentToolExecutions: React.FC<{ loading: boolean }> = ({ loading }) => {
 
   if (done.length === 0 && active.length === 0) return null;
 
+  const activeTray = loading && active.length > 0 ? <ToolTray protocols={active} /> : null;
+  const doneTray = !loading && done.length > 0 ? <ToolTray protocols={done} /> : null;
+
+  if (!activeTray && !doneTray) return null;
+
   return (
-    <div className="space-y-0.5 px-1">
-      {loading && active.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-1.5 px-1">
-            <motion.div
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ background: '#a855f7' }}
-              animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-            />
-            <span className="text-[8px] font-semibold uppercase tracking-widest" style={{ color: '#a855f7' }}>Executing tools</span>
-          </div>
-          {active.map((p, i) => <InlineToolExecution key={p.id} protocol={p} index={i} />)}
-        </div>
-      )}
-      {!loading && done.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-1.5 px-1">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-            >
-              <CheckCircle2 size={9} style={{ color: '#22c55e' }} />
-            </motion.div>
-            <span className="text-[8px] font-semibold uppercase tracking-widest" style={{ color: '#22c55e' }}>Actions completed</span>
-          </div>
-          {done.map((p, i) => <InlineToolExecution key={p.id} protocol={p} index={i} />)}
-        </div>
-      )}
+    <div className="space-y-2 px-1">
+      {activeTray}
+      {doneTray}
     </div>
   );
 };

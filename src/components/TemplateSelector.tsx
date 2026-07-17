@@ -65,7 +65,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ isOpen, onCl
 
   const handleTemplateSelect = (template: RecommendedTemplate) => {
     templateLearning.recordTemplateUse(template.id, userContext || {});
-    useGiaStore.getState().setPendingInput(template.prompt);
+    useGiaStore.getState().setPendingInput(template.prompt, { autoSend: false });
     onClose();
   };
 

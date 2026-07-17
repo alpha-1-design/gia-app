@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { GraduationCap, Clock, WifiOff } from 'lucide-react';
+import { GraduationCap, Clock, WifiOff, Loader2 } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
@@ -67,6 +67,7 @@ const ExamModule: React.FC = () => {
   const [timerActive, setTimerActive] = useState(false);
   const [startTime, setStartTime] = useState(0);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [retryStatus, setRetryStatus] = useState('');
   const [profile, setProfile] = useState<LearningProfile | null>(() => loadAssessmentProfile());
   const submitQuizRef = useRef<() => void>(() => {});
 
@@ -144,7 +145,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
           temperature: 0.4,
           maxTokens: 3000,
         }),
-        { moduleName: 'ExamModule' }
+        { moduleName: 'ExamModule', onRetry: (attempt, err) => setRetryStatus(`Retry ${attempt + 1}/4: ${err}`) }
       );
       if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
         throw new Error('AI returned an invalid response format. Please try again.');
@@ -190,16 +191,17 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
       setStartTime(Date.now());
     } finally {
       setLoading(false);
+      setRetryStatus('');
     }
   }, [subject, topic, examMode, examSystem, difficulty, questionCount]);
 
   useEffect(() => {
-    if (!timerActive || timeLeft <= 0) return;
+    if (!timerActive) return;
     const interval = setInterval(() => {
       setTimeLeft(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [timerActive, timeLeft]);
+  }, [timerActive]);
 
   useEffect(() => {
     if (timerActive && timeLeft <= 0 && startTime > 0) {
@@ -308,7 +310,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
               </div>
             )}
             <span className="text-xs" style={{ color: 'var(--gia-muted)' }}>
-              {currentIndex + 1}/{questions.length}
+              {questions.length > 0 ? `${currentIndex + 1}/${questions.length}` : '...'}
             </span>
           </div>
         )}
@@ -363,27 +365,43 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
 
       {tab === 'quiz' && (
         <>
-          {usedFallback && (
-            <div className="flex items-center gap-2 px-4 py-2 text-xs" style={{
-              background: 'rgba(234,179,8,0.1)',
-              color: '#eab308',
-              borderBottom: '1px solid rgba(234,179,8,0.2)',
-            }}>
-              <WifiOff size={12} />
-              Using cached or sample questions. AI-generated questions may not be available — check your internet connection or AI provider settings.
+          {loading && questions.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
+              <Loader2 size={32} className="animate-spin" style={{ color: '#f59e0b' }} />
+              <div className="text-center space-y-2">
+                <p className="text-sm font-medium" style={{ color: 'var(--gia-text)' }}>Generating questions...</p>
+                {retryStatus ? (
+                  <p className="text-xs" style={{ color: '#f59e0b' }}>{retryStatus}</p>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>This may take a few seconds</p>
+                )}
+              </div>
             </div>
+          ) : (
+            <>
+              {usedFallback && (
+                <div className="flex items-center gap-2 px-4 py-2 text-xs" style={{
+                  background: 'rgba(234,179,8,0.1)',
+                  color: '#eab308',
+                  borderBottom: '1px solid rgba(234,179,8,0.2)',
+                }}>
+                  <WifiOff size={12} />
+                  Using cached or sample questions. AI-generated questions may not be available — check your internet connection or AI provider settings.
+                </div>
+              )}
+              <ExamQuiz
+                questions={questions}
+                currentIndex={currentIndex}
+                onNavigateTo={(idx) => { setCurrentIndex(idx); setShowExplanation(false); }}
+                selectedAnswers={selectedAnswers}
+                handleAnswer={handleAnswer}
+                submittedQuestions={submittedQuestions}
+                handleSubmitAnswer={handleSubmitAnswer}
+                showExplanation={showExplanation}
+                handleSubmitQuiz={handleSubmitQuiz}
+              />
+            </>
           )}
-          <ExamQuiz
-            questions={questions}
-            currentIndex={currentIndex}
-            onNavigateTo={(idx) => { setCurrentIndex(idx); setShowExplanation(false); }}
-            selectedAnswers={selectedAnswers}
-            handleAnswer={handleAnswer}
-            submittedQuestions={submittedQuestions}
-            handleSubmitAnswer={handleSubmitAnswer}
-            showExplanation={showExplanation}
-            handleSubmitQuiz={handleSubmitQuiz}
-          />
         </>
       )}
 

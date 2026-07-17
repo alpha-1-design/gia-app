@@ -1,6 +1,13 @@
 import { Hero } from './components/Hero'
 import { Features } from './components/Features'
+import { OnDevice } from './components/OnDevice'
+import { Modules } from './components/Modules'
+import { HowItWorks } from './components/HowItWorks'
+import { UseCases } from './components/UseCases'
 import { Skills } from './components/Skills'
+import { Comparison } from './components/Comparison'
+import { Docs } from './components/Docs'
+import { FAQ } from './components/FAQ'
 import { Stats } from './components/Stats'
 import { CTA } from './components/CTA'
 import { Footer } from './components/Footer'
@@ -8,7 +15,14 @@ import './landing.css'
 
 const navItems = [
   { label: 'Features', href: '#features' },
+  { label: 'On-Device', href: '#on-device' },
+  { label: 'App', href: '#app' },
+  { label: 'How', href: '#how' },
+  { label: 'Use Cases', href: '#usecases' },
+  { label: 'Compare', href: '#compare' },
+  { label: 'Docs', href: '#docs' },
   { label: 'Skills', href: '#skills' },
+  { label: 'FAQ', href: '#faq' },
   { label: 'Stats', href: '#stats' },
 ]
 
@@ -58,7 +72,14 @@ export default function App() {
 
       <Hero />
       <Features />
+      <OnDevice />
+      <Modules />
+      <HowItWorks />
+      <UseCases />
+      <Comparison />
+      <Docs />
       <Skills />
+      <FAQ />
       <Stats />
       <CTA />
       <Footer />

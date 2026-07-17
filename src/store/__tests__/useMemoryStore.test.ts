@@ -249,5 +249,59 @@ describe('useMemoryStore', () => {
       expect(memories).toHaveLength(1);
       expect(memories[0].value).toBe('longer value here');
     });
+
+    it('merges near-duplicate paraphrased facts within a category', () => {
+      useMemoryStore.setState({
+        memories: [
+          makeEntry({ id: '1', key: 'edu_a', value: 'studies computer science at the university', category: 'fact', confidence: 0.7 }),
+          makeEntry({ id: '2', key: 'edu_b', value: 'is studying computer science at university', category: 'fact', confidence: 0.8 }),
+        ],
+      });
+      useMemoryStore.getState().compactMemories();
+      const { memories } = useMemoryStore.getState();
+      expect(memories).toHaveLength(1);
+    });
+  });
+
+  describe('near-duplicate merging on add', () => {
+    it('merges a paraphrased memory into an existing same-category one', () => {
+      useMemoryStore.getState().addMemory({
+        key: 'edu_a', value: 'studies computer science at the university', category: 'fact', tier: 'semantic', confidence: 0.7,
+      });
+      useMemoryStore.getState().addMemory({
+        key: 'edu_b', value: 'is studying computer science at university', category: 'fact', tier: 'semantic', confidence: 0.8,
+      });
+      const { memories } = useMemoryStore.getState();
+      expect(memories).toHaveLength(1);
+    });
+
+    it('does not merge memories from different categories', () => {
+      useMemoryStore.getState().addMemory({
+        key: 'a', value: 'studies computer science at the university', category: 'fact', tier: 'semantic', confidence: 0.7,
+      });
+      useMemoryStore.getState().addMemory({
+        key: 'b', value: 'is studying computer science at university', category: 'preference', tier: 'semantic', confidence: 0.8,
+      });
+      expect(useMemoryStore.getState().memories).toHaveLength(2);
+    });
+  });
+
+  describe('getCoreContext', () => {
+    it('returns empty string when there are no core memories', () => {
+      expect(useMemoryStore.getState().getCoreContext()).toBe('');
+    });
+
+    it('returns a Knows-you block for high-confidence profile/preference/goal facts', () => {
+      useMemoryStore.getState().addMemories([
+        { key: 'user_name', value: 'Alice', category: 'profile', tier: 'semantic', confidence: 0.95 },
+        { key: 'likes', value: 'hiking', category: 'preference', tier: 'semantic', confidence: 0.9 },
+        { key: 'low', value: 'trivial fact', category: 'fact', tier: 'semantic', confidence: 0.9 },
+      ]);
+      const ctx = useMemoryStore.getState().getCoreContext();
+      expect(ctx).toContain('What I know about you');
+      expect(ctx).toContain('user_name');
+      expect(ctx).toContain('likes');
+      expect(ctx).not.toContain('trivial fact');
+    });
   });
 });

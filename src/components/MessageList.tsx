@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
@@ -11,8 +11,8 @@ import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
 import MessageContextMenu from './MessageContextMenu';
 import { ChatSkeleton } from './feedback';
-import { resolveAgentColor } from '../utils/agentIcons';
-import InlineToolExecution from './InlineToolExecution';
+import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
+import ToolTray from './ToolTray';
 import { useProtocolStore } from '../store/useProtocolStore';
 import type { Message, ThinkingPhase } from '../store/useGiaStore';
 
@@ -91,7 +91,7 @@ const MessageList: React.FC<MessageListProps> = ({
       {messages.map((msg) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
-            {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
+            {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
           </div>
           <div className="flex-1 min-w-0 space-y-1">
             {msg.attachments?.some(a => a.preview) && (
@@ -225,27 +225,31 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {msg.role === 'assistant' && !msg.thinking && !msg.error && (
-                      <div className="mt-1.5 text-[9px] text-right tracking-wider select-none" style={{ color: 'var(--gia-muted-3)' }}>
+                      <div className="mt-1.5 text-[9px] text-right tracking-wider select-none flex items-center justify-end gap-1.5" style={{ color: 'var(--gia-muted-3)' }}>
                         <span className="opacity-40">— </span>
                         <span style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}66` : '#a855f766' }}>✦</span>
                         <span className="font-medium ml-0.5" style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}44` : '#a855f744' }}>{msg.agentId ? msg.agentName : 'GIA'}</span>
+                        {msg.source === 'on-device' && (
+                          <span className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
+                            <Lock size={9} /> on-device
+                          </span>
+                        )}
+                        {msg.source === 'cloud' && (
+                          <span className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>
+                            <Cloud size={9} /> cloud
+                          </span>
+                        )}
                       </div>
                     )}
                     {msg.artifacts && msg.artifacts.length > 0 && (
                       <ArtifactsPanel artifacts={msg.artifacts} />
                     )}
                     {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id).length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider px-0.5" style={{ color: 'var(--gia-muted)' }}>
-                          Tool calls
-                        </p>
-                        {consoleProtocols
+                      <ToolTray
+                        protocols={consoleProtocols
                           .filter(p => p.messageId === msg.id)
-                          .sort((a, b) => a.createdAt - b.createdAt)
-                          .map((p, pi) => (
-                            <InlineToolExecution key={p.id} protocol={p} index={pi} />
-                          ))}
-                      </div>
+                          .sort((a, b) => a.createdAt - b.createdAt)}
+                      />
                     )}
                     {(liveThoughts[msg.id] || msg.thoughts) && (
                       <div className="rounded-xl overflow-hidden transition-all duration-300" style={{

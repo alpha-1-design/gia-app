@@ -12,6 +12,7 @@ import { useAgentStore, type CustomAgent, type AgentMessage, type AgentSource, s
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
+import { resolveAgentIcon } from '../utils/agentIcons';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import OrbAvatar from '../components/OrbAvatar';
 
@@ -321,7 +322,7 @@ const AgentListView: React.FC<{
               >
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(agent.icon)}15` }}>
-                    <OrbAvatar color={getIconColor(agent.icon)} size={32} animate={false} />
+                    <OrbAvatar color={getIconColor(agent.icon)} size={34} animate={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -534,7 +535,7 @@ ${toolSection}
           <ChevronLeft size={16} />
         </button>
         <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(agent.icon)}15` }}>
-          <OrbAvatar color={getIconColor(agent.icon)} size={24} animate={false} />
+          <OrbAvatar color={getIconColor(agent.icon)} size={26} animate={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</h2>
@@ -571,7 +572,7 @@ ${toolSection}
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${getIconColor(agent.icon)}08` }}>
-              <OrbAvatar color={getIconColor(agent.icon)} size={44} animate glow={false} />
+              <OrbAvatar color={getIconColor(agent.icon)} size={46} animate glow={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
             </div>
             <p className="text-xs font-medium" style={{ color: 'var(--gia-muted)' }}>Ask {agent.name} anything</p>
             <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
@@ -720,9 +721,12 @@ const CreateAgentModal: React.FC<{
             const progressInterval = setInterval(() => {
               setUploadProgress(prev => Math.min(prev + 2, endPct - 5));
             }, 100);
-            await useAgentStore.getState().addFileToAgent(editAgent.id, file);
-            clearInterval(progressInterval);
-            setUploadProgress(endPct);
+            try {
+              await useAgentStore.getState().addFileToAgent(editAgent.id, file);
+              setUploadProgress(endPct);
+            } finally {
+              clearInterval(progressInterval);
+            }
           } catch (e) { console.error('Upload failed:', file.name, e); }
         }
         setUploadProgress(100);
@@ -745,9 +749,12 @@ const CreateAgentModal: React.FC<{
             const progressInterval = setInterval(() => {
               setUploadProgress(prev => Math.min(prev + 2, endPct - 5));
             }, 100);
-            await useAgentStore.getState().addFileToAgent(agent.id, file);
-            clearInterval(progressInterval);
-            setUploadProgress(endPct);
+            try {
+              await useAgentStore.getState().addFileToAgent(agent.id, file);
+              setUploadProgress(endPct);
+            } finally {
+              clearInterval(progressInterval);
+            }
           } catch (e) { console.error('Upload failed:', file.name, e); }
         }
         setUploadProgress(100);
@@ -792,7 +799,7 @@ const CreateAgentModal: React.FC<{
             <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Avatar</label>
             <div className="flex items-center gap-3 mt-2">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(icon)}15` }}>
-                <OrbAvatar color={getIconColor(icon)} size={32} animate glow={false} />
+                <OrbAvatar color={getIconColor(icon)} size={34} animate glow={false} icon={React.createElement(resolveAgentIcon(icon))} />
               </div>
               <div className="flex-1 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                 {AGENT_ICONS.map(a => {

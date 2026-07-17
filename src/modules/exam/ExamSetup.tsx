@@ -88,7 +88,8 @@ overallScore is 0-100. Be specific with recommendations. Pure JSON, no markdown.
         localStorage.setItem('gia-learning-profile', JSON.stringify(profile));
 
         // Save assessment file + analysis to localStorage for later reference
-        const existing = JSON.parse(localStorage.getItem(ASSESSMENT_FILE_KEY) || '[]');
+        let existing: unknown[] = [];
+        try { existing = JSON.parse(localStorage.getItem(ASSESSMENT_FILE_KEY) || '[]'); } catch { existing = []; }
         existing.push({
           fileName: assessFile.name,
           content: assessFile.content,

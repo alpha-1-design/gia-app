@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Send } from 'lucide-react';
 import { useProviderStore } from '../store/useProviderStore';
 import { providerMonitor } from '../services/ProviderMonitor';
-import { resolveAgentColor } from '../utils/agentIcons';
+import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
 import { getMentionableAgents } from '../utils/mentionableAgents';
 import OrbAvatar from './OrbAvatar';
 
@@ -67,7 +67,7 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
                   const color = resolveAgentColor(pickedAgent.icon);
                   return (
                     <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}20`, border: `1px solid ${color}30` }}>
-                      <OrbAvatar color={color} size={16} animate={false} glow={false} />
+                      <OrbAvatar color={color} size={16} animate={false} glow={false} icon={React.createElement(resolveAgentIcon(pickedAgent.icon))} />
                     </div>
                   );
                 })()}
@@ -115,7 +115,7 @@ const AgentMentionPicker: React.FC<AgentMentionPickerProps> = ({ query, onSelect
                       className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
                       style={{ background: `${color}20`, border: `1px solid ${color}30` }}
                     >
-                      <OrbAvatar color={color} size={18} animate={false} glow={false} />
+                      <OrbAvatar color={color} size={20} animate={false} glow={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">

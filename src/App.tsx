@@ -275,18 +275,6 @@ const App: React.FC = () => {
         }
       }
 
-      // Clipboard pasting detection — handle pasted gia:// links
-      const handlePaste = (e: ClipboardEvent) => {
-        const text = e.clipboardData?.getData('text');
-        if (text && text.startsWith('gia://')) {
-          useGiaStore.getState().setPendingAction({
-            type: 'deep-link',
-            data: { url: text.replace('gia://', ''), raw: text },
-          });
-          useGiaStore.getState().addNotification('🔗 Pasted GIA link detected');
-        }
-      };
-      document.addEventListener('paste', handlePaste);
       return () => document.removeEventListener('paste', handlePaste);
     };
     init();
@@ -294,11 +282,24 @@ const App: React.FC = () => {
     // Show Setup Wizard if no provider is configured on first launch
     const { providers } = useProviderStore.getState();
     const hasAnyProvider = Object.values(providers).some(p => (p.enabled && p.apiKey) || (!p.enabled && p.apiKey && p.apiKey.length > 0));
-    // Also check a localStorage flag as backup — the wizard stores 'gia-wizard-completed'
     const wizardCompleted = localStorage.getItem('gia-wizard-completed') === 'true';
     if (!hasAnyProvider && !wizardCompleted) {
       setShowSetup(true);
     }
+
+    // Clipboard paste detection (synchronous — cleaned up properly)
+    const handlePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text');
+      if (text && text.startsWith('gia://')) {
+        useGiaStore.getState().setPendingAction({
+          type: 'deep-link',
+          data: { url: text.replace('gia://', ''), raw: text },
+        });
+        useGiaStore.getState().addNotification('🔗 Pasted GIA link detected');
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
   }, []);
 
   useKeyboardShortcuts([
@@ -509,12 +510,14 @@ const App: React.FC = () => {
     }
 
     // Native Circle to Search overlay result handler
+    let overlayHandle: Promise<{ remove: () => void }> | undefined;
+    let wakeHandle: Promise<{ remove: () => void }> | undefined;
     (async () => {
       try {
         const { Capacitor } = await import('@capacitor/core');
         if (!Capacitor.isNativePlatform()) return;
         const { GIAOverlay } = await import('./services/GIAOverlay');
-        await GIAOverlay.addListener('overlayResult', (result) => {
+        overlayHandle = GIAOverlay.addListener('overlayResult', (result) => {
           if (result.cancelled) return;
           if (result.dataUrl) {
             setPendingCircleImage(result.dataUrl);
@@ -536,7 +539,7 @@ const App: React.FC = () => {
         const { Capacitor } = await import('@capacitor/core');
         if (!Capacitor.isNativePlatform()) return;
         const { GIAWakeWord } = await import('./services/GIAWakeWord');
-        await GIAWakeWord.addListener('wakeWordDetected', async () => {
+        wakeHandle = GIAWakeWord.addListener('wakeWordDetected', async () => {
           try {
             const { GIAOverlay } = await import('./services/GIAOverlay');
             await GIAOverlay.startOverlay();
@@ -597,6 +600,8 @@ const App: React.FC = () => {
       window.removeEventListener('keydown', trackActivity);
       window.removeEventListener('touchstart', trackActivity);
       appStateHandle.then(h => h.remove());
+      if (overlayHandle) overlayHandle.then(h => h.remove()).catch(() => {});
+      if (wakeHandle) wakeHandle.then(h => h.remove()).catch(() => {});
       MCPManager.shutdown(); SystemService.stopMonitoring();
       proactiveEngine.stop();
       stopLongRunning();

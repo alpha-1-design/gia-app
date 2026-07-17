@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, Award, AlertTriangle, Lightbulb, FileText, X, Search, Trash2 } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import type { LearningProfile } from './types';
 import { ASSESSMENT_FILE_KEY } from './types';
 
@@ -42,6 +43,7 @@ const ExamReference: React.FC<ExamReferenceProps> = ({ profile, onProfileUpdate,
   const [showProfile, setShowProfile] = useState(true);
   const [assessments, setAssessments] = useState<StoredAssessment[]>(() => loadAssessments());
   const [viewing, setViewing] = useState<StoredAssessment | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const filteredHistory = history.filter(r =>
     !search || r.subject.toLowerCase().includes(search.toLowerCase()) || r.examSystem.toLowerCase().includes(search.toLowerCase())
@@ -271,7 +273,7 @@ const ExamReference: React.FC<ExamReferenceProps> = ({ profile, onProfileUpdate,
               )}
             </div>
             {history.length > 0 && (
-              <button onClick={() => { if (confirm('Clear all exam history?')) clearExamHistory(); }}
+              <button onClick={() => setConfirmClear(true)}
                 className="text-[10px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
                 style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171' }}>
                 <Trash2 size={10} /> Clear History
@@ -280,6 +282,16 @@ const ExamReference: React.FC<ExamReferenceProps> = ({ profile, onProfileUpdate,
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="Clear All Exam History?"
+        message="This will permanently delete all exam history. This cannot be undone."
+        confirmLabel="Clear All"
+        danger
+        onConfirm={() => { clearExamHistory(); setConfirmClear(false); }}
+        onCancel={() => setConfirmClear(false)}
+      />
     </div>
   );
 };

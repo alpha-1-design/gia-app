@@ -260,9 +260,14 @@ class LocalLLMService {
       fullText = lastMsg?.content || '';
 
       if (options.onToken) {
-        // The pipeline generates all at once in ONNX (no streaming),
-        // but we deliver the full text as a single "token"
-        options.onToken(fullText);
+        // ONNX generates all at once — deliver in chunks for pseudo-streaming UX
+        const chunkSize = 8;
+        for (let i = 0; i < fullText.length; i += chunkSize) {
+          if (options.signal?.aborted) break;
+          options.onToken(fullText.slice(0, i + chunkSize));
+          await new Promise(r => setTimeout(r, 16));
+        }
+        if (!options.signal?.aborted) options.onToken(fullText);
       }
 
       totalTokens = this._estimateTokens(fullText);

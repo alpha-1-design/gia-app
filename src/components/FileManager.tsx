@@ -6,6 +6,7 @@ import {
   Camera, Image as ImageIcon, Loader2,
 } from 'lucide-react';
 import { useFileStore, type StoredFile } from '../store/useFileStore';
+import ConfirmDialog from './ConfirmDialog';
 
 interface FileManagerProps {
   onClose: () => void;
@@ -117,6 +118,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
   const [tagInput, setTagInput] = useState('');
   const [previewFile, setPreviewFile] = useState<StoredFile | null>(null);
   const [viewSource, setViewSource] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -158,8 +160,8 @@ const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
   }, [addFile]);
 
   const handleDelete = useCallback((id: string) => {
-    if (confirm('Delete this file permanently?')) deleteFile(id);
-  }, [deleteFile]);
+    setConfirmDeleteId(id);
+  }, []);
 
   const handleTag = useCallback((id: string) => {
     setTaggingFile(id);
@@ -412,6 +414,16 @@ const FileManager: React.FC<FileManagerProps> = ({ onClose }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Delete File?"
+        message="This will permanently delete this file. This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => { if (confirmDeleteId) deleteFile(confirmDeleteId); setConfirmDeleteId(null); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </motion.div>
   );
 };

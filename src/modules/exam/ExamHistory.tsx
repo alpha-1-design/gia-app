@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronRight, Trash2 } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const ExamHistory: React.FC = () => {
   const [show, setShow] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const history = useGiaStore((s) => s.examHistory);
   const clearExamHistory = useGiaStore((s) => s.clearExamHistory);
 
@@ -44,12 +46,22 @@ const ExamHistory: React.FC = () => {
       )}
 
       {show && history.length > 0 && (
-        <button onClick={() => { if (confirm('Clear all exam history?')) clearExamHistory(); }}
+        <button onClick={() => setConfirmClear(true)}
           className="text-[10px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171' }}>
           <Trash2 size={10} /> Clear History
         </button>
       )}
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="Clear All Exam History?"
+        message="This will permanently delete all exam history. This cannot be undone."
+        confirmLabel="Clear All"
+        danger
+        onConfirm={() => { clearExamHistory(); setConfirmClear(false); }}
+        onCancel={() => setConfirmClear(false)}
+      />
     </div>
   );
 };

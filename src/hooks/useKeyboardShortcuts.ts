@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface Shortcut {
   key: string;
@@ -10,9 +10,12 @@ interface Shortcut {
 }
 
 export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
+  const shortcutsRef = useRef(shortcuts);
+  shortcutsRef.current = shortcuts;
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      for (const s of shortcuts) {
+      for (const s of shortcutsRef.current) {
         const wantsMeta = s.meta || s.ctrl;
         const hasMeta = s.meta ? (e.metaKey || e.ctrlKey) : s.ctrl ? e.ctrlKey : true;
         const needsNoMeta = !wantsMeta && (e.metaKey || e.ctrlKey);
@@ -36,5 +39,5 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
 
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [shortcuts]);
+  }, []);
 }

@@ -1,11 +1,15 @@
 import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
+import { providerRegistry } from '../ProviderRegistry';
+import { corsProxy } from '../CorsProxy';
 import { useGiaStore } from '../../store/useGiaStore';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
 
 export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { providers } = useProviderStore.getState();
   const config = providers.gemini;
+
+  const baseUrl = providerRegistry.getBaseUrl('gemini') || 'https://generativelanguage.googleapis.com/v1beta';
 
   const contents: { role: string; parts: { text: string }[] }[] = [];
   if (req.history) {
@@ -38,13 +42,13 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
   if (req.onStream) {
     if (req.signal?.aborted) return { text: '', provider: 'gemini', model: config.model };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?alt=sse`;
+    const url = `${baseUrl}/models/${config.model}:streamGenerateContent?alt=sse`;
     const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey };
 
     let finishReason = '';
     let streamTokenUsage: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | undefined;
 
-    return new Promise<BrainResponse>((resolve, reject) => {
+    const runStream = (streamUrl: string) => new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       let fullText = '';
       let lastProcessed = 0;
@@ -61,7 +65,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
         functionCallsAccum.length = 0;
       };
 
-      xhr.open('POST', url);
+      xhr.open('POST', streamUrl);
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
       xhr.timeout = 120000;
@@ -144,7 +148,11 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
         }
       };
 
-      xhr.onerror = () => reject(new Error('Gemini network error'));
+      xhr.onerror = () => {
+        const err = new Error('Gemini network error') as Error & { retryable?: boolean };
+        err.retryable = fullText.length === 0 && lastProcessed === 0;
+        reject(err);
+      };
       xhr.ontimeout = () => reject(new Error('Gemini timed out after 120s'));
       xhr.onabort = () => {
         const e = new Error('Request aborted');
@@ -175,17 +183,45 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
 
       xhr.send(JSON.stringify(body));
     });
+
+    try {
+      return await runStream(url);
+    } catch (e) {
+      const err = e as Error & { retryable?: boolean };
+      if (err.name === 'AbortError' || !err.retryable) throw err;
+      logger.warn('[gemini] Direct streaming request failed, retrying via CORS proxy:', err.message);
+      return await runStream(corsProxy.proxyUrl(url));
+    }
   }
 
-  const res = await ctx.retryFetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
-    body: JSON.stringify(body),
-    signal: req.signal,
-  }).catch((e: { name?: string }) => {
-    if (e.name === 'AbortError') throw e;
-    throw new Error(ctx.friendlyError('Gemini', e));
-  });
+  const doRequest = async (url: string): Promise<Response> => {
+    try {
+      return await ctx.retryFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
+        body: JSON.stringify(body),
+        signal: req.signal,
+      });
+    } catch (e) {
+      if ((e as { name?: string }).name === 'AbortError') throw e;
+      throw new Error(ctx.friendlyError('Gemini', e));
+    }
+  };
+
+  let res: Response;
+  let usedProxy = false;
+  try {
+    res = await doRequest(`${baseUrl}/models/${config.model}:generateContent`);
+  } catch (e) {
+    // CORS / network errors throw instead of returning a non-ok response, so
+    // retry through the CORS proxy here (mirrors the OpenAI-compat path).
+    logger.warn('[gemini] Direct fetch failed, trying CORS proxy:', (e as Error).message);
+    res = await doRequest(corsProxy.proxyUrl(`${baseUrl}/models/${config.model}:generateContent`));
+    usedProxy = true;
+  }
+  if (!res.ok && !usedProxy) {
+    res = await doRequest(corsProxy.proxyUrl(`${baseUrl}/models/${config.model}:generateContent`));
+  }
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     throw new Error(ctx.friendlyError('Gemini', e?.error?.message || `Gemini error ${res.status}`));

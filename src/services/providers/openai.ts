@@ -235,15 +235,31 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     }
   }
 
-  const attemptFetch = async (url: string) => ctx.retryFetch(url, {
-    method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
-  }).catch((e: { name?: string }) => {
-    if (e.name === 'AbortError') throw e;
-    throw new Error(ctx.friendlyError(label, e));
-  });
+  const attemptFetch = async (url: string): Promise<Response> => {
+    try {
+      return await ctx.retryFetch(url, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: req.signal,
+      });
+    } catch (e) {
+      if ((e as { name?: string }).name === 'AbortError') throw e;
+      throw new Error(ctx.friendlyError(label, e));
+    }
+  };
 
-  let res = await attemptFetch(`${baseUrl}/chat/completions`);
-  if (!res.ok) {
+  let res: Response;
+  let usedProxy = false;
+  try {
+    res = await attemptFetch(`${baseUrl}/chat/completions`);
+  } catch (e) {
+    // A CORS / network error makes fetch throw rather than return a non-ok
+    // response, so it never reaches the proxy retry below. Retry through the
+    // CORS proxy here — the streaming path already does this; non-streaming
+    // must too or forceJson/collaborative/image-gen never reach the provider.
+    logger.warn('[openai] Direct fetch failed, trying CORS proxy:', (e as Error).message);
+    res = await attemptFetch(corsProxy.proxyUrl(`${baseUrl}/chat/completions`));
+    usedProxy = true;
+  }
+  if (!res.ok && !usedProxy) {
     const errMsg = `${label} error ${res.status}: ${await res.text().catch(() => '')}`;
     logger.warn('[openai] Direct fetch failed, trying CORS proxy:', errMsg);
     const proxiedUrl = corsProxy.proxyUrl(`${baseUrl}/chat/completions`);

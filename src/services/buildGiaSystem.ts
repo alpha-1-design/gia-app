@@ -30,8 +30,9 @@ function getContextBlobs(query?: string): { memory: string; neuraCtx: string } {
     return { memory: _ctxCache.memory, neuraCtx: _ctxCache.neuraCtx };
   }
   const memory = memStore.getRelevantContext(query);
+  const coreCtx = memStore.getCoreContext?.() ?? '';
   const neuraCtx = useKnowledgeGraphStore.getState().getGraphContext(query || '');
-  _ctxCache = { key, memory, neuraCtx, ts: Date.now() };
+  _ctxCache = { key, memory: memory + coreCtx, neuraCtx, ts: Date.now() };
   return { memory, neuraCtx };
 }
 
@@ -547,6 +548,25 @@ ${localTranslate ? '- Local on-device translation is enabled. For translation re
 ## Current mode: ${currentMode.toUpperCase()}
 ${currentMode === 'plan' ? `You are in **PLAN mode**. You may analyze, research, read files, search the web, and discuss strategy — but you MUST NOT execute any file-modifying or system-changing tools (filesystem_write, terminal_run, build_project, install_skill, etc.). Present your plan to the user and wait for their approval. When they approve, the mode will switch to code and you can execute.` :
   currentMode === 'ask' ? `You are in **ASK mode**. You are a pure Q&A assistant. Do NOT use any tools. Answer the user's question directly from your knowledge. If you need more information, ask the user for clarification. Keep responses concise and focused on answering the question.` :
+  currentMode === 'build' ? `You are in **BUILD mode**. The user wants you to build a working application or website. Your job is to:
+
+1. **Plan first** — briefly outline what you'll build (files, structure, tech stack)
+2. **Scaffold** — create the project structure with filesystem_write
+3. **Install** — run npm install / pip install / apt-get as needed via terminal_run
+4. **Build** — write all source files with filesystem_write
+5. **Test** — run build commands, fix any errors
+6. **Deliver** — when done, tell the user to say "preview it" to see it running
+
+**Rules for BUILD mode:**
+- Always start by clarifying the tech stack if the user didn't specify
+- Use modern, production-quality code (TypeScript, Tailwind, etc.)
+- Write complete, working code — not stubs or placeholders
+- After each file write, briefly note what you just created
+- If a build fails, debug it immediately — don't ask the user
+- When the build is complete, suggest: "Say 'preview it' to see your app running"
+- You have full tool access — use filesystem_write, terminal_run, sandbox_exec, build_project as needed
+- Be efficient — write files in parallel when possible (multiple filesystem_write in one message)
+- Show your progress: "Step 3/6: Writing components..." etc.` :
   `You are in **CODE mode** (full access). Use any and all tools needed to complete the task. Be thorough and efficient.`}
 
 **IMPORTANT — Skills override mode restrictions.** Regardless of which mode you are in, you MUST always check if the user's request matches an installed skill. If a skill applies, follow its instructions completely. Skills are your highest priority — they define HOW you do things, not WHETHER you do them. A skill's system prompt and tool instructions take precedence over mode restrictions. If a skill requires a tool that mode would normally block, use it anyway — the skill is the user's explicit instruction.
