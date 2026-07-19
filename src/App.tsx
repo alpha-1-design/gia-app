@@ -2,6 +2,7 @@ import React, { useEffect, lazy, Suspense, useState, useRef, useCallback } from 
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target, Bot, ClipboardIcon } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
+import { setStorageErrorHandler } from './store/idb-storage';
 import { useShallow } from 'zustand/react/shallow';
 import { useMemoryStore } from './store/useMemoryStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -48,6 +49,23 @@ import { useAutomationBridge } from './hooks/useAutomationBridge';
 import { updateService } from './services/UpdateService';
 import type { UpdateInfo } from './services/UpdateService';
 import './styles/globals.css';
+
+// Surface persistence failures (e.g. storage quota exceeded) to the user
+// instead of failing silently and losing data. Throttled so a persistent
+// failure can't flood the notification stack.
+let lastStorageWarn = 0;
+if (typeof window !== 'undefined') {
+  setStorageErrorHandler(({ key, error }) => {
+    logger.error('[storage] persistence failure:', key, error);
+    const now = Date.now();
+    if (now - lastStorageWarn > 10000) {
+      lastStorageWarn = now;
+      useGiaStore.getState().addNotification(
+        '⚠️ Storage unavailable — recent changes may not be saved. Free up device space and reload.',
+      );
+    }
+  });
+}
 
 const AnalystModule = lazy(() => import('./modules/AnalystModule'));
 const ExamModule = lazy(() => import('./modules/ExamModule'));

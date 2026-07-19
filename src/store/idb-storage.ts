@@ -34,19 +34,47 @@ function getDB(): Promise<IDBDatabase> {
 const pendingWrites = new Map<string, { value: string; timer: ReturnType<typeof setTimeout> }>();
 const DEBOUNCE_MS = 300;
 
+/**
+ * Optional handler the app registers to learn about persistence failures
+ * (e.g. storage quota exceeded). Without it, a failed write would be lost
+ * silently — so we surface it instead of swallowing.
+ */
+type StorageErrorHandler = (info: { key: string; error: unknown }) => void;
+let writeErrorHandler: StorageErrorHandler | null = null;
+export function setStorageErrorHandler(handler: StorageErrorHandler | null): void {
+  writeErrorHandler = handler;
+}
+
 async function writeNow(name: string, value: string): Promise<void> {
+  let db: IDBDatabase;
   try {
-    const db = await getDB();
-    return new Promise<void>((resolve, reject) => {
+    db = await getDB();
+  } catch (e) {
+    logger.error('[idb-storage] Cannot open database — write dropped:', e);
+    writeErrorHandler?.({ key: name, error: e });
+    return;
+  }
+
+  // Resolve with whether the transaction committed. A failed commit (e.g.
+  // QuotaExceededError) fires onerror/onabort, which we treat as a failure.
+  const attempt = (): Promise<boolean> =>
+    new Promise<boolean>((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       store.put(value, name);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
     });
-  } catch (e) {
-    logger.error('[idb-storage] Failed to set item in IndexedDB:', e);
-  }
+
+  // Best-effort: try once, and on failure retry a single time (covers
+  // transient lock/quota races). If both fail, surface it so the user knows
+  // data may not have been saved rather than failing silently.
+  if (await attempt()) return;
+  logger.warn('[idb-storage] First write attempt failed, retrying once:', name);
+  if (await attempt()) return;
+  logger.error('[idb-storage] Persisted write failed after retry — data may be lost:', name);
+  writeErrorHandler?.({ key: name, error: new Error('IndexedDB write did not persist') });
 }
 
 /** Flush all pending writes immediately — call on page unload */
@@ -60,12 +88,15 @@ export async function flushStorage(): Promise<void> {
 }
 
 if (typeof window !== 'undefined') {
-  const onLeave = () => { flushStorage(); };
+  const onLeave = () => { void flushStorage(); };
   window.addEventListener('beforeunload', onLeave);
   window.addEventListener('pagehide', onLeave);
   window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushStorage();
+    if (document.visibilityState === 'hidden') void flushStorage();
   });
+  // Browsers that support the Page Lifecycle 'freeze' event (Chrome/Android)
+  // fire this when the page is being cached/backgrounded — flush early.
+  window.addEventListener('freeze', onLeave);
 
   // Android WebView: beforeunload/pagehide are not reliable when the app is
   // backgrounded or the process is reclaimed by the OS. Hook the native
@@ -73,7 +104,7 @@ if (typeof window !== 'undefined') {
   // getting killed in the background (common on low-RAM devices).
   import('@capacitor/app').then(({ App }) => {
     App.addListener('appStateChange', ({ isActive }) => {
-      if (!isActive) flushStorage();
+      if (!isActive) void flushStorage();
     });
   }).catch(() => {
     // Not running under Capacitor (e.g. plain web/test env) — web listeners above are enough
@@ -99,16 +130,11 @@ export const idbStorage = {
   setItem: async (name: string, value: string): Promise<void> => {
     const existing = pendingWrites.get(name);
     if (existing) clearTimeout(existing.timer);
-    return new Promise((resolve) => {
-      const timer = setTimeout(async () => {
-        pendingWrites.delete(name);
-        await writeNow(name, value);
-        resolve();
-      }, DEBOUNCE_MS);
-      pendingWrites.set(name, { value, timer });
-      // Resolve immediately — caller doesn't wait for debounced write
-      resolve();
-    });
+    const timer = setTimeout(() => {
+      pendingWrites.delete(name);
+      void writeNow(name, value);
+    }, DEBOUNCE_MS);
+    pendingWrites.set(name, { value, timer });
   },
   removeItem: async (name: string): Promise<void> => {
     try {
