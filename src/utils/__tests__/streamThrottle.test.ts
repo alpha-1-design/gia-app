@@ -3,23 +3,22 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // Control rAF + MessageChannel so we can drive the throttle deterministically.
 let rafMap = new Map<number, (t: number) => void>();
 let rafId = 0;
-let lastChannel: { port1: { onmessage: ((e: unknown) => void) | null; close(): void } } | null = null;
+let lastChannel: { port1: { onmessage: ((e: unknown) => void) | null; close(): void }; port2: { postMessage: () => void; close(): void } } | null = null;
 
 class FakeMessagePort {
   onmessage: ((e: unknown) => void) | null = null;
   close() {}
 }
-class FakeMessageChannel {
-  port1 = new FakeMessagePort();
-  port2 = {
+function FakeMessageChannel(): { port1: FakeMessagePort; port2: { postMessage: () => void; close(): void } } {
+  const port1 = new FakeMessagePort();
+  const port2 = {
     postMessage: () => {
       queueMicrotask(() => lastChannel?.port1.onmessage?.({ data: 1 }));
     },
     close() {},
   };
-  constructor() {
-    lastChannel = this;
-  }
+  lastChannel = { port1, port2 };
+  return { port1, port2 };
 }
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));

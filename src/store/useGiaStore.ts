@@ -255,6 +255,7 @@ interface GiaState {
   showTerminal: boolean;
   sharedData: Record<string, unknown>;
   sessions: ChatSession[];
+  archivedSessions: ChatSession[];
   activeSessionId: string | null;
   scheduledTasks: ScheduledTask[];
   userProfile: UserProfile;
@@ -373,6 +374,7 @@ interface GiaState {
   addExamResult: (r: ExamResult) => void;
   clearExamHistory: () => void;
   hibernateSessions: () => void;
+  restoreSession: (id: string) => void;
   setSkill: (id: string | null) => void;
   addSkill: (skill: Skill) => void;
   removeSkill: (id: string) => void;
@@ -417,6 +419,7 @@ export const useGiaStore = create<GiaState>()(
       showTerminal: false,
       sharedData: {},
       sessions: [],
+      archivedSessions: [],
       activeSessionId: null,
       scheduledTasks: [],
       userProfile: { name: '', bio: '', goals: '', profilePictureUri: '' },
@@ -855,15 +858,25 @@ export const useGiaStore = create<GiaState>()(
         if (!active) return;
         const inactive = sessions.filter(s => s.id !== active.id && s.messages.length > 0);
         if (inactive.length <= 5) return;
-        const toArchive = inactive.slice(0, inactive.length - 5).map(s => ({
-          ...s, messages: s.messages.slice(0, 1).map(m => ({ ...m.message, content: `Archived — ${m.message.content.slice(0, 100)}` } as Message))
-        }));
+        // Archive older sessions to keep the live working set small — but
+        // NEVER destroy their content. Full messages are preserved in
+        // archivedSessions so the user can restore them later from the
+        // chat history panel. (Previously this truncated history to a
+        // 100-char stub, irreversibly losing every older conversation.)
+        const toArchive = inactive.slice(0, inactive.length - 5);
+        const archiveIds = new Set(toArchive.map(s => s.id));
         set((s) => ({
-          sessions: s.sessions.map(sess =>
-            toArchive.find(a => a.id === sess.id)
-              ? { ...sess, messages: sess.messages.slice(0, 1).map(m => ({ message: { ...m.message, content: `Archived — ${m.message.content.slice(0, 100)}` }, children: m.children })) }
-              : sess
-          ),
+          sessions: s.sessions.filter(sess => !archiveIds.has(sess.id)),
+          archivedSessions: [...toArchive, ...s.archivedSessions],
+        }));
+      },
+      restoreSession: (id) => {
+        const sess = get().archivedSessions.find(s => s.id === id);
+        if (!sess) return;
+        set((s) => ({
+          archivedSessions: s.archivedSessions.filter(x => x.id !== id),
+          sessions: [sess, ...s.sessions],
+          activeSessionId: id,
         }));
       },
       setSkill: (id) => set({ activeSkillId: id }),
@@ -921,6 +934,7 @@ export const useGiaStore = create<GiaState>()(
       },
       partialize: (s) => ({
         sessions: s.sessions,
+        archivedSessions: s.archivedSessions,
         activeSessionId: s.activeSessionId,
         scheduledTasks: s.scheduledTasks,
         userProfile: s.userProfile,

@@ -4,7 +4,7 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
-  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer,
+  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -82,6 +82,8 @@ const ChatModule: React.FC = () => {
   const setBuildMode = useGiaStore((s) => s.setBuildMode);
   const buildPreviewUrl = useGiaStore((s) => s.buildPreviewUrl);
   const setBuildPreview = useGiaStore((s) => s.setBuildPreview);
+  const archivedSessions = useGiaStore((s) => s.archivedSessions);
+  const restoreSession = useGiaStore((s) => s.restoreSession);
 
   React.useEffect(() => {
     if (!buildMode) return;
@@ -147,6 +149,29 @@ const ChatModule: React.FC = () => {
             return s.messages.some(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase()));
           }).length === 0 && (
             <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
+          )}
+
+          {archivedSessions.length > 0 && (
+            <div className="pt-2 mt-2" style={{ borderTop: '1px solid var(--gia-border)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide px-1 pb-2 flex items-center gap-1.5" style={{ color: 'var(--gia-muted-2)' }}>
+                <Archive size={11} /> Archived ({archivedSessions.length})
+              </p>
+              {archivedSessions.filter(s => !historySearch || s.title?.toLowerCase().includes(historySearch.toLowerCase())).map((sess) => (
+                <div key={sess.id} className="gia-card p-3 flex items-center gap-3" style={{ opacity: 0.85 }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--gia-text)' }}>{sess.title}</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{sess.messages.length} msgs · {new Date(sess.updatedAt).toLocaleDateString()}</p>
+                  </div>
+                  <button
+                    onClick={() => restoreSession(sess.id)}
+                    className="p-1.5 rounded-lg transition-colors text-zinc-600 hover:text-emerald-400"
+                    title="Restore this archived chat"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
