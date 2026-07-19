@@ -123,7 +123,7 @@ const ModuleView: React.FC = () => {
         transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
         className="h-full w-full"
       >
-        {components[currentModule]}
+        {components[currentModule] ?? components.chat}
       </motion.div>
     </AnimatePresence>
   );
@@ -717,7 +717,7 @@ const App: React.FC = () => {
           {/* Module selector pill */}
           <div ref={moduleRef} className="relative">
             {(() => {
-              const cur = MODULES.find(m => m.id === currentModule)!;
+              const cur = MODULES.find(m => m.id === currentModule) ?? MODULES[0];
               return (
                 <>
                   <button

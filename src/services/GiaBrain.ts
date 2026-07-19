@@ -158,7 +158,11 @@ class GiaBrain {
     let carryOverText = ''; // text already streamed to the user across failed attempts this turn
 
     while (iterations < maxIterations) {
-      if (req.signal?.aborted) throw new Error('Request aborted');
+      if (req.signal?.aborted) {
+        const e = new Error('Request aborted');
+        e.name = 'AbortError';
+        throw e;
+      }
       iterations++;
       loopReq.prompt = currentPrompt;
       loopReq.history = history;
@@ -248,8 +252,9 @@ class GiaBrain {
             );
             req.onThought?.(`Rate limit on ${effectiveProvider} — retrying in ${Math.round(delay / 1000)}s (attempt ${attempt}/2)...`);
             await new Promise<void>((resolve, reject) => {
-              const t = setTimeout(resolve, delay);
-              req.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+              const onAbort = () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); };
+              req.signal?.addEventListener('abort', onAbort, { once: true });
+              const t = setTimeout(() => { req.signal?.removeEventListener('abort', onAbort); resolve(); }, delay);
             });
             loopReq.prompt = buildContinuationPrompt();
             loopReq.history = history;
