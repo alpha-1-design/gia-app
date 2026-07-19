@@ -88,6 +88,42 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
+/**
+ * Like {@link findFenceClose}, but JSON-aware: it finds the closing triple-
+ * backtick fence that terminates a fenced JSON body while correctly ignoring
+ * any ` ``` ` sequences that appear *inside* JSON string values (e.g. a tool
+ * argument that embeds a fenced code block, `{"code":"```python\n...\n```"}`).
+ *
+ * This is critical for tool execution: the naive first-fence scan would stop
+ * at the embedded fence, truncate the JSON, fail to parse it, and silently
+ * drop the tool call — leaving the model believing it ran.
+ */
+export function findJsonFenceClose(text: string, fromIndex: number): number {
+  let i = fromIndex;
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  while (i < text.length) {
+    const c = text[i];
+    // Only treat a ` ``` ` as the closing fence once we're outside any JSON
+    // structure (depth 0) and outside a string — i.e. after the top-level
+    // value has fully closed.
+    if (!inString && depth === 0 && c === '`' && text[i + 1] === '`' && text[i + 2] === '`') {
+      if (text[i + 3] !== '`') return i;
+      while (i < text.length && text[i] === '`') i++; // skip 4+ backticks
+      continue;
+    }
+    if (escapeNext) { escapeNext = false; i++; continue; }
+    if (c === '\\') { escapeNext = true; i++; continue; }
+    if (c === '"') { inString = !inString; i++; continue; }
+    if (inString) { i++; continue; }
+    if (c === '{' || c === '[') depth++;
+    else if (c === '}' || c === ']') depth = Math.max(0, depth - 1);
+    i++;
+  }
+  return -1;
+}
+
 export function extractToolCalls(text: string): ToolCall[] {
   const calls: ToolCall[] = [];
   let pos = 0;
@@ -113,7 +149,7 @@ export function extractToolCalls(text: string): ToolCall[] {
     // Skip past newline if present
     const bodyStart = text[contentStart] === '\n' ? contentStart + 1 : contentStart;
 
-    const closeIdx = findFenceClose(text, bodyStart);
+    const closeIdx = findJsonFenceClose(text, bodyStart);
     if (closeIdx < 0) break;
 
     const body = text.slice(bodyStart, closeIdx).trim();

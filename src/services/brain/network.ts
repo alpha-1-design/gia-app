@@ -41,7 +41,7 @@ export function friendlyError(label: string, e: unknown): string {
     return `${label} — too many requests. Wait a moment or switch providers.`;
   }
   if (msg.includes('503') || msg.includes('502') || msg.includes('500') || msg.includes('server error') || msg.includes('Service Unavailable')) {
-    return `${label} is temporarily down — try again later or switch to OpenRouter.`;
+    return `${label} is temporarily down (server error) — try again later or switch to OpenRouter.`;
   }
   if (msg.includes('empty response') || msg.includes('returned empty')) {
     return `${label} returned nothing — the model may have usage caps. Try a different model or provider.`;
