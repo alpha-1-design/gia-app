@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Copy, Pencil, Play, GitFork, Trash2 } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
@@ -9,6 +9,7 @@ import OrbAvatar from './OrbAvatar';
 import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
+import MessageActionSheet from './MessageActionSheet';
 import { ChatSkeleton } from './feedback';
 import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
 import ToolTray from './ToolTray';
@@ -48,6 +49,7 @@ interface MessageListProps {
   onFork: (id: string) => void;
   onRetry: (id: string) => Promise<void>;
   onEditResend: (msgId: string) => void;
+  onRewrite: (id: string, instruction: string) => void;
 }
 
 const formatTimeAgo = (ts: number) => {
@@ -60,53 +62,50 @@ const formatTimeAgo = (ts: number) => {
 
 const LONG_MSG_CHARS = 3000;
 
-const MessageActions: React.FC<{
-  msg: Message;
-  onCopy: (id: string, content: string) => void;
-  onRetry: (id: string) => void;
-  onEdit: (id: string) => void;
-  onContinue: (id: string) => void;
-  onFork: (id: string) => void;
-  onDelete: (id: string) => void;
-  nextAssistantId?: string;
-}> = ({ msg, onCopy, onRetry, onEdit, onContinue, onFork, onDelete, nextAssistantId }) => {
-  if (msg.error) return null; // error messages render their own Retry/Edit buttons
-
-  const isUser = msg.role === 'user';
-  const btn = 'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5';
-  const muted = { color: 'var(--gia-muted-2)' };
-  const danger = { color: '#f87171' };
+const SourcesBlock: React.FC<{ sources: Array<string | { url: string; title?: string }> }> = ({ sources }) => {
+  const [open, setOpen] = useState(false);
   return (
-    <div className={`flex items-center flex-wrap gap-0.5 mt-1.5 ${isUser ? 'justify-end' : 'justify-start'} pl-0.5`}>
-      {isUser ? (
-        <>
-          <button onClick={() => onEdit(msg.id)} className={btn} style={muted} title="Edit">
-            <Pencil size={11} /> Edit
-          </button>
-          {nextAssistantId && (
-            <button onClick={() => onRetry(nextAssistantId)} className={btn} style={muted} title="Retry response">
-              <RotateCcw size={11} /> Retry
-            </button>
-          )}
-        </>
-      ) : (
-        <>
-          <button onClick={() => onCopy(msg.id, msg.content)} className={btn} style={muted} title="Copy">
-            <Copy size={11} /> Copy
-          </button>
-          <button onClick={() => onRetry(msg.id)} className={btn} style={muted} title="Regenerate">
-            <RotateCcw size={11} /> Regenerate
-          </button>
-          <button onClick={() => onContinue(msg.id)} className={btn} style={muted} title="Continue">
-            <Play size={11} /> Continue
-          </button>
-          <button onClick={() => onFork(msg.id)} className={btn} style={muted} title="Fork conversation">
-            <GitFork size={11} /> Fork
-          </button>
-          <button onClick={() => onDelete(msg.id)} className={btn} style={danger} title="Delete">
-            <Trash2 size={11} /> Delete
-          </button>
-        </>
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-[10px] font-semibold tap-feedback transition-colors hover:opacity-80"
+        style={{ color: 'var(--gia-muted-2)' }}
+      >
+        <Globe size={11} />
+        <span>Searched {sources.length} source{sources.length !== 1 ? 's' : ''}</span>
+        <ChevronDown size={12} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+      {open && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1.5">
+          {sources.map((src, si) => {
+            const url = typeof src === 'string' ? src : (src as { url: string; title?: string }).url || '';
+            const title = typeof src === 'string' ? url : (src as { url: string; title?: string }).title || `Source ${si + 1}`;
+            const domain = (() => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } })();
+            return (
+              <motion.a
+                key={si}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 24, mass: 0.8, delay: si * 0.08 }}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.1)' }}
+              >
+                <span className="w-5 h-5 rounded-md flex items-center justify-center text-[8px] font-bold shrink-0"
+                  style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>
+                  {si + 1}
+                </span>
+                <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`} alt="" className="w-3.5 h-3.5 rounded shrink-0" loading="lazy" />
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate font-medium" style={{ color: 'var(--gia-text)' }}>{title}</span>
+                  <span className="block text-[7px] truncate" style={{ color: '#64748b' }}>{domain}</span>
+                </div>
+              </motion.a>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -129,17 +128,18 @@ const MessageList: React.FC<MessageListProps> = ({
   liveThoughts, thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
-  onFork, onRetry, onEditResend,
+  onFork, onRetry, onEditResend, onRewrite,
 }) => {
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
+  const [sheetMsgId, setSheetMsgId] = useState<string | null>(null);
   const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
   return (
     <>
       {loading && messages.length === 0 && (
         <ChatSkeleton count={3} />
       )}
-      {messages.map((msg, idx) => (
+      {messages.map((msg) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
             {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
@@ -162,10 +162,14 @@ const MessageList: React.FC<MessageListProps> = ({
             </div>
             <>
               <div
-                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}
+                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative cursor-pointer ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}
                 style={{
                   borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                   borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
+                }}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('a, button')) return;
+                  setSheetMsgId(prev => (prev === msg.id ? null : msg.id));
                 }}
               >
                 {msg.thinking && !((streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content) ? (
@@ -249,14 +253,14 @@ const MessageList: React.FC<MessageListProps> = ({
                     )}
                     {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
                       <>
-                        <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} />
+                        <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} />
                         <button onClick={() => setExpandedMsgs(prev => new Set(prev).add(msg.id))} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
                           Show more ({Math.ceil((msg.content.length - LONG_MSG_CHARS) / 1000)}k+ chars)
                         </button>
                       </>
                     ) : (
                       <div className="token-reveal">
-                        <MarkdownRenderer content={msg.content} />
+                        <MarkdownRenderer content={msg.content} sources={msg.sources} />
                         {(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && loading && (
                           extThinking
                             ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />
@@ -269,16 +273,6 @@ const MessageList: React.FC<MessageListProps> = ({
                         )}
                       </div>
                     )}
-                    <MessageActions
-                msg={msg}
-                onCopy={onCopyMessage}
-                onRetry={onRetry}
-                onEdit={onEdit}
-                onContinue={onContinue}
-                onFork={onFork}
-                onDelete={onDeleteWithUndo}
-                nextAssistantId={messages[idx + 1]?.role === 'assistant' ? messages[idx + 1].id : undefined}
-              />
                     {msg.role === 'assistant' && !msg.thinking && !msg.error && (
                       <div className="mt-1.5 text-[9px] text-right tracking-wider select-none flex items-center justify-end gap-1.5" style={{ color: 'var(--gia-muted-3)' }}>
                         <span className="opacity-40">— </span>
@@ -339,39 +333,7 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-4 space-y-1.5">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Sources</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                          {msg.sources.map((src, si) => {
-                            const url = typeof src === 'string' ? src : (src as { url: string; title?: string }).url || '';
-                            const title = typeof src === 'string' ? url : (src as { url: string; title?: string }).title || `Source ${si + 1}`;
-                            const domain = (() => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } })();
-                            return (
-                              <motion.a
-                                key={si}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                initial={{ opacity: 0, y: 12, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{ type: 'spring', stiffness: 300, damping: 24, mass: 0.8, delay: si * 0.08 }}
-                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] transition-all hover:scale-[1.02] active:scale-[0.98]"
-                                style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.1)' }}
-                              >
-                                <span className="w-5 h-5 rounded-md flex items-center justify-center text-[8px] font-bold shrink-0"
-                                  style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>
-                                  {si + 1}
-                                </span>
-                                <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`} alt="" className="w-3.5 h-3.5 rounded shrink-0" loading="lazy" />
-                                <div className="min-w-0 flex-1">
-                                  <span className="block truncate font-medium" style={{ color: 'var(--gia-text)' }}>{title}</span>
-                                  <span className="block text-[7px] truncate" style={{ color: '#64748b' }}>{domain}</span>
-                                </div>
-                              </motion.a>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <SourcesBlock sources={msg.sources} />
                     )}
                     {msg.attachments?.filter(a => !a.preview).map(att => (
                       <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
@@ -388,6 +350,22 @@ const MessageList: React.FC<MessageListProps> = ({
           </div>
         </motion.div>
       ))}
+      <MessageActionSheet
+        msg={sheetMsgId ? (messages.find(m => m.id === sheetMsgId) ?? null) : null}
+        onClose={() => setSheetMsgId(null)}
+        onCopy={onCopyMessage}
+        onRetry={onRetry}
+        onEdit={onEdit}
+        onContinue={onContinue}
+        onFork={onFork}
+        onDelete={onDeleteWithUndo}
+        onRewrite={onRewrite}
+        nextAssistantId={sheetMsgId ? (() => {
+          const i = messages.findIndex(m => m.id === sheetMsgId);
+          const n = messages[i + 1];
+          return n && n.role === 'assistant' ? n.id : undefined;
+        })() : undefined}
+      />
     </>
   );
 };

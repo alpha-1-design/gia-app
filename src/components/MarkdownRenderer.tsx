@@ -8,7 +8,7 @@ interface KaTeXStatic {
   renderToString(formula: string, options: Record<string, unknown>): string;
 }
 
-interface Props { content: string; className?: string }
+interface Props { content: string; className?: string; sources?: Array<string | { url: string; title?: string }> }
 
 const InlineCode: React.FC<{ code: string }> = ({ code }) => {
   const [copied, setCopied] = useState(false);
@@ -47,7 +47,7 @@ const parseStyleString = (s: string): Record<string, string> => {
 
 const SPAN_RE = /<span\s+([^>]*)>([\s\S]*?)<\/span>/g;
 
-const inlineRender = (text: string, footnotes: Map<string, string>): React.ReactNode[] => {
+const inlineRender = (text: string, footnotes: Map<string, string>, sources: { url: string; title?: string }[] = []): React.ReactNode[] => {
   if (text.includes('<span')) {
     const nodes: React.ReactNode[] = [];
     let lastIdx = 0;
@@ -55,22 +55,22 @@ const inlineRender = (text: string, footnotes: Map<string, string>): React.React
     const re = new RegExp(SPAN_RE.source, 'g');
     while ((match = re.exec(text)) !== null) {
       if (match.index > lastIdx) {
-        nodes.push(...inlineRender(text.slice(lastIdx, match.index), footnotes));
+        nodes.push(...inlineRender(text.slice(lastIdx, match.index), footnotes, sources));
       }
       const attrs = match[1];
       const innerText = match[2];
       const styleMatch = attrs.match(/style\s*=\s*"([^"]*)"/);
       const style = styleMatch ? parseStyleString(styleMatch[1]) : {};
-      nodes.push(<span key={match.index} style={style}>{inlineRender(innerText, footnotes)}</span>);
+      nodes.push(<span key={match.index} style={style}>{inlineRender(innerText, footnotes, sources)}</span>);
       lastIdx = match.index + match[0].length;
     }
     if (lastIdx < text.length) {
-      nodes.push(...inlineRender(text.slice(lastIdx), footnotes));
+      nodes.push(...inlineRender(text.slice(lastIdx), footnotes, sources));
     }
     return nodes;
   }
 
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~|==[^=]+==|\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|!\[[^\]]*\]\([^)]+\)|\[\^[^\]]+\]|https?:\/\/[^\s<]+)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|~~[^~]+~~|==[^=]+==|\$\$[^$]+\$\$|\$[^$\s][^$]*?\$|!\[[^\]]*\]\([^)]+\)|\[\^[^\]]+\]|\[\d{1,2}\]|https?:\/\/[^\s<]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
       return <strong key={i}>{part.slice(2, -2)}</strong>;
@@ -99,6 +99,15 @@ const inlineRender = (text: string, footnotes: Map<string, string>): React.React
     const fnRef = part.match(/^\[\^([^\]]+)\]$/);
     if (fnRef && footnotes.has(fnRef[1]))
       return <sup key={i}><a href={`#fn-${fnRef[1]}`} id={`fnref-${fnRef[1]}`} style={{ color: '#a855f7', fontSize: '10px', cursor: 'pointer', textDecoration: 'none' }}>{fnRef[1]}</a></sup>;
+
+    const cite = part.match(/^\[\d{1,2}\]$/);
+    if (cite) {
+      const idx = parseInt(cite[0].slice(1, -1), 10) - 1;
+      const src = sources[idx];
+      if (src) {
+        return <sup key={i}><a href={src.url} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none', fontSize: '10px', margin: '0 1px', padding: '0 2px', borderRadius: '3px', background: 'rgba(168,85,247,0.15)' }} title={src.title || src.url}>{cite[0]}</a></sup>;
+      }
+    }
 
     const autoUrl = part.match(/^https?:\/\/[^\s<]+$/);
     if (autoUrl)
@@ -177,13 +186,13 @@ const RichTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers,
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr>{headers.map((h, hi) =>
-              <th key={hi} style={{ background: 'var(--gia-surface-3)', padding: '7px 10px', textAlign: 'left', fontWeight: 600, border: '1px solid var(--gia-border)', color: 'var(--gia-muted)', whiteSpace: 'nowrap' }}>{inlineRender(h, new Map())}</th>
+              <th key={hi} style={{ background: 'var(--gia-surface-3)', padding: '7px 10px', textAlign: 'left', fontWeight: 600, border: '1px solid var(--gia-border)', color: 'var(--gia-muted)', whiteSpace: 'nowrap' }}>{inlineRender(h, new Map(), [])}</th>
             )}</tr>
           </thead>
           <tbody>{rows.map((row, ri) =>
             <tr key={ri} className="hover-row" style={{ background: ri % 2 === 1 ? 'var(--gia-surface-2)' : 'transparent', transition: 'background 0.15s' }}>
               {row.map((cell, ci) =>
-                <td key={ci} style={{ padding: '5px 10px', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}>{inlineRender(cell, new Map())}</td>
+                <td key={ci} style={{ padding: '5px 10px', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}>{inlineRender(cell, new Map(), [])}</td>
               )}
             </tr>
           )}</tbody>
@@ -202,7 +211,7 @@ const parseTaskList = (line: string): React.ReactNode => {
     <label className="flex items-start gap-2 py-0.5 cursor-pointer select-none" style={{ margin: '0' }}>
       <input type="checkbox" defaultChecked={checked} readOnly onClick={e => e.preventDefault()} className="mt-0.5 shrink-0 accent-violet-500" style={{ width: '13px', height: '13px' }} />
       <span style={{ color: 'var(--gia-text)', textDecoration: checked ? 'line-through' : 'none', opacity: checked ? 0.5 : 1 }}>
-        {inlineRender(m[3], new Map())}
+        {inlineRender(m[3], new Map(), [])}
       </span>
     </label>
   );
@@ -240,7 +249,11 @@ const stripArtifactBlocks = (text: string): string => {
   return text.replace(/```artifact[\s\S]*?```/g, '').trim();
 };
 
-const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
+const MarkdownRenderer: React.FC<Props> = ({ content, className = '', sources }) => {
+  const resolvedSources = useMemo(
+    () => (sources || []).map(s => (typeof s === 'string' ? { url: s, title: s } : { url: s.url, title: s.title || s.url })),
+    [sources],
+  );
   const cleaned = useMemo(() => stripArtifactBlocks(content), [content]);
   const processed = useMemo(() => wrapBareVisualBlocks(cleaned), [cleaned]);
   const visualFallback = useMemo(() => tryParseVisualBlock(processed), [processed]);
@@ -379,15 +392,15 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
     const h3 = line.match(/^### (.+)/);
     const h2 = line.match(/^## (.+)/);
     const h1 = line.match(/^# (.+)/);
-    if (h1) { nodes.push(<h1 key={`h1-${i}`} style={{ fontSize: '20px', fontWeight: 700, margin: '16px 0 8px', color: 'var(--gia-text)' }}>{inlineRender(h1[1], footnotes)}</h1>); i++; continue; }
-    if (h2) { nodes.push(<h2 key={`h2-${i}`} style={{ fontSize: '16px', fontWeight: 600, margin: '14px 0 6px', color: 'var(--gia-text)' }}>{inlineRender(h2[1], footnotes)}</h2>); i++; continue; }
-    if (h3) { nodes.push(<h3 key={`h3-${i}`} style={{ fontSize: '14px', fontWeight: 600, margin: '12px 0 4px', color: 'var(--gia-text)' }}>{inlineRender(h3[1], footnotes)}</h3>); i++; continue; }
+    if (h1) { nodes.push(<h1 key={`h1-${i}`} style={{ fontSize: '20px', fontWeight: 700, margin: '16px 0 8px', color: 'var(--gia-text)' }}>{inlineRender(h1[1], footnotes, resolvedSources)}</h1>); i++; continue; }
+    if (h2) { nodes.push(<h2 key={`h2-${i}`} style={{ fontSize: '16px', fontWeight: 600, margin: '14px 0 6px', color: 'var(--gia-text)' }}>{inlineRender(h2[1], footnotes, resolvedSources)}</h2>); i++; continue; }
+    if (h3) { nodes.push(<h3 key={`h3-${i}`} style={{ fontSize: '14px', fontWeight: 600, margin: '12px 0 4px', color: 'var(--gia-text)' }}>{inlineRender(h3[1], footnotes, resolvedSources)}</h3>); i++; continue; }
 
     // Blockquote
     if (line.startsWith('> ')) {
       nodes.push(
         <blockquote key={`bq-${i}`} style={{ borderLeft: '3px solid #a855f7', paddingLeft: '12px', margin: '10px 0', color: 'var(--gia-muted)', fontStyle: 'italic' }}>
-          {inlineRender(line.slice(2), footnotes)}
+          {inlineRender(line.slice(2), footnotes, resolvedSources)}
         </blockquote>
       );
       i++; continue;
@@ -406,7 +419,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
         const taskItem = parseTaskList(lines[i]);
         items.push(
           <li key={i} style={{ margin: '1px 0', listStyle: taskItem ? 'none' : 'disc' }}>
-            {taskItem || inlineRender(lines[i].slice(2), footnotes)}
+            {taskItem || inlineRender(lines[i].slice(2), footnotes, resolvedSources)}
           </li>
         );
         i++;
@@ -419,7 +432,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
     if (line.match(/^\d+\. /)) {
       const items: React.ReactNode[] = [];
       while (i < lines.length && lines[i].match(/^\d+\. /)) {
-        items.push(<li key={i} style={{ margin: '2px 0' }}>{inlineRender(lines[i].replace(/^\d+\. /, ''), footnotes)}</li>);
+        items.push(<li key={i} style={{ margin: '2px 0' }}>{inlineRender(lines[i].replace(/^\d+\. /, ''), footnotes, resolvedSources)}</li>);
         i++;
       }
       nodes.push(<ol key={`ol-${i}`} style={{ margin: '8px 0', paddingLeft: '20px' }}>{items}</ol>);
@@ -440,7 +453,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '' }) => {
     // Paragraph
     nodes.push(
       <p key={`p-${i}`} style={{ margin: '8px 0', lineHeight: '1.7', color: 'var(--gia-text)' }}>
-        {inlineRender(line, footnotes)}
+        {inlineRender(line, footnotes, resolvedSources)}
       </p>
     );
     i++;

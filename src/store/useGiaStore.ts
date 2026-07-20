@@ -271,6 +271,7 @@ interface GiaState {
   showProtocols: boolean;
   
   webSearch: boolean;
+  deepSearch: boolean;
   extThinking: boolean;
   handsOff: boolean;
   localVision: boolean;
@@ -332,6 +333,7 @@ interface GiaState {
   setShowTerminal: (show: boolean) => void;
   setShowModelSwitcher: (show: boolean) => void;
   setWebSearch: (enabled: boolean) => void;
+  setDeepSearch: (enabled: boolean) => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
   setLocalVision: (enabled: boolean) => void;
@@ -489,6 +491,7 @@ export const useGiaStore = create<GiaState>()(
       showConsole: false,
       showProtocols: false,
       webSearch: true,
+      deepSearch: false,
       extThinking: false,
       handsOff: false,
       localVision: false,
@@ -585,6 +588,7 @@ export const useGiaStore = create<GiaState>()(
       setShowTerminal: (show) => set({ showTerminal: show }),
       setShowModelSwitcher: (show) => set({ showModelSwitcher: show }),
       setWebSearch: (enabled) => set({ webSearch: enabled }),
+      setDeepSearch: (enabled) => set({ deepSearch: enabled }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
       setHandsOff: (enabled) => set({ handsOff: enabled }),
       setLocalVision: (enabled) => set({ localVision: enabled }),
@@ -965,6 +969,7 @@ export const useGiaStore = create<GiaState>()(
         activeSkillId: s.activeSkillId,
         examHistory: s.examHistory,
         webSearch: s.webSearch,
+        deepSearch: s.deepSearch,
         extThinking: s.extThinking,
         handsOff: s.handsOff,
         localVision: s.localVision,

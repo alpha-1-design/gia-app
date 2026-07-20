@@ -2,24 +2,25 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronRight, Paperclip, Image as ImageIcon,
-  Globe, Brain, Zap, Headphones,
+  Globe, Brain, Zap, Headphones, Radar,
 } from 'lucide-react';
 
 interface ChatToolbarProps {
   showTools: boolean;
   setShowTools: (val: boolean) => void;
   webSearch: boolean;
+  deepSearch: boolean;
   extThinking: boolean;
   handsOff: boolean;
   voiceEnabled: boolean;
-  toggleFeature: (feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen') => void;
+  toggleFeature: (feature: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen') => void;
   fileRef: React.RefObject<HTMLInputElement | null>;
   imgRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export const ChatToolbar: React.FC<ChatToolbarProps> = ({
   showTools, setShowTools,
-  webSearch, extThinking, handsOff, voiceEnabled,
+  webSearch, deepSearch, extThinking, handsOff, voiceEnabled,
   toggleFeature, fileRef, imgRef,
 }) => {
   return (
@@ -52,6 +53,7 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({
             <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
             {[
               { label: 'Search', feature: 'webSearch' as const, icon: Globe, active: webSearch, color: '#3b82f6' },
+              { label: 'DeepSearch', feature: 'deepSearch' as const, icon: Radar, active: deepSearch, color: '#22d3ee' },
               { label: 'Think', feature: 'extThinking' as const, icon: Brain, active: extThinking, color: '#f59e0b' },
               { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
               { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
@@ -71,11 +73,12 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({
             >
               <div className="flex -space-x-1.5">
                 {webSearch && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-blue-500/20 text-blue-400"><Globe size={10} /></div>}
+                {deepSearch && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-cyan-500/20 text-cyan-400"><Radar size={10} /></div>}
                 {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
                 {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
               </div>
               <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                {(!webSearch && !extThinking && !handsOff) ? 'No active tools' : 'Tools active'}
+                {(!webSearch && !deepSearch && !extThinking && !handsOff) ? 'No active tools' : 'Tools active'}
               </span>
             </motion.div>
           )}

@@ -67,6 +67,7 @@ export function useChatState() {
     userProfile, setIntentState, addNotification,
     setShowConsole, showConsole, consoleLogs,
     webSearch, setWebSearch,
+    deepSearch, setDeepSearch,
     extThinking, setExtThinking,
     handsOff, setHandsOff,
     localVision, setLocalVision,
@@ -87,6 +88,7 @@ export function useChatState() {
     setIntentState: s.setIntentState, addNotification: s.addNotification,
     setShowConsole: s.setShowConsole, showConsole: s.showConsole, consoleLogs: s.consoleLogs,
     webSearch: s.webSearch, setWebSearch: s.setWebSearch,
+    deepSearch: s.deepSearch, setDeepSearch: s.setDeepSearch,
     extThinking: s.extThinking, setExtThinking: s.setExtThinking,
     handsOff: s.handsOff, setHandsOff: s.setHandsOff,
     localVision: s.localVision, setLocalVision: s.setLocalVision,
@@ -156,9 +158,15 @@ export function useChatState() {
     setInput,
   );
 
-  const toggleFeature = useCallback((feature: 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate') => {
+  const toggleFeature = useCallback((feature: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate') => {
     let newFeatureState: boolean | undefined;
     if (feature === 'webSearch') { setWebSearch(!webSearch); newFeatureState = !webSearch; }
+    if (feature === 'deepSearch') {
+      const next = !deepSearch;
+      setDeepSearch(next);
+      if (next && !webSearch) setWebSearch(true); // DeepSearch requires web access
+      newFeatureState = next;
+    }
     if (feature === 'extThinking') { setExtThinking(!extThinking); newFeatureState = !extThinking; }
     if (feature === 'handsOff') { setHandsOff(!handsOff); newFeatureState = !handsOff; }
     if (feature === 'vision') { setLocalVision(!localVision); newFeatureState = !localVision; }
@@ -196,7 +204,7 @@ export function useChatState() {
       }
     }
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
-  }, [setWebSearch, setExtThinking, setHandsOff, setLocalVision, setLocalTranslate, setVoiceEnabled, webSearch, extThinking, handsOff, localVision, localTranslate, voiceEnabled, voiceRef, setInput, addNotification]);
+  }, [setWebSearch, setDeepSearch, setExtThinking, setHandsOff, setLocalVision, setLocalTranslate, setVoiceEnabled, webSearch, deepSearch, extThinking, handsOff, localVision, localTranslate, voiceEnabled, voiceRef, setInput, addNotification]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
 
@@ -508,7 +516,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     addBranch, renameBranch, deleteBranch, getAllBranchIds,
     userProfile, setIntentState,
     addNotification, setShowConsole, showConsole, consoleLogs,
-    webSearch, setWebSearch, extThinking, setExtThinking,
+    webSearch, setWebSearch, deepSearch, setDeepSearch, extThinking, setExtThinking,
     handsOff, setHandsOff,
     localVision, setLocalVision,
     localTranslate, setLocalTranslate,
@@ -526,7 +534,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     handleClarificationAnswer: gen.handleClarificationAnswer,
     addFiles, handlePaste, handleDragEnter, handleDragLeave,
     handleDragOver, handleDrop, handleFork: msgOps.handleFork,
-    handleEditResend, handleRetry: gen.handleRetry,
+    handleEditResend, handleRetry: gen.handleRetry, handleRewrite: gen.handleRewrite,
     handleScroll, scrollToBottom, handleFile, removeAttachment,
     copyMessage: msgOps.copyMessage, exportChat: msgOps.exportChat,
     showBranchView: msgOps.showBranchView, setShowBranchView: msgOps.setShowBranchView,

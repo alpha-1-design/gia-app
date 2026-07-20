@@ -2,9 +2,9 @@ import React from 'react';
 import {
   Bot, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
-  Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
+  Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
-  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive,
+  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -14,6 +14,7 @@ import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import GiaIcon from '../components/GiaIcon';
 import MessageList from '../components/MessageList';
+import ComposerToolsSheet from '../components/ComposerToolsSheet';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
 import { KnowledgePanel } from '../components/KnowledgePanel';
@@ -61,7 +62,7 @@ const ChatModule: React.FC = () => {
     activeSessionId, setActiveSession, sessions,
     createSession, deleteSession, clearSession,
     addNotification,
-    webSearch, extThinking, handsOff,
+    webSearch, deepSearch, extThinking, handsOff,
     localVision, localTranslate,
     activeSkillId, setSkill,
     skills, thinkingPhase, currentTool,
@@ -69,7 +70,7 @@ const ChatModule: React.FC = () => {
     activeModel,
     toggleFeature, handleStop, handleUndoDelete,
     handleInputChange, handleSend, handleClarificationAnswer,
-    handleDeleteWithUndo, handleContinue, handleFork, handleRetry, handleEditResend,
+    handleDeleteWithUndo, handleContinue, handleFork, handleRetry, handleRewrite, handleEditResend,
     handlePaste, handleDragEnter, handleDragLeave,
     handleDragOver, handleDrop, handleFile, removeAttachment, addFiles,
     copyMessage, scrollToBottom, handleScroll, exportChat,
@@ -87,6 +88,17 @@ const ChatModule: React.FC = () => {
   const archivedSessions = useGiaStore((s) => s.archivedSessions);
   const restoreSession = useGiaStore((s) => s.restoreSession);
   const activeProvider = useProviderStore((s) => s.activeProvider);
+
+  const toolItems: { key: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate'; label: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string }[] = [
+    { key: 'webSearch', label: 'Web Search', icon: Globe, active: webSearch, color: '#3b82f6' },
+    { key: 'deepSearch', label: 'DeepSearch', icon: Radar, active: deepSearch, color: '#22d3ee' },
+    { key: 'extThinking', label: 'Think', icon: Brain, active: extThinking, color: '#f59e0b' },
+    { key: 'handsOff', label: 'Hands-off', icon: Zap, active: handsOff, color: '#a855f7' },
+    { key: 'listen', label: 'Listen', icon: Headphones, active: voiceEnabled, color: '#ec4899' },
+    { key: 'vision', label: 'Vision', icon: Eye, active: localVision, color: '#22c55e' },
+    { key: 'translate', label: 'Translate', icon: Languages, active: localTranslate, color: '#14b8a6' },
+  ];
+  const activeToolCount = toolItems.filter(t => t.active).length;
 
   React.useEffect(() => {
     if (!buildMode) return;
@@ -380,6 +392,7 @@ const ChatModule: React.FC = () => {
           onFork={handleFork}
           onRetry={handleRetry}
           onEditResend={handleEditResend}
+          onRewrite={handleRewrite}
         />
 
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
@@ -498,95 +511,62 @@ const ChatModule: React.FC = () => {
 
         <div className="flex items-center gap-1.5 mb-2.5">
           <button type="button"
-            onClick={() => setShowTools(!showTools)}
+            onClick={() => setShowTools(true)}
             className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors tap-feedback"
             style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
+            title="Tools"
           >
-            <motion.div animate={{ rotate: showTools ? 90 : 0 }}>
-              <ChevronRight size={14} />
-            </motion.div>
+            <SlidersHorizontal size={14} />
           </button>
 
-          <div className="flex-1 overflow-hidden flex items-center gap-2">
-            <AnimatePresence initial={false} mode="wait">
-              {showTools ? (
-                <motion.div 
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: '100%', opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                className="flex items-center gap-1.5 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
-                >
-                <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
-                  <Paperclip size={11} /> File
-                </button>
-                <button type="button" onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
-                  <ImageIcon size={11} /> Photo
-                </button>
-                <button type="button" onClick={async () => {
-                  try {
-                    const { Camera: CapCamera, CameraResultType } = await import('@capacitor/camera');
-                    const image = await CapCamera.getPhoto({ resultType: CameraResultType.DataUrl, quality: 85, allowEditing: false, saveToGallery: false });
-                    if (image.dataUrl) {
-                      const blob = await (await fetch(image.dataUrl)).blob();
-                      const file = new File([blob], `camera-${Date.now()}.${image.format || 'jpg'}`, { type: `image/${image.format || 'jpeg'}` });
-                      await addFiles([file], true);
-                    }
-                  } catch (e) {
-                    if (e instanceof Error && e.message !== 'User cancelled photos app') {
-                      imgRef.current?.click();
-                    }
-                  }
-                }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
-                  <Camera size={11} /> Camera
-                </button>
-                <button type="button" onClick={() => setShowTemplateSelector(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-purple-400 hover:text-purple-300 transition-all shrink-0">
-                  <LayoutTemplate size={11} /> Templates
-                </button>
-                <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
-                {[
-                  { label: 'Search', feature: 'webSearch' as const, icon: Globe, active: webSearch, color: '#3b82f6' },
-                  { label: 'Think', feature: 'extThinking' as const, icon: Brain, active: extThinking, color: '#f59e0b' },
-                  { label: 'Hands-off', feature: 'handsOff' as const, icon: Zap, active: handsOff, color: '#a855f7' },
-                  { label: 'Listen', feature: 'listen' as const, icon: Headphones, active: voiceEnabled, color: '#ec4899' },
-                  { label: 'Vision', feature: 'vision' as const, icon: Eye, active: localVision, color: '#22c55e' },
-                  { label: 'Translate', feature: 'translate' as const, icon: Languages, active: localTranslate, color: '#14b8a6' },
-                ].map((tool: { label: string; feature: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string; action?: boolean }) => (
-                  <button type="button" key={tool.label} onClick={() => tool.action ? useGiaStore.getState().setShowCircleSearch(true) : toggleFeature(tool.feature as 'webSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision')} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: tool.active ? `${tool.color}20` : 'var(--gia-surface)', border: `1px solid ${tool.active ? `${tool.color}40` : 'var(--gia-border)'}`, color: tool.active ? tool.color : 'var(--gia-muted)', fontWeight: 500 }}>
-                    <tool.icon size={11} />
-                    {tool.label}
-                  </button>
-                ))}
-                <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
-                <button type="button" onClick={() => {
-                  const next = !buildMode;
-                  setBuildMode(next);
-                  useGiaStore.getState().updateSharedData({ currentMode: next ? 'build' : 'code' });
-                }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: buildMode ? '#f9731620' : 'var(--gia-surface)', border: `1px solid ${buildMode ? '#f9731640' : 'var(--gia-border)'}`, color: buildMode ? '#f97316' : 'var(--gia-muted)', fontWeight: 500 }}>
-                  <Hammer size={11} />
-                  Build
-                </button>
-                </motion.div>
-
-              ) : (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="flex -space-x-1.5">
-                    {buildMode && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-orange-500/20 text-orange-400"><Hammer size={10} /></div>}
-                    {webSearch && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-blue-500/20 text-blue-400"><Globe size={10} /></div>}
-                    {extThinking && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-amber-500/20 text-amber-400"><Brain size={10} /></div>}
-                    {handsOff && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-purple-500/20 text-purple-400"><Zap size={10} /></div>}
-                    {localVision && <div className="w-5 h-5 rounded-full border border-zinc-900 flex items-center justify-center bg-emerald-500/20 text-emerald-400"><Eye size={10} /></div>}
-                  </div>
-                  <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-                    {buildMode ? 'Build mode' : (!webSearch && !extThinking && !handsOff && !localVision && !voiceEnabled) ? 'No active tools' : 'Tools active'}
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="flex-1 overflow-x-auto flex items-center gap-1.5 py-1 [&::-webkit-scrollbar]:hidden">
+            <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+              <Paperclip size={11} /> File
+            </button>
+            <button type="button" onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+              <ImageIcon size={11} /> Photo
+            </button>
+            <button type="button" onClick={async () => {
+              try {
+                const { Camera: CapCamera, CameraResultType } = await import('@capacitor/camera');
+                const image = await CapCamera.getPhoto({ resultType: CameraResultType.DataUrl, quality: 85, allowEditing: false, saveToGallery: false });
+                if (image.dataUrl) {
+                  const blob = await (await fetch(image.dataUrl)).blob();
+                  const file = new File([blob], `camera-${Date.now()}.${image.format || 'jpg'}`, { type: `image/${image.format || 'jpeg'}` });
+                  await addFiles([file], true);
+                }
+              } catch (e) {
+                if (e instanceof Error && e.message !== 'User cancelled photos app') {
+                  imgRef.current?.click();
+                }
+              }
+            }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+              <Camera size={11} /> Camera
+            </button>
+            <button type="button" onClick={() => setShowTemplateSelector(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-purple-400 hover:text-purple-300 transition-all shrink-0">
+              <LayoutTemplate size={11} /> Templates
+            </button>
+            <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
+            <button type="button" onClick={() => {
+              const next = !buildMode;
+              setBuildMode(next);
+              useGiaStore.getState().updateSharedData({ currentMode: next ? 'build' : 'code' });
+            }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: buildMode ? '#f9731620' : 'var(--gia-surface)', border: `1px solid ${buildMode ? '#f9731640' : 'var(--gia-border)'}`, color: buildMode ? '#f97316' : 'var(--gia-muted)', fontWeight: 500 }}>
+              <Hammer size={11} />
+              Build
+            </button>
           </div>
+          {activeToolCount > 0 && (
+            <span className="text-[10px] shrink-0 px-2 py-1 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>
+              {activeToolCount} active
+            </span>
+          )}
+          <ComposerToolsSheet
+            open={showTools}
+            onClose={() => setShowTools(false)}
+            items={toolItems}
+            onToggle={(key) => toggleFeature(key as 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate')}
+          />
         </div>
 
         {buildMode && !loading && (

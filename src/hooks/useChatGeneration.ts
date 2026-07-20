@@ -199,7 +199,8 @@ export function useChatGeneration() {
         state.addNotification('⚠️ Safety check failed, proceeding without guardrails');
       }
     }
-    const { webSearch, extThinking, handsOff, localVision } = state;
+    const { webSearch: rawWebSearch, deepSearch, extThinking, handsOff, localVision } = state;
+    const webSearch = rawWebSearch || deepSearch;
     let sessionId = state.activeSessionId;
     if (!sessionId) sessionId = state.createSession();
 
@@ -307,15 +308,23 @@ export function useChatGeneration() {
 To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the file contents in \`[FILE:path] content [FILE]\` format.]\n\n` : '';
 
       const stateContext = `[SYSTEM: Current Feature State:
-- Web Search: ${webSearch ? 'ON' : 'OFF'}
+- Web Search: ${(webSearch || deepSearch) ? 'ON' : 'OFF'}
+- DeepSearch: ${deepSearch ? 'ON' : 'OFF'}
 - Extended Thinking: ${extThinking ? 'ON' : 'OFF'}
 - Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}
 - Local Vision: ${localVision ? 'ON' : 'OFF'}]\n\n`;
 
+      const deepSearchPrefix = deepSearch ? `[DEEP SEARCH MODE: Conduct thorough, multi-step web research before answering.
+- Break the question into sub-questions and run SEVERAL distinct web_search queries (at least 3-5), not just one.
+- For the most relevant results, use read_url to read the full page content.
+- Cross-check facts across multiple sources and prefer authoritative ones.
+- Cite every factual claim inline using [1], [2], ... matching the order of your sources.
+- Keep searching until you have enough confident, sourced information, then synthesize a comprehensive, well-structured answer.]\n\n` : '';
+
       // Resolve agent system prompt if routing to an agent
       let agentSystemPrompt: string | undefined;
       let systemPromptMode: 'append' | 'replace' | undefined;
-      let agentPrompt = stateContext + handsOffPrefix + prompt;
+      let agentPrompt = stateContext + handsOffPrefix + deepSearchPrefix + prompt;
       if (agent) {
         const agentDef = useAgentStore.getState().agents.find(a => a.id === agent.id);
         if (agentDef) {
@@ -800,9 +809,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     }
   }, [registerGenerationController, unregisterGenerationController]);
 
-  const handleRetry = useCallback(async (id: string) => {
+  const handleRetry = useCallback(async (id: string, extraInstruction?: string) => {
     const state = useGiaStore.getState();
-    const { webSearch, extThinking } = state;
+    const { webSearch: rawWebSearch, deepSearch, extThinking } = state;
+    const webSearch = rawWebSearch || deepSearch;
     if (!state.activeSessionId) return;
     const activeBranchId = state.getActiveSession()?.currentBranchId ?? '';
     const msgs = state.getBranchMessages(state.activeSessionId, activeBranchId);
@@ -810,6 +820,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     if (msgIndex <= 0) return;
     const originalPrompt = msgs[msgIndex - 1]?.content || '';
     if (!originalPrompt) return;
+    const prevAnswer = msgs[msgIndex]?.content || '';
+    const prompt = extraInstruction
+      ? `${originalPrompt}\n\n[REWRITE YOUR PREVIOUS ANSWER]\nYour previous answer:\n${prevAnswer}\n\nRewrite instruction: ${extraInstruction}\nRespond with only the rewritten answer.`
+      : originalPrompt;
 
     const genKey = `chat-retry-${state.activeSessionId}-${id}`;
     generationKeyRef.current = genKey;
@@ -844,7 +858,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         signal: ctrl.signal,
         checkpointKey: streamKey,
         messageId: id,
-        prompt: originalPrompt, history,
+        prompt, history,
         useWebSearch: webSearch,
         useExtendedThinking: extThinking,
         onStream: (chunk) => {
@@ -912,6 +926,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     }
   }, [registerGenerationController, unregisterGenerationController]);
 
+  const handleRewrite = useCallback(async (id: string, instruction: string) => {
+    return handleRetry(id, instruction);
+  }, [handleRetry]);
+
   return {
     loading, setLoading,
     streamingMsgId, setStreamingMsgId,
@@ -921,6 +939,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     abortTimeoutRef,
     responseStartRef, responseTimesRef, lastUserMsgRef,
     handleSend, handleContinue, handleClarificationAnswer,
-    handleRetry, handleStop,
+    handleRetry, handleRewrite, handleStop,
   };
 }

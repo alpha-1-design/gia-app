@@ -6,6 +6,41 @@ Chronological record of changes, rationale, and decisions.
 
 ## 2026-07-20
 
+### Premium push — Tier 2: Grok/Claude-style web research + slide-up sheets
+
+Brought GIA's message + composer UX in line with Grok/Claude mobile: tap-to-reveal
+action sheets instead of always-visible buttons, a Grok-style DeepSearch mode, and
+inline source citations.
+
+**Web search, Grok-style**
+- New **DeepSearch** mode: store flag (`deepSearch`) + toolbar toggle + `toggleFeature`
+  support. When ON it force-enables web access and injects a system instruction for
+  agentic multi-step research (several distinct `web_search` queries, `read_url` on top
+  hits, cross-check, cite with `[1]`/`[2]`). Mirrors Grok's DeepSearch.
+- `useChatGeneration`: `webSearch` is now effectively ON whenever `deepSearch` is ON, so
+  both HandleSend and HandleRetry honor it.
+- Inline **source citations**: `MarkdownRenderer` now renders `[n]` as a superscript link
+  to the matching source (passed `sources` from the message). Matches Grok/Claude inline
+  citation chips.
+- Collapsible **"Searched N sources ▾"** dropdown under each answer (was an always-open
+  grid). Tapping expands the source chips. Grok-like "drop of sources searched".
+
+**Slide-up action sheets (Claude/Grok mobile pattern)**
+- `MessageActionSheet` (new): tap any message → bottom sheet with Copy / Regenerate /
+  Continue / Fork / Delete (assistant) or Edit / Retry (user), plus a **Rewrite** section
+  (Simplify / Elaborate / Make shorter / More casual). Replaces the old inline action bar
+  and the long-press `MessageContextMenu` (deleted earlier).
+- `ComposerToolsSheet` (new): the composer feature chips (Search/DeepSearch/Think/
+  Hands-off/Listen/Vision/Translate) are now a tap-to-open bottom sheet with toggle
+  switches, like Claude. The always-visible chip row is gone; only a "Tools" button +
+  active-count pill remain. File/Photo/Camera/Templates/Build stay as quick inline actions.
+- `handleRewrite` added to `useChatGeneration` (reuses `handleRetry` with a rewrite
+  instruction) and exposed via `useChatState` → `ChatModule` → `MessageList`.
+
+---
+
+## 2026-07-20
+
 ### Removed: all desktop-only code (mobile-only app)
 
 GIA is a mobile-only Capacitor app; a separate desktop app is planned. Everything that
