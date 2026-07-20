@@ -60,6 +60,25 @@ instructs the model to emit artifacts; `handleRetry` regenerates any assistant m
 
 ---
 
+## 2026-07-20
+
+### Premium push — Tier 1 (cont.): long-press menu moved to visible bottom toolbar
+
+User wanted the long-press `MessageContextMenu` powers **visible at the bottom of every
+message** (Grok-style), no long-press needed.
+
+**Changes**
+- `src/components/MessageList.tsx` — expanded the `MessageActions` toolbar:
+  - **User messages**: **Edit + Retry** (Retry regenerates the assistant reply that follows
+    the user message, via `nextAssistantId`).
+  - **GIA (assistant) messages**: **Copy + Regenerate + Continue + Fork + Delete** (Delete
+    styled red).
+  - Error messages keep their own Retry / Edit & Resend buttons.
+- Deleted `src/components/MessageContextMenu.tsx` entirely — its actions now live in the
+  visible toolbar, so long-press is gone. Added `Play`, `GitFork`, `Trash2` icons.
+
+---
+
 ## 2026-06-05
 
 ### Fixed: SettingsModule naming conflict

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Copy, Pencil } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Copy, Pencil, Play, GitFork, Trash2 } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
@@ -9,7 +9,6 @@ import OrbAvatar from './OrbAvatar';
 import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
-import MessageContextMenu from './MessageContextMenu';
 import { ChatSkeleton } from './feedback';
 import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
 import ToolTray from './ToolTray';
@@ -66,37 +65,48 @@ const MessageActions: React.FC<{
   onCopy: (id: string, content: string) => void;
   onRetry: (id: string) => void;
   onEdit: (id: string) => void;
-}> = ({ msg, onCopy, onRetry, onEdit }) => {
+  onContinue: (id: string) => void;
+  onFork: (id: string) => void;
+  onDelete: (id: string) => void;
+  nextAssistantId?: string;
+}> = ({ msg, onCopy, onRetry, onEdit, onContinue, onFork, onDelete, nextAssistantId }) => {
   if (msg.error) return null; // error messages render their own Retry/Edit buttons
+
   const isUser = msg.role === 'user';
+  const btn = 'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5';
+  const muted = { color: 'var(--gia-muted-2)' };
+  const danger = { color: '#f87171' };
   return (
-    <div className={`flex items-center gap-0.5 mt-1.5 ${isUser ? 'justify-end' : 'justify-start'} pl-0.5`}>
-      <button
-        onClick={() => onCopy(msg.id, msg.content)}
-        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5"
-        style={{ color: 'var(--gia-muted-2)' }}
-        title="Copy"
-      >
-        <Copy size={11} /> Copy
-      </button>
+    <div className={`flex items-center flex-wrap gap-0.5 mt-1.5 ${isUser ? 'justify-end' : 'justify-start'} pl-0.5`}>
       {isUser ? (
-        <button
-          onClick={() => onEdit(msg.id)}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5"
-          style={{ color: 'var(--gia-muted-2)' }}
-          title="Edit message"
-        >
-          <Pencil size={11} /> Edit
-        </button>
+        <>
+          <button onClick={() => onEdit(msg.id)} className={btn} style={muted} title="Edit">
+            <Pencil size={11} /> Edit
+          </button>
+          {nextAssistantId && (
+            <button onClick={() => onRetry(nextAssistantId)} className={btn} style={muted} title="Retry response">
+              <RotateCcw size={11} /> Retry
+            </button>
+          )}
+        </>
       ) : (
-        <button
-          onClick={() => onRetry(msg.id)}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5"
-          style={{ color: 'var(--gia-muted-2)' }}
-          title="Regenerate response"
-        >
-          <RotateCcw size={11} /> Regenerate
-        </button>
+        <>
+          <button onClick={() => onCopy(msg.id, msg.content)} className={btn} style={muted} title="Copy">
+            <Copy size={11} /> Copy
+          </button>
+          <button onClick={() => onRetry(msg.id)} className={btn} style={muted} title="Regenerate">
+            <RotateCcw size={11} /> Regenerate
+          </button>
+          <button onClick={() => onContinue(msg.id)} className={btn} style={muted} title="Continue">
+            <Play size={11} /> Continue
+          </button>
+          <button onClick={() => onFork(msg.id)} className={btn} style={muted} title="Fork conversation">
+            <GitFork size={11} /> Fork
+          </button>
+          <button onClick={() => onDelete(msg.id)} className={btn} style={danger} title="Delete">
+            <Trash2 size={11} /> Delete
+          </button>
+        </>
       )}
     </div>
   );
@@ -129,7 +139,7 @@ const MessageList: React.FC<MessageListProps> = ({
       {loading && messages.length === 0 && (
         <ChatSkeleton count={3} />
       )}
-      {messages.map((msg) => (
+      {messages.map((msg, idx) => (
         <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
             {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
@@ -150,18 +160,7 @@ const MessageList: React.FC<MessageListProps> = ({
                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
-            <MessageContextMenu
-              messageId={msg.id}
-              content={msg.content}
-              isUser={msg.role === 'user'}
-              canFork={messages.length > 0}
-              onCopy={onCopyMessage}
-              onEdit={onEdit}
-              onDelete={onDeleteWithUndo}
-              onContinue={onContinue}
-              onFork={() => onFork(msg.id)}
-              onRetry={onRetry}
-            >
+            <>
               <div
                 className={`p-3 sm:p-4 md:p-5 rounded-2xl relative ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}
                 style={{
@@ -270,7 +269,16 @@ const MessageList: React.FC<MessageListProps> = ({
                         )}
                       </div>
                     )}
-                    <MessageActions msg={msg} onCopy={onCopyMessage} onRetry={onRetry} onEdit={onEdit} />
+                    <MessageActions
+                msg={msg}
+                onCopy={onCopyMessage}
+                onRetry={onRetry}
+                onEdit={onEdit}
+                onContinue={onContinue}
+                onFork={onFork}
+                onDelete={onDeleteWithUndo}
+                nextAssistantId={messages[idx + 1]?.role === 'assistant' ? messages[idx + 1].id : undefined}
+              />
                     {msg.role === 'assistant' && !msg.thinking && !msg.error && (
                       <div className="mt-1.5 text-[9px] text-right tracking-wider select-none flex items-center justify-end gap-1.5" style={{ color: 'var(--gia-muted-3)' }}>
                         <span className="opacity-40">— </span>
@@ -376,7 +384,7 @@ const MessageList: React.FC<MessageListProps> = ({
                   <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
                 )}
               </div>
-            </MessageContextMenu>
+            </>
           </div>
         </motion.div>
       ))}
