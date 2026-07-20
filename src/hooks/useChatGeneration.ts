@@ -307,20 +307,12 @@ export function useChatGeneration() {
       const handsOffPrefix = handsOff ? `[HANDS-OFF MODE: You have full control. Use built-in tools (web_search, filesystem_read, filesystem_write, terminal_run) freely.
 To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the file contents in \`[FILE:path] content [FILE]\` format.]\n\n` : '';
 
-      const reactionVals = Object.values(state.reactions);
-      const upCount = reactionVals.filter(v => v === 'up').length;
-      const downCount = reactionVals.filter(v => v === 'down').length;
-      const feedbackLine = (upCount + downCount) > 0
-        ? `👍 ${upCount} / 👎 ${downCount} on recent responses. Steer toward the style, length, and depth the user liked; avoid what they disliked.`
-        : 'none yet';
-
       const stateContext = `[SYSTEM: Current Feature State:
 - Web Search: ${(webSearch || deepSearch) ? 'ON' : 'OFF'}
 - DeepSearch: ${deepSearch ? 'ON' : 'OFF'}
 - Extended Thinking: ${extThinking ? 'ON' : 'OFF'}
 - Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}
-- Local Vision: ${localVision ? 'ON' : 'OFF'}
-- User feedback: ${feedbackLine}]\n\n`;
+- Local Vision: ${localVision ? 'ON' : 'OFF'}]\n\n`;
 
       const deepSearchPrefix = deepSearch ? `[DEEP SEARCH MODE: Conduct thorough, multi-step web research before answering.
 - Break the question into sub-questions and run SEVERAL distinct web_search queries (at least 3-5), not just one.
@@ -880,9 +872,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           }
         },
       });
-      if (!ctrl.signal.aborted) {
-        streamCancel(streamKey);
-        const retryFinal = retryDisplayAccumulated || processStreamForDisplay(retryParserState.accumulated);
+        if (!ctrl.signal.aborted) {
+          streamCancel(streamKey);
+          const retryFinal = retryDisplayAccumulated || processStreamForDisplay(retryParserState.accumulated);
         state.updateMessage(state.activeSessionId!, id, retryFinal);
         if (retryParserState.artifacts.length > 0) {
           state.updateMessageArtifacts(state.activeSessionId!, id, retryParserState.artifacts);

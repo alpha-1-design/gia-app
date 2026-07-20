@@ -65,7 +65,7 @@ export const DataTableVisual: React.FC<{ data: Record<string, unknown> }> = ({ d
       <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--gia-border)' }}>
         <table className="w-full text-[11px]">
           <thead>
-            <tr style={{ background: 'var(--gia-surface-3)' }}>
+            <tr style={{ background: 'var(--gia-surface-3)', position: 'sticky', top: 0, zIndex: 1 }}>
               {cols.map((c: string) => (
                 <th key={c} onClick={() => toggleSort(c)} className="px-3 py-2 text-left font-medium cursor-pointer select-none whitespace-nowrap" style={{ color: 'var(--gia-muted)', borderBottom: '1px solid var(--gia-border)' }}>
                   {c} {sortKey === c ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : ''}
@@ -75,7 +75,7 @@ export const DataTableVisual: React.FC<{ data: Record<string, unknown> }> = ({ d
           </thead>
           <tbody>
             {pageRows.map((row: Record<string, unknown>, ri: number) => (
-              <tr key={ri} style={{ background: ri % 2 === 1 ? 'var(--gia-surface-2)' : 'transparent' }}>
+              <tr key={ri} className="transition-colors hover:bg-white/5" style={{ background: ri % 2 === 1 ? 'var(--gia-surface-2)' : 'transparent' }}>
                 {cols.map((c: string) => (
                   <td key={c} className="px-3 py-1.5" style={{ color: 'var(--gia-text)', borderBottom: '1px solid var(--gia-border)' }}>{String(row[c] ?? '')}</td>
                 ))}

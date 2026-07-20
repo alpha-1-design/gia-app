@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useCallback, useEffect, useReducer } from 'react';
+import { tint } from './palette';
 
 interface GraphNode {
   id: string;
@@ -124,6 +125,7 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
   const [dims, setDims] = useState({ w: 600, h: 400 });
   const [dragNode, setDragNode] = useState<string | null>(null);
   const layoutRef = useRef<LayoutMap>({});
+  const [, forceRender] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -142,14 +144,14 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
     return layoutRef.current;
   }, [data, dims]);
 
-  const handleMouseDown = useCallback((nodeId: string, e: React.MouseEvent) => {
+  const handlePointerDown = useCallback((nodeId: string, e: React.PointerEvent) => {
     e.preventDefault();
     setDragNode(nodeId);
   }, []);
 
   useEffect(() => {
     if (!dragNode) return;
-    const handleMove = (e: MouseEvent) => {
+    const handleMove = (e: PointerEvent) => {
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -157,12 +159,13 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
       if (p) {
         p.x = e.clientX - rect.left;
         p.y = e.clientY - rect.top;
+        forceRender();
       }
     };
     const handleUp = () => setDragNode(null);
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => { window.removeEventListener('pointermove', handleMove); window.removeEventListener('pointerup', handleUp); };
   }, [dragNode]);
 
   if (!data?.nodes?.length) {
@@ -172,13 +175,13 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
   const { nodes, edges = [], directed = false } = data;
 
   return (
-    <div ref={containerRef} className="w-full h-full min-h-[300px] relative overflow-hidden rounded-lg border border-gray-700/30 bg-gray-900/20">
-      <svg width={dims.w} height={dims.h} className="w-full h-full">
+    <div ref={containerRef} className="w-full h-full min-h-[300px] relative overflow-hidden rounded-xl border" style={{ background: 'var(--gia-surface-2)', borderColor: 'var(--gia-border)' }}>
+      <svg width={dims.w} height={dims.h} className="w-full h-full" style={{ touchAction: 'none' }}>
         {/* Edge arrowhead marker */}
         {directed && (
           <defs>
             <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-              <polygon points="0 0, 8 3, 0 6" fill="#94a3b8" />
+              <polygon points="0 0, 8 3, 0 6" fill="var(--gia-muted)" />
             </marker>
           </defs>
         )}
@@ -188,7 +191,7 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
           const src = positions[edge.source];
           const tgt = positions[edge.target];
           if (!src || !tgt) return null;
-          const color = edge.color || '#4a5568';
+          const color = edge.color || 'var(--gia-muted-2)';
           const width = edge.width || 1.5;
           const dash = edge.style === 'dashed' ? '6,3' : edge.style === 'dotted' ? '2,2' : 'none';
           const midX = (src.x + tgt.x) / 2;
@@ -203,7 +206,7 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
                 className="transition-all duration-300"
               />
               {edge.label && (
-                <text x={midX} y={midY - 4} textAnchor="middle" fill="#94a3b8" fontSize="10" className="pointer-events-none select-none">
+                <text x={midX} y={midY - 4} textAnchor="middle" fill="var(--gia-muted)" fontSize="10" className="pointer-events-none select-none">
                   {edge.label}
                 </text>
               )}
@@ -216,31 +219,32 @@ const GraphVisual: React.FC<{ data: GraphData }> = ({ data }) => {
           const pos = positions[node.id];
           if (!pos) return null;
           const r = node.size || 18;
-          const color = node.color || '#6366f1';
+          const color = node.color || 'var(--gia-accent)';
           const isDragging = dragNode === node.id;
 
           return (
             <g
               key={node.id}
-              onMouseDown={(e) => handleMouseDown(node.id, e)}
+              onPointerDown={(e) => handlePointerDown(node.id, e)}
               className="cursor-grab active:cursor-grabbing"
               style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
             >
-              {/* Shadow */}
-              <circle cx={pos.x + 1} cy={pos.y + 1} r={r} fill="rgba(0,0,0,0.3)" />
+              {/* Shadow + glow */}
+              <circle cx={pos.x + 1} cy={pos.y + 2} r={r} fill="rgba(0,0,0,0.35)" />
               {/* Main circle */}
               <circle
                 cx={pos.x} cy={pos.y} r={r}
-                fill={color} stroke={isDragging ? '#fff' : 'rgba(255,255,255,0.3)'}
+                fill={color} stroke={isDragging ? '#fff' : 'rgba(255,255,255,0.35)'}
                 strokeWidth={isDragging ? 2.5 : 1.5}
+                style={{ filter: `drop-shadow(0 0 6px ${tint(typeof color === 'string' && color.startsWith('#') ? color : '#a855f7', 0.5)})` }}
                 className="transition-[stroke] duration-150"
               />
               {/* Inner highlight */}
-              <circle cx={pos.x - r * 0.2} cy={pos.y - r * 0.2} r={r * 0.35} fill="rgba(255,255,255,0.15)" />
+              <circle cx={pos.x - r * 0.2} cy={pos.y - r * 0.2} r={r * 0.35} fill="rgba(255,255,255,0.18)" />
               {/* Label */}
               <text
                 x={pos.x} y={pos.y + r + 14}
-                textAnchor="middle" fill="#e2e8f0"
+                textAnchor="middle" fill="var(--gia-text)"
                 fontSize="11" fontWeight="500"
                 className="pointer-events-none select-none"
               >

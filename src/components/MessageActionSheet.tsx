@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Copy, RotateCcw, Pencil, Play, GitFork, Trash2, Sparkles, X, Wand2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Copy, RotateCcw, Pencil, Play, GitFork, Trash2, Sparkles, X, Wand2, ThumbsUp, ThumbsDown, Maximize } from 'lucide-react';
 import type { Message } from '../store/useGiaStore';
 
 interface MessageActionSheetProps {
@@ -13,6 +13,7 @@ interface MessageActionSheetProps {
   onFork: (id: string) => void;
   onDelete: (id: string) => void;
   onRewrite: (id: string, instruction: string) => void;
+  onExpand: (id: string) => void;
   reaction?: 'up' | 'down';
   onReact: (value: 'up' | 'down') => void;
   nextAssistantId?: string;
@@ -42,7 +43,7 @@ const Row: React.FC<{
 );
 
 export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
-  msg, onClose, onCopy, onRetry, onEdit, onContinue, onFork, onDelete, onRewrite, reaction, onReact, nextAssistantId,
+  msg, onClose, onCopy, onRetry, onEdit, onContinue, onFork, onDelete, onRewrite, onExpand, reaction, onReact, nextAssistantId,
 }) => {
   const isUser = msg?.role === 'user';
   return (
@@ -86,6 +87,7 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
               ) : (
                 <>
                   <Row icon={Copy} label="Copy" onClick={() => { onCopy(msg.id, msg.content); onClose(); }} />
+                  <Row icon={Maximize} label="Expand" onClick={() => { onExpand(msg.id); }} />
                   <Row icon={RotateCcw} label="Regenerate" onClick={() => { onRetry(msg.id); onClose(); }} />
                   <Row icon={Play} label="Continue" onClick={() => { onContinue(msg.id); onClose(); }} />
                   <Row icon={GitFork} label="Fork conversation" onClick={() => { onFork(msg.id); onClose(); }} />

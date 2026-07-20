@@ -69,7 +69,7 @@ export const MindMapVisual: React.FC<{ data: Record<string, unknown> }> = ({ dat
         <button onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }} className="p-1 rounded" style={{ color: 'var(--gia-muted-2)', background: 'var(--gia-surface-2)' }}><RotateCcw size={11} /></button>
         <span className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>{Math.round(scale * 100)}%</span>
       </div>
-      <div ref={svgRef} className="overflow-auto rounded-lg" style={{ background: '#0d0d14', maxHeight: expanded ? '600px' : '250px', cursor: 'grab' }}>
+        <div ref={svgRef} className="overflow-auto rounded-lg" style={{ background: 'var(--gia-surface-2)', maxHeight: expanded ? '600px' : '250px', cursor: 'grab' }}>
         <svg width={svgWidth * scale} height={svgHeight * scale} style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
           <g transform={`scale(${scale})`}>
             {layout.map((node, i) => {

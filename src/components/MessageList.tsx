@@ -10,6 +10,7 @@ import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
 import MessageActionSheet from './MessageActionSheet';
+import MessageFullScreen from './MessageFullScreen';
 import { ChatSkeleton } from './feedback';
 import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
 import ToolTray from './ToolTray';
@@ -133,6 +134,7 @@ const MessageList: React.FC<MessageListProps> = ({
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
   const [sheetMsgId, setSheetMsgId] = useState<string | null>(null);
+  const [fullScreenMsgId, setFullScreenMsgId] = useState<string | null>(null);
   const reactions = useGiaStore(s => s.reactions);
   const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
   return (
@@ -292,9 +294,9 @@ const MessageList: React.FC<MessageListProps> = ({
                       </div>
                     )}
                     {msg.role === 'assistant' && reactions[msg.id] && (
-                      <div className="mt-1 flex items-center gap-1" style={{ color: reactions[msg.id] === 'up' ? '#22c55e' : '#f87171' }}>
-                        {reactions[msg.id] === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
-                        <span className="text-[9px] tracking-wider select-none">{reactions[msg.id] === 'up' ? 'Liked' : 'Disliked'}</span>
+                      <div className="mt-1 flex items-center gap-1" style={{ color: reactions[msg.id].value === 'up' ? '#22c55e' : '#f87171' }}>
+                        {reactions[msg.id].value === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
+                        <span className="text-[9px] tracking-wider select-none">{reactions[msg.id].value === 'up' ? 'Liked' : 'Disliked'}</span>
                       </div>
                     )}
                     {msg.artifacts && msg.artifacts.length > 0 && (
@@ -367,13 +369,22 @@ const MessageList: React.FC<MessageListProps> = ({
         onFork={onFork}
         onDelete={onDeleteWithUndo}
         onRewrite={onRewrite}
-        reaction={sheetMsgId ? reactions[sheetMsgId] : undefined}
-        onReact={(value) => { if (sheetMsgId) useGiaStore.getState().setReaction(sheetMsgId, value); }}
+        onExpand={(id) => { setSheetMsgId(null); setFullScreenMsgId(id); }}
+        reaction={sheetMsgId ? reactions[sheetMsgId]?.value : undefined}
+        onReact={(value) => { if (sheetMsgId) { const m = messages.find(x => x.id === sheetMsgId); useGiaStore.getState().setReaction(sheetMsgId, value, m ? m.content.slice(0, 200) : ''); } }}
         nextAssistantId={sheetMsgId ? (() => {
           const i = messages.findIndex(m => m.id === sheetMsgId);
           const n = messages[i + 1];
           return n && n.role === 'assistant' ? n.id : undefined;
         })() : undefined}
+      />
+      <MessageFullScreen
+        msg={fullScreenMsgId ? (messages.find(m => m.id === fullScreenMsgId) ?? null) : null}
+        reaction={fullScreenMsgId ? reactions[fullScreenMsgId]?.value : undefined}
+        onClose={() => setFullScreenMsgId(null)}
+        onCopy={onCopyMessage}
+        onRegenerate={onRetry}
+        onReact={(value) => { if (fullScreenMsgId) { const m = messages.find(x => x.id === fullScreenMsgId); useGiaStore.getState().setReaction(fullScreenMsgId, value, m ? m.content.slice(0, 200) : ''); } }}
       />
     </>
   );

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { parseVisualBlock } from './parseVisualBlock';
-import { ErrorVisual } from './common';
+import { ErrorVisual, VisualLoading } from './common';
 import VisualErrorBoundary from './VisualErrorBoundary';
 import { ChartVisual } from './ChartVisual';
 import { MindMapVisual } from './MindMapVisual';
@@ -22,7 +22,7 @@ import { FileVisual } from './FileVisual';
 const RenderVisualByType: React.FC<{ code: string }> = ({ code }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
 
-  if ('error' in parsed) return <ErrorVisual message={parsed.error} />;
+    if ('error' in parsed) return <VisualLoading />;
 
   const { type, data } = parsed;
 

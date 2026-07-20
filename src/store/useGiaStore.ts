@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
+import { useMemoryStore } from './useMemoryStore';
+
+const FEEDBACK_KEYS = { up: 'feedback:liked', down: 'feedback:disliked' } as const;
 
 export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy' | 'agents';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
@@ -272,7 +275,7 @@ interface GiaState {
   
   webSearch: boolean;
   deepSearch: boolean;
-  reactions: Record<string, 'up' | 'down'>;
+  reactions: Record<string, { value: 'up' | 'down'; snippet: string }>;
   extThinking: boolean;
   handsOff: boolean;
   localVision: boolean;
@@ -335,7 +338,7 @@ interface GiaState {
   setShowModelSwitcher: (show: boolean) => void;
   setWebSearch: (enabled: boolean) => void;
   setDeepSearch: (enabled: boolean) => void;
-  setReaction: (msgId: string, value: 'up' | 'down') => void;
+  setReaction: (msgId: string, value: 'up' | 'down', snippet: string) => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
   setLocalVision: (enabled: boolean) => void;
@@ -592,10 +595,29 @@ export const useGiaStore = create<GiaState>()(
       setShowModelSwitcher: (show) => set({ showModelSwitcher: show }),
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setDeepSearch: (enabled) => set({ deepSearch: enabled }),
-      setReaction: (msgId, value) => set(s => {
+      setReaction: (msgId, value, snippet) => set(s => {
         const next = { ...s.reactions };
-        if (next[msgId] === value) delete next[msgId];
-        else next[msgId] = value;
+        const wasSet = next[msgId]?.value === value;
+        if (wasSet) delete next[msgId];
+        else next[msgId] = { value, snippet };
+
+        const mem = useMemoryStore.getState();
+        const prevKey = value === 'up' ? FEEDBACK_KEYS.down : FEEDBACK_KEYS.up;
+        const prevEntry = mem.getMemories().find(m => m.key === prevKey);
+        if (prevEntry) mem.deleteMemory(prevEntry.id);
+
+        if (!wasSet) {
+          mem.addMemory({
+            key: FEEDBACK_KEYS[value],
+            value: value === 'up'
+              ? `Preferred response style — match this: "${snippet}"`
+              : `Disliked response style — avoid this: "${snippet}"`,
+            category: value === 'up' ? 'preference' : 'correction',
+            tier: 'semantic',
+            confidence: 0.85,
+          });
+        }
+
         return { reactions: next };
       }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
