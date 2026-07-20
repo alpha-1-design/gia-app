@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Copy, RotateCcw, Pencil, Play, GitFork, Trash2, Sparkles, X, Wand2 } from 'lucide-react';
+import { Copy, RotateCcw, Pencil, Play, GitFork, Trash2, Sparkles, X, Wand2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import type { Message } from '../store/useGiaStore';
 
 interface MessageActionSheetProps {
@@ -13,6 +13,8 @@ interface MessageActionSheetProps {
   onFork: (id: string) => void;
   onDelete: (id: string) => void;
   onRewrite: (id: string, instruction: string) => void;
+  reaction?: 'up' | 'down';
+  onReact: (value: 'up' | 'down') => void;
   nextAssistantId?: string;
 }
 
@@ -40,7 +42,7 @@ const Row: React.FC<{
 );
 
 export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
-  msg, onClose, onCopy, onRetry, onEdit, onContinue, onFork, onDelete, onRewrite, nextAssistantId,
+  msg, onClose, onCopy, onRetry, onEdit, onContinue, onFork, onDelete, onRewrite, reaction, onReact, nextAssistantId,
 }) => {
   const isUser = msg?.role === 'user';
   return (
@@ -94,6 +96,17 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
                   {REWRITE_OPTIONS.map(opt => (
                     <Row key={opt.label} icon={Sparkles} label={opt.label} onClick={() => { onRewrite(msg.id, opt.instruction); onClose(); }} />
                   ))}
+                  <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Was this helpful?</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { onReact('up'); }} className="p-2 rounded-lg tap-feedback transition-colors active:bg-white/5" style={{ color: reaction === 'up' ? '#22c55e' : 'var(--gia-muted)' }}>
+                        <ThumbsUp size={16} />
+                      </button>
+                      <button onClick={() => { onReact('down'); }} className="p-2 rounded-lg tap-feedback transition-colors active:bg-white/5" style={{ color: reaction === 'down' ? '#f87171' : 'var(--gia-muted)' }}>
+                        <ThumbsDown size={16} />
+                      </button>
+                    </div>
+                  </div>
                   <div className="h-px my-1" style={{ background: 'var(--gia-border)' }} />
                   <Row icon={Trash2} label="Delete" danger onClick={() => { onDelete(msg.id); onClose(); }} />
                 </>

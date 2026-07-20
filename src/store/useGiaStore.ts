@@ -272,6 +272,7 @@ interface GiaState {
   
   webSearch: boolean;
   deepSearch: boolean;
+  reactions: Record<string, 'up' | 'down'>;
   extThinking: boolean;
   handsOff: boolean;
   localVision: boolean;
@@ -334,6 +335,7 @@ interface GiaState {
   setShowModelSwitcher: (show: boolean) => void;
   setWebSearch: (enabled: boolean) => void;
   setDeepSearch: (enabled: boolean) => void;
+  setReaction: (msgId: string, value: 'up' | 'down') => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
   setLocalVision: (enabled: boolean) => void;
@@ -492,6 +494,7 @@ export const useGiaStore = create<GiaState>()(
       showProtocols: false,
       webSearch: true,
       deepSearch: false,
+      reactions: {},
       extThinking: false,
       handsOff: false,
       localVision: false,
@@ -589,6 +592,12 @@ export const useGiaStore = create<GiaState>()(
       setShowModelSwitcher: (show) => set({ showModelSwitcher: show }),
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setDeepSearch: (enabled) => set({ deepSearch: enabled }),
+      setReaction: (msgId, value) => set(s => {
+        const next = { ...s.reactions };
+        if (next[msgId] === value) delete next[msgId];
+        else next[msgId] = value;
+        return { reactions: next };
+      }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
       setHandsOff: (enabled) => set({ handsOff: enabled }),
       setLocalVision: (enabled) => set({ localVision: enabled }),
@@ -970,6 +979,7 @@ export const useGiaStore = create<GiaState>()(
         examHistory: s.examHistory,
         webSearch: s.webSearch,
         deepSearch: s.deepSearch,
+        reactions: s.reactions,
         extThinking: s.extThinking,
         handsOff: s.handsOff,
         localVision: s.localVision,

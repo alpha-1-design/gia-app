@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
@@ -133,6 +133,7 @@ const MessageList: React.FC<MessageListProps> = ({
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
   const [sheetMsgId, setSheetMsgId] = useState<string | null>(null);
+  const reactions = useGiaStore(s => s.reactions);
   const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
   return (
     <>
@@ -290,6 +291,12 @@ const MessageList: React.FC<MessageListProps> = ({
                         )}
                       </div>
                     )}
+                    {msg.role === 'assistant' && reactions[msg.id] && (
+                      <div className="mt-1 flex items-center gap-1" style={{ color: reactions[msg.id] === 'up' ? '#22c55e' : '#f87171' }}>
+                        {reactions[msg.id] === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
+                        <span className="text-[9px] tracking-wider select-none">{reactions[msg.id] === 'up' ? 'Liked' : 'Disliked'}</span>
+                      </div>
+                    )}
                     {msg.artifacts && msg.artifacts.length > 0 && (
                       <ArtifactsPanel artifacts={msg.artifacts} />
                     )}
@@ -360,6 +367,8 @@ const MessageList: React.FC<MessageListProps> = ({
         onFork={onFork}
         onDelete={onDeleteWithUndo}
         onRewrite={onRewrite}
+        reaction={sheetMsgId ? reactions[sheetMsgId] : undefined}
+        onReact={(value) => { if (sheetMsgId) useGiaStore.getState().setReaction(sheetMsgId, value); }}
         nextAssistantId={sheetMsgId ? (() => {
           const i = messages.findIndex(m => m.id === sheetMsgId);
           const n = messages[i + 1];

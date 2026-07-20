@@ -6,6 +6,22 @@ Chronological record of changes, rationale, and decisions.
 
 ## 2026-07-20
 
+### Premium push — Tier 2.5: Reaction feedback injected into GIA
+
+Added 👍/👎 reaction on assistant responses (tap message → "Was this helpful?").
+
+- `useGiaStore`: `reactions` map (msgId -> 'up' | 'down') + `setReaction` (toggle). Persisted.
+- `useChatGeneration`: aggregates reactions into a **feedback signal injected into the
+  prompt** (`User feedback: 👍 N / 👎 M ... steer toward what they liked`). This is the
+  injection — GIA nudges style/length/depth toward rewarded responses. No training backend,
+  so it's a soft steering signal, not fine-tuning.
+- `MessageActionSheet`: "Was this helpful?" row with 👍/👎 (selected state highlighted).
+- `MessageList`: small "Liked"/"Disliked" badge under the assistant bubble.
+
+---
+
+## 2026-07-20
+
 ### Premium push — Tier 2: Grok/Claude-style web research + slide-up sheets
 
 Brought GIA's message + composer UX in line with Grok/Claude mobile: tap-to-reveal
