@@ -24,12 +24,13 @@ import { NeuraPage } from '../components/settings/NeuraPage';
 import { NexusPage } from '../components/settings/NexusPage';
 import { MicalPage } from '../components/settings/MicalPage';
 import { SkillsMarketplaceUI } from '../components/settings/SkillsMarketplaceSection';
+import SandboxSubPage from '../components/settings/SandboxSubPage';
 import { DashboardModule } from './DashboardModule';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
 
-type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace';
+type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox';
 
 const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
   { id: 'profile-identity', icon: <UserCircle size={20} />, label: 'Profile & Identity', desc: 'Your profile, GIA identity, skills, memory & brain export', sections: '5 sections', color: '#a855f7' },
@@ -37,6 +38,7 @@ const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc
   { id: 'system', icon: <Battery size={20} />, label: 'System & Performance', desc: 'Security, code execution, voice, power & reliability', sections: '7 sections', color: '#34d399' },
   { id: 'local-ai', icon: <Cpu size={20} />, label: 'Local AI', desc: 'On-device LLM models & vision recognition', sections: '2 sections', color: '#22c55e' },
   { id: 'app-extensions', icon: <Puzzle size={20} />, label: 'App & Extensions', desc: 'Plugins, install APK, code history & developer settings', sections: '5 sections', color: '#a855f7' },
+  { id: 'sandbox', icon: <Terminal size={20} />, label: 'Sandbox & Build', desc: 'On-device terminal environment, Node/npm & build tools', sections: '1 section', color: '#34d399' },
   { id: 'skills-marketplace', icon: <Sparkles size={20} />, label: 'Skills Marketplace', desc: 'Install, create, and manage GIA skills', sections: 'Marketplace', color: '#f59e0b' },
   { id: 'dashboard', icon: <Activity size={20} />, label: 'Dashboard', desc: 'Performance analytics, tool usage, error tracking & insights', sections: '6 sections', color: '#3b82f6' },
   { id: 'about', icon: <Info size={20} />, label: 'About', desc: 'Analytics, version info & danger zone', sections: '3 sections', color: '#94a3b8' },
@@ -115,6 +117,7 @@ const SettingsModule: React.FC = () => {
   if (settingsPage === 'neura') return <NeuraPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'nexus') return <NexusPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'mical') return <MicalPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'sandbox') return <SandboxSubPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'skills-marketplace') return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
       <div className="flex items-center gap-2">

@@ -552,7 +552,8 @@ ${currentMode === 'plan' ? `You are in **PLAN mode**. You may analyze, research,
 3. **Install** — run npm install / pip install / apt-get as needed via terminal_run
 4. **Build** — write all source files with filesystem_write
 5. **Test** — run build commands, fix any errors
-6. **Deliver** — when done, tell the user to say "preview it" to see it running
+6. **Run** — start the dev server (npm run dev / python -m http.server) and confirm it is serving
+7. **Deliver** — in your final message, print the exact local URL the dev server is listening on (e.g. "Running at http://localhost:3000") so the user can preview it
 
 **Rules for BUILD mode:**
 - Always start by clarifying the tech stack if the user didn't specify
@@ -560,10 +561,10 @@ ${currentMode === 'plan' ? `You are in **PLAN mode**. You may analyze, research,
 - Write complete, working code — not stubs or placeholders
 - After each file write, briefly note what you just created
 - If a build fails, debug it immediately — don't ask the user
-- When the build is complete, suggest: "Say 'preview it' to see your app running"
+- When the dev server is running, print its full URL verbatim in your final message (this is how the in-app Preview opens)
 - You have full tool access — use filesystem_write, terminal_run, sandbox_exec, build_project as needed
 - Be efficient — write files in parallel when possible (multiple filesystem_write in one message)
-- Show your progress: "Step 3/6: Writing components..." etc.` :
+- Show your progress: "Step 3/7: Writing components..." etc.` :
   `You are in **CODE mode** (full access). Use any and all tools needed to complete the task. Be thorough and efficient.`}
 
 **IMPORTANT — Skills override mode restrictions.** Regardless of which mode you are in, you MUST always check if the user's request matches an installed skill. If a skill applies, follow its instructions completely. Skills are your highest priority — they define HOW you do things, not WHETHER you do them. A skill's system prompt and tool instructions take precedence over mode restrictions. If a skill requires a tool that mode would normally block, use it anyway — the skill is the user's explicit instruction.

@@ -1,4 +1,5 @@
 import SandboxService from '../SandboxService';
+import terminalService from '../TerminalService';
 import type { Tool } from './types';
 
 const sandboxExec: Tool = {
@@ -60,6 +61,19 @@ const sandboxInstall: Tool = {
   execute: async (args) => {
     const packages = String(args.packages || '');
     if (!packages) return { success: false, content: '', error: 'packages is required' };
+
+    // Prefer the on-device native proot terminal (so installs work in-app on mobile)
+    if (terminalService.isAvailable()) {
+      try {
+        const result = await terminalService.exec(`apk add ${packages}`, undefined, undefined, 300000);
+        if (result.exitCode !== 0) {
+          return { success: false, content: result.output, error: `Exit code ${result.exitCode}` };
+        }
+        return { success: true, content: `Installed: ${packages}\n${result.output}` };
+      } catch (e) {
+        return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
+      }
+    }
 
     const available = await SandboxService.ensureAvailable();
     if (!available) {

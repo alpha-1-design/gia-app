@@ -402,6 +402,8 @@ interface GiaState {
   buildSessionId: string | null;
   buildPreviewUrl: string | null;
   setBuildPreview: (url: string | null) => void;
+  sandboxEnvReady: boolean | null;
+  setSandboxEnvReady: (v: boolean | null) => void;
   longRunningMode: boolean;
   autoModelUnload: boolean;
   setLongRunningMode: (v: boolean) => void;
@@ -539,11 +541,13 @@ export const useGiaStore = create<GiaState>()(
       buildMode: false,
       buildSessionId: null,
       buildPreviewUrl: null,
+      sandboxEnvReady: null,
       longRunningMode: false,
       autoModelUnload: true,
 
       setBuildMode: (v) => set((s) => ({ buildMode: v, buildSessionId: v ? s.activeSessionId : s.buildSessionId })),
       setBuildPreview: (url) => set({ buildPreviewUrl: url }),
+      setSandboxEnvReady: (v) => set({ sandboxEnvReady: v }),
       setModule: (module) => set((s) => {
         if (s.currentModule === module) return {};
         // Preserve context across module switches so the next module can pick

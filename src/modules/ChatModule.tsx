@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Bot, Plus, History, Trash2,
-  Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
+  Paperclip, X, Download, Globe, Image as ImageIcon, Camera, Terminal,
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
   Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal,
@@ -13,10 +13,12 @@ import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import GiaIcon from '../components/GiaIcon';
+import SandboxEnvService from '../services/SandboxEnvService';
 import MessageList from '../components/MessageList';
 import ComposerToolsSheet from '../components/ComposerToolsSheet';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
+import BuildPreviewSheet from '../components/BuildPreviewSheet';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 import FileManager from '../components/FileManager';
 import ToolTray from '../components/ToolTray';
@@ -41,7 +43,7 @@ const QUICK_STARTS = [
   { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b', category: 'productivity' },
 ];
 
-const LOCALHOST_RE = /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/[^\s<]*)?/i;
+const LOCALHOST_RE = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|(10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(192\.168\.\d{1,3}\.\d{1,3})|(172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}))(:\d+)?(\/[^\s<]*)?/i;
 const extractLocalhostUrl = (text: string): string | null => {
   const m = text?.match(LOCALHOST_RE);
   return m ? m[0] : null;
@@ -85,6 +87,7 @@ const ChatModule: React.FC = () => {
   const setBuildMode = useGiaStore((s) => s.setBuildMode);
   const buildPreviewUrl = useGiaStore((s) => s.buildPreviewUrl);
   const setBuildPreview = useGiaStore((s) => s.setBuildPreview);
+  const sandboxEnvReady = useGiaStore((s) => s.sandboxEnvReady);
   const archivedSessions = useGiaStore((s) => s.archivedSessions);
   const restoreSession = useGiaStore((s) => s.restoreSession);
   const activeProvider = useProviderStore((s) => s.activeProvider);
@@ -109,12 +112,20 @@ const ChatModule: React.FC = () => {
     }
   }, [buildMode, messages, buildPreviewUrl, setBuildPreview]);
 
+  // Refresh on-device sandbox readiness when entering Build Mode so the
+  // "set up" nudge is accurate.
+  React.useEffect(() => {
+    if (buildMode && SandboxEnvService.isAvailable()) {
+      SandboxEnvService.status().catch(() => {});
+    }
+  }, [buildMode]);
+
   const showEngine = useGiaStore((s) => s.showEngine);
   const setShowEngine = useGiaStore((s) => s.setShowEngine);
   const showModelSwitcher = useGiaStore((s) => s.showModelSwitcher);
   const setShowModelSwitcher = useGiaStore((s) => s.setShowModelSwitcher);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
-  const [showPreview, setShowPreview] = React.useState(false);
+  const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
 
@@ -263,7 +274,7 @@ const ChatModule: React.FC = () => {
             </div>
             <div>
               <p className="text-lg font-semibold" style={{ color: 'var(--gia-text)' }}>Build Mode</p>
-              <p className="text-xs mt-1 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>Describe the app you want to build. GIA scaffolds it, runs a dev server, and you can preview it live right here.</p>
+              <p className="text-xs mt-1 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>Describe the app you want to build. GIA scaffolds it, runs a dev server, and a Preview button appears when it's live — tap it to see your app.</p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
               {[
@@ -555,7 +566,20 @@ const ChatModule: React.FC = () => {
               <Hammer size={11} />
               Build
             </button>
+            {buildMode && (
+              <button type="button" onClick={() => setShowPreviewSheet(true)} disabled={!buildPreviewUrl} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: buildPreviewUrl ? '#22c55e15' : 'var(--gia-surface)', border: `1px solid ${buildPreviewUrl ? '#22c55e40' : 'var(--gia-border)'}`, color: buildPreviewUrl ? '#22c55e' : 'var(--gia-muted)', fontWeight: 500 }}>
+                {buildPreviewUrl && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />}
+                <Eye size={11} />
+                Preview
+              </button>
+            )}
           </div>
+          {buildMode && sandboxEnvReady === false && (
+            <button type="button" onClick={() => useGiaStore.getState().setModule('settings')} className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-lg self-start transition-colors tap-feedback" style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}>
+              <Terminal size={11} />
+              Set up sandbox to preview apps
+            </button>
+          )}
           {activeToolCount > 0 && (
             <span className="text-[10px] shrink-0 px-2 py-1 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>
               {activeToolCount} active
@@ -568,34 +592,6 @@ const ChatModule: React.FC = () => {
             onToggle={(key) => toggleFeature(key as 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate')}
           />
         </div>
-
-        {buildMode && !loading && (
-          <div className="flex flex-col gap-2 mb-2 px-1">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setShowPreview(p => !p)} className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-all font-medium shrink-0">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                {showPreview ? 'Hide Preview' : 'Preview App'}
-              </button>
-              {buildPreviewUrl && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0" style={{ background: '#22c55e20', color: '#22c55e' }}>● live</span>
-              )}
-              <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{buildPreviewUrl ? 'dev server detected — tap Preview App' : 'or say "preview it" after building'}</span>
-            </div>
-            {showPreview && (
-              <div className="rounded-xl overflow-hidden border" style={{ borderColor: '#f9731640', background: '#000' }}>
-                <div className="flex items-center justify-between px-3 py-1.5" style={{ background: '#f9731615' }}>
-                  <span className="text-[10px] font-medium truncate" style={{ color: '#f97316' }}>Preview · {buildPreviewUrl || 'no server'}</span>
-                  <button type="button" onClick={() => setShowPreview(false)} className="p-0.5 shrink-0"><X size={12} style={{ color: '#f97316' }} /></button>
-                </div>
-                {buildPreviewUrl ? (
-                  <iframe src={buildPreviewUrl} title="App preview" className="w-full block" style={{ height: '240px', border: 'none', background: '#fff' }} />
-                ) : (
-                  <div className="flex items-center justify-center h-[240px] text-[11px] px-4 text-center" style={{ color: 'var(--gia-muted)' }}>No dev server detected yet. Build your app, then say "preview it" and GIA will start it.</div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {loading && (
           <div className="mb-1 px-1">
@@ -621,6 +617,7 @@ const ChatModule: React.FC = () => {
           />
         )}
       </AnimatePresence>
+      <BuildPreviewSheet url={buildPreviewUrl} open={showPreviewSheet} onClose={() => setShowPreviewSheet(false)} />
       {showKnowledge && <KnowledgePanel onClose={() => setShowKnowledge(false)} />}
       {showFileManager && <FileManager onClose={() => setShowFileManager(false)} />}
       {showBranchView && activeSession && (
