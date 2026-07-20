@@ -52,6 +52,17 @@ export const SandboxEnvService = {
     return terminalService.isAvailable();
   },
 
+  /** True only if the plugin is registered AND proot can actually execute. */
+  async isExecutable(): Promise<boolean> {
+    if (!terminalService.isAvailable()) return false;
+    try {
+      const r = await run('echo ok', 15000);
+      return !(r.exitCode === -1 && r.sessionId === 'mock');
+    } catch {
+      return false;
+    }
+  },
+
   getCached(): SandboxStatus | null {
     return cached;
   },
@@ -63,12 +74,22 @@ export const SandboxEnvService = {
       return cached;
     }
 
+    // Probe proot for real: the plugin may be registered yet proot still fails
+    // to execute (libproot.so failed to load, or Android W^X blocks the
+    // extracted binary). In that case report unavailable rather than "missing".
     let resolv = false;
     try {
-      const r = await run("test -f /etc/resolv.conf && echo YES || echo NO", 15000);
+      const r = await run('test -f /etc/resolv.conf && echo YES || echo NO', 15000);
+      if (r.exitCode === -1 && r.sessionId === 'mock') {
+        cached = { available: false, resolv: false, packages: [], ready: false };
+        useGiaStore.getState().setSandboxEnvReady(false);
+        return cached;
+      }
       resolv = /YES/.test(r.output || '');
     } catch {
-      /* ignore */
+      cached = { available: false, resolv: false, packages: [], ready: false };
+      useGiaStore.getState().setSandboxEnvReady(false);
+      return cached;
     }
 
     const packages = await Promise.all(
@@ -91,8 +112,8 @@ export const SandboxEnvService = {
   },
 
   async provision(onProgress?: (msg: string) => void): Promise<{ success: boolean; output: string }> {
-    if (!terminalService.isAvailable()) {
-      return { success: false, output: 'On-device sandbox terminal is not available on this platform.' };
+    if (!(await this.isExecutable())) {
+      return { success: false, output: 'On-device sandbox terminal is not available on this device.' };
     }
     try {
       onProgress?.('Ensuring DNS (resolv.conf)…');
@@ -112,8 +133,8 @@ export const SandboxEnvService = {
   },
 
   async repair(onProgress?: (msg: string) => void): Promise<{ success: boolean; output: string }> {
-    if (!terminalService.isAvailable()) {
-      return { success: false, output: 'On-device sandbox terminal is not available on this platform.' };
+    if (!(await this.isExecutable())) {
+      return { success: false, output: 'On-device sandbox terminal is not available on this device.' };
     }
     try {
       onProgress?.('Fixing packages (apk fix)…');
@@ -130,8 +151,8 @@ export const SandboxEnvService = {
   },
 
   async reset(onProgress?: (msg: string) => void): Promise<{ success: boolean; output: string }> {
-    if (!terminalService.isAvailable()) {
-      return { success: false, output: 'On-device sandbox terminal is not available on this platform.' };
+    if (!(await this.isExecutable())) {
+      return { success: false, output: 'On-device sandbox terminal is not available on this device.' };
     }
     try {
       onProgress?.('Removing installed packages…');
