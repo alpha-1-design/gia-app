@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { Code, FileType, Image, MapIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
+import { Code, FileType, Image, MapIcon, Maximize2, X } from 'lucide-react';
 import ArtifactRenderer from './ArtifactRenderer';
 import type { Artifact } from '../store/useGiaStore';
 
@@ -25,6 +26,7 @@ const typeColor = (type: string) => {
 const ArtifactsPanel: React.FC<Props> = ({ artifacts }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
   const active = artifacts[activeIdx];
 
   if (artifacts.length === 0) return null;
@@ -59,6 +61,14 @@ const ArtifactsPanel: React.FC<Props> = ({ artifacts }) => {
           )}
         </div>
         <button
+          onClick={() => setCanvasOpen(true)}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] transition-colors hover:opacity-70"
+          style={{ color: 'var(--gia-muted-2)' }}
+          title="Open in Canvas"
+        >
+          <Maximize2 size={11} /> Canvas
+        </button>
+        <button
           onClick={() => setCollapsed(!collapsed)}
           className="text-[9px] px-1.5 py-0.5 rounded transition-colors hover:opacity-70"
           style={{ color: 'var(--gia-muted-2)' }}
@@ -75,6 +85,36 @@ const ArtifactsPanel: React.FC<Props> = ({ artifacts }) => {
         >
           <ArtifactRenderer type={active.type} content={active.content} title={active.title} />
         </motion.div>
+      )}
+      {canvasOpen && active && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex flex-col"
+            style={{ background: 'var(--gia-bg)' }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)', background: 'var(--gia-surface)' }}>
+              <div className="flex items-center gap-2 min-w-0">
+                {typeIcon(active.type)}
+                <span className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{active.title}</span>
+              </div>
+              <button
+                onClick={() => setCanvasOpen(false)}
+                className="p-2 rounded-xl tap-feedback transition-colors hover:bg-white/10"
+                style={{ color: 'var(--gia-muted)' }}
+                title="Close Canvas"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <ArtifactRenderer type={active.type} content={active.content} title={active.title} />
+            </div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
       )}
     </div>
   );

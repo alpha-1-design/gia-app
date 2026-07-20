@@ -35,6 +35,31 @@ cluttering the UI.
 
 ---
 
+## 2026-07-20
+
+### Premium push — Tier 1: Artifacts + Regenerate/Edit (discoverability + Canvas)
+
+Audited GIA against ChatGPT/Claude/Perplexity/Gemini 2026 UX. Found that **Artifacts,
+Regenerate, and Edit already existed** but were hidden behind the long-press context menu
+(`MessageContextMenu`), so they felt absent. The premium gap was discoverability + a true
+Canvas view, not missing logic.
+
+**Changes**
+- `src/components/MessageList.tsx` — added a visible `MessageActions` toolbar under every
+  message (ChatGPT-style): assistant → **Copy + Regenerate**; user → **Copy + Edit**. Error
+  messages keep their own Retry/Edit buttons. Makes the existing regenerate/edit power
+  features discoverable instead of buried in a long-press menu.
+- `src/components/ArtifactsPanel.tsx` — added an **Open in Canvas** button that opens the
+  active artifact in a full-screen Canvas overlay (HTML live `iframe` preview, SVG, Mermaid,
+  code via `ArtifactRenderer`). The Claude-Artifacts-style side canvas, adapted for mobile.
+
+**Already present (verified, not changed)**: `streamParser.ts` extracts ` ```artifact ` blocks;
+`useChatGeneration` stores them via `updateMessageArtifacts`; `buildGiaSystem.ts` already
+instructs the model to emit artifacts; `handleRetry` regenerates any assistant message;
+`handleEditResend` loads a user message back into the composer for edit-and-resend.
+
+---
+
 ## 2026-06-05
 
 ### Fixed: SettingsModule naming conflict

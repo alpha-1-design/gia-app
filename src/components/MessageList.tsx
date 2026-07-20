@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Copy, Pencil } from 'lucide-react';
 import { ThinkingPanel } from './ThinkingPanel';
 import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
@@ -60,6 +60,47 @@ const formatTimeAgo = (ts: number) => {
 };
 
 const LONG_MSG_CHARS = 3000;
+
+const MessageActions: React.FC<{
+  msg: Message;
+  onCopy: (id: string, content: string) => void;
+  onRetry: (id: string) => void;
+  onEdit: (id: string) => void;
+}> = ({ msg, onCopy, onRetry, onEdit }) => {
+  if (msg.error) return null; // error messages render their own Retry/Edit buttons
+  const isUser = msg.role === 'user';
+  return (
+    <div className={`flex items-center gap-0.5 mt-1.5 ${isUser ? 'justify-end' : 'justify-start'} pl-0.5`}>
+      <button
+        onClick={() => onCopy(msg.id, msg.content)}
+        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5"
+        style={{ color: 'var(--gia-muted-2)' }}
+        title="Copy"
+      >
+        <Copy size={11} /> Copy
+      </button>
+      {isUser ? (
+        <button
+          onClick={() => onEdit(msg.id)}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5"
+          style={{ color: 'var(--gia-muted-2)' }}
+          title="Edit message"
+        >
+          <Pencil size={11} /> Edit
+        </button>
+      ) : (
+        <button
+          onClick={() => onRetry(msg.id)}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] tap-feedback transition-colors hover:bg-white/5"
+          style={{ color: 'var(--gia-muted-2)' }}
+          title="Regenerate response"
+        >
+          <RotateCcw size={11} /> Regenerate
+        </button>
+      )}
+    </div>
+  );
+};
 
 function useShowTokenUsage(): boolean {
   const [show, setShow] = useState(() => localStorage.getItem('gia-show-token-usage') === 'true');
@@ -229,6 +270,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         )}
                       </div>
                     )}
+                    <MessageActions msg={msg} onCopy={onCopyMessage} onRetry={onRetry} onEdit={onEdit} />
                     {msg.role === 'assistant' && !msg.thinking && !msg.error && (
                       <div className="mt-1.5 text-[9px] text-right tracking-wider select-none flex items-center justify-end gap-1.5" style={{ color: 'var(--gia-muted-3)' }}>
                         <span className="opacity-40">— </span>
