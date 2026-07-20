@@ -2,6 +2,7 @@ import { logger } from '../utils/logger';
 import ttsService from '../services/TTSService';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
+import type { SpeechRecognitionPartialResultEvent, SpeechRecognitionListeningEvent } from '@capgo/capacitor-speech-recognition';
 import { Capacitor } from '@capacitor/core';
 
 interface BrowserSpeechRecognition extends EventTarget {
@@ -55,6 +56,7 @@ export interface VoiceControlConfig {
   wakeWord?: string;
   onWakeWord?: (transcript: string) => void;
   onTranscript?: (text: string) => void;
+  onInterim?: (text: string) => void;
   onDirectCommand?: (command: string, raw: string) => boolean;
   autoStopAfter?: number;
   keepListening?: boolean;
@@ -91,6 +93,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     wakeWord = 'hey gia',
     onWakeWord,
     onTranscript,
+    onInterim,
     autoStopAfter = 60000,
     keepListening = false,
     confidenceThreshold = 0.3,
@@ -113,6 +116,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const nativeListenerRef = useRef<{ remove: () => void } | null>(null);
   const restartCountRef = useRef(0);
   const listenOnceCountRef = useRef(0);
+  const partialListenerRef = useRef<{ remove: () => void } | null>(null);
+  const stateListenerRef = useRef<{ remove: () => void } | null>(null);
 
   useEffect(() => {
     wakeWordRegexRef.current = new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i');
@@ -143,6 +148,15 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       nativeListenerRef.current = null;
     }
 
+    if (partialListenerRef.current) {
+      try { partialListenerRef.current.remove(); } catch { /* ignore */ }
+      partialListenerRef.current = null;
+    }
+    if (stateListenerRef.current) {
+      try { stateListenerRef.current.remove(); } catch { /* ignore */ }
+      stateListenerRef.current = null;
+    }
+
     if (isNative) {
       try {
         const { GIAWakeWord } = await import('../services/GIAWakeWord');
@@ -169,6 +183,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const keepListeningRef = useRef(keepListening);
   const onWakeWordRef = useRef(onWakeWord);
   const onTranscriptRef = useRef(onTranscript);
+  const onInterimRef = useRef(onInterim);
   const thresholdRef = useRef(confidenceThreshold);
   const langRef = useRef(language);
   const onDirectCommandRef = useRef(config.onDirectCommand);
@@ -177,6 +192,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   keepListeningRef.current = keepListening;
   onWakeWordRef.current = onWakeWord;
   onTranscriptRef.current = onTranscript;
+  onInterimRef.current = onInterim;
   thresholdRef.current = confidenceThreshold;
   langRef.current = language;
   onDirectCommandRef.current = config.onDirectCommand;
@@ -334,35 +350,106 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           return;
         }
 
-        // NOTE: partialResults must be false here. When partialResults is true, this
-        // plugin resolves `start()` immediately with no matches and instead streams
-        // results through a `partialResults` event listener. Since nothing here
-        // subscribed to that event, every call resolved empty and the loop below
-        // restarted the microphone every ~3s without ever capturing speech.
+        // Live, word-for-word transcription: partialResults:true makes start()
+        // resolve immediately and stream interim text through the `partialResults`
+        // listener. The final utterance is delivered when `listeningState` reports
+        // `stopped` (silence / results). We keep the previous `partialResults:false`
+        // note as a warning: without subscribing to these listeners, start() resolves
+        // empty and no speech is ever captured.
+        if (partialListenerRef.current) { try { partialListenerRef.current.remove(); } catch { /* ignore */ } partialListenerRef.current = null; }
+        if (stateListenerRef.current) { try { stateListenerRef.current.remove(); } catch { /* ignore */ } stateListenerRef.current = null; }
+
+        let lastText = '';
+        let committed = false;
+
+        partialListenerRef.current = await SpeechRecognition.addListener('partialResults', (data: SpeechRecognitionPartialResultEvent) => {
+          if (!activeRef.current) return;
+          const text = data.accumulatedText || (data.matches && data.matches[data.matches.length - 1]) || '';
+          if (text) {
+            lastText = text;
+            restartCountRef.current = 0;
+            setIsHearing(true);
+            onInterimRef.current?.(text);
+          }
+        });
+
+        stateListenerRef.current = await SpeechRecognition.addListener('listeningState', (ev: SpeechRecognitionListeningEvent) => {
+          if (!activeRef.current) return;
+          if (ev.state === 'started' || ev.status === 'started') {
+            setIsListening(true);
+            setIsHearing(false);
+            return;
+          }
+          if (ev.state === 'stopped' || ev.status === 'stopped') {
+            setIsHearing(false);
+            if (!committed && lastText) {
+              committed = true;
+              listenOnceCountRef.current = 0;
+              processTranscript(lastText);
+            }
+            if (!activeRef.current) return;
+            listeningLoopRef.current = false;
+            const backoff = lastText ? 1500 : 3000;
+            timeoutRef.current = setTimeout(listenOnce, backoff);
+          }
+        });
+
         const result = await SpeechRecognition.start({
           language: langRef.current,
-          partialResults: false,
+          partialResults: true,
           popup: false,
         });
 
-        if (!activeRef.current) { listeningLoopRef.current = false; return; }
-
+        // Some plugin versions still resolve start() with the final matches; commit
+        // those if the listeningState path hasn't already.
         const hadResult = result?.matches?.length && result.matches[0]?.length > 0;
-        if (hadResult) {
+        if (hadResult && !committed) {
+          committed = true;
+          lastText = result.matches![0];
+          onInterimRef.current?.(lastText);
           listenOnceCountRef.current = 0;
-          processTranscript(result.matches![0]);
+          processTranscript(lastText);
         }
 
         if (!activeRef.current) { listeningLoopRef.current = false; return; }
-
-        const backoff = hadResult ? 1500 : 3000;
-        listeningLoopRef.current = false;
-
-        if (activeRef.current) {
+      } else {
+        const SR = SpeechRecognitionAPI.SpeechRecognition || SpeechRecognitionAPI.webkitSpeechRecognition;
+        if (!SR) { setIsHearing(false); listeningLoopRef.current = false; return; }
+        const sr = new SR();
+        sr.continuous = false;
+        sr.interimResults = true;
+        sr.lang = langRef.current;
+        let finalText = '';
+        sr.onresult = (event: SpeechRecognitionEvent) => {
+          if (!activeRef.current) return;
+          let interim = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const res = event.results[i];
+            let t = res[0]?.transcript ?? '';
+            t = t.replace(/[^\w\s']/g, '').trim();
+            if (res.isFinal) finalText += (finalText ? ' ' : '') + t;
+            else interim += (interim ? ' ' : '') + t;
+          }
+          if (interim) {
+            setIsHearing(true);
+            onInterimRef.current?.(interim);
+          }
+          if (finalText) {
+            setIsHearing(false);
+            listenOnceCountRef.current = 0;
+            processTranscript(finalText);
+          }
+        };
+        sr.onerror = () => { setIsHearing(false); };
+        sr.onend = () => {
+          setIsHearing(false);
+          if (!activeRef.current) return;
+          listeningLoopRef.current = false;
+          const backoff = finalText ? 1500 : 3000;
           timeoutRef.current = setTimeout(listenOnce, backoff);
-        } else {
-          stopListening();
-        }
+        };
+        sr.start();
+        srRef.current = sr;
       }
     } catch (e) {
       logger.error('Speech recognition error:', e);

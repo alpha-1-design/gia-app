@@ -159,6 +159,9 @@ export function useVoiceInput(
     onTranscript: (transcript: string) => {
       if (setInput) handleVoiceTranscript(transcript, setInput, (text) => onAutoSend?.(text));
     },
+    onInterim: (text: string) => {
+      if (setInput) setInput(text);
+    },
     keepListening: voiceSettings.keepListening,
     autoStopAfter: 120000,
     confidenceThreshold: 0.3,

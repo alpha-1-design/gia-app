@@ -11,7 +11,6 @@ export function getToolColor(toolId: string): string {
     read_url: '#10b981', browser_navigate: '#3b82f6', page_info: '#06b6d4',
     filesystem_read: '#f59e0b', filesystem_write: '#f59e0b', list_files: '#f59e0b',
     zip_project: '#f59e0b',
-    filesystem_desktop_read: '#f59e0b', filesystem_desktop_write: '#f59e0b', filesystem_desktop_list: '#f59e0b',
     switch_module: '#3b82f6', toggle_feature: '#f59e0b', show_notification: '#ec4899',
     request_clarification: '#3b82f6', forget_memory: '#8b5cf6',
   };

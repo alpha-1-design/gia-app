@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 const PROXY_LIST = [
   'https://corsproxy.io/?url=',
   'https://api.allorigins.win/raw?url=',
+  'https://api.codetabs.com/v1/proxy/?url=',
   'https://cors-anywhere.gia.workers.dev/?url=',
 ];
 

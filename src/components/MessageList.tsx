@@ -147,9 +147,14 @@ const MessageList: React.FC<MessageListProps> = ({
                 ) : msg.error ? (
                   <div className="flex flex-col gap-2">
                     <p className="text-sm leading-relaxed" style={{ color: '#f87171' }}>{msg.content}</p>
-                    <button onClick={() => onEditResend(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] w-fit" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>
-                      <RotateCcw size={10} /> Edit & Resend
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => onRetry(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-semibold w-fit" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5' }}>
+                        <RotateCcw size={10} /> Retry
+                      </button>
+                      <button onClick={() => onEditResend(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] w-fit" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>
+                        <RotateCcw size={10} /> Edit & Resend
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>

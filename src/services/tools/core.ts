@@ -44,7 +44,6 @@ const environmentInfo: Tool = {
           inlineImages: true, streamingResponses: true, zipBundling: true,
           fileDownloads: !native,
           filesystemAccess: native,
-          desktopFilesystemAccess: typeof window !== 'undefined' && 'showDirectoryPicker' in window,
         },
         memory: (await import('../../store/useMemoryStore')).useMemoryStore.getState().memories.length,
         skills: store.skills?.length || 0,

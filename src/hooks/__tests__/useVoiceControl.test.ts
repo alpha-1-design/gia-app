@@ -6,6 +6,7 @@ const mockStop = vi.fn();
 const mockAvailable = vi.fn();
 const mockCheckPermissions = vi.fn();
 const mockRequestPermissions = vi.fn();
+const mockAddListener = vi.fn(() => Promise.resolve({ remove: vi.fn() }));
 
 vi.mock('@capgo/capacitor-speech-recognition', () => ({
   SpeechRecognition: {
@@ -14,6 +15,7 @@ vi.mock('@capgo/capacitor-speech-recognition', () => ({
     stop: (...args: unknown[]) => mockStop(...args),
     checkPermissions: (...args: unknown[]) => mockCheckPermissions(...args),
     requestPermissions: (...args: unknown[]) => mockRequestPermissions(...args),
+    addListener: mockAddListener,
   },
 }));
 
@@ -39,7 +41,7 @@ describe('useVoiceControl — listenOnce microphone loop', () => {
     mockRequestPermissions.mockResolvedValue({ speechRecognition: 'granted' });
   });
 
-  it('requests partialResults:false so the awaited result actually contains a transcript', async () => {
+  it('uses partialResults:true and subscribes to live interim + listening-state listeners', async () => {
     mockStart.mockResolvedValue({ matches: ['hello gia'] });
     const onTranscript = vi.fn();
 
@@ -50,8 +52,10 @@ describe('useVoiceControl — listenOnce microphone loop', () => {
     });
 
     expect(mockStart).toHaveBeenCalledWith(
-      expect.objectContaining({ partialResults: false }),
+      expect.objectContaining({ partialResults: true }),
     );
+    expect(mockAddListener).toHaveBeenCalledWith('partialResults', expect.any(Function));
+    expect(mockAddListener).toHaveBeenCalledWith('listeningState', expect.any(Function));
   });
 
   it('does not repeatedly re-invoke the microphone when every call resolves with no matches', async () => {

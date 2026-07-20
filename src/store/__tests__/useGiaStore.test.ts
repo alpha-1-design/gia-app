@@ -463,8 +463,44 @@ describe('useGiaStore', () => {
       }
       useGiaStore.getState().setActiveSession(useGiaStore.getState().sessions[0].id);
       useGiaStore.getState().hibernateSessions();
-      const archived = useGiaStore.getState().sessions.filter(s => s.messages.length > 0 && s.messages[0].message.content.startsWith('Archived'));
-      expect(archived.length).toBe(2);
+      const { sessions, archivedSessions } = useGiaStore.getState();
+      // Active session + 5 most-recent inactive stay live; 2 oldest archived.
+      expect(sessions).toHaveLength(6);
+      expect(archivedSessions).toHaveLength(2);
+      // Archived sessions keep their FULL content — history is preserved, never stubbed.
+      // (messages are a tree: each session is a root user node with an assistant child)
+      type Node = { children?: Node[] };
+      const countNodes = (nodes: Node[]): number =>
+        nodes.reduce((n, node) => n + 1 + countNodes(node.children ?? []), 0);
+      archivedSessions.forEach(s => expect(countNodes(s.messages)).toBe(2));
+    });
+  });
+
+  describe('generation controllers', () => {
+    it('aborts every registered controller (multi-agent Stop contract)', () => {
+      const c1 = new AbortController();
+      const c2 = new AbortController();
+      const c3 = new AbortController();
+      useGiaStore.getState().registerGenerationController('k1', c1);
+      useGiaStore.getState().registerGenerationController('k2', c2);
+      useGiaStore.getState().registerGenerationController('k3', c3);
+      expect(c1.signal.aborted).toBe(false);
+      expect(c2.signal.aborted).toBe(false);
+      expect(c3.signal.aborted).toBe(false);
+
+      // handleStop iterates the fan-out set and aborts each individually.
+      useGiaStore.getState().abortGeneration('k1');
+      useGiaStore.getState().abortGeneration('k2');
+      useGiaStore.getState().abortGeneration('k3');
+
+      expect(c1.signal.aborted).toBe(true);
+      expect(c2.signal.aborted).toBe(true);
+      expect(c3.signal.aborted).toBe(true);
+
+      useGiaStore.getState().unregisterGenerationController('k1');
+      useGiaStore.getState().unregisterGenerationController('k2');
+      useGiaStore.getState().unregisterGenerationController('k3');
+      expect(useGiaStore.getState().generationControllers.size).toBe(0);
     });
   });
 });

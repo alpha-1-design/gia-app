@@ -22,15 +22,15 @@ type ThoughtFn = (msg: string) => void;
 const FALLBACK_HINTS: Record<string, string> = {
   web_search: 'read_url',
   read_url: 'web_search',
-  filesystem_read: 'filesystem_desktop_read',
-  filesystem_write: 'filesystem_desktop_write',
-  list_files: 'filesystem_desktop_list',
+  filesystem_read: 'filesystem_write',
+  filesystem_write: 'filesystem_read',
+  list_files: 'filesystem_read',
   terminal_run: 'Try bash to install needed packages (pip/npm/apt), then retry. Or switch language.',
   image_generation: 'web_search',
   github: 'web_search or read_url',
   search_places: 'web_search',
   browser_navigate: 'read_url',
-  zip_project: 'Try filesystem_write or filesystem_desktop_write as individual files',
+  zip_project: 'Try filesystem_write as individual files',
   send_sms: 'Try send_whatsapp or send_email as an alternative',
   set_alarm: 'Ask the user to set the alarm manually, or set a reminder via send_email',
   send_whatsapp: 'Try send_sms or send_email instead',
@@ -47,7 +47,7 @@ const FALLBACK_HINTS: Record<string, string> = {
 
 const PARALLEL_SAFE_TOOLS = new Set([
   'web_search', 'read_url', 'browser_navigate', 'page_info',
-  'filesystem_read', 'filesystem_desktop_read', 'list_files', 'filesystem_desktop_list',
+  'filesystem_read', 'list_files',
   'get_environment_info', 'get_user_location', 'search_places',
   'task_read', 'note_read',
   'wikipedia', 'weather', 'define',

@@ -4,7 +4,7 @@ import {
   Plus, X, Trash2, Upload, FileText,
   ChevronLeft, Send, Loader2, Settings2,
   Code2, Brain, Compass, Cpu, Cloud, BookOpen, Target, Image, PenLine,
-  Folder, AlertTriangle, RefreshCw, Search, Globe, Sparkles,
+  AlertTriangle, RefreshCw, Search, Globe, Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -72,8 +72,6 @@ const AVAILABLE_TOOLS: { id: string; label: string; icon: LucideIcon; descriptio
   { id: 'terminal_run', label: 'Code Execution', icon: Code2, description: 'Run code (Python, JS, bash) in sandbox' },
   { id: 'filesystem_read', label: 'Read Files', icon: FileText, description: 'Read files from device' },
   { id: 'filesystem_write', label: 'Write Files', icon: PenLine, description: 'Save files to device' },
-  { id: 'filesystem_desktop_read', label: 'Desktop Read', icon: Folder, description: 'Read from project folder' },
-  { id: 'filesystem_desktop_write', label: 'Desktop Write', icon: Folder, description: 'Write to project folder' },
   { id: 'image_generation', label: 'Image Gen', icon: Image, description: 'Generate images from prompts' },
   { id: 'browser_navigate', label: 'Browser', icon: Compass, description: 'Full JS-rendered web pages' },
   { id: 'get_user_location', label: 'Location', icon: Target, description: 'Get GPS location' },
@@ -95,9 +93,6 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   terminal_run: 'Execute code (Python, JavaScript, bash) in an isolated sandbox',
   filesystem_read: 'Read a file from the device by path',
   filesystem_write: 'Write or save a file to the device',
-  filesystem_desktop_read: 'Read a file from the user\'s project folder (desktop only)',
-  filesystem_desktop_write: 'Write a file to the user\'s project folder (desktop only)',
-  filesystem_desktop_list: 'List files in the project folder',
   image_generation: 'Generate an image from a text description',
   browser_navigate: 'Open a full JavaScript-rendered web page in an iframe',
   get_user_location: 'Get the user\'s current GPS location',

@@ -341,12 +341,12 @@ class GiaBrain {
           useProviderStore.getState().deductTokens(effectiveProvider, tokenUsage.total);
         }
 
-        const finalResponse = await PluginManager.runAfterGenerate({ text, provider: effectiveProvider, model: config.model });
+        const finalResponse = await PluginManager.runAfterGenerate({ text, provider: effectiveProvider, model: finalModel });
         return { ...finalResponse, provider: effectiveProvider, sources: sourcesAcc.length > 0 ? sourcesAcc : undefined, finishReason, wasTruncated, tokenUsage };
       }
 
       if (toolResult.result === '__CLARIFICATION__') {
-        return { text: '__CLARIFICATION__', provider: effectiveProvider, model: config.model };
+        return { text: '__CLARIFICATION__', provider: effectiveProvider, model: finalModel };
       }
 
       if (toolResult.result === 'malformed_json') {
@@ -443,7 +443,7 @@ class GiaBrain {
     const primaryPromise = (async () => {
       onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'responding' });
       try {
-        const res = await this.generate({ ...req, providerId: primary.id });
+        const res = await this.generate({ ...req, providerId: primary.id, onStream: undefined, onThought: undefined });
         onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'done' });
         return { provider: primary.id, model: primary.model, text: res.text };
       } catch {

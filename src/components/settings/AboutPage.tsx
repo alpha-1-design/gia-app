@@ -106,6 +106,23 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </div>
 
+      {/* GIA Everywhere vision */}
+      <div className="gia-card p-4" style={{ borderColor: 'rgba(139,92,246,0.2)', background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.06))' }}>
+        <p className="text-sm font-semibold mb-2" style={{ color: '#c4b5fd' }}>🌌 GIA Everywhere</p>
+        <p className="text-[11px] leading-relaxed mb-2" style={{ color: 'var(--gia-muted)' }}>
+          GIA started as an app. It's about to stop being just an app. <strong style={{ color: '#a78bfa' }}>GIA Desktop is coming</strong> — same brain, bigger canvas, and they sync: phone to desktop, desktop to phone. Your memory, your agents, your context, following you like they always should.
+        </p>
+        <p className="text-[11px] leading-relaxed mb-2" style={{ color: 'var(--gia-muted)' }}>Not stopping at two screens:</p>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {['GIA CLI', 'GIA Watch', 'GIA Car', 'GIA Phone', 'GIA Everything'].map(t => (
+            <span key={t} className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{ background: 'rgba(139,92,246,0.12)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,0.2)' }}>{t}</span>
+          ))}
+        </div>
+        <p className="text-[10px] italic" style={{ color: 'var(--gia-muted-2)' }}>
+          They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere.
+        </p>
+      </div>
+
       {/* Version */}
       <p className="text-center text-[10px] pb-4" style={{ color: 'var(--gia-muted-2)' }}>
         GIA v2.3.2.0 · Built by Samuel Mensah · Alpha-1 Studio, Ghana

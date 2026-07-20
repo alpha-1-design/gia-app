@@ -168,9 +168,45 @@ export const useProviderStore = create<GiaProviderState>()(
 
         try {
           // Providers without dynamic listing
-          if (listingType === 'anthropic' || listingType === 'huggingface' || listingType === 'local') {
+          if (listingType === 'huggingface' || listingType === 'local') {
             set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
             return providerRegistry.getModels(p);
+          }
+
+          // Anthropic supports CORS from the browser via the dangerous-direct-browser-access
+          // header (enabled Aug 2024). So we CAN list models live instead of a static fallback.
+          if (listingType === 'anthropic') {
+            try {
+              const res = await corsProxy.fetch('https://api.anthropic.com/v1/models', {
+                signal: AbortSignal.timeout(8000),
+                headers: {
+                  'x-api-key': config.apiKey,
+                  'anthropic-version': '2023-06-01',
+                  'anthropic-dangerous-direct-browser-access': 'true',
+                },
+              });
+              if (!res.ok) throw new Error(`${res.status}`);
+              const json: { data?: { id: string; display_name?: string; type?: string }[] } = await res.json();
+              const data = (json.data || []).filter((m) => m.type === 'model');
+              if (data.length > 0) {
+                const formatted: ModelOption[] = data.map((m) => ({
+                  id: m.id,
+                  label: m.display_name || m.id,
+                  free: false,
+                  context: '200k',
+                  tools: true,
+                  vision: true,
+                }));
+                formatted.sort((a, b) => b.id.localeCompare(a.id));
+                set((s) => ({ availableModels: { ...s.availableModels, [p]: formatted } }));
+                return formatted;
+              }
+            } catch (e) {
+              logger.warn(`[fetchModels] Anthropic live listing failed, using curated catalog:`, e);
+            }
+            const fallback = providerRegistry.getModels(p);
+            set((s) => ({ availableModels: { ...s.availableModels, [p]: fallback } }));
+            return fallback;
           }
 
           // Ollama local listing

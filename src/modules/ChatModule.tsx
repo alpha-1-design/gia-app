@@ -3,7 +3,7 @@ import {
   Bot, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera,
   Brain, ChevronDown, ChevronRight, Sparkles, GraduationCap, Code2,
-  BookOpen, Zap, Undo2, Search, Headphones, Folder, GitBranch,
+  BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
   Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,14 +17,16 @@ import MessageList from '../components/MessageList';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
 import { KnowledgePanel } from '../components/KnowledgePanel';
-import FileBrowser from '../components/FileBrowser';
 import FileManager from '../components/FileManager';
 import ToolTray from '../components/ToolTray';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { EngineSheet } from '../components/chat/EngineSheet';
+import ModelSwitcherSheet from '../components/chat/ModelSwitcherSheet';
+import ProviderIcon from '../components/ProviderIcon';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
 import AgentMentionPicker from '../components/AgentMentionPicker';
+import { useProviderStore } from '../store/useProviderStore';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { LiveFileEditor } from '../components/LiveFileEditor';
@@ -52,7 +54,7 @@ const ChatModule: React.FC = () => {
     showScrollBtn, undoMsg, showSkillPicker,
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
     liveThoughts, showKnowledge, setShowKnowledge,
-    isDragging, showFileBrowser, setShowFileBrowser, showFileManager, setShowFileManager, showTools,
+    isDragging, showFileManager, setShowFileManager, showTools,
     inputContainerHeight,
     scrollRef, inputContainerRef, fileRef, imgRef,
     responseTimesRef, clarAnswer, setClarAnswer,
@@ -84,6 +86,7 @@ const ChatModule: React.FC = () => {
   const setBuildPreview = useGiaStore((s) => s.setBuildPreview);
   const archivedSessions = useGiaStore((s) => s.archivedSessions);
   const restoreSession = useGiaStore((s) => s.restoreSession);
+  const activeProvider = useProviderStore((s) => s.activeProvider);
 
   React.useEffect(() => {
     if (!buildMode) return;
@@ -94,7 +97,10 @@ const ChatModule: React.FC = () => {
     }
   }, [buildMode, messages, buildPreviewUrl, setBuildPreview]);
 
-  const [showEngine, setShowEngine] = React.useState(false);
+  const showEngine = useGiaStore((s) => s.showEngine);
+  const setShowEngine = useGiaStore((s) => s.setShowEngine);
+  const showModelSwitcher = useGiaStore((s) => s.showModelSwitcher);
+  const setShowModelSwitcher = useGiaStore((s) => s.setShowModelSwitcher);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
   const [showPreview, setShowPreview] = React.useState(false);
 
@@ -211,18 +217,23 @@ const ChatModule: React.FC = () => {
               <span className="text-[8px] font-medium" style={{ color: '#ec4899' }}>LIVE</span>
             </div>
           )}
-          <div className="gia-pill flex items-center gap-1.5 flex-1 min-w-0 max-w-[180px]" style={{
-            background: providerConnected ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-            color: providerConnected ? '#34d399' : '#f87171',
-            border: `1px solid ${providerConnected ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
-          }}>
-            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: providerConnected ? '#34d399' : '#f87171' }} />
-            <span className="truncate max-w-[80px]">{providerLabel}</span>
+          <button
+            onClick={() => setShowModelSwitcher(true)}
+            className="gia-pill flex items-center gap-1.5 flex-1 min-w-0 max-w-[180px] tap-feedback transition-all"
+            style={{
+              background: providerConnected ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+              color: providerConnected ? '#34d399' : '#f87171',
+              border: `1px solid ${providerConnected ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
+            }}
+            title="Switch model & provider"
+          >
+            <ProviderIcon provider={activeProvider} size={18} bare />
+            <span className="truncate max-w-[70px]">{providerLabel}</span>
             {activeModel && providerConnected && (
-              <span className="text-[7px] opacity-50 truncate max-w-[60px] hidden sm:inline">{activeModel.split('/').pop()}</span>
+              <span className="text-[7px] opacity-50 truncate max-w-[54px] hidden sm:inline">{activeModel.split('/').pop()}</span>
             )}
-          </div>
-          <button onClick={() => setShowFileBrowser(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title="Browse files"><Folder size={13} /></button>
+            <ChevronDown size={11} className="shrink-0 opacity-70" />
+          </button>
           <button onClick={() => setShowFileManager(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title="File Manager"><Upload size={13} /></button>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
           <SearchActivityButton />
@@ -275,14 +286,14 @@ const ChatModule: React.FC = () => {
             </div>
             {!providerConnected && (
             <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
-              <button onClick={() => { setInput('Start with your local AI model. '); }} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
+              <button onClick={() => { useProviderStore.getState().setProviderKey('local-llm', ''); }} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
                 <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.2)' }}><Zap size={14} style={{ color: '#a855f7' }} /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Use Local AI (Free)</p>
                   <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>GIA works offline with on-device intelligence</p>
                 </div>
               </button>
-              <button onClick={() => useGiaStore.getState().setModule('settings')} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600/50">
+              <button onClick={() => setShowModelSwitcher(true)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600/50">
                 <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(113,113,122,0.2)' }}><Bot size={14} style={{ color: '#a1a1aa' }} /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Connect AI Provider</p>
@@ -335,9 +346,9 @@ const ChatModule: React.FC = () => {
 
         <div className="max-w-3xl mx-auto w-full px-4 space-y-2 sm:space-y-3">
         {!providerConnected && !loading && (
-          <div onClick={() => useGiaStore.getState().setModule('settings')} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+          <div onClick={() => setShowModelSwitcher(true)} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Tap to go to Settings → Engine Room and type: <code className="text-[10px] px-1 py-0.5 rounded" style={{ background: 'rgba(0,0,0,0.3)' }}>connect</code></p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Tap to connect a provider — OpenRouter, Anthropic, Gemini & more</p>
           </div>
         )}
 
@@ -385,6 +396,7 @@ const ChatModule: React.FC = () => {
           />
         )}
         <EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />
+        <ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} onOpenEngine={() => setShowEngine(true)} />
 
         <AnimatePresence>
           {liveFileEdit && (
@@ -413,11 +425,12 @@ const ChatModule: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Stop button — floats above input when loading */}
+      {/* Stop button — floats above input when loading (touch-friendly on mobile) */}
       {loading && handleStop && (
-        <div className="absolute bottom-[72px] right-6 z-10">
-          <button onClick={handleStop} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors" title="Stop" style={{ color: 'var(--gia-muted-2)' }}>
-            <svg width="10" height="10" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
+        <div className="absolute bottom-[78px] right-4 z-20">
+          <button onClick={handleStop} className="flex items-center gap-1.5 px-3.5 h-9 rounded-full font-semibold text-[12px] shadow-lg active:scale-95 transition-transform tap-feedback" style={{ background: '#1a1a22', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171' }}>
+            <svg width="9" height="9" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
+            Stop
           </button>
         </div>
       )}
@@ -629,7 +642,6 @@ const ChatModule: React.FC = () => {
         )}
       </AnimatePresence>
       {showKnowledge && <KnowledgePanel onClose={() => setShowKnowledge(false)} />}
-      {showFileBrowser && <FileBrowser onClose={() => setShowFileBrowser(false)} />}
       {showFileManager && <FileManager onClose={() => setShowFileManager(false)} />}
       {showBranchView && activeSession && (
         <BranchView

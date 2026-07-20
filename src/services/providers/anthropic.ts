@@ -43,14 +43,17 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
     messages,
     stream: !!req.onStream,
   };
-  if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
+  const enableTools = useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson;
+  if (enableTools) {
     body.tools = ctx.buildAnthropicTools();
   }
   if (req.forceJson) {
     body.stop_sequences = ["\n```\n"];
   }
   if (!useThinking && req.temperature !== undefined) body.temperature = req.temperature;
-  if (useThinking) body.thinking = { type: 'enabled', budget_tokens: 10000 };
+  // Anthropic rejects `tools` + `thinking` together on many versions/accounts
+  // (hard 400). When native tools are needed we keep them and drop thinking.
+  if (useThinking && !enableTools) body.thinking = { type: 'enabled', budget_tokens: 10000 };
   const baseUrl = providerRegistry.getBaseUrl('anthropic') || 'https://api.anthropic.com/v1';
   const anthropicHeaders: Record<string, string> = {
     'x-api-key': config.apiKey,

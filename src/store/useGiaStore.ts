@@ -253,6 +253,9 @@ interface GiaState {
   currentModule: Module;
   intentState: IntentState;
   showTerminal: boolean;
+  showModelSwitcher: boolean;
+  showEngine: boolean;
+  moduleHistory: Module[];
   sharedData: Record<string, unknown>;
   sessions: ChatSession[];
   archivedSessions: ChatSession[];
@@ -316,6 +319,8 @@ interface GiaState {
   setLiveFileEdit: (edit: LiveFileEdit | null) => void;
 
   setModule: (module: Module) => void;
+  goBack: () => boolean;
+  setShowEngine: (v: boolean) => void;
   setGenerationState: (state: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal }) => void;
   setCurrentTool: (tool: string | null) => void;
   registerGenerationController: (key: string, controller: AbortController) => void;
@@ -325,6 +330,7 @@ interface GiaState {
   setClarification: (c: Clarification | null) => void;
   setIntentState: (state: IntentState) => void;
   setShowTerminal: (show: boolean) => void;
+  setShowModelSwitcher: (show: boolean) => void;
   setWebSearch: (enabled: boolean) => void;
   setExtThinking: (enabled: boolean) => void;
   setHandsOff: (enabled: boolean) => void;
@@ -417,6 +423,9 @@ export const useGiaStore = create<GiaState>()(
       currentModule: 'chat',
       intentState: 'idle',
       showTerminal: false,
+      showModelSwitcher: false,
+      showEngine: false,
+      moduleHistory: [],
       sharedData: {},
       sessions: [],
       archivedSessions: [],
@@ -537,8 +546,21 @@ export const useGiaStore = create<GiaState>()(
           activeSessionId: s.activeSessionId,
           ...(prevModule === 'chat' ? { lastTopic: s.sessions.find(se => se.id === s.activeSessionId)?.title || '' } : {}),
         };
-        return { currentModule: module, sharedData: { ...s.sharedData, lastModuleSwitch: contextPayload } };
+        // Record navigation history (capped) so the hardware Back button can
+        // return to the previous module on mobile.
+        const history = s.moduleHistory[s.moduleHistory.length - 1] === prevModule
+          ? s.moduleHistory
+          : [...s.moduleHistory, prevModule].slice(-20);
+        return { currentModule: module, moduleHistory: history, sharedData: { ...s.sharedData, lastModuleSwitch: contextPayload } };
       }),
+      goBack: () => {
+        const s = get();
+        if (s.moduleHistory.length === 0) return false;
+        const prev = s.moduleHistory[s.moduleHistory.length - 1];
+        set((st) => ({ currentModule: prev, moduleHistory: st.moduleHistory.slice(0, -1) }));
+        return true;
+      },
+      setShowEngine: (v) => set({ showEngine: v }),
       setGenerationState: (generationState) => set({ generationState }),
       registerGenerationController: (key, controller) => set((s) => {
         const newControllers = new Map(s.generationControllers);
@@ -561,6 +583,7 @@ export const useGiaStore = create<GiaState>()(
       setClarification: (c) => set({ clarification: c }),
       setIntentState: (state) => set({ intentState: state }),
       setShowTerminal: (show) => set({ showTerminal: show }),
+      setShowModelSwitcher: (show) => set({ showModelSwitcher: show }),
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setExtThinking: (enabled) => set({ extThinking: enabled }),
       setHandsOff: (enabled) => set({ handsOff: enabled }),
@@ -966,6 +989,20 @@ export const useGiaStore = create<GiaState>()(
         buildSessionId: s.buildSessionId,
         buildPreviewUrl: s.buildPreviewUrl,
       }),
+      onRehydrateStorage: () => (state) => {
+        // A stream interrupted by a crash / tab close can persist a message
+        // with thinking:true forever. Nothing is generating on reload, so any
+        // in-flight flag is stale — clear it so the UI doesn't show a dead spinner.
+        if (!state) return;
+        const clearThinking = (sess: typeof state.sessions[number]) => ({
+          ...sess,
+          messages: sess.messages.map((m) =>
+            m.message.thinking ? { ...m, message: { ...m.message, thinking: false } } : m
+          ),
+        });
+        state.sessions = state.sessions.map(clearThinking);
+        state.archivedSessions = (state.archivedSessions || []).map(clearThinking);
+      },
     }
   )
 );

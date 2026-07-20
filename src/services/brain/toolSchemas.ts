@@ -307,24 +307,6 @@ export const toolSchemas: Record<string, { description: string; required: string
     required: [],
     properties: {}
   },
-  filesystem_desktop_read: {
-    description: 'Read a file from the user\'s selected project folder on desktop.',
-    required: ['path'],
-    properties: { path: { type: 'string', description: 'File path relative to project root' } }
-  },
-  filesystem_desktop_write: {
-    description: 'Write or update a file in the user\'s selected project folder on desktop.',
-    required: ['path', 'content'],
-    properties: {
-      path: { type: 'string', description: 'File path relative to project root' },
-      content: { type: 'string', description: 'File content' }
-    }
-  },
-  filesystem_desktop_list: {
-    description: 'List files and directories in the user\'s selected project folder on desktop.',
-    required: [],
-    properties: { path: { type: 'string', description: 'Subdirectory path (optional, default root)' } }
-  },
 
   // Task management tools
   task_create: {
@@ -657,8 +639,6 @@ export function toolToProtocolType(id: string): ProtocolType {
     toggle_feature: 'settings_change', request_clarification: 'clarification',
     get_environment_info: 'environment_info', show_map: 'show_map',
     list_files: 'file_read', summarize_conversation: 'environment_info',
-    filesystem_desktop_read: 'file_read', filesystem_desktop_write: 'file_write',
-    filesystem_desktop_list: 'file_read',
     create_goal: 'settings_change', list_goals: 'environment_info',
     pause_goal: 'settings_change', goal_progress: 'environment_info',
     set_autonomy_config: 'settings_change',

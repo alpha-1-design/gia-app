@@ -25,6 +25,26 @@
 
 ---
 
+## 🌌 The Vision — GIA Everywhere
+
+GIA started as an app. It's about to stop being just an app.
+
+You've got GIA in your pocket today. **GIA Desktop is coming** — same brain, bigger canvas, a real workspace you actually sit down and build in. And the magic? They sync. Phone to desktop, desktop to phone — your memory, your agents, your context, trailing along like they always should have. Start something on the bus, finish it at your desk, and GIA just… knows.
+
+But we're not stopping at two screens.
+
+- **GIA CLI** — a terminal-native GIA for people who live in the shell, that writes, runs, and ships code with you.
+- **GIA Watch** — your assistant on the wrist, surfacing context before you even ask.
+- **GIA Car** — hands-free, eyes-on-the-road GIA that runs your life while you drive.
+- **GIA Phone** — yeah, maybe we build the whole phone one day. Why not.
+- **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
+
+They've not seen this one before. They won't see this one coming.
+
+GIA isn't a chatbot. It's the start of something packed, powerful, and everywhere — including right here, in this app, today.
+
+---
+
 ## 📸 Screenshots
 
 <table>
@@ -478,12 +498,10 @@ Schedule periodic AI tasks that run automatically:
 
 ## 🖥 Desktop File System Access
 
-Chromium-only: GIA can read/write to a user-selected project folder:
-
-- **Folder Picker**: Click "Pick Project Folder" in settings to grant access
-- **Tools**: `filesystem_desktop_read`, `filesystem_desktop_write`, `filesystem_desktop_list`
-- **File System Access API**: Uses the native browser File System Access API
-- **Scope**: Limited to the selected directory tree only
+GIA is a mobile-first Capacitor app. Desktop project-folder access (the Chromium-only
+File System Access API / "Pick Project Folder") has been removed — it is handled by the
+separate GIA desktop app. On mobile, GIA uses the device filesystem
+(`filesystem_read` / `filesystem_write` via `@capacitor/filesystem`).
 
 ## 🧠 Brain Export/Import
 

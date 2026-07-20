@@ -521,9 +521,6 @@ export const ToolIcon: React.FC<{ toolId: string; size?: number; color?: string;
     filesystem_write: <FolderIcon size={size} color={c} animated={animated} />,
     list_files: <FolderIcon size={size} color={c} animated={animated} />,
     zip_project: <ZipIcon size={size} color={c} animated={animated} />,
-    filesystem_desktop_read: <FolderIcon size={size} color={c} animated={animated} />,
-    filesystem_desktop_write: <FolderIcon size={size} color={c} animated={animated} />,
-    filesystem_desktop_list: <FolderIcon size={size} color={c} animated={animated} />,
     // Controls
     switch_module: <ToggleIcon size={size} color={c} animated={animated} />,
     toggle_feature: <ToggleIcon size={size} color={c} animated={animated} />,

@@ -18,7 +18,6 @@ import GiaConsole from './components/GiaConsole';
 import ProtocolPanel from './components/ProtocolPanel';
 import { TaskBoard } from './components/TaskBoard';
 import { NotesPanel } from './components/NotesPanel';
-import CommandPalette from './components/CommandPalette';
 import { SourcesPanel } from './components/SourcesPanel';
 import { RegionSelectorOverlay } from './components/RegionSelectorOverlay';
 import { ScreenCaptureService } from './services/ScreenCaptureService';
@@ -29,7 +28,6 @@ import { backgroundRecovery } from './services/BackgroundRecovery';
 import SetupWizard from './components/SetupWizard';
 import { proactiveEngine } from './services/autonomy/ProactiveEngine';
 import { useAutonomyStore } from './store/useAutonomyStore';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import SystemService from './services/SystemService';
 import { useProviderStore } from './store/useProviderStore';
 import { providerRegistry } from './services/ProviderRegistry';
@@ -148,19 +146,39 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, createSession, addNotification, connectionStatus, providerConnected, autoStartWakeWord } = useGiaStore(useShallow(s => ({
+  const { currentModule, setModule, showTerminal, setShowTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, addNotification, connectionStatus, providerConnected, autoStartWakeWord } = useGiaStore(useShallow(s => ({
     currentModule: s.currentModule, setModule: s.setModule,
-    showTerminal: s.showTerminal, userProfile: s.userProfile,
+    showTerminal: s.showTerminal, setShowTerminal: s.setShowTerminal, userProfile: s.userProfile,
     notifications: s.notifications, clearNotification: s.clearNotification,
     showConsole: s.showConsole, consoleLogs: s.consoleLogs, setShowConsole: s.setShowConsole,
     showProtocols: s.showProtocols, setShowProtocols: s.setShowProtocols,
     theme: s.theme,
-    createSession: s.createSession, addNotification: s.addNotification,
+    addNotification: s.addNotification,
     connectionStatus: s.connectionStatus, providerConnected: s.providerConnected,
     autoStartWakeWord: s.autoStartWakeWord,
   })));
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
-  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Hardware Back button (Android): close top overlay → back through module
+  // history → "press again to exit" at root. A ref keeps the native listener
+  // (registered once) reading the latest React state. Must be declared before
+  // any early return (below) to satisfy the rules of hooks.
+  const backActionRef = useRef<() => void>(() => {});
+  const lastBackTsRef = useRef(0);
+  backActionRef.current = () => {
+    const st = useGiaStore.getState();
+    if (st.showModelSwitcher) { st.setShowModelSwitcher(false); return; }
+    if (st.showEngine) { st.setShowEngine(false); return; }
+    if (showTerminal) { setShowTerminal(false); return; }
+    if (st.currentModule !== 'chat') { st.goBack(); return; }
+    const now = Date.now();
+    if (now - lastBackTsRef.current < 2000) { CapacitorApp.exitApp(); }
+    else { lastBackTsRef.current = now; st.addNotification('Press back again to exit'); }
+  };
+  useEffect(() => {
+    const handle = CapacitorApp.addListener('backButton', () => backActionRef.current());
+    return () => { handle.then(h => h.remove()); };
+  }, []);
   const [showTaskBoard, setShowTaskBoard] = useState(false);
   const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [moduleOpen, setModuleOpen] = useState(false);
@@ -319,15 +337,6 @@ const App: React.FC = () => {
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
   }, []);
-
-  useKeyboardShortcuts([
-    { key: 'k', meta: true, handler: () => setPaletteOpen(o => !o) },
-    { key: 'n', meta: true, handler: () => { createSession(); addNotification('New session created'); } },
-    { key: 's', meta: true, shift: true, handler: () => { setModule('settings'); } },
-    { key: 'o', meta: true, shift: true, handler: () => { setShowProtocols(!showProtocols); } },
-    { key: 'c', meta: true, shift: true, handler: () => { useGiaStore.getState().setShowCircleSearch(true); } },
-    { key: 'escape', handler: () => { if (paletteOpen) setPaletteOpen(false); } },
-  ]);
 
   // Theme switching
   useEffect(() => {
@@ -975,20 +984,6 @@ const App: React.FC = () => {
           />
         )}
       </AnimatePresence>
-
-      <CommandPalette 
-        isOpen={paletteOpen} 
-        onClose={() => setPaletteOpen(false)}
-        onNavigate={(action) => {
-          if (action === 'task-board') {
-            setPaletteOpen(false);
-            setShowTaskBoard(true);
-          } else if (action === 'notes-panel') {
-            setPaletteOpen(false);
-            setShowNotesPanel(true);
-          }
-        }} 
-      />
 
       {showTaskBoard && (
         <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTaskBoard(false)}>

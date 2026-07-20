@@ -134,9 +134,6 @@ Call a tool by writing a fenced code block:
 | \`filesystem_read\` | Read a file | \`path\` | Mobile only |
 | \`filesystem_write\` | Save a file | \`path\`, \`content\` | Mobile saves; browser downloads |
 | \`list_files\` | List directory | \`path\` (optional) | Mobile only |
-| \`filesystem_desktop_read\` | Read from project folder | \`path\` | Desktop Chrome only |
-| \`filesystem_desktop_write\` | Write to project folder | \`path\`, \`content\` | Desktop Chrome only |
-| \`filesystem_desktop_list\` | List project folder | \`path\` (optional) | Desktop Chrome only |
 | \`zip_project\` | Bundle existing files into ZIP | \`filename\`, \`files\` or \`paths\` | From device or content |
 | \`build_project\` | Scaffold, build, and package project into ZIP | \`files\`, \`build_command\`, \`language\`, \`output_filename\`, \`entry\` | Full build pipeline |
 | \`install_skill\` | Install a new skill from URL or package | \`source\` (URL/package name), \`name\`, \`id\` | Expands GIA capabilities |

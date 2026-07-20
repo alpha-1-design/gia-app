@@ -87,6 +87,10 @@ export function useChatGeneration() {
   const responseTimesRef = useRef<Record<string, number>>({});
   const lastUserMsgRef = useRef('');
   const generationKeyRef = useRef<string | null>(null);
+  // Tracks every generation controller spawned by the current handleSend
+  // (multi-agent fan-out can spawn several). Used so Stop aborts ALL of them,
+  // not just the last one, and so we can clean them up without leaking.
+  const allGenKeysRef = useRef<Set<string>>(new Set());
 
   const { registerGenerationController, unregisterGenerationController, abortGeneration } = useGiaStore(useShallow(s => ({
     registerGenerationController: s.registerGenerationController,
@@ -95,28 +99,58 @@ export function useChatGeneration() {
   })));
 
   const handleStop = useCallback(() => {
+    // Abort EVERY spawned generation — a single handleSend can fan out into
+    // several agents (Nexus multi-agent), each with its own controller. Stop
+    // must halt the whole run, not just the last branch.
+    for (const key of allGenKeysRef.current) {
+      abortGeneration(key);
+      unregisterGenerationController(key);
+    }
+    allGenKeysRef.current.clear();
     if (generationKeyRef.current) {
       abortGeneration(generationKeyRef.current);
       unregisterGenerationController(generationKeyRef.current);
     }
     TTSService.stop();
     const state = useGiaStore.getState();
-    if (streamingMsgId && state.activeSessionId) {
-      const session = state.sessions.find(s => s.id === state.activeSessionId);
-      const ghost = session?.messages.find(m => m.message.id === streamingMsgId);
-      if (ghost) {
-        if (!ghost.message.content && ghost.message.thinking) {
-          useGiaStore.setState({
-            sessions: state.sessions.map(s =>
-              s.id === state.activeSessionId
-                ? { ...s, messages: s.messages.filter(m => m.message.id !== streamingMsgId), updatedAt: Date.now() }
-                : s
-            ),
-          });
+    const session = state.activeSessionId ? state.sessions.find(s => s.id === state.activeSessionId) : undefined;
+    if (session) {
+      // A single send can fan out into many agents; abort already cleared their
+      // controllers. Now clean up every spawned bubble: drop empty ghosts, and
+      // append a "stopped" note to any that already had content.
+      const activeIds = new Set<string>(activeStreamsRef.current);
+      if (streamingMsgId) activeIds.add(streamingMsgId);
+      const toDelete = new Set<string>();
+      const finalized: { id: string; content: string; thoughts?: string }[] = [];
+      for (const id of activeIds) {
+        const node = session.messages.find(m => m.message.id === id);
+        if (!node) continue;
+        if (!node.message.content && node.message.thinking) {
+          toDelete.add(id);
         } else {
-          const finalContent = (ghost.message.content || '') + '\n\n*— Response stopped —*';
-          state.updateMessage(state.activeSessionId, streamingMsgId, finalContent, ghost.message.thoughts);
+          finalized.push({
+            id,
+            content: (node.message.content || '') + '\n\n*— Response stopped —*',
+            thoughts: node.message.thoughts,
+          });
         }
+      }
+      if (toDelete.size || finalized.length) {
+        useGiaStore.setState({
+          sessions: state.sessions.map((s) => {
+            if (s.id !== state.activeSessionId) return s;
+            let messages = s.messages;
+            if (toDelete.size) messages = messages.filter(m => !toDelete.has(m.message.id));
+            if (finalized.length) {
+              const finMap = new Map(finalized.map(f => [f.id, f]));
+              messages = messages.map(m => {
+                const f = finMap.get(m.message.id);
+                return f ? { ...m, message: { ...m.message, content: f.content, thinking: false } } : m;
+              });
+            }
+            return { ...s, messages, updatedAt: Date.now() };
+          }),
+        });
       }
     }
     setLoading(false);
@@ -238,6 +272,7 @@ export function useChatGeneration() {
     generationKeyRef.current = genKey;
     const ctrl = new AbortController();
     registerGenerationController(genKey, ctrl);
+    allGenKeysRef.current.add(genKey);
     useGiaStore.getState().setGenerationState({ active: true, module: 'chat', sessionId, messageId: asstId, abortSignal: ctrl.signal });
 
     let streamKey = '';
@@ -486,6 +521,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       }
     } finally {
       streamCancel(streamKey);
+      unregisterGenerationController(genKey);
+      allGenKeysRef.current.delete(genKey);
       setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
@@ -499,6 +536,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       if (activeStreamsRef.current.size === 0) {
         setLoading(false);
         setStreamingMsgId(null);
+        generationKeyRef.current = null;
+        allGenKeysRef.current.clear();
         useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
         useGiaStore.getState().setIntentState('idle');
         useGiaStore.getState().setThinkingPhase('idle');
@@ -511,7 +550,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     // own message, avatar and visible thoughts. No mention → a single GIA turn.
     const agentsToRun = agentInfo && agentInfo.length > 0 ? agentInfo : [undefined];
     await Promise.all(agentsToRun.map((a) => runAgentTurn(a)));
-  }, [registerGenerationController]);
+  }, [registerGenerationController, unregisterGenerationController]);
 
   const handleContinue = useCallback(async (msgId: string) => {
     const state = useGiaStore.getState();

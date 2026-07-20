@@ -2,6 +2,22 @@
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
+## 🌌 The Vision — GIA Everywhere
+
+GIA started as an app. It's about to stop being just an app.
+
+You've got GIA in your pocket today. **GIA Desktop is coming** — same brain, bigger canvas, a real workspace you actually sit down and build in. And the magic? They sync. Phone to desktop, desktop to phone — your memory, your agents, your context, trailing along like they always should have. Start something on the bus, finish it at your desk, and GIA just… knows.
+
+But we're not stopping at two screens.
+
+- **GIA CLI** — a terminal-native GIA for people who live in the shell, that writes, runs, and ships code with you.
+- **GIA Watch** — your assistant on the wrist, surfacing context before you even ask.
+- **GIA Car** — hands-free, eyes-on-the-road GIA that runs your life while you drive.
+- **GIA Phone** — yeah, maybe we build the whole phone one day. Why not.
+- **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
+
+They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
 ## 🧠 What's New in v2.3.2.0
 
 | Feature | Description |
@@ -31,7 +47,6 @@ GIA (Generative Interface Agent) is a private, on-device AI workspace for studen
 | **Input Guardrails** | Blocks prompt injection attempts and dangerous commands |
 | **Output Validation** | Auto-repairs malformed JSON, missing fences, repeated text |
 | **Response Caching** | Cache identical requests to reduce API costs |
-| **Desktop File Access** | Read/write/list files in a selected project folder (Chrome) |
 | **PWA Share Target** | Receive content shared from other apps |
 | **Deep Link Support** | `gia://` and `web+gia://` protocol handling |
 | **Clipboard Monitor** | Detects copied text with "Ask GIA" button |
@@ -114,7 +129,6 @@ Enable **Hands-off Mode** in Settings for fully autonomous operation:
 | `filesystem_read` | Read files from device storage |
 | `filesystem_write` | Write files to device storage |
 | `list_files` | List directory contents (mobile) |
-| `filesystem_desktop_read/write/list` | Project folder access (Chrome desktop only) |
 | `zip_project` | Bundle project files into .zip |
 | `image_generation` | Generate and inline images via DALL-E 3 |
 | `sub_agent_call` | Delegate to another AI provider/model for sub-tasks |
@@ -583,14 +597,6 @@ Back up and restore all of GIA's knowledge:
 
 - **Export**: Settings → Brain Export → Download — saves all memories, skills, identity as `.gia-brain.json`
 - **Import**: Settings → Brain Export → Upload — restores from a previous backup
-
-## 🖥 Desktop File Access (Chrome)
-
-GIA can access files in a project folder on desktop browsers:
-
-1. Click **"Pick Project Folder"** in Settings or the tools panel
-2. Select a folder in the browser's file picker
-3. GIA can now read, write, and list files in that folder using dedicated tools
 
 ## 🌐 MCP (Model Context Protocol)
 
