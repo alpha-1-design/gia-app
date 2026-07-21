@@ -330,7 +330,7 @@ export const useProviderStore = create<GiaProviderState>()(
           set((s) => ({ availableModels: { ...s.availableModels, [p]: result } }));
           return result;
         } catch (e) {
-          logger.error(`Fetch models failed for ${p}:`, e);
+          logger.warn(`Fetch models failed for ${p}:`, e);
           set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
           return providerRegistry.getModels(p);
         }
