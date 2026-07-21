@@ -10,15 +10,15 @@ const PROXY_LIST = [
 export class CorsProxy {
   private customProxy: string | null = null;
 
-  setProxy(url: string | null) {
+  setProxy = (url: string | null) => {
     this.customProxy = url;
   }
 
-  getActiveProxy(): string | null {
+  getActiveProxy = (): string | null => {
     return this.customProxy || null;
   }
 
-  async fetch(url: string, options: RequestInit = {}): Promise<Response> {
+  fetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
     // Try direct first
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -62,14 +62,14 @@ export class CorsProxy {
     throw new Error(`Failed to fetch ${url.slice(0, 60)} — all proxies exhausted`);
   }
 
-  proxyUrl(url: string): string {
+  proxyUrl = (url: string): string => {
     if (this.customProxy) {
       return this.customProxy + encodeURIComponent(url);
     }
     return PROXY_LIST[0] + encodeURIComponent(url);
   }
 
-  async fetchJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
+  fetchJSON = async <T>(url: string, options: RequestInit = {}): Promise<T> => {
     const res = await this.fetch(url, options);
     return res.json();
   }

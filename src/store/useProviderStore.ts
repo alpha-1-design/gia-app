@@ -158,7 +158,8 @@ export const useProviderStore = create<GiaProviderState>()(
         const def = providerRegistry.getProvider(p);
         if (!def) return [];
 
-        if (!config?.apiKey && def.needsApiKey) {
+        const isPublicListingSupported = p === 'opencode' || p === 'openrouter';
+        if (!config?.apiKey && def.needsApiKey && !isPublicListingSupported) {
           return providerRegistry.getModels(p);
         }
 
@@ -281,12 +282,12 @@ export const useProviderStore = create<GiaProviderState>()(
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
           };
-          if (config.apiKey) {
+          if (config?.apiKey) {
             headers['Authorization'] = `Bearer ${config.apiKey}`;
           }
           if (def.headers) Object.assign(headers, def.headers);
 
-          const fetchFn = isLocal ? fetch : corsProxy.fetch;
+          const fetchFn = isLocal ? fetch : (url: string, init?: RequestInit) => corsProxy.fetch(url, init);
           const res = await fetchFn(`${baseUrl}/models`, {
             headers,
             signal: AbortSignal.timeout(8000),

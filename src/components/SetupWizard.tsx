@@ -178,7 +178,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
         if (def.headers) Object.assign(headers, def.headers);
 
         const isLocal = !def.needsApiKey;
-        const fetchFn = isLocal ? fetch : corsProxy.fetch;
+        const fetchFn = isLocal ? fetch : (url: string, init?: RequestInit) => corsProxy.fetch(url, init);
 
         const res = await fetchFn(`${baseUrl}/models`, {
           headers,
