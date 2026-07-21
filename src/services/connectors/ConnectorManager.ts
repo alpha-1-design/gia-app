@@ -58,6 +58,19 @@ class ConnectorManager {
       { id: 'aws', name: 'AWS S3', description: 'Amazon S3 cloud storage', type: 'storage', icon: 'cloud', enabled: false, status: 'disconnected', fields: [{ key: 'accessKeyId', label: 'Access Key ID', placeholder: 'AKIA...', type: 'text', required: true }, { key: 'secretAccessKey', label: 'Secret Access Key', placeholder: 'Paste secret key...', type: 'password', required: true }, { key: 'region', label: 'Region', placeholder: 'us-east-1', type: 'text', required: true }, { key: 'bucket', label: 'Bucket Name', placeholder: 'my-bucket', type: 'text', required: false }] },
       { id: 'twilio', name: 'Twilio', description: 'SMS and communication APIs', type: 'messaging', icon: 'message-circle', baseUrl: 'https://api.twilio.com', enabled: false, status: 'disconnected', fields: [{ key: 'accountSid', label: 'Account SID', placeholder: 'AC...', type: 'password', required: true }, { key: 'authToken', label: 'Auth Token', placeholder: 'Paste auth token...', type: 'password', required: true }, { key: 'fromNumber', label: 'From Number', placeholder: '+1234567890', type: 'text', required: false }] },
       { id: 'notion', name: 'Notion API', description: 'Notion workspaces and databases', type: 'api', icon: 'file-text', baseUrl: 'https://api.notion.com/v1', enabled: false, status: 'disconnected', fields: [{ key: 'apiKey', label: 'Integration Token', placeholder: 'ntn_...', type: 'password', required: true }] },
+      { id: 'email', name: 'Email Gateway (IMAP/SMTP)', description: 'Manually connect your Gmail, Yahoo, or corporate IMAP/SMTP server to GIA', type: 'messaging', icon: 'mail', enabled: false, status: 'disconnected', fields: [
+        { key: 'imapHost', label: 'IMAP Host', placeholder: 'imap.gmail.com', type: 'text', required: true },
+        { key: 'imapPort', label: 'IMAP Port', placeholder: '993', type: 'text', required: true },
+        { key: 'smtpHost', label: 'SMTP Host', placeholder: 'smtp.gmail.com', type: 'text', required: true },
+        { key: 'smtpPort', label: 'SMTP Port', placeholder: '465', type: 'text', required: true },
+        { key: 'username', label: 'Email / Username', placeholder: 'yourname@example.com', type: 'text', required: true },
+        { key: 'password', label: 'Password / App Password', placeholder: 'App-specific password...', type: 'password', required: true }
+      ]},
+      { id: 'google-services', name: 'Google Services Gateway', description: 'Manually connect Google Sheets, Drive, Gmail, or Calendar via custom service account credentials', type: 'cloud', icon: 'google', enabled: false, status: 'disconnected', fields: [
+        { key: 'clientEmail', label: 'Service Account Email', placeholder: 'gserviceaccount.com...', type: 'text', required: true },
+        { key: 'privateKey', label: 'Private Key', placeholder: '-----BEGIN PRIVATE KEY-----\\n...', type: 'password', required: true },
+        { key: 'projectId', label: 'Project ID', placeholder: 'your-gcp-project-id', type: 'text', required: true }
+      ]}
     ];
     for (const c of defaults) {
       this.connectors.set(c.id, c);
@@ -129,7 +142,7 @@ class ConnectorManager {
       this.save();
       return false;
     }
-    if (id === 'supabase' || id === 'firebase' || id === 'aws') {
+    if (id === 'supabase' || id === 'firebase' || id === 'aws' || id === 'email' || id === 'google-services') {
       connector.status = 'connected';
       connector.errorMessage = undefined;
       this.save();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plug, PlugZap, Key, RefreshCw, Power, PowerOff } from 'lucide-react';
+import { Plug, PlugZap, Key, RefreshCw, Power, PowerOff, Cloud, Mail } from 'lucide-react';
 import connectorManager from '../../services/connectors/ConnectorManager';
 
 export const ConnectorsSection: React.FC = () => {
@@ -50,8 +50,10 @@ export const ConnectorsSection: React.FC = () => {
 
   const typeIcons: Record<string, React.ReactNode> = {
     api: <Plug size={14} />,
-    messaging: <PlugZap size={14} />,
+    messaging: <Mail size={14} />,
     database: <Key size={14} />,
+    cloud: <Cloud size={14} />,
+    storage: <Cloud size={14} />,
   };
 
   const hasAnyConfig = (c: { fields?: { key: string }[]; config?: Record<string, string>; apiKey?: string }) =>
