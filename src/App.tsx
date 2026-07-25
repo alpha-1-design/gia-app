@@ -1018,7 +1018,7 @@ const App: React.FC = () => {
       )}
 
       <AnimatePresence>
-        {showSetup && <motion.div key="setup-wizard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}><SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} /></motion.div>}
+        {showSetup && <motion.div key="setup-wizard" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}><SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} /></motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>
