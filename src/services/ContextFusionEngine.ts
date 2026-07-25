@@ -109,11 +109,22 @@ class ContextFusionEngine {
     };
   }
 
-  private generateSuggestions(): ProactiveSuggestion[] {
+  private generateSuggestions(signals: ContextSignal, query?: string): ProactiveSuggestion[] {
     const suggestions: ProactiveSuggestion[] = [];
     const now = Date.now();
-    suggestions.push({ type: 'morning_prep', priority: 2, message: 'Want me to check your calendar and prep your day?', context: 'Morning routine', timestamp: now });
-    suggestions.push({ type: 'entity_followup', priority: 1, message: 'Pending tasks from your goals need attention.', context: 'Task review', timestamp: now });
+    const hour = signals.hour;
+    if (hour >= 6 && hour < 10) {
+      suggestions.push({ type: 'morning_prep', priority: 2, message: 'Good morning! Want me to check your calendar and prep your day?', context: 'Morning routine', timestamp: now });
+    }
+    if (signals.pendingGoals > 0) {
+      suggestions.push({ type: 'entity_followup', priority: 1, message: `${signals.pendingGoals} pending goals need attention.`, context: 'Goal review', timestamp: now });
+    }
+    if (signals.topMemories && signals.topMemories.length > 0) {
+      suggestions.push({ type: 'memory_cleanup', priority: 3, message: `You have ${signals.topMemories.length} relevant memory${signals.topMemories.length > 1 ? 'entries' : 'entry'}.`, context: 'Memory check', timestamp: now });
+    }
+    if (hour >= 21 || hour < 5) {
+      suggestions.push({ type: 'end_of_day', priority: 2, message: 'It is late — wrap up for the day?', context: 'End of day', timestamp: now });
+    }
     return suggestions;
   }
 
