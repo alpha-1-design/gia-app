@@ -115,7 +115,7 @@ const sourcePreferences = new Map<string, SourcePreference>();
 const pendingBatches: NotificationBatch[] = [];
 let totalDecisions = 0;
 let correctDecisions = 0;
-const nextBatchId = 1;
+
 
 function classifyCategory(notification: IncomingNotification): NotificationCategory {
   if (notification.category) return notification.category;

@@ -1,7 +1,5 @@
-import { knowledgeGraphService } from './KnowledgeGraphService';
 import { useMemoryStore, type MemoryEntry } from '../store/useMemoryStore';
 import { useGiaStore } from '../store/useGiaStore';
-import { logger } from '../utils/logger';
 import type { Tool } from './tools/types';
 import ToolRegistry from './ToolRegistry';
 
@@ -45,11 +43,11 @@ class ContextFusionEngine {
     if (this.activityLog.length > 500) this.activityLog = this.activityLog.slice(-400);
   }
 
-  async fuse(query?: string): Promise<FusionResult> {
+  async fuse(): Promise<FusionResult> {
     const now = Date.now();
     if (this.fusionCache && (now - this.fusionCacheTime) < CACHE_TTL_MS) return this.fusionCache;
     const signals = this.gatherSignals();
-    const suggestions = this.generateSuggestions(signals, query);
+    const suggestions = this.generateSuggestions(signals);
     const snippet = this.buildPromptSnippet(signals);
     const result: FusionResult = { signals, suggestions, fusedAt: now, systemPromptSnippet: snippet };
     this.fusionCache = result;
@@ -109,7 +107,7 @@ class ContextFusionEngine {
     };
   }
 
-  private generateSuggestions(signals: ContextSignal, query?: string): ProactiveSuggestion[] {
+  private generateSuggestions(signals: ContextSignal): ProactiveSuggestion[] {
     const suggestions: ProactiveSuggestion[] = [];
     const now = Date.now();
     const hour = signals.hour;
