@@ -5,6 +5,7 @@ import { isNativePlatform } from '../../utils/helpers';
 import { isPathSafe, blobToBase64, triggerDownload, MAX_FILE_SIZE } from './helpers';
 import { useGiaStore } from '../../store/useGiaStore';
 import type { Tool, ToolContext } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 const isNative = isNativePlatform;
 
@@ -217,3 +218,8 @@ const zipProject: Tool = {
 };
 
 export const filesystemTools: Tool[] = [filesystemRead, filesystemWrite, listFiles, zipProject];
+
+
+export function registerFilesystemTools() {
+  for (const tool of filesystemTools) ToolRegistry.register(tool);
+}

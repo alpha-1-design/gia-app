@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import type { Tool, ToolResult } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 interface SSHConnection {
   id: string;
@@ -178,3 +179,8 @@ const sshTools: Tool[] = [
 ];
 
 export { sshTools };
+
+
+export function registerSshTools() {
+  for (const tool of sshTools) ToolRegistry.register(tool);
+}

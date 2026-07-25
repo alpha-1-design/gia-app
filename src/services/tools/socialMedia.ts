@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import socialManager from '../social/SocialManager';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -314,3 +315,8 @@ export const socialMediaTools: Tool[] = [
   socialDeletePost,
   socialAnalytics,
 ];
+
+
+export function registerSocialMediaTools() {
+  for (const tool of socialMediaTools) ToolRegistry.register(tool);
+}

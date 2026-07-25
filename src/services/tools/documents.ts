@@ -2,6 +2,7 @@ import SandboxService from '../SandboxService';
 import { isPyodideAvailable, runPython } from '../PyodideRunner';
 import { triggerDownload } from './helpers';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 let sandboxChecked = false;
 async function ensureSandbox() {
@@ -727,3 +728,8 @@ if __name__ == "__main__":
 `;
 
 export const documentTools: Tool[] = [read_document, download_url, browse_web];
+
+
+export function registerDocumentTools() {
+  for (const tool of documentTools) ToolRegistry.register(tool);
+}

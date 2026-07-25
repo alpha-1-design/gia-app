@@ -344,6 +344,9 @@ const App: React.FC = () => {
     useProviderStore.getState().loadProviders().catch(e => logger.error('[App] Failed to load providers:', e));
     LocalNotifications.requestPermissions();
 
+    // Register all tool definitions into the ToolRegistry singleton
+    import('./services/tools/index').then(m => m.registerAllTools());
+
     // Lazy-loaded service singletons — resolved in parallel, none block first paint
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let svc: Record<string, any> | null = null;

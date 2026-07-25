@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import type { Tool, ToolResult } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 interface DBConnection {
   id: string;
@@ -194,3 +195,8 @@ const databaseTools: Tool[] = [
 ];
 
 export { databaseTools };
+
+
+export function registerDatabaseTools() {
+  for (const tool of databaseTools) ToolRegistry.register(tool);
+}

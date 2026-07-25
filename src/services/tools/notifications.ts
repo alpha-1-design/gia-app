@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -249,3 +250,8 @@ export const notificationTools: Tool[] = [
   checkNotificationPermissions,
   requestNotificationPermissions,
 ];
+
+
+export function registerNotificationTools() {
+  for (const tool of notificationTools) ToolRegistry.register(tool);
+}

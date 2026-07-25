@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Tool } from './types';
 import pdfService from '../PDFService';
+import ToolRegistry from '../ToolRegistry';
 
 const readPdfTool: Tool = {
   id: 'read_pdf',
@@ -115,3 +116,8 @@ except Exception as e:
 };
 
 export const pdfTools: Tool[] = [readPdfTool];
+
+
+export function registerPdfTools() {
+  for (const tool of pdfTools) ToolRegistry.register(tool);
+}

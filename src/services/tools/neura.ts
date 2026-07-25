@@ -1,6 +1,7 @@
 import { useKnowledgeGraphStore } from '../../store/useKnowledgeGraphStore';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import type { Tool, ToolContext } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 export const neuraTools: Tool[] = [
   {
@@ -281,3 +282,8 @@ export const neuraTools: Tool[] = [
     },
   },
 ];
+
+
+export function registerNeuraTools() {
+  for (const tool of neuraTools) ToolRegistry.register(tool);
+}

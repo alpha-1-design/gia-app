@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Tool, ToolContext } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -204,3 +205,8 @@ const browserScrollTool: Tool = {
 };
 
 export const browserAutomationTools: Tool[] = [browserClickTool, browserFillTool, browserScrollTool];
+
+
+export function registerBrowserAutomationTools() {
+  for (const tool of browserAutomationTools) ToolRegistry.register(tool);
+}

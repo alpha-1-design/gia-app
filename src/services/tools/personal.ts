@@ -5,6 +5,7 @@ import messagingBridge from '../MessagingBridge';
 import { useGiaStore } from '../../store/useGiaStore';
 import { getIntervalMs, isNativePlatform } from '../../utils/helpers';
 import { GIAMedia } from '../../services/GIAMedia';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -307,3 +308,8 @@ export const personalTools: Tool[] = [
   setReminder,
   playMusic,
 ];
+
+
+export function registerPersonalTools() {
+  for (const tool of personalTools) ToolRegistry.register(tool);
+}

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Tool } from './types';
 import { GIAMedia } from '../../services/GIAMedia';
 import { isNativePlatform } from '../../utils/helpers';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -109,3 +110,8 @@ const mediaAccess: Tool = {
 };
 
 export const mediaAccessTools: Tool[] = [mediaAccess];
+
+
+export function registerMediaAccessTools() {
+  for (const tool of mediaAccessTools) ToolRegistry.register(tool);
+}

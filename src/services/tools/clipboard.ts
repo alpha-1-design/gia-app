@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Clipboard } from '@capacitor/clipboard';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -72,3 +73,8 @@ const clipboardWrite: Tool = {
 };
 
 export const clipboardTools: Tool[] = [clipboardRead, clipboardWrite];
+
+
+export function registerClipboardTools() {
+  for (const tool of clipboardTools) ToolRegistry.register(tool);
+}

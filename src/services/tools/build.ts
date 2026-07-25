@@ -4,6 +4,7 @@ import { isNativePlatform } from '../../utils/helpers';
 import { triggerDownload, blobToBase64 } from './helpers';
 import type { Tool, ToolContext } from './types';
 import type { Skill } from '../../store/useGiaStore';
+import ToolRegistry from '../ToolRegistry';
 
 const isNative = isNativePlatform;
 
@@ -311,3 +312,8 @@ const installSkill: Tool = {
 };
 
 export const buildTools: Tool[] = [buildProject, installSkill];
+
+
+export function registerBuildTools() {
+  for (const tool of buildTools) ToolRegistry.register(tool);
+}

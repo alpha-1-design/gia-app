@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 const smartDiscover: Tool = {
   id: 'smart_discover',
@@ -221,3 +222,8 @@ const smartStatus: Tool = {
 };
 
 export const smartHomeTools: Tool[] = [smartDiscover, smartCast, smartControl, smartStatus];
+
+
+export function registerSmartHomeTools() {
+  for (const tool of smartHomeTools) ToolRegistry.register(tool);
+}

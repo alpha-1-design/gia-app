@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Share } from '@capacitor/share';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -66,3 +67,8 @@ const shareContent: Tool = {
 };
 
 export const shareTools: Tool[] = [shareContent];
+
+
+export function registerShareTools() {
+  for (const tool of shareTools) ToolRegistry.register(tool);
+}

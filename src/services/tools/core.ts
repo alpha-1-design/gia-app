@@ -4,6 +4,7 @@ import { useGiaStore } from '../../store/useGiaStore';
 import { providerRegistry } from '../ProviderRegistry';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 const isNative = isNativePlatform;
 
@@ -222,3 +223,8 @@ const imageGeneration: Tool = {
 };
 
 export const coreTools: Tool[] = [environmentInfo, github, wikipedia, weather, define, imageGeneration];
+
+
+export function registerCoreTools() {
+  for (const tool of coreTools) ToolRegistry.register(tool);
+}

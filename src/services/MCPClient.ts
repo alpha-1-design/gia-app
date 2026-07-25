@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 import type { MCPServerConfig } from '../store/useMCPStore';
-import type { ToolResult } from './GiaTools';
+import type { ToolResult } from './tools/types';
 
 export interface MCPToolDefinition {
   name: string;

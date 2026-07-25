@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { CapacitorHttp } from '@capacitor/core';
 import { isNativePlatform } from '../utils/helpers';
+import { Directory, Filesystem } from '@capacitor/filesystem';
 
 export interface CodeRunRequest {
   language: string;
@@ -63,47 +64,41 @@ class CodeRunner {
   private getAuthHeaders(): Record<string, string> {
     return this.userApiKey ? { 'Authorization': `Bearer ${this.userApiKey}` } : {};
   }
+  private async isSandboxAvailable(): Promise<boolean> {
+    if (!isNative) return false;
+    try {
+      await Filesystem.stat({ path: 'alpine/bin/sh', directory: Directory.External });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
-  private runLocalJS(code: string): Promise<CodeRunResult> {
-    return new Promise((resolve) => {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.sandbox.add('allow-scripts');
-      document.body.appendChild(iframe);
-      const timeout = setTimeout(() => {
-        document.body.removeChild(iframe);
-        resolve({ output: '', error: 'Execution timed out after 10s', exitCode: 1, language: 'javascript', version: 'local (browser)' });
-      }, 10000);
-      const win = iframe.contentWindow;
-      if (!win) {
-        clearTimeout(timeout);
-        document.body.removeChild(iframe);
-        resolve({ output: '', error: 'Failed to create sandbox', exitCode: 1, language: 'javascript', version: 'local (browser)' });
-        return;
-      }
-      const logs: string[] = [];
-      const sandbox = win! as Window & { console: Record<string, (...args: unknown[]) => void>; Function: FunctionConstructor };
-      sandbox.console = {
-        log: (...args: unknown[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
-        error: (...args: unknown[]) => logs.push('[ERROR] ' + args.map(a => String(a)).join(' ')),
-        warn: (...args: unknown[]) => logs.push('[WARN] ' + args.map(a => String(a)).join(' ')),
+  private async runInSandbox(req: CodeRunRequest): Promise<CodeRunResult> {
+    const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
+    try {
+      const command = `proot -S alpine -b /data/data/com.gia.dev/files/alpine/bin/sh echo "${req.code}" | alpine/bin/sh`;
+      const result = await Filesystem.readFile({
+        path: command,
+        directory: Directory.External,
+      });
+
+      return {
+        output: result.data as string,
+        error: null,
+        exitCode: 0,
+        language: lang,
+        version: 'Alpine/proot',
       };
-      try {
-        const result = new sandbox.Function(code)();
-        clearTimeout(timeout);
-        document.body.removeChild(iframe);
-        const output = logs.join('\n');
-        if (result !== undefined && !output.includes(String(result))) {
-          resolve({ output: output + (output ? '\n' : '') + String(result), error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' });
-        } else {
-          resolve({ output: output || 'undefined', error: null, exitCode: 0, language: 'javascript', version: 'local (browser)' });
-        }
-      } catch (e: unknown) {
-        clearTimeout(timeout);
-        document.body.removeChild(iframe);
-        resolve({ output: logs.join('\n'), error: e instanceof Error ? e.message : 'JavaScript execution failed', exitCode: 1, language: 'javascript', version: 'local (browser)' });
-      }
-    });
+    } catch (e: unknown) {
+      return {
+        output: '',
+        error: e instanceof Error ? e.message : 'Sandbox execution failed',
+        exitCode: 1,
+        language: lang,
+        version: 'Alpine/proot',
+      };
+    }
   }
 
   async run(req: CodeRunRequest, attempts = 0, signal?: AbortSignal): Promise<CodeRunResult> {
@@ -112,12 +107,8 @@ class CodeRunner {
 
     if (signal?.aborted) return { output: '', error: 'Request aborted', exitCode: 1, language: lang, version: '' };
 
-    // Run JavaScript locally in browser — instant, no network needed
-    if (lang === 'javascript') {
-      const result = await this.runLocalJS(req.code);
-      logger.warn('⚠️ JavaScript executed locally in sandboxed iframe. For full language support, use the Piston API endpoint in Settings → Code Execution.');
-      result.output = result.output + (result.output ? '\n' : '') + '⚠️ Running in local sandbox (limited). For full language support, configure Piston API in Settings.';
-      return result;
+    if (await this.isSandboxAvailable()) {
+      return this.runInSandbox(req);
     }
 
     const files = [{ name: `main.${lang}`, content: req.code }];

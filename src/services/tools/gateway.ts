@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import gatewayManager from '../gateway/GatewayManager';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -248,3 +249,8 @@ export const gatewayTools: Tool[] = [
   gatewayStats,
   gatewayLogs,
 ];
+
+
+export function registerGatewayTools() {
+  for (const tool of gatewayTools) ToolRegistry.register(tool);
+}

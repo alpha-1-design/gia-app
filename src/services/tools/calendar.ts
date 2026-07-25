@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Tool } from './types';
 import calendarService from '../CalendarService';
 import connectionManager from '../ConnectionManager';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -249,3 +250,8 @@ export const calendarTools: Tool[] = [
   calendarUpdateEvent,
   calendarDeleteEvent,
 ];
+
+
+export function registerCalendarTools() {
+  for (const tool of calendarTools) ToolRegistry.register(tool);
+}

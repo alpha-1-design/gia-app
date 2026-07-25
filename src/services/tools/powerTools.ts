@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { useNotesStore } from '../../store/useNotesStore';
 import type { Tool, ToolContext } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 const httpRequest: Tool = {
   id: 'http_request',
@@ -461,3 +462,8 @@ export const powerTools: Tool[] = [
   listApis,
   screenshotPage,
 ];
+
+
+export function registerPowerTools() {
+  for (const tool of powerTools) ToolRegistry.register(tool);
+}

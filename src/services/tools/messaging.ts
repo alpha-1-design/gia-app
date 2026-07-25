@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Tool } from './types';
 import messagingBridge from '../MessagingBridge';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -212,3 +213,8 @@ export const messagingTools: Tool[] = [
   messagingSend,
   messagingSetMentionOnly,
 ];
+
+
+export function registerMessagingTools() {
+  for (const tool of messagingTools) ToolRegistry.register(tool);
+}

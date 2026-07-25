@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 interface OSRMRoute {
   legs: { steps: { instruction: string; distance: number; duration: number; maneuver: { type: string; location: number[] } }[]; distance: number; duration: number; summary: string }[];
@@ -130,3 +131,8 @@ ${mapVisual}
     }
   }
 ];
+
+
+export function registerLocationTools() {
+  for (const tool of locationTools) ToolRegistry.register(tool);
+}

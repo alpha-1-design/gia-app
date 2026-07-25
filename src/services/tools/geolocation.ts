@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Geolocation } from '@capacitor/geolocation';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
+import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -202,3 +203,8 @@ export const geolocationTools: Tool[] = [
   geolocationCheckPermissions,
   geolocationRequestPermissions,
 ];
+
+
+export function registerGeolocationTools() {
+  for (const tool of geolocationTools) ToolRegistry.register(tool);
+}
