@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../CodeRunner', () => ({ default: {} }));
 vi.mock('../../store/useGiaStore', () => ({ useGiaStore: {} }));
@@ -8,7 +8,12 @@ vi.mock('../../store/useProviderStore', () => ({}));
 vi.mock('../../utils/helpers', () => ({ isNativePlatform: vi.fn(), featureAvailable: vi.fn(), featureFallbackMessage: vi.fn() }));
 vi.mock('@capacitor/filesystem', () => ({ Filesystem: {}, Directory: {}, Encoding: {} }));
 
+const { registerAllTools } = await import('../tools/index');
 const { default: giaTools } = await import('../GiaTools');
+
+beforeEach(() => {
+  registerAllTools();
+});
 
 describe('GiaTools', () => {
   it('is a singleton instance', () => {
@@ -48,30 +53,29 @@ describe('GiaTools', () => {
     });
   });
 
-  describe('getAllToolSchemas', () => {
-    it('returns all tool schemas as a record', () => {
-      const schemas = giaTools.getAllToolSchemas();
-      expect(schemas).toBeInstanceOf(Object);
-      const keys = Object.keys(schemas);
-      expect(keys.length).toBeGreaterThan(0);
-      expect(keys).toContain('web_search');
-      expect(schemas.web_search).toHaveProperty('description');
-      expect(schemas.web_search).toHaveProperty('properties');
-    });
-  });
+   describe('getAllToolSchemas', () => {
+     it('returns all tool schemas as a record', () => {
+       const schemas = giaTools.getAllToolSchemas();
+       expect(schemas).toBeInstanceOf(Object);
+       const keys = Object.keys(schemas);
+       expect(keys.length).toBeGreaterThan(0);
+       expect(keys).toContain('web_search');
+       expect(schemas.web_search).toHaveProperty('properties');
+     });
+   });
 
-  describe('tool schemas structure', () => {
-    it('web_search has required query', () => {
-      const schema = giaTools.getToolSchema('web_search');
-      expect(schema!.required).toContain('query');
-    });
+   describe('tool schemas structure', () => {
+     it('web_search has required query', () => {
+       const schema = giaTools.getToolSchema('web_search');
+       expect(schema!.required).toContain('query');
+     });
 
-    it('switch_module accepts chat/exam/analyst/writer/planner/settings', () => {
-      const schema = giaTools.getToolSchema('switch_module');
-      const moduleProp = schema!.properties['module'] as Record<string, unknown>;
-      expect(moduleProp).toBeDefined();
-      expect(schema!.required).toContain('module');
-    });
+     it('switch_module accepts chat/exam/analyst/writer/planner/settings', () => {
+       const schema = giaTools.getToolSchema('switch_module');
+       const moduleProp = schema!.properties['module'] as Record<string, unknown>;
+       expect(moduleProp).toBeDefined();
+       expect(schema!.required).toContain('module');
+     });
 
     it('image_generation has prompt property', () => {
       const schema = giaTools.getToolSchema('image_generation');

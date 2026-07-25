@@ -72,13 +72,21 @@ describe('useChatMessages', () => {
 
   it('copyMessage sets copiedId', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    const origClipboard = globalThis.navigator.clipboard;
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
     const { result } = renderHook(() => useChatMessages());
     await act(async () => {
       await result.current.copyMessage('m1', 'hello');
     });
     expect(writeText).toHaveBeenCalledWith('hello');
     expect(result.current.copiedId).toBe('m1');
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: origClipboard,
+      configurable: true,
+    });
   });
 
   it('showBranchView toggles', () => {

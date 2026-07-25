@@ -17,6 +17,7 @@ export interface Tool {
   description: string;
   schema?: {
     type: 'object';
+    description?: string;
     properties: Record<string, unknown>;
     required?: string[];
   };
