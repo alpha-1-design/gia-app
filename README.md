@@ -19,6 +19,8 @@
 
 **GIA (Generative Interface Agent)** — private, on-device AI workspace. No backend, no telemetry, no cloud dependency except the AI API calls you configure.
 
+> **v2.3.3.0-beta.1** — This is our most stable release yet, with a few UI improvements too.
+
 [Explore Manual](./manual.md) · [Report Bug](./gia-bug-report.md) · [Contributing](./CONTRIBUTING.md)
 
 </div>
