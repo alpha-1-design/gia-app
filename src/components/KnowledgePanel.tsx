@@ -34,7 +34,7 @@ const KnowledgeCard: React.FC<{ entry: MemoryEntry; pinned: boolean; onTogglePin
         <p className="text-[11px] font-medium leading-tight" style={{ color: 'var(--gia-text)' }}>{entry.key}</p>
         <p className="text-[10px] leading-relaxed mt-0.5" style={{ color: 'var(--gia-muted)' }}>{entry.value}</p>
       </div>
-      <button onClick={() => onDelete(entry.id)} className="mt-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded" style={{ color: 'var(--gia-muted)' }}>
+      <button onClick={() => onDelete(entry.id)} className="mt-0.5 shrink-0 p-0.5 rounded transition-opacity sm:opacity-0 sm:group-hover:opacity-100" style={{ color: 'var(--gia-muted)' }}>
         <X size={10} />
       </button>
     </div>

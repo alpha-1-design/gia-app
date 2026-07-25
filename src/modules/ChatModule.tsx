@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bot, Plus, History, Trash2,
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera, Terminal,
@@ -90,6 +91,7 @@ const ChatModule: React.FC = () => {
   const sandboxEnvReady = useGiaStore((s) => s.sandboxEnvReady);
   const archivedSessions = useGiaStore((s) => s.archivedSessions);
   const restoreSession = useGiaStore((s) => s.restoreSession);
+  const userProfile = useGiaStore((s) => s.userProfile);
   const activeProvider = useProviderStore((s) => s.activeProvider);
 
   const toolItems: { key: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate'; label: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string }[] = [
@@ -154,31 +156,34 @@ const ChatModule: React.FC = () => {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {sessions.filter(s => {
-            if (s.title?.toLowerCase().includes(historySearch.toLowerCase())) return true;
-            if (!historySearch) return false;
-            return s.messages.some(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase()));
-          }).map((sess) => {
-            const matchCount = historySearch ? sess.messages.filter(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
+          {(() => {
+            const filtered = sessions.filter(s => {
+              if (s.title?.toLowerCase().includes(historySearch.toLowerCase())) return true;
+              if (!historySearch) return false;
+              return s.messages.some(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase()));
+            });
             return (
-              <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--gia-text)' }}>{sess.title}</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{sess.messages.length} msgs · {new Date(sess.updatedAt).toLocaleDateString()}{matchCount > 0 ? ` · ${matchCount} match${matchCount > 1 ? 'es' : ''}` : ''}</p>
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); deleteSession(sess.id); }} className="p-1.5 rounded-lg transition-colors text-zinc-600 hover:text-rose-400">
-                  <Trash2 size={13} />
-                </button>
-              </div>
+              <>
+                {filtered.map((sess) => {
+                  const matchCount = historySearch ? sess.messages.filter(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase())).length : 0;
+                  return (
+                    <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--gia-text)' }}>{sess.title}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{sess.messages.length} msgs · {new Date(sess.updatedAt).toLocaleDateString()}{matchCount > 0 ? ` · ${matchCount} match${matchCount > 1 ? 'es' : ''}` : ''}</p>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); deleteSession(sess.id); }} className="p-1.5 rounded-lg transition-colors text-zinc-600 hover:text-rose-400">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
+                )}
+              </>
             );
-          })}
-          {sessions.filter(s => {
-            if (s.title?.toLowerCase().includes(historySearch.toLowerCase())) return true;
-            if (!historySearch) return false;
-            return s.messages.some(m => m.message?.content?.toLowerCase().includes(historySearch.toLowerCase()));
-          }).length === 0 && (
-            <p className="text-xs text-center py-8" style={{ color: 'var(--gia-muted-2)' }}>No chats found{historySearch ? ` for "${historySearch}"` : ''}</p>
-          )}
+          })()}
 
           {archivedSessions.length > 0 && (
             <div className="pt-2 mt-2" style={{ borderTop: '1px solid var(--gia-border)' }}>
@@ -257,12 +262,12 @@ const ChatModule: React.FC = () => {
             )}
             <ChevronDown size={11} className="shrink-0 opacity-70" />
           </button>
-          <button onClick={() => setShowFileManager(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title="File Manager"><Upload size={13} /></button>
-          <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Brain size={13} /></button>
+          <button onClick={() => setShowFileManager(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="File Manager" title="File Manager"><Upload size={13} /></button>
+          <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Knowledge" title="Knowledge"><Brain size={13} /></button>
           <SearchActivityButton />
-          <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Download size={13} /></button>
-          <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Trash2 size={13} /></button>
-          <button onClick={createSession} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}><Plus size={13} /></button>
+          <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Export chat" title="Export chat"><Download size={13} /></button>
+          <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Clear chat" title="Clear chat"><Trash2 size={13} /></button>
+          <button onClick={createSession} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="New chat" title="New chat"><Plus size={13} /></button>
         </div>
       </div>
 
@@ -299,14 +304,14 @@ const ChatModule: React.FC = () => {
               <GiaIcon size={30} animate={false} color="#a855f7" />
             </div>
             <div>
-              <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{useGiaStore.getState().userProfile.name ? `Hey ${useGiaStore.getState().userProfile.name}` : greeting.emoji + ' ' + greeting.text}</p>
+              <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{userProfile.name ? `Hey ${userProfile.name}` : greeting.emoji + ' ' + greeting.text}</p>
               <p className="text-xs mt-1 max-w-[240px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{providerConnected ? 'Your personal AI workspace. Ask anything, attach files, or pick a quick start below.' : 'No AI provider connected. Use the on-device local LLM or connect a provider in Settings.'}</p>
               {!messages.length && (
                 <p className="text-[10px] mt-2 animate-fade-in" style={{ color: 'var(--gia-muted-2)' }}>
                   {tip.emoji} {tip.text}
                 </p>
-              )}
-            </div>
+            )}
+          </div>
             {!providerConnected && (
             <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
               <button onClick={() => { useProviderStore.getState().setProviderKey('local-llm', ''); }} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
@@ -419,8 +424,8 @@ const ChatModule: React.FC = () => {
             onDismiss={() => setClarification(null)}
           />
         )}
-        <EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />
-        <ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} onOpenEngine={() => setShowEngine(true)} />
+        {createPortal(<EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />, document.body)}
+        {createPortal(<ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} onOpenEngine={() => setShowEngine(true)} />, document.body)}
 
         <AnimatePresence>
           {liveFileEdit && (
@@ -443,21 +448,11 @@ const ChatModule: React.FC = () => {
 
       <AnimatePresence>
         {showScrollBtn && (
-          <motion.button initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} onClick={scrollToBottom} className="absolute right-4 bottom-32 w-8 h-8 rounded-full flex items-center justify-center shadow-lg z-10 bg-zinc-800 border border-zinc-700">
-            <ChevronDown size={14} className="text-zinc-400" />
+          <motion.button initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} onClick={scrollToBottom} className="absolute right-4 bottom-32 w-8 h-8 rounded-full flex items-center justify-center shadow-lg z-10" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+            <ChevronDown size={14} style={{ color: 'var(--gia-muted)' }} />
           </motion.button>
         )}
       </AnimatePresence>
-
-      {/* Stop button — floats above input when loading (touch-friendly on mobile) */}
-      {loading && handleStop && (
-        <div className="absolute bottom-[78px] right-4 z-20">
-          <button onClick={handleStop} className="flex items-center gap-1.5 px-3.5 h-9 rounded-full font-semibold text-[12px] shadow-lg active:scale-95 transition-transform tap-feedback" style={{ background: '#1a1a22', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171' }}>
-            <svg width="9" height="9" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
-            Stop
-          </button>
-        </div>
-      )}
 
       <AnimatePresence>
         {undoMsg && (
@@ -480,6 +475,12 @@ const ChatModule: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+        {loading && (
+          <div className="mb-1 px-1">
+            <ThinkingStatus phase={thinkingPhase} toolName={currentTool} />
+          </div>
+        )}
 
         <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
         {showAgentMention && (
@@ -530,7 +531,8 @@ const ChatModule: React.FC = () => {
             <SlidersHorizontal size={14} />
           </button>
 
-          <div className="flex-1 overflow-x-auto flex items-center gap-1.5 py-1 [&::-webkit-scrollbar]:hidden">
+          <div className="flex-1 relative overflow-hidden">
+            <div className="overflow-x-auto flex items-center gap-1.5 py-1 [&::-webkit-scrollbar]:hidden">
             <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
               <Paperclip size={11} /> File
             </button>
@@ -573,6 +575,8 @@ const ChatModule: React.FC = () => {
                 Preview
               </button>
             )}
+          </div>
+            <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none" style={{ background: 'linear-gradient(to right, transparent, var(--gia-bg))' }} />
           </div>
           {buildMode && sandboxEnvReady === false && (
             <button type="button" onClick={() => useGiaStore.getState().setModule('settings')} className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-lg self-start transition-colors tap-feedback" style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}>

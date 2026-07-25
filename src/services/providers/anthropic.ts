@@ -262,7 +262,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   }
   if (!res.ok) {
     const e = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(ctx.friendlyError('Anthropic', e?.error?.message || `Anthropic error ${res.status}`));
+    throw new Error(ctx.friendlyError('Anthropic', e?.error?.message || `Anthropic error ${res.status}`, res.status));
   }
   const data: { content?: { type: string; text?: string; name?: string; input?: unknown }[]; stop_reason?: string; usage?: { input_tokens: number; output_tokens: number } } = await res.json();
   const tokenUsage = data.usage ? { input: data.usage.input_tokens || 0, output: data.usage.output_tokens || 0, total: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0) } : undefined;

@@ -206,6 +206,7 @@ class GiaBrain {
         }
 
         const rateLimited = isRateLimitOrQuotaError(msg) || isRetryableServerError(msg);
+        logger.log(`[GiaBrain] Error classified: rateLimited=${rateLimited} provider=${effectiveProvider} model=${finalModel} msg="${msg.slice(0, 200)}"`);
         carryOverText += attemptStreamed;
 
         // Persist a durable checkpoint the moment something recoverable goes

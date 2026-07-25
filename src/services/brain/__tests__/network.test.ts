@@ -36,4 +36,20 @@ describe('friendlyError → retry classification', () => {
     expect(isRateLimitOrQuotaError(msg)).toBe(false);
     expect(isRetryableServerError(msg)).toBe(false);
   });
+
+  it('a 400 with "rate" in the body is NOT classified as rate-limited when status code is provided', () => {
+    const msg = friendlyError('OpenCode Zen', new Error('rate limit exceeded for this model'), 400);
+    expect(isRateLimitOrQuotaError(msg)).toBe(false);
+    expect(isRetryableServerError(msg)).toBe(false);
+  });
+
+  it('a real 429 IS classified as rate-limited when status code is provided', () => {
+    const msg = friendlyError('OpenCode Zen', new Error('rate_limit_exceeded'), 429);
+    expect(isRateLimitOrQuotaError(msg)).toBe(true);
+  });
+
+  it('a 5xx with body text is classified as server error via status code', () => {
+    const msg = friendlyError('Gemini', new Error('some internal message'), 503);
+    expect(isRetryableServerError(msg)).toBe(true);
+  });
 });

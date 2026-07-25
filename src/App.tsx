@@ -5,48 +5,32 @@ import { useGiaStore, Module } from './store/useGiaStore';
 import { setStorageErrorHandler } from './store/idb-storage';
 import { useShallow } from 'zustand/react/shallow';
 import { useMemoryStore } from './store/useMemoryStore';
+import { useAutonomyStore } from './store/useAutonomyStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
 import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
-
-import EngineRoom from './components/EngineRoom';
 import ErrorBoundary from './components/ErrorBoundary';
-import GiaConsole from './components/GiaConsole';
-import ProtocolPanel from './components/ProtocolPanel';
-import { TaskBoard } from './components/TaskBoard';
-import { NotesPanel } from './components/NotesPanel';
 import { SourcesPanel } from './components/SourcesPanel';
-import { RegionSelectorOverlay } from './components/RegionSelectorOverlay';
-import { ScreenCaptureService } from './services/ScreenCaptureService';
-import SchedulerService from './services/SchedulerService';
 import BiometricService from './services/BiometricService';
-import MCPManager from './services/MCPManager';
-import { backgroundRecovery } from './services/BackgroundRecovery';
-import SetupWizard from './components/SetupWizard';
-import { proactiveEngine } from './services/autonomy/ProactiveEngine';
-import { useAutonomyStore } from './store/useAutonomyStore';
-import SystemService from './services/SystemService';
 import { useProviderStore } from './store/useProviderStore';
-import { providerRegistry } from './services/ProviderRegistry';
-import { setSystemContext } from './services/GiaBrain';
 import { logger } from './utils/logger';
-import wakeLockService from './services/WakeLockService';
-import keepaliveService from './services/KeepaliveService';
-import idleManager from './services/IdleManager';
-import LocalLLMService from './services/LocalLLMService';
-import messagingBridge from './services/MessagingBridge';
-import GiaBrain from './services/GiaBrain';
-import giaForegroundService from './services/GIAForegroundService';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
 import { useAutomationBridge } from './hooks/useAutomationBridge';
-import { updateService } from './services/UpdateService';
 import type { UpdateInfo } from './services/UpdateService';
 import './styles/globals.css';
+
+const EngineRoom = lazy(() => import('./components/EngineRoom'));
+const GiaConsole = lazy(() => import('./components/GiaConsole'));
+const ProtocolPanel = lazy(() => import('./components/ProtocolPanel'));
+const TaskBoard = lazy(() => import('./components/TaskBoard').then(m => ({ default: m.TaskBoard })));
+const NotesPanel = lazy(() => import('./components/NotesPanel').then(m => ({ default: m.NotesPanel })));
+const RegionSelectorOverlay = lazy(() => import('./components/RegionSelectorOverlay').then(m => ({ default: m.RegionSelectorOverlay })));
+const SetupWizard = lazy(() => import('./components/SetupWizard'));
 
 // Surface persistence failures (e.g. storage quota exceeded) to the user
 // instead of failing silently and losing data. Throttled so a persistent
@@ -83,6 +67,7 @@ const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string
 
 async function checkProviderHealth(provider: string, apiKey: string, model: string): Promise<boolean> {
   try {
+    const { providerRegistry } = await import('./services/ProviderRegistry');
     const baseUrl = providerRegistry.getBaseUrl(provider);
     if (!baseUrl) return false;
     if (provider === 'anthropic') {
@@ -169,6 +154,7 @@ const App: React.FC = () => {
     const st = useGiaStore.getState();
     if (st.showModelSwitcher) { st.setShowModelSwitcher(false); return; }
     if (st.showEngine) { st.setShowEngine(false); return; }
+    if (st.showProtocols) { st.setShowProtocols(false); return; }
     if (showTerminal) { setShowTerminal(false); return; }
     if (st.currentModule !== 'chat') { st.goBack(); return; }
     const now = Date.now();
@@ -203,6 +189,7 @@ const App: React.FC = () => {
           const { GIAOverlay } = await import('./services/GIAOverlay');
           await GIAOverlay.startOverlay();
         } else {
+          const { ScreenCaptureService } = await import('./services/ScreenCaptureService');
           const dataUrl = await ScreenCaptureService.captureScreen();
           setCapturedImage(dataUrl);
         }
@@ -259,7 +246,7 @@ const App: React.FC = () => {
 
             if (msg.type === 'gia-tg-status' && msg.lastUpdateId > 0) {
               // Sync app's offset to SW's (happens after configure)
-              messagingBridge.syncOffset(Number(msg.lastUpdateId));
+              import('./services/MessagingBridge').then(m => m.default.syncOffset(Number(msg.lastUpdateId)));
             }
 
             if (msg.type === 'gia-tg-missed-messages' && msg.messages?.length > 0) {
@@ -267,7 +254,7 @@ const App: React.FC = () => {
               for (const incoming of msg.messages) {
                 const ctx = incoming.isGroup ? `group "${incoming.chatTitle}"` : 'DM';
                 logger.log(`[Messaging] Missed ${ctx} from ${incoming.from}: ${incoming.text.slice(0, 80)}`);
-                messagingBridge.handleIncomingFromSW(incoming);
+                import('./services/MessagingBridge').then(m => m.default.handleIncomingFromSW(incoming));
               }
             }
           });
@@ -356,15 +343,33 @@ const App: React.FC = () => {
     // Load provider definitions dynamically
     useProviderStore.getState().loadProviders().catch(e => logger.error('[App] Failed to load providers:', e));
     LocalNotifications.requestPermissions();
-    SchedulerService.start();
-    MCPManager.init();
-    proactiveEngine.start();
+
+    // Lazy-loaded service singletons — resolved in parallel, none block first paint
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let svc: Record<string, any> | null = null;
+    const servicesReady = Promise.all([
+      import('./services/SchedulerService').then(m => { m.default.start(); }),
+      import('./services/MCPManager').then(m => m.default),
+      import('./services/autonomy/ProactiveEngine').then(m => { m.proactiveEngine.start(); return m.proactiveEngine; }),
+      import('./services/IdleManager').then(m => m.default),
+      import('./services/SystemService').then(m => m.default),
+      import('./services/GiaBrain').then(m => m.setSystemContext),
+      import('./services/WakeLockService').then(m => m.default),
+      import('./services/KeepaliveService').then(m => m.default),
+      import('./services/GIAForegroundService').then(m => m.default),
+      import('./services/MessagingBridge').then(m => m.default),
+      import('./services/BackgroundRecovery').then(m => m.backgroundRecovery),
+    ]).then(([, MCPManager, proactiveEngine, idleManager, SystemService, setSystemContext, wakeLockService, keepaliveService, giaForegroundService, messagingBridge, backgroundRecovery]) => {
+      svc = { idleManager, SystemService, setSystemContext, wakeLockService, keepaliveService, giaForegroundService, messagingBridge, backgroundRecovery, proactiveEngine, MCPManager };
+      return svc;
+    });
+
     import('./services/GIACoreServices').then(m => m.giaCoreServices.onAppStart());
 
     // Track user activity for autonomy engine + idle manager
     const trackActivity = () => {
       useAutonomyStore.getState().setLastUserActivity();
-      idleManager.ping();
+      if (svc) svc.idleManager.ping();
     };
     window.addEventListener('mousedown', trackActivity);
     window.addEventListener('keydown', trackActivity);
@@ -372,11 +377,9 @@ const App: React.FC = () => {
     import('./services/PluginManager').then(m => m.default.initialize());
 
     // Deep system embedding — monitor battery, network, and feed into GIA context
-    SystemService.getInfo().then(() => {
-      setSystemContext(SystemService.formattedContext);
-    });
-    SystemService.startMonitoring().then(() => {
-      setSystemContext(SystemService.formattedContext);
+    servicesReady.then(({ SystemService, setSystemContext }) => {
+      SystemService.getInfo().then(() => setSystemContext(SystemService.formattedContext));
+      SystemService.startMonitoring().then(() => setSystemContext(SystemService.formattedContext));
     });
 
     // Connectivity monitoring
@@ -414,6 +417,7 @@ const App: React.FC = () => {
     if (!updateDismissed) {
       setTimeout(async () => {
         try {
+          const { updateService } = await import('./services/UpdateService');
           const info = await updateService.checkForUpdate();
           if (info) setUpdateNotification(info);
         } catch { /* ignore */ }
@@ -422,7 +426,7 @@ const App: React.FC = () => {
 
     // Persistent notification — shows in Android notification tray while GIA is running
     const LONGRUNNING_NOTIF_ID = 9999;
-    const showPersistentNotification = async () => {
+    const showPersistentNotification = async (messagingBridge: { isConnected: (ch: string) => boolean }) => {
       try {
         const { Capacitor } = await import('@capacitor/core');
         if (!Capacitor.isNativePlatform()) return;
@@ -445,82 +449,84 @@ const App: React.FC = () => {
     };
 
     // Long-running mode: wake lock + keepalive + idle model unload + messaging polling + fast autonomy
-    const startLongRunning = async () => {
-      if (!useGiaStore.getState().longRunningMode) return;
-      await wakeLockService.start();
-      await keepaliveService.start();
-      idleManager.start(useGiaStore.getState().autoModelUnload ? 10 * 60 * 1000 : 30 * 60 * 1000);
-      proactiveEngine.restartWithFastInterval();
+    const cleanupFns: (() => void)[] = [];
+    servicesReady.then(({ wakeLockService, keepaliveService, idleManager, proactiveEngine, messagingBridge, giaForegroundService }) => {
+      const startLongRunning = async () => {
+        if (!useGiaStore.getState().longRunningMode) return;
+        await wakeLockService.start();
+        await keepaliveService.start();
+        idleManager.start(useGiaStore.getState().autoModelUnload ? 10 * 60 * 1000 : 30 * 60 * 1000);
+        proactiveEngine.restartWithFastInterval();
+        if (messagingBridge.isConnected('telegram')) {
+          messagingBridge.startPolling();
+        }
+        await giaForegroundService.start(true);
+        await showPersistentNotification(messagingBridge);
+      };
+      const stopLongRunning = async () => {
+        await giaForegroundService.stop();
+        await wakeLockService.stop();
+        await keepaliveService.stop();
+        idleManager.stop();
+        await dismissPersistentNotification();
+      };
+      const unsubUnload = idleManager.onIdleTimeout(async () => {
+        if (!useGiaStore.getState().autoModelUnload) return;
+        logger.log('[IdleManager] Unloading idle models…');
+        try { const { default: llm } = await import('./services/LocalLLMService'); await llm.unloadModel(); } catch { /* noop */ }
+        try { const { default: whisper } = await import('./services/WhisperService'); whisper.unload(); } catch { /* noop */ }
+      });
+      const unsubActive = idleManager.onActiveAgain(() => {
+        logger.log('[IdleManager] User active — models will reload on next use');
+      });
+      startLongRunning();
+      const unsubLongRunning = useGiaStore.subscribe((s) => {
+        if (s.longRunningMode) startLongRunning();
+        else stopLongRunning();
+      });
+
+      // Configure SW polling for Telegram
       if (messagingBridge.isConnected('telegram')) {
-        messagingBridge.startPolling();
+        messagingBridge.configureSWPolling();
+        offsetSyncRef.current = setInterval(() => {
+          messagingBridge.syncOffsetToSW();
+        }, 30000);
       }
-      // Start native foreground service (keeps WebView alive on Android)
-      await giaForegroundService.start(true);
-      await showPersistentNotification();
-    };
-    const stopLongRunning = async () => {
-      await giaForegroundService.stop();
-      await wakeLockService.stop();
-      await keepaliveService.stop();
-      idleManager.stop();
-      await dismissPersistentNotification();
-    };
-    const unsubUnload = idleManager.onIdleTimeout(async () => {
-      if (!useGiaStore.getState().autoModelUnload) return;
-      logger.log('[IdleManager] Unloading idle models…');
-      try { await LocalLLMService.unloadModel(); } catch { /* noop */ }
-      try {
-        const { default: whisper } = await import('./services/WhisperService');
-        whisper.unload();
-      } catch { /* noop */ }
-    });
-    const unsubActive = idleManager.onActiveAgain(() => {
-      logger.log('[IdleManager] User active — models will reload on next use');
-    });
-    startLongRunning();
-    const unsubLongRunning = useGiaStore.subscribe((s) => {
-      if (s.longRunningMode) startLongRunning();
-      else stopLongRunning();
-    });
 
-    // Configure SW polling for Telegram (runs regardless of long-running mode)
-    // SW only polls when no clients are open, so it's safe to always configure
-    if (messagingBridge.isConnected('telegram')) {
-      messagingBridge.configureSWPolling();
-      // Periodic offset sync to SW so it can continue seamlessly
-      offsetSyncRef.current = setInterval(() => {
-        messagingBridge.syncOffsetToSW();
-      }, 30000);
-    }
+      // Messaging bridge — process incoming Telegram messages via GiaBrain
+      const unsubMessage = messagingBridge.onMessage(async (incoming: { isGroup: boolean; chatTitle: string; from: string; text: string; channel: string; chatId: string }) => {
+        const ctx = incoming.isGroup ? `group "${incoming.chatTitle}"` : 'DM';
+        logger.log(`[Messaging] ${ctx} from ${incoming.from}: ${incoming.text.slice(0, 80)}`);
+        try {
+          const { default: GiaBrain } = await import('./services/GiaBrain');
+          const systemPrompt = incoming.isGroup
+            ? `You are GIA, an AI assistant in the Telegram group "${incoming.chatTitle}". ${incoming.from} is speaking to you. Be helpful, concise, and natural. Address the whole group unless the message is directed at you personally. Keep responses brief — this is a group chat.`
+            : `You are GIA, chatting with ${incoming.from} on Telegram. Be concise and natural. Respond conversationally.`;
+          const res = await GiaBrain.generate({
+            prompt: incoming.text,
+            systemPrompt,
+            onStream: undefined,
+          });
+          const reply = res.text;
+          await messagingBridge.sendMessage({
+            channel: incoming.channel,
+            to: incoming.chatId,
+            text: reply,
+          });
+          logger.log(`[Messaging] Replied to ${incoming.from} in ${ctx}`);
+        } catch (e) {
+          logger.error('[Messaging] Failed to process message:', e);
+          await messagingBridge.sendMessage({
+            channel: incoming.channel,
+            to: incoming.chatId,
+            text: 'Sorry, I hit an error. Try again in a moment.',
+          }).catch(() => {});
+        }
+      });
 
-    // Messaging bridge — process incoming Telegram messages via GiaBrain
-    const unsubMessage = messagingBridge.onMessage(async (incoming) => {
-      const ctx = incoming.isGroup ? `group "${incoming.chatTitle}"` : 'DM';
-      logger.log(`[Messaging] ${ctx} from ${incoming.from}: ${incoming.text.slice(0, 80)}`);
-      try {
-        const systemPrompt = incoming.isGroup
-          ? `You are GIA, an AI assistant in the Telegram group "${incoming.chatTitle}". ${incoming.from} is speaking to you. Be helpful, concise, and natural. Address the whole group unless the message is directed at you personally. Keep responses brief — this is a group chat.`
-          : `You are GIA, chatting with ${incoming.from} on Telegram. Be concise and natural. Respond conversationally.`;
-        const res = await GiaBrain.generate({
-          prompt: incoming.text,
-          systemPrompt,
-          onStream: undefined,
-        });
-        const reply = res.text;
-        await messagingBridge.sendMessage({
-          channel: incoming.channel,
-          to: incoming.chatId,
-          text: reply,
-        });
-        logger.log(`[Messaging] Replied to ${incoming.from} in ${ctx}`);
-      } catch (e) {
-        logger.error('[Messaging] Failed to process message:', e);
-        await messagingBridge.sendMessage({
-          channel: incoming.channel,
-          to: incoming.chatId,
-          text: 'Sorry, I hit an error. Try again in a moment.',
-        }).catch(() => {});
-      }
+      cleanupFns.push(
+        () => { unsubUnload(); unsubActive(); unsubLongRunning(); unsubMessage(); messagingBridge.stopPolling(); messagingBridge.stopSWPolling(); },
+      );
     });
 
     // Auto-start wake word listening if enabled
@@ -544,7 +550,7 @@ const App: React.FC = () => {
         const { Capacitor } = await import('@capacitor/core');
         if (!Capacitor.isNativePlatform()) return;
         const { GIAOverlay } = await import('./services/GIAOverlay');
-        overlayHandle = GIAOverlay.addListener('overlayResult', (result) => {
+        overlayHandle = GIAOverlay.addListener('overlayResult', (result: { cancelled?: boolean; dataUrl?: string; text?: string }) => {
           if (result.cancelled) return;
           if (result.dataUrl) {
             setPendingCircleImage(result.dataUrl);
@@ -571,7 +577,6 @@ const App: React.FC = () => {
             const { GIAOverlay } = await import('./services/GIAOverlay');
             await GIAOverlay.startOverlay();
 
-            // Auto-start voice capture after overlay appears
             setTimeout(async () => {
               try {
                 const { SpeechRecognition } = await import('@capgo/capacitor-speech-recognition');
@@ -606,12 +611,12 @@ const App: React.FC = () => {
     })();
 
     // App lifecycle — persist + recover on resume
-    backgroundRecovery.recover();
+    servicesReady.then(s => s.backgroundRecovery.recover());
     const appStateHandle = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) {
         logger.log('[App] Backgrounded — state persisted');
       } else {
-        backgroundRecovery.recover();
+        servicesReady.then(s => s.backgroundRecovery.recover());
         logger.log('[App] Foreground — checking for interrupted tasks');
       }
     });
@@ -629,15 +634,8 @@ const App: React.FC = () => {
       appStateHandle.then(h => h.remove());
       if (overlayHandle) overlayHandle.then(h => h.remove()).catch(() => {});
       if (wakeHandle) wakeHandle.then(h => h.remove()).catch(() => {});
-      MCPManager.shutdown(); SystemService.stopMonitoring();
-      proactiveEngine.stop();
-      stopLongRunning();
-      unsubUnload();
-      unsubActive();
-      unsubLongRunning();
-      unsubMessage();
-      messagingBridge.stopPolling();
-      messagingBridge.stopSWPolling();
+      if (svc) { svc.MCPManager.shutdown(); svc.SystemService.stopMonitoring(); svc.proactiveEngine.stop(); }
+      for (const fn of cleanupFns) fn();
       if (offsetSyncRef.current) clearInterval(offsetSyncRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -987,10 +985,11 @@ const App: React.FC = () => {
 
       {showTaskBoard && (
         <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTaskBoard(false)}>
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl w-full max-w-4xl h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative rounded-2xl w-full max-w-4xl h-[80vh] overflow-hidden shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }} onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setShowTaskBoard(false)}
-              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors text-gray-500"
+              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+              style={{ color: 'var(--gia-muted)' }}
               aria-label="Close task board"
             >
               <X size={16} />
@@ -1001,10 +1000,11 @@ const App: React.FC = () => {
       )}
       {showNotesPanel && (
         <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowNotesPanel(false)}>
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl h-[80vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative rounded-2xl w-full max-w-2xl h-[80vh] overflow-hidden shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }} onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setShowNotesPanel(false)}
-              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors text-gray-500"
+              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+              style={{ color: 'var(--gia-muted)' }}
               aria-label="Close notes"
             >
               <X size={16} />
@@ -1015,7 +1015,7 @@ const App: React.FC = () => {
       )}
 
       <AnimatePresence>
-        {showSetup && <SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} />}
+        {showSetup && <motion.div key="setup-wizard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}><SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} /></motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>

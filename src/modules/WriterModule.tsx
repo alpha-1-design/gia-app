@@ -5,6 +5,7 @@ import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X } from 'lucide-re
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
+import { useWriterStore } from '../store/useWriterStore';
 import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -13,10 +14,7 @@ const FORMATS = ['Email', 'Essay', 'Blog Post', 'Report', 'Story', 'Cover Letter
 const WORD_PRESETS = [100, 200, 400, 800, 1200];
 
 const WriterModule: React.FC = () => {
-  const [prompt, setPrompt] = useState('');
-  const [draft, setDraft] = useState('');
-  const [format, setFormat] = useState('Essay');
-  const [wordTarget, setWordTarget] = useState(300);
+  const { prompt, draft, format, wordTarget, setPrompt, setDraft, setFormat, setWordTarget, clearDraft } = useWriterStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -27,38 +25,6 @@ const WriterModule: React.FC = () => {
   })));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
-
-  const DRAFT_KEY = 'gia-writer-draft';
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setDraft(parsed.draft || '');
-        setPrompt(parsed.prompt || '');
-        setFormat(parsed.format || 'Essay');
-        setWordTarget(parsed.wordTarget || 300);
-      }
-    } catch (e) { logger.error('[WriterModule] Failed to load draft from localStorage:', e); }
-  }, []);
-
-
-  useEffect(() => {
-    if (draft) {
-      try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ draft, prompt, format, wordTarget }));
-      } catch (e) { logger.error('[WriterModule] Failed to save draft to localStorage:', e); }
-    }
-  }, [draft, prompt, format, wordTarget]);
-
-  const clearDraft = () => {
-    setDraft('');
-    setPrompt('');
-    setFormat('Essay');
-    setWordTarget(300);
-    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { logger.error('[WriterModule] Failed to clear draft from localStorage:', e); }
-  };
 
   const handleWrite = useCallback(async () => {
     const text = prompt.trim();
@@ -82,7 +48,7 @@ const WriterModule: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [prompt, format, wordTarget, loading, setIntentState]);
+  }, [prompt, format, wordTarget, loading, setIntentState, setDraft]);
 
   const copyDraft = async () => {
     try {
@@ -103,7 +69,7 @@ const WriterModule: React.FC = () => {
         directory: Directory.Documents,
         encoding: Encoding.UTF8,
       });
-      addNotification(`📄 Draft exported to Documents: ${fileName}`);
+      addNotification(`Draft exported to Documents: ${fileName}`);
     } catch (e) {
       logger.error('Export failed', e);
       const blob = new Blob([draft], { type: 'text/plain' });

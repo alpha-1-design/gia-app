@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, XCircle, Loader2, Clock, AlertCircle, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Clock, AlertCircle, ChevronDown, ChevronRight, Eye, EyeOff, Play, Ban } from 'lucide-react';
 import { ToolIcon } from './ToolIcons';
 import type { ProtocolProposal } from '../types/protocol';
 import { TOOL_LABELS } from '../utils/toolLabels';
+import { useProtocolStore } from '../store/useProtocolStore';
 
 const STATE_CFG: Record<string, { label: string; color: string }> = {
   proposed:  { label: 'Proposed',  color: '#3b82f6' },
@@ -35,6 +36,8 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
   const isCompleted = protocol.state === 'completed';
   const isFailed = protocol.state === 'failed';
   const isPending = protocol.state === 'proposed' || protocol.state === 'confirmed';
+  const confirm = useProtocolStore((s) => s.confirm);
+  const reject = useProtocolStore((s) => s.reject);
 
   const toolColor = (() => {
     const colors: Record<string, string> = {
@@ -162,6 +165,43 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
             {stateCfg.label}
           </motion.div>
         </div>
+
+        {/* Inline approve/reject actions — replaces the need to open the protocol panel */}
+        <AnimatePresence>
+          {isPending && (
+            <motion.div
+              className="flex items-center gap-2 pt-1"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <button
+                onClick={() => confirm(protocol.id)}
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-95"
+                style={{
+                  background: `linear-gradient(135deg, ${toolColor}20, ${toolColor}10)`,
+                  color: toolColor,
+                  border: `1px solid ${toolColor}30`,
+                }}
+              >
+                <Play size={10} fill="currentColor" />
+                Execute
+              </button>
+              <button
+                onClick={() => reject(protocol.id)}
+                className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-95"
+                style={{
+                  background: 'rgba(239,68,68,0.08)',
+                  color: '#ef4444',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                }}
+              >
+                <Ban size={10} />
+                Reject
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Execution status line with progress */}
         {isExecuting && (

@@ -9,7 +9,7 @@ import OrbAvatar from './OrbAvatar';
 import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
-import MessageActionSheet from './MessageActionSheet';
+import MessageActionSheet, { RewriteBar } from './MessageActionSheet';
 import MessageFullScreen from './MessageFullScreen';
 import { ChatSkeleton } from './feedback';
 import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
@@ -355,29 +355,32 @@ const MessageList: React.FC<MessageListProps> = ({
                   <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
                 )}
               </div>
+              {sheetMsgId === msg.id && (
+                <>
+                  <MessageActionSheet
+                    msg={msg}
+                    onClose={() => setSheetMsgId(null)}
+                    onCopy={onCopyMessage}
+                    onRetry={onRetry}
+                    onEdit={onEdit}
+                    onContinue={onContinue}
+                    onFork={onFork}
+                    onDelete={onDeleteWithUndo}
+                    onRewrite={onRewrite}
+                    onExpand={(id) => { setSheetMsgId(null); setFullScreenMsgId(id); }}
+                    reaction={reactions[msg.id]?.value}
+                    onReact={(value) => { const m = messages.find(x => x.id === msg.id); useGiaStore.getState().setReaction(msg.id, value, m ? m.content.slice(0, 200) : ''); }}
+                    nextAssistantId={(() => { const i = messages.findIndex(m => m.id === msg.id); const n = messages[i + 1]; return n && n.role === 'assistant' ? n.id : undefined; })()}
+                  />
+                  {msg.role === 'assistant' && (
+                    <RewriteBar msgId={msg.id} onRewrite={onRewrite} onClose={() => setSheetMsgId(null)} onFork={onFork} onDelete={onDeleteWithUndo} />
+                  )}
+                </>
+              )}
             </>
           </div>
         </motion.div>
       ))}
-      <MessageActionSheet
-        msg={sheetMsgId ? (messages.find(m => m.id === sheetMsgId) ?? null) : null}
-        onClose={() => setSheetMsgId(null)}
-        onCopy={onCopyMessage}
-        onRetry={onRetry}
-        onEdit={onEdit}
-        onContinue={onContinue}
-        onFork={onFork}
-        onDelete={onDeleteWithUndo}
-        onRewrite={onRewrite}
-        onExpand={(id) => { setSheetMsgId(null); setFullScreenMsgId(id); }}
-        reaction={sheetMsgId ? reactions[sheetMsgId]?.value : undefined}
-        onReact={(value) => { if (sheetMsgId) { const m = messages.find(x => x.id === sheetMsgId); useGiaStore.getState().setReaction(sheetMsgId, value, m ? m.content.slice(0, 200) : ''); } }}
-        nextAssistantId={sheetMsgId ? (() => {
-          const i = messages.findIndex(m => m.id === sheetMsgId);
-          const n = messages[i + 1];
-          return n && n.role === 'assistant' ? n.id : undefined;
-        })() : undefined}
-      />
       <MessageFullScreen
         msg={fullScreenMsgId ? (messages.find(m => m.id === fullScreenMsgId) ?? null) : null}
         reaction={fullScreenMsgId ? reactions[fullScreenMsgId]?.value : undefined}

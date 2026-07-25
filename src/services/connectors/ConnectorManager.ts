@@ -144,7 +144,7 @@ class ConnectorManager {
     }
     if (id === 'supabase' || id === 'firebase' || id === 'aws' || id === 'email' || id === 'google-services') {
       connector.status = 'connected';
-      connector.errorMessage = undefined;
+      connector.errorMessage = 'Connection assumed — no live validation performed';
       this.save();
       return true;
     }

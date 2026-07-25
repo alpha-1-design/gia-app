@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plug, PlugZap, Key, RefreshCw, Power, PowerOff, Cloud, Mail } from 'lucide-react';
 import connectorManager from '../../services/connectors/ConnectorManager';
+import { useGiaStore } from '../../store/useGiaStore';
 
 export const ConnectorsSection: React.FC = () => {
   const [connectors, setConnectors] = useState(connectorManager.getAll());
@@ -22,6 +23,7 @@ export const ConnectorsSection: React.FC = () => {
     setEditId(null);
     setFieldValues({});
     refresh();
+    useGiaStore.getState().addNotification(`Connector saved: ${c.id}`);
   };
 
   const handleToggle = (id: string, current: boolean) => {

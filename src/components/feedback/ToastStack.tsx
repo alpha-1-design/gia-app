@@ -26,7 +26,7 @@ const TOAST_CONFIG: Record<ToastType, { icon: React.FC<{ size?: number }>; bg: s
 
 const ToastStack: React.FC<ToastStackProps> = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col-reverse gap-2 max-w-sm">
+    <div className="fixed bottom-20 right-6 z-[100] flex flex-col-reverse gap-2 max-w-sm">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}
