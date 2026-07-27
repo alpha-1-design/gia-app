@@ -1,70 +1,110 @@
-import type { MCPContentType, MCPStructuredResult } from './MCPContentTypes';
-
-export interface MCPContentRenderer {
-  contentType: MCPContentType;
-  canRender(contentType: MCPContentType): boolean;
-  render(result: MCPStructuredResult, container: HTMLElement): Promise<void>;
-  getPreview?(result: MCPStructuredResult): string;
+export interface RenderItem {
+  contentType?: string;
+  data?: string | Uint8Array | unknown;
+  metadata?: {
+    title?: string;
+    description?: string;
+  };
+  encoding?: string;
+  [key: string]: unknown;
 }
 
-export interface RendererRegistry {
-  register(renderer: MCPContentRenderer): void;
-  unregister(contentType: MCPContentType): void;
-  getRenderer(contentType: MCPContentType): MCPContentRenderer | undefined;
-  getAllRenderers(): MCPContentRenderer[];
-  render(result: MCPStructuredResult, container: HTMLElement): Promise<void>;
-  getPreview(result: MCPStructuredResult): string;
-}
+export type Renderer = (item: RenderItem, container: HTMLElement) => void;
 
-function createRendererRegistry(): RendererRegistry {
-  const renderers = new Map<MCPContentType, MCPContentRenderer>();
+export class RendererRegistry {
+  private renderers: Map<string, Renderer> = new Map();
 
-  return {
-    register(renderer: MCPContentRenderer) {
-      renderers.set(renderer.contentType, renderer);
-    },
-    unregister(contentType: MCPContentType) {
-      renderers.delete(contentType);
-    },
-    getRenderer(contentType: MCPContentType) {
-      return renderers.get(contentType);
-    },
-    getAllRenderers() {
-      return Array.from(renderers.values());
-    },
-    async render(result: MCPStructuredResult, container: HTMLElement) {
-      const renderer = renderers.get(result.contentType);
-      if (!renderer) {
-        container.innerHTML = `
-          <div style="padding: 16px; color: var(--gia-muted); font-size: 12px;">
-            No renderer for ${result.contentType}
-          </div>
-        `;
+  constructor() {
+    this.registerDefaultRenderers();
+  }
+
+  public register(contentType: string, renderer: Renderer): void {
+    this.renderers.set(contentType.toLowerCase(), renderer);
+  }
+
+  public render(item: RenderItem, container: HTMLElement): void {
+    if (!item) return;
+    const contentType = (item.contentType || 'text/plain').toLowerCase();
+
+    for (const [type, renderer] of this.renderers.entries()) {
+      if (contentType.includes(type)) {
+        renderer(item, container);
         return;
       }
-      try {
-        await renderer.render(result, container);
-      } catch (e) {
-        console.error(`[Renderer] Failed to render ${result.contentType}:`, e);
-        container.innerHTML = `
-          <div style="padding: 16px; color: #ef4444; font-size: 12px;">
-            Render error: ${e instanceof Error ? e.message : String(e)}
-          </div>
-        `;
+    }
+
+    this.defaultRenderer(item, container);
+  }
+
+  private registerDefaultRenderers(): void {
+    this.register('image/', (item, container) => {
+      const img = document.createElement('img');
+      img.style.maxWidth = '100%';
+      img.style.borderRadius = '8px';
+      img.style.marginTop = '4px';
+
+      if (typeof item.data === 'string') {
+        img.src = item.data.startsWith('data:')
+          ? item.data
+          : `data:${item.contentType || 'image/png'};base64,${item.data}`;
+      } else if (item.data instanceof Uint8Array) {
+        const blob = new Blob([item.data as unknown as BlobPart], { type: item.contentType || 'image/png' });
+        img.src = URL.createObjectURL(blob);
       }
-    },
-    getPreview(result: MCPStructuredResult) {
-      const renderer = renderers.get(result.contentType);
-      if (renderer?.getPreview) return renderer.getPreview(result);
-      const meta = result.metadata;
-      return meta?.preview || meta?.title || result.contentType;
-    },
-  };
+      if (item.metadata?.title) {
+        img.alt = item.metadata.title;
+        img.title = item.metadata.title;
+      }
+      container.appendChild(img);
+    });
+
+    this.register('text/html', (item, container) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'mcp-html-content p-2 rounded text-xs';
+      if (typeof item.data === 'string') {
+        wrapper.innerHTML = item.data;
+      }
+      container.appendChild(wrapper);
+    });
+
+    this.register('application/json', (item, container) => {
+      const pre = document.createElement('pre');
+      pre.className = 'text-[10px] leading-relaxed whitespace-pre-wrap font-mono p-2 rounded-lg mt-1 max-h-40 overflow-y-auto';
+      try {
+        pre.textContent = typeof item.data === 'string'
+          ? JSON.stringify(JSON.parse(item.data), null, 2)
+          : JSON.stringify(item.data, null, 2);
+      } catch {
+        pre.textContent = String(item.data);
+      }
+      container.appendChild(pre);
+    });
+  }
+
+  private defaultRenderer(item: RenderItem, container: HTMLElement): void {
+    const div = document.createElement('div');
+    div.className = 'text-xs p-2 rounded';
+
+    if (item.metadata?.title) {
+      const header = document.createElement('div');
+      header.className = 'font-semibold text-xs mb-1';
+      header.textContent = item.metadata.title;
+      div.appendChild(header);
+    }
+
+    const content = document.createElement('pre');
+    content.className = 'text-[10px] leading-relaxed whitespace-pre-wrap font-mono';
+    if (typeof item.data === 'string') {
+      content.textContent = item.data;
+    } else if (item.data instanceof Uint8Array) {
+      content.textContent = new TextDecoder().decode(item.data);
+    } else {
+      content.textContent = JSON.stringify(item.data, null, 2);
+    }
+    div.appendChild(content);
+    container.appendChild(div);
+  }
 }
 
-export const rendererRegistry = createRendererRegistry();
-
-export function registerDefaultRenderers() {
-  // Import and register renderers dynamically to avoid circular deps
-  // This will be called during app initialization
-}
+export const rendererRegistry = new RendererRegistry();
+export default rendererRegistry;

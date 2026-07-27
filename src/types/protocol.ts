@@ -31,6 +31,7 @@ export interface ProtocolProposal {
   impact: ProtocolImpact;
   state: ProtocolState;
   result?: string;
+  structuredResult?: unknown;
   error?: string;
   trace?: string[];
   sources?: { title: string; url: string }[];

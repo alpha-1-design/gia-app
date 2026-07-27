@@ -1,4 +1,5 @@
-import GiaTools, { ToolResult } from '../GiaTools';
+import GiaTools from '../GiaTools';
+import type { ToolResult } from '../tools/types';
 import { useProtocolStore } from '../../store/useProtocolStore';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useSearchActivity } from '../../store/useSearchActivity';
@@ -11,8 +12,10 @@ import AnalyticsService from '../AnalyticsService';
 import AnalyticsTracker from '../AnalyticsTracker';
 import { toolRateLimiter, globalToolLimiter } from '../ToolRateLimiter';
 
-interface ExecutionState {
-  history: { role: string; content: string }[];
+import type { BrainRequest } from '../providers/types';
+
+export interface ExecutionState {
+  history: NonNullable<BrainRequest['history']>;
   currentPrompt: string;
   clarificationAttempts: number;
 }
@@ -265,10 +268,10 @@ async function executeSingleTool(
       sa.completeEvent(msg);
       if (toolCall.id === 'web_search') {
         sa.addEvent({ type: 'info', message: `Found ${result!.sources?.length || 0} results`, done: true });
-        result!.sources?.forEach(s => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
+        result!.sources?.forEach((s: { title: string; url: string }) => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
       } else {
         if (result!.sources?.length) {
-          result!.sources.forEach(s => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
+          result!.sources.forEach((s: { title: string; url: string }) => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
         } else {
           sa.addSource({ title: (toolCall.args.url as string) || '', url: (toolCall.args.url as string) || '', snippet: '', source: 'web' });
         }

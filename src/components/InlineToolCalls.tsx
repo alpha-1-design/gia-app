@@ -140,7 +140,7 @@ const ProtocolCard: React.FC<{ protocol: ProtocolProposal; idx: number }> = ({ p
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-2"
               >
-                {protocol.structuredResult && (
+                {Boolean(protocol.structuredResult) && (
                   <div
                     id={`mcp-result-${protocol.id}`}
                     className="mcp-result-container"
@@ -149,7 +149,7 @@ const ProtocolCard: React.FC<{ protocol: ProtocolProposal; idx: number }> = ({ p
                         const items = Array.isArray(protocol.structuredResult) ? protocol.structuredResult : [protocol.structuredResult];
                         for (const item of items) {
                           const container = document.createElement('div');
-                          rendererRegistry.render(item, container);
+                          rendererRegistry.render(item as Parameters<typeof rendererRegistry.render>[0], container);
                           el.appendChild(container);
                         }
                       }
