@@ -1,7 +1,6 @@
 import { useGiaStore, type Module } from '../../store/useGiaStore';
 import { z } from 'zod';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 export const controlTools: Tool[] = [
   {
     id: 'switch_module', name: 'switch_module',
@@ -67,8 +66,3 @@ export const controlTools: Tool[] = [
     }
   }
 ];
-
-
-export function registerControlTools() {
-  for (const tool of controlTools) ToolRegistry.register(tool);
-}

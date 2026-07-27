@@ -4,7 +4,6 @@ import { useGiaStore } from '../../store/useGiaStore';
 import { providerRegistry } from '../ProviderRegistry';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 const isNative = isNativePlatform;
 
@@ -21,7 +20,7 @@ const environmentInfo: Tool = {
       const giaTools = (await import('../GiaTools')).default;
       const info = {
         identity: {
-          name: 'GIA', fullName: 'Generative Interface Agent', version: '2.3.3.0-beta.1',
+          name: 'GIA', fullName: 'Generative Interface Agent', version: '2.3.2.0',
           tagline: 'Private on-device AI workspace',
           platform: native ? 'Android (Capacitor)' : 'Browser (Web)',
           architecture: 'React 18 + TypeScript + Zustand + Vite + Capacitor',
@@ -223,8 +222,3 @@ const imageGeneration: Tool = {
 };
 
 export const coreTools: Tool[] = [environmentInfo, github, wikipedia, weather, define, imageGeneration];
-
-
-export function registerCoreTools() {
-  for (const tool of coreTools) ToolRegistry.register(tool);
-}

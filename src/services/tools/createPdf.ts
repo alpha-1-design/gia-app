@@ -1,6 +1,5 @@
 import type { Tool } from './types';
 import { pdfGenerationService } from '../PdfGenerationService';
-import ToolRegistry from '../ToolRegistry';
 
 interface PendingSaveEntry {
   blob: Blob;
@@ -103,8 +102,3 @@ export const createPdfTool: Tool = {
     }
   },
 };
-
-
-export function registerCreatePdfTool() {
-  ToolRegistry.register(createPdfTool);
-}

@@ -224,7 +224,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
   }
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    throw new Error(ctx.friendlyError('Gemini', e?.error?.message || `Gemini error ${res.status}`, res.status));
+    throw new Error(ctx.friendlyError('Gemini', e?.error?.message || `Gemini error ${res.status}`));
   }
   const data = await res.json();
   const tokenUsage = data.usageMetadata ? { input: data.usageMetadata.promptTokenCount || 0, output: data.usageMetadata.candidatesTokenCount || 0, total: data.usageMetadata.totalTokenCount || 0 } : undefined;

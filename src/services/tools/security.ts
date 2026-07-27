@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { logger } from '../../utils/logger';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 async function sandboxExec(cmd: string, timeout = 30000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
@@ -554,8 +553,3 @@ export const securityTools: Tool[] = [
   securityTrace,
   securityQuarantine,
 ];
-
-
-export function registerSecurityTools() {
-  for (const tool of securityTools) ToolRegistry.register(tool);
-}

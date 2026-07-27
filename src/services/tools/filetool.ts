@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { useFileStore } from '../../store/useFileStore';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 const fileSearch: Tool = {
   id: 'file_search',
@@ -184,8 +183,3 @@ const fileTag: Tool = {
 };
 
 export const fileTools: Tool[] = [fileSearch, fileGet, fileList, fileDelete, fileTag];
-
-
-export function registerFileTools() {
-  for (const tool of fileTools) ToolRegistry.register(tool);
-}

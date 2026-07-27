@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { ProtocolProposal, ProtocolAction, ProtocolType } from '../types/protocol';
-import type { ToolResult } from '../services/tools/types';
 
 interface PendingConfirm {
   protocolId: string;
@@ -25,7 +24,7 @@ interface ProtocolStore {
   modify: (protocolId: string, args: Record<string, unknown>) => void;
   setExecuting: (protocolId: string) => void;
   setProgress: (protocolId: string, progress: number, label: string) => void;
-  setCompleted: (protocolId: string, result: string, sources?: { title: string; url: string }[], structuredResult?: ToolResult['structuredResult']) => void;
+  setCompleted: (protocolId: string, result: string, sources?: { title: string; url: string }[]) => void;
   setFailed: (protocolId: string, error: string) => void;
   clearProtocols: () => void;
   clearConsoleProtocols: () => void;
@@ -112,13 +111,13 @@ export const useProtocolStore = create<ProtocolStore>()(
         }));
       },
 
-      setCompleted: (protocolId: string, result: string, sources?: { title: string; url: string }[], structuredResult?: ToolResult['structuredResult']) => {
+      setCompleted: (protocolId, result, sources) => {
         set((s) => ({
           protocols: s.protocols.map((p) =>
-            p.id === protocolId ? { ...p, state: 'completed' as const, result, sources, structuredResult, completedAt: Date.now() } : p
+            p.id === protocolId ? { ...p, state: 'completed' as const, result, sources, completedAt: Date.now() } : p
           ),
           consoleProtocols: s.consoleProtocols.map((p) =>
-            p.id === protocolId ? { ...p, state: 'completed' as const, result, sources, structuredResult, completedAt: Date.now() } : p
+            p.id === protocolId ? { ...p, state: 'completed' as const, result, sources, completedAt: Date.now() } : p
           ),
         }));
       },

@@ -4,7 +4,7 @@
   "version": "2.3.3.0-beta.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node server/sandbox-server.cjs & vite --port=3000 --host=0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest",

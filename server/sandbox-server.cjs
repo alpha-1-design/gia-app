@@ -25,16 +25,24 @@ const path = require('path');
 const url = require('url');
 
 const PORT = parseInt(process.argv.find(a => a.startsWith('--port='))?.split('=')[1] || process.env.SANDBOX_PORT || '3081');
-const WORKSPACE = path.resolve(
-  process.argv.find(a => a.startsWith('--workspace='))?.split('=')[1] ||
-  process.env.SANDBOX_WORKSPACE ||
-  path.join(__dirname, 'sandbox-workspace')
-);
-const ROOTFS = path.resolve(
-  process.argv.find(a => a.startsWith('--rootfs='))?.split('=')[1] ||
-  process.env.SANDBOX_ROOTFS ||
-  path.join(__dirname, 'alpine-rootfs')
-);
+function getRootfsPath() {
+  const arg = process.argv.find(a => a.startsWith('--rootfs='))?.split('=')[1];
+  if (arg) return path.resolve(arg);
+  if (process.env.SANDBOX_ROOTFS) return path.resolve(process.env.SANDBOX_ROOTFS);
+  if (fs.existsSync('/app/alpine-rootfs')) return '/app/alpine-rootfs';
+  return path.join(__dirname, 'alpine-rootfs');
+}
+
+function getWorkspacePath() {
+  const arg = process.argv.find(a => a.startsWith('--workspace='))?.split('=')[1];
+  if (arg) return path.resolve(arg);
+  if (process.env.SANDBOX_WORKSPACE) return path.resolve(process.env.SANDBOX_WORKSPACE);
+  if (fs.existsSync('/app/sandbox-workspace')) return '/app/sandbox-workspace';
+  return path.join(__dirname, 'sandbox-workspace');
+}
+
+const ROOTFS = getRootfsPath();
+const WORKSPACE = getWorkspacePath();
 const PROOT_BIN = process.argv.find(a => a.startsWith('--proot-bin='))?.split('=')[1] ||
   process.env.SANDBOX_PROOT_BIN ||
   path.join(__dirname, 'proot');
@@ -140,7 +148,32 @@ async function ensureProotRootfs() {
 }
 
 function getProotPrefix(workdir) {
-  const proot = fs.existsSync(PROOT_BIN) ? PROOT_BIN : 'proot';
+  let proot = 'proot';
+  let canUseProot = false;
+
+  try {
+    require('child_process').execSync('proot --version', { stdio: 'ignore' });
+    canUseProot = true;
+  } catch {
+    if (fs.existsSync(PROOT_BIN)) {
+      try {
+        require('child_process').execSync(`"${PROOT_BIN}" --version`, { stdio: 'ignore' });
+        proot = PROOT_BIN;
+        canUseProot = true;
+      } catch {
+        canUseProot = false;
+      }
+    }
+  }
+
+  if (!canUseProot && process.getuid && process.getuid() === 0) {
+    const wsMount = path.join(ROOTFS, 'workspace');
+    try {
+      require('child_process').execSync(`mountpoint -q "${wsMount}" || mount --bind "${WORKSPACE}" "${wsMount}"`, { stdio: 'ignore' });
+    } catch {}
+    return `chroot "${ROOTFS}"`;
+  }
+
   const wd = workdir || '/workspace';
   return `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin "${proot}" -r "${ROOTFS}" -b "${WORKSPACE}:/workspace" -w "${wd}"`;
 }
@@ -148,7 +181,15 @@ function getProotPrefix(workdir) {
 async function prootExec(command, opts = {}) {
   const timeout = opts.timeout || 60000;
   const prefix = getProotPrefix(opts.workdir);
-  const cmd = `${prefix} sh -c ${JSON.stringify(command)}`;
+  const wd = opts.workdir || '/workspace';
+  let cmd;
+  if (prefix.startsWith('chroot')) {
+    const guestCmd = `cd "${wd}" && export PATH=/bin:/usr/bin:/sbin:/usr/sbin && ` + command;
+    cmd = `${prefix} /bin/sh -c ${JSON.stringify(guestCmd)}`;
+  } else {
+    const guestCmd = "export PATH=/bin:/usr/bin:/sbin:/usr/sbin && " + command;
+    cmd = `${prefix} /bin/sh -c ${JSON.stringify(guestCmd)}`;
+  }
   const result = await execCmd(cmd, { timeout });
   return { stdout: result.stdout.trim(), stderr: result.stderr.trim(), exitCode: result.exitCode };
 }

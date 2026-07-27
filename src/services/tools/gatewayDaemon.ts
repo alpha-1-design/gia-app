@@ -1,6 +1,5 @@
 import terminalService from '../TerminalService';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 const gatewayDaemonStart: Tool = {
   id: 'gateway_daemon_start',
@@ -95,8 +94,3 @@ export const gatewayDaemonTools: Tool[] = [
   gatewayDaemonStatus,
   gatewayDaemonLogs,
 ];
-
-
-export function registerGatewayDaemonTools() {
-  for (const tool of gatewayDaemonTools) ToolRegistry.register(tool);
-}

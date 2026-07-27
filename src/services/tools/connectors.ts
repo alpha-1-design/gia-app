@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import connectorManager from '../connectors/ConnectorManager';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -210,8 +209,3 @@ export const connectorTools: Tool[] = [
   connectorRaw,
   connectorRemove,
 ];
-
-
-export function registerConnectorTools() {
-  for (const tool of connectorTools) ToolRegistry.register(tool);
-}

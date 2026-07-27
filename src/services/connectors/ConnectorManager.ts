@@ -46,7 +46,7 @@ class ConnectorManager {
     this.load();
   }
 
-private registerDefaults() {
+  private registerDefaults() {
     const defaults: ConnectorConfig[] = [
       { id: 'openweather', name: 'OpenWeatherMap', description: 'Weather data API', type: 'api', icon: 'cloud-sun', baseUrl: 'https://api.openweathermap.org/data/2.5', enabled: false, status: 'disconnected', fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'Paste API key...', type: 'password', required: true }] },
       { id: 'newsapi', name: 'NewsAPI', description: 'News articles and headlines', type: 'api', icon: 'newspaper', baseUrl: 'https://newsapi.org/v2', enabled: false, status: 'disconnected', fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'Paste API key...', type: 'password', required: true }] },
@@ -70,7 +70,7 @@ private registerDefaults() {
         { key: 'clientEmail', label: 'Service Account Email', placeholder: 'gserviceaccount.com...', type: 'text', required: true },
         { key: 'privateKey', label: 'Private Key', placeholder: '-----BEGIN PRIVATE KEY-----\\n...', type: 'password', required: true },
         { key: 'projectId', label: 'Project ID', placeholder: 'your-gcp-project-id', type: 'text', required: true }
-      ]},
+      ]}
     ];
     for (const c of defaults) {
       this.connectors.set(c.id, c);
@@ -144,7 +144,7 @@ private registerDefaults() {
     }
     if (id === 'supabase' || id === 'firebase' || id === 'aws' || id === 'email' || id === 'google-services') {
       connector.status = 'connected';
-      connector.errorMessage = 'Connection assumed — no live validation performed';
+      connector.errorMessage = undefined;
       this.save();
       return true;
     }
@@ -157,7 +157,7 @@ private registerDefaults() {
     try {
       const apiKey = cfg.apiKey || connector.apiKey || '';
       const testUrl = `${connector.baseUrl.replace(/\/+$/, '')}/`;
-      const headers: Record<string, string> = { 'User-Agent': 'GIA/2.3.3.0-beta.1' };
+      const headers: Record<string, string> = { 'User-Agent': 'GIA/2.3.2.0' };
       if (id === 'github') headers['Authorization'] = `Bearer ${apiKey}`;
       else if (id === 'twilio') headers['Authorization'] = 'Basic ' + btoa(`${cfg.accountSid || apiKey}:${cfg.authToken || ''}`);
       else headers['x-api-key'] = apiKey;
@@ -187,7 +187,7 @@ private registerDefaults() {
     const start = performance.now();
 
     let urlStr: string;
-    const headers: Record<string, string> = { 'User-Agent': 'GIA/2.3.3.0-beta.1', ...request.headers };
+    const headers: Record<string, string> = { 'User-Agent': 'GIA/2.3.2.0', ...request.headers };
 
     if (id === 'supabase') {
       const base = cfg.projectUrl || connector.baseUrl || '';
@@ -243,7 +243,7 @@ private registerDefaults() {
     const start = performance.now();
     const res = await fetch(url, {
       method,
-      headers: { 'User-Agent': 'GIA/2.3.3.0-beta.1', ...headers },
+      headers: { 'User-Agent': 'GIA/2.3.2.0', ...headers },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000),
     });

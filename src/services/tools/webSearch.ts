@@ -3,7 +3,6 @@ import type { Tool, ToolContext } from './types';
 import { useSearchStore } from '../../store/useSearchStore';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useKnowledgeGraphStore } from '../../store/useKnowledgeGraphStore';
-import ToolRegistry from '../ToolRegistry';
 
 function getSearchDescription(): string {
   const store = useSearchStore.getState();
@@ -200,8 +199,3 @@ const pageInfoTool: Tool = {
 };
 
 export const webSearchTools: Tool[] = [webSearchTool, readUrlTool, browserNavigateTool, pageInfoTool];
-
-
-export function registerWebSearchTools() {
-  for (const tool of webSearchTools) ToolRegistry.register(tool);
-}

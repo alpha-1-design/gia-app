@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -125,8 +124,3 @@ const hapticVibrate: Tool = {
 };
 
 export const hapticsTools: Tool[] = [hapticImpact, hapticNotification, hapticVibrate];
-
-
-export function registerHapticsTools() {
-  for (const tool of hapticsTools) ToolRegistry.register(tool);
-}

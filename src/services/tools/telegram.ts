@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import telegramChannel from '../social/TelegramChannelService';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -192,8 +191,3 @@ export const telegramTools: Tool[] = [
   telegramStatus,
   telegramDisconnect,
 ];
-
-
-export function registerTelegramTools() {
-  for (const tool of telegramTools) ToolRegistry.register(tool);
-}

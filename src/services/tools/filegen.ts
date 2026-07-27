@@ -1,6 +1,5 @@
 import SandboxService from '../SandboxService';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 async function ensureSandbox() {
   const ok = await SandboxService.ensureAvailable();
@@ -243,8 +242,3 @@ const download_file: Tool = {
 };
 
 export const filegenTools: Tool[] = [generate_file, edit_document, download_file];
-
-
-export function registerFilegenTools() {
-  for (const tool of filegenTools) ToolRegistry.register(tool);
-}

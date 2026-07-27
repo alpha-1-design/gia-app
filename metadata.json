@@ -1,0 +1,6 @@
+{
+  "name": "GIA App",
+  "description": "On-device operates-everything AI assistant and terminal execution layer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

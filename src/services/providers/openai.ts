@@ -267,7 +267,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   }
   if (!res.ok) {
     const e: { error?: { message?: string } } = await res.json().catch(() => ({}));
-    throw new Error(ctx.friendlyError(label, e?.error?.message || `${label} error ${res.status}`, res.status));
+    throw new Error(ctx.friendlyError(label, e?.error?.message || `${label} error ${res.status}`));
   }
   const data = await res.json();
   const tokenUsage = data.usage ? {

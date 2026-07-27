@@ -57,7 +57,7 @@ export interface BrainContext {
   buildSystemPrompt(prompt: string, moduleSpecific?: string, mode?: 'append' | 'replace'): string;
   buildMessages(req: BrainRequest): Promise<{ role: string; content: string | { type: string; text?: string; source?: { type: string; data: string } }[] }[]>;
   retryFetch(url: string, options: RequestInit, retries?: number): Promise<Response>;
-  friendlyError(label: string, e: unknown, statusCode?: number): string;
+  friendlyError(label: string, e: unknown): string;
   buildOpenAITools(): { type: string; function: { name: string; description: string; parameters: Record<string, unknown> } }[];
   buildAnthropicTools(): { type: string; function: { name: string; description: string; input_schema: Record<string, unknown> } }[];
   buildGeminiTools(): { functionDeclarations: { name: string; description: string; parameters: Record<string, unknown> } }[];

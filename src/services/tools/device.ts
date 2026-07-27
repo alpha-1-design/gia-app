@@ -1,7 +1,6 @@
 import { Device } from '@capacitor/device';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 // Capacitor DeviceInfo may carry extra fields at runtime
 interface DeviceInfoExtended {
@@ -215,8 +214,3 @@ export const deviceTools: Tool[] = [
   devicePluginLocale,
   deviceHealth,
 ];
-
-
-export function registerDeviceTools() {
-  for (const tool of deviceTools) ToolRegistry.register(tool);
-}

@@ -1,6 +1,5 @@
 import type { Tool } from './types';
 import RAGService from '../RAGService';
-import ToolRegistry from '../ToolRegistry';
 
 export const ragTools: Tool[] = [
   {
@@ -73,8 +72,3 @@ export const ragTools: Tool[] = [
     },
   },
 ];
-
-
-export function registerRagTools() {
-  for (const tool of ragTools) ToolRegistry.register(tool);
-}

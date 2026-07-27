@@ -2,7 +2,6 @@ import { useGiaStore } from '../../store/useGiaStore';
 import { providerRegistry } from '../ProviderRegistry';
 import type { Tool } from './types';
 import type { MemoryCategory, MemoryTier } from '../../store/useMemoryStore';
-import ToolRegistry from '../ToolRegistry';
 export const memoryTools: Tool[] = [
   {
     id: 'save_memory', name: 'save_memory',
@@ -117,8 +116,3 @@ export const memoryTools: Tool[] = [
     }
   }
 ];
-
-
-export function registerMemoryTools() {
-  for (const tool of memoryTools) ToolRegistry.register(tool);
-}

@@ -1,7 +1,6 @@
 import { useAutonomyStore } from '../../store/useAutonomyStore';
 import { autonomousAgent } from '../autonomy/AutonomousAgent';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 export const autonomyTools: Tool[] = [
   {
@@ -144,8 +143,3 @@ export const autonomyTools: Tool[] = [
     },
   },
 ];
-
-
-export function registerAutonomyTools() {
-  for (const tool of autonomyTools) ToolRegistry.register(tool);
-}

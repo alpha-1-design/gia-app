@@ -1,6 +1,5 @@
 import { useNotesStore, randomNoteColor } from '../../store/useNotesStore';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 export const noteTools: Tool[] = [
   {
     id: 'note_create', name: 'note_create',
@@ -110,8 +109,3 @@ export const noteTools: Tool[] = [
     }
   }
 ];
-
-
-export function registerNoteTools() {
-  for (const tool of noteTools) ToolRegistry.register(tool);
-}

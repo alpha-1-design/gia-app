@@ -1,6 +1,5 @@
 import { useTaskStore } from '../../store/useTaskStore';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 export const taskTools: Tool[] = [
   {
     id: 'task_create', name: 'task_create',
@@ -115,8 +114,3 @@ export const taskTools: Tool[] = [
     }
   }
 ];
-
-
-export function registerTaskTools() {
-  for (const tool of taskTools) ToolRegistry.register(tool);
-}

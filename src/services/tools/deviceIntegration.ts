@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -467,8 +466,3 @@ export const deviceIntegrationTools: Tool[] = [
   openUrlTool,
   setAlarmTool,
 ];
-
-
-export function registerDeviceIntegrationTools() {
-  for (const tool of deviceIntegrationTools) ToolRegistry.register(tool);
-}

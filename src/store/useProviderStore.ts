@@ -7,8 +7,6 @@ import { corsProxy } from '../services/CorsProxy';
 
 export type ProviderType = string;
 
-const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
 export interface ModelOption {
   id: string;
   label: string;
@@ -16,11 +14,6 @@ export interface ModelOption {
   context?: string;
   tools?: boolean;
   vision?: boolean;
-}
-
-interface ModelCacheEntry {
-  models: ModelOption[];
-  fetchedAt: number;
 }
 
 export interface ProviderConfig {
@@ -45,7 +38,6 @@ export interface PendingTask {
 interface GiaProviderState {
   providers: Record<string, ProviderConfig>;
   availableModels: Record<string, ModelOption[]>;
-  modelCache: Record<string, ModelCacheEntry>;
   activeProvider: string;
   initialised: boolean;
   pendingTasks: PendingTask[];
@@ -90,7 +82,6 @@ export const useProviderStore = create<GiaProviderState>()(
     (set, get) => ({
       providers: {},
       availableModels: {},
-      modelCache: {},
       activeProvider: 'opencode',
       initialised: false,
       pendingTasks: [],
@@ -98,11 +89,9 @@ export const useProviderStore = create<GiaProviderState>()(
       loadProviders: async () => {
         await providerRegistry.ensureLoaded();
         const ids = providerRegistry.getAllIds();
-        const now = Date.now();
         set((s) => {
           const providers = { ...s.providers };
           const availableModels = { ...s.availableModels };
-          const modelCache = { ...s.modelCache };
           for (const id of ids) {
             if (!providers[id]) {
               providers[id] = {
@@ -112,12 +101,7 @@ export const useProviderStore = create<GiaProviderState>()(
                 baseUrl: providerRegistry.getProvider(id)?.baseUrl,
               };
             }
-            // Seed from stale-while-revalidate cache: serve cached models immediately,
-            // then revalidate in background if stale.
-            const cached = modelCache[id];
-            if (cached && now - cached.fetchedAt < MODEL_CACHE_TTL_MS) {
-              availableModels[id] = cached.models;
-            } else if (!availableModels[id] || availableModels[id].length === 0) {
+            if (!availableModels[id] || availableModels[id].length === 0) {
               availableModels[id] = providerRegistry.getModels(id);
             }
           }
@@ -134,13 +118,6 @@ export const useProviderStore = create<GiaProviderState>()(
           }
           return { providers, availableModels, activeProvider, initialised: true };
         });
-        // Background revalidation: refresh stale or uncached providers without blocking init
-        for (const id of ids) {
-          const cached = get().modelCache[id];
-          if (!cached || now - cached.fetchedAt >= MODEL_CACHE_TTL_MS) {
-            get().fetchModels(id).catch(() => { /* fire-and-forget */ });
-          }
-        }
       },
 
       setProviderKey: (p, key) =>
@@ -188,6 +165,7 @@ export const useProviderStore = create<GiaProviderState>()(
 
         const baseUrl = config?.baseUrl || def.baseUrl;
         const listingType = def.listingType;
+        const isLocal = !def.needsApiKey && (p === 'ollama' || p === 'lmstudio');
 
         try {
           // Providers without dynamic listing
@@ -309,23 +287,11 @@ export const useProviderStore = create<GiaProviderState>()(
           }
           if (def.headers) Object.assign(headers, def.headers);
 
-          // Try direct fetch first for providers that allow CORS (faster, no proxy dependency).
-          // Fall back to CORS proxy if direct fails (CORS blocked, network, etc.).
-          let res: Response;
-          const directUrl = `${baseUrl}/models`;
-          const directSignal = AbortSignal.timeout(6000);
-          try {
-            res = await fetch(directUrl, { headers, signal: directSignal });
-          } catch {
-            // Direct fetch failed (CORS/network) — try via proxy
-            res = await corsProxy.fetch(directUrl, { headers, signal: AbortSignal.timeout(8000) });
-          }
-          if (!res.ok && isPublicListingSupported) {
-            // Proxy fallback for public listings when direct got a non-OK status
-            try {
-              res = await corsProxy.fetch(directUrl, { headers, signal: AbortSignal.timeout(8000) });
-            } catch { /* use the original response */ }
-          }
+          const fetchFn = isLocal ? fetch : (url: string, init?: RequestInit) => corsProxy.fetch(url, init);
+          const res = await fetchFn(`${baseUrl}/models`, {
+            headers,
+            signal: AbortSignal.timeout(8000),
+          });
           if (!res.ok) throw new Error(`${res.status}`);
           const json: {
             data?: { id: string; name?: string; pricing?: { prompt?: string } | string; context_length?: number }[];
@@ -361,16 +327,12 @@ export const useProviderStore = create<GiaProviderState>()(
             return 0;
           });
 
-          set((s) => ({
-            availableModels: { ...s.availableModels, [p]: result },
-            modelCache: { ...s.modelCache, [p]: { models: result, fetchedAt: Date.now() } },
-          }));
+          set((s) => ({ availableModels: { ...s.availableModels, [p]: result } }));
           return result;
         } catch (e) {
           logger.warn(`Fetch models failed for ${p}:`, e);
-          const fallback = providerRegistry.getModels(p);
-          set((s) => ({ availableModels: { ...s.availableModels, [p]: fallback } }));
-          return fallback;
+          set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
+          return providerRegistry.getModels(p);
         }
       },
 
@@ -418,7 +380,7 @@ export const useProviderStore = create<GiaProviderState>()(
     {
       name: 'gia-provider-storage-v2',
       storage: createJSONStorage(() => idbStorage),
-      partialize: (s) => ({ providers: s.providers, activeProvider: s.activeProvider, pendingTasks: s.pendingTasks, modelCache: s.modelCache }),
+      partialize: (s) => ({ providers: s.providers, activeProvider: s.activeProvider, pendingTasks: s.pendingTasks }),
     }
   )
 );

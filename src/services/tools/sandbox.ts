@@ -1,7 +1,6 @@
 import SandboxService from '../SandboxService';
 import terminalService from '../TerminalService';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 const sandboxExec: Tool = {
   id: 'sandbox_exec',
@@ -191,8 +190,3 @@ const sandboxFS: Tool = {
 };
 
 export const sandboxTools: Tool[] = [sandboxExec, sandboxInstall, sandboxClone, sandboxFS];
-
-
-export function registerSandboxTools() {
-  for (const tool of sandboxTools) ToolRegistry.register(tool);
-}

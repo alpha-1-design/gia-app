@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { logger } from '../../utils/logger';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 async function sandboxExec(cmd: string, timeout = 15000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
@@ -268,8 +267,3 @@ const networkDetect: Tool = {
 };
 
 export const networkTools: Tool[] = [networkScan, networkConnectivity, networkDetect];
-
-
-export function registerNetworkTools() {
-  for (const tool of networkTools) ToolRegistry.register(tool);
-}

@@ -1,7 +1,6 @@
 import { Camera, CameraResultType } from '@capacitor/camera';
 import { useGiaStore } from '../../store/useGiaStore';
 import type { Tool } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 // Hold the last captured photo data for the UI to pick up
 let lastCapturedImage: { name: string; type: string; dataUrl: string } | null = null;
@@ -73,8 +72,3 @@ const capture_photo: Tool = {
 };
 
 export const cameraTools: Tool[] = [capture_photo];
-
-
-export function registerCameraTools() {
-  for (const tool of cameraTools) ToolRegistry.register(tool);
-}

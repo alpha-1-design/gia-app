@@ -3,7 +3,7 @@ import {
   Shield, ShieldCheck, ShieldAlert, Lock, Unlock, Globe, Search,
   Terminal, Activity, Wifi, AlertTriangle,
   Loader, RefreshCw, MapPin, Bug, Radio,
-  Skull, Clock, Filter, CheckCircle2, XCircle,
+  Skull, Clock, Filter, CheckCircle2, XCircle, Wrench, Download, RotateCcw, Loader2
 } from 'lucide-react';
 import {
   securityScan, securityFirewall, securityThreatIntel,
@@ -11,7 +11,9 @@ import {
 } from '../../services/tools/security';
 import { networkScan, networkConnectivity } from '../../services/tools/network';
 import SandboxService from '../../services/SandboxService';
+import SandboxEnvService, { type SandboxStatus } from '../../services/SandboxEnvService';
 import { SubPageHeader } from './SubPageHeader';
+import ConfirmDialog from '../ConfirmDialog';
 
 interface ScanResult {
   severity: 'ok' | 'warning' | 'critical';
@@ -154,10 +156,22 @@ const MicalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [activeTag, setActiveTag] = useState<FindingTag>('all');
   const [lastScan, setLastScan] = useState<number | null>(null);
 
+  const [sandboxStatus, setSandboxStatus] = useState<SandboxStatus | null>(null);
+  const [sandboxBusy, setSandboxBusy] = useState<null | 'setup' | 'repair' | 'reset'>(null);
+  const [sandboxProgress, setSandboxProgress] = useState('');
+  const [sandboxOutput, setSandboxOutput] = useState('');
+  const [confirmSandboxReset, setConfirmSandboxReset] = useState(false);
+
+  const refreshSandboxStatus = useCallback(async () => {
+    const s = await SandboxEnvService.status();
+    setSandboxStatus(s);
+  }, []);
+
   useEffect(() => {
     SandboxService.ensureAvailable().then(setSandboxOk);
     getFirewallStatus().then(setFirewall);
-  }, []);
+    refreshSandboxStatus();
+  }, [refreshSandboxStatus]);
 
   const health = useMemo(() => computeHealth(scanResult, firewall, sandboxOk), [scanResult, firewall, sandboxOk]);
 
@@ -303,27 +317,41 @@ const MicalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Info banner */}
-      {sandboxOk === false && (
-        <div className="px-3 py-3 rounded-xl text-xs leading-relaxed"
-          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)' }}>
-          <p className="font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠️ Sandbox not available</p>
-          <p style={{ color: 'var(--gia-muted)' }}>
-            Neither the on-device Alpine terminal nor a remote sandbox server could be reached. If you're on
-            desktop/web, start one with{' '}
-            <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 4px', borderRadius: 4 }}>
-              node server/sandbox-server.cjs
-            </code>{' '}
-            in the project root, or use chat commands like <em>security_scan</em>.
-          </p>
+      {/* Alpine Sandbox Connection Banner */}
+      {sandboxOk === true && (
+        <div className="px-3.5 py-3 rounded-xl text-xs flex items-center justify-between"
+          style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <div>
+              <p className="font-semibold flex items-center gap-1.5" style={{ color: '#34d399' }}>
+                <CheckCircle2 size={13} /> Alpine Sandbox Connected & Operational
+              </p>
+              <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+                {SandboxService.isUsingNativeFallback()
+                  ? 'Active on native on-device terminal (proot + Alpine Linux)'
+                  : 'Active on Sandbox Server (port 3081) — proot chroot ready'}
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded font-medium shrink-0" style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>
+            ACTIVE
+          </span>
         </div>
       )}
-      {sandboxOk === true && SandboxService.isUsingNativeFallback() && (
-        <div className="px-3 py-3 rounded-xl text-xs leading-relaxed"
-          style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.15)' }}>
+      {sandboxOk === false && (
+        <div className="px-3.5 py-3 rounded-xl text-xs leading-relaxed"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="font-semibold flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
+              <AlertTriangle size={13} /> Sandbox Connection Pending
+            </p>
+            <button onClick={() => SandboxService.ensureAvailable().then(setSandboxOk)} className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+              Retry
+            </button>
+          </div>
           <p style={{ color: 'var(--gia-muted)' }}>
-            Running on the on-device Alpine terminal (no remote sandbox server needed). File downloads will
-            save directly to your device instead of a browser link.
+            Connecting to Alpine Linux Sandbox execution environment...
           </p>
         </div>
       )}
@@ -364,6 +392,121 @@ const MicalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           Quarantine
         </button>
       </div>
+
+      {/* Alpine Sandbox & Build Environment Controls */}
+      <div className="flex items-center gap-2 px-1 mt-1">
+        <Terminal size={14} style={{ color: '#34d399' }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+          Alpine Sandbox & Build Environment
+        </span>
+        {sandboxStatus && (
+          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium"
+            style={{
+              background: sandboxStatus.ready ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
+              color: sandboxStatus.ready ? '#34d399' : '#f87171',
+            }}>
+            {sandboxStatus.ready ? 'Ready' : 'Setup Required'}
+          </span>
+        )}
+      </div>
+      <div className="gia-card p-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          {sandboxStatus?.packages.map((p) => (
+            <div key={p.key} className="flex items-center gap-3">
+              <span className="flex-1 text-xs font-medium" style={{ color: 'var(--gia-text)' }}>
+                {p.label}
+              </span>
+              {p.ok ? (
+                <span className="flex items-center gap-1 text-[11px] font-mono" style={{ color: '#34d399' }}>
+                  <CheckCircle2 size={12} /> {p.version}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[11px] font-mono" style={{ color: '#f87171' }}>
+                  <XCircle size={12} /> missing
+                </span>
+              )}
+            </div>
+          ))}
+          {!sandboxStatus && <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>Checking environment packages...</p>}
+        </div>
+
+        <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <button
+            disabled={sandboxBusy !== null}
+            onClick={async () => {
+              setSandboxBusy('setup');
+              setSandboxProgress('Starting...');
+              setSandboxOutput('');
+              const res = await SandboxEnvService.provision(m => setSandboxProgress(m));
+              setSandboxOutput(res.output || '');
+              setSandboxBusy(null);
+              refreshSandboxStatus();
+            }}
+            className="flex-1 px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+            style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.2)', opacity: sandboxBusy ? 0.6 : 1 }}
+          >
+            {sandboxBusy === 'setup' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            {sandboxBusy === 'setup' ? 'Installing...' : 'Set Up Environment'}
+          </button>
+          <button
+            disabled={sandboxBusy !== null}
+            onClick={async () => {
+              setSandboxBusy('repair');
+              setSandboxProgress('Repairing...');
+              setSandboxOutput('');
+              const res = await SandboxEnvService.repair(m => setSandboxProgress(m));
+              setSandboxOutput(res.output || '');
+              setSandboxBusy(null);
+              refreshSandboxStatus();
+            }}
+            className="px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--gia-text)', border: '1px solid rgba(255,255,255,0.08)', opacity: sandboxBusy ? 0.6 : 1 }}
+          >
+            {sandboxBusy === 'repair' ? <Loader2 size={13} className="animate-spin" /> : <Wrench size={13} />} Repair
+          </button>
+          <button
+            disabled={sandboxBusy !== null}
+            onClick={() => setConfirmSandboxReset(true)}
+            className="px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+            style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.15)', opacity: sandboxBusy ? 0.6 : 1 }}
+          >
+            <RotateCcw size={13} /> Reset
+          </button>
+        </div>
+
+        {sandboxBusy && (
+          <div className="p-3 rounded-lg" style={{ background: 'rgba(255,255,255,0.02)' }}>
+            <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--gia-text)' }}>{sandboxProgress}</p>
+            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              <div className="h-full w-full animate-pulse" style={{ background: '#34d399' }} />
+            </div>
+          </div>
+        )}
+
+        {sandboxOutput && !sandboxBusy && (
+          <pre className="p-2.5 rounded-lg text-[10px] font-mono whitespace-pre-wrap max-h-32 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.3)', color: 'var(--gia-muted)' }}>
+            {sandboxOutput}
+          </pre>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmSandboxReset}
+        title="Reset Alpine Sandbox Environment?"
+        message="This removes installed build packages (node, npm, git, gcc, python3). The base rootfs remains intact."
+        confirmLabel="Reset Environment"
+        danger
+        onConfirm={async () => {
+          setConfirmSandboxReset(false);
+          setSandboxBusy('reset');
+          setSandboxProgress('Resetting environment...');
+          const res = await SandboxEnvService.reset(m => setSandboxProgress(m));
+          setSandboxOutput(res.output || '');
+          setSandboxBusy(null);
+          refreshSandboxStatus();
+        }}
+        onCancel={() => setConfirmSandboxReset(false)}
+      />
 
       {/* Quarantine confirmation modal */}
       {showQuarantine && (

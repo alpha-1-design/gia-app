@@ -7,7 +7,7 @@ import path from 'path'
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'happy-dom',
+    environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: false,
   },
@@ -15,6 +15,17 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    proxy: {
+      '/api/sandbox': {
+        target: 'http://localhost:3081',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/sandbox/, ''),
+      },
+    },
+  },
   // CRITICAL for Capacitor Android APK — assets must use relative paths
   base: './',
   resolve: {

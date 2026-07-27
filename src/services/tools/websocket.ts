@@ -1,5 +1,4 @@
 import type { Tool, ToolResult } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 interface WSConnection {
   url: string;
@@ -237,8 +236,3 @@ const websocketTools: Tool[] = [
 ];
 
 export { websocketTools };
-
-
-export function registerWebsocketTools() {
-  for (const tool of websocketTools) ToolRegistry.register(tool);
-}

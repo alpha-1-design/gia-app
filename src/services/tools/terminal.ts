@@ -3,7 +3,6 @@ import terminalService from '../TerminalService';
 import SandboxService from '../SandboxService';
 import CodeRunner from '../CodeRunner';
 import type { Tool, ToolContext } from './types';
-import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -286,8 +285,3 @@ export const terminalTools: Tool[] = [
   terminalStatus,
   terminalKill,
 ];
-
-
-export function registerTerminalTools() {
-  for (const tool of terminalTools) ToolRegistry.register(tool);
-}

@@ -1,5 +1,4 @@
-import GiaTools from '../GiaTools';
-import type { ToolResult } from '../tools/types';
+import GiaTools, { ToolResult } from '../GiaTools';
 import { useProtocolStore } from '../../store/useProtocolStore';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useSearchActivity } from '../../store/useSearchActivity';
@@ -12,8 +11,8 @@ import AnalyticsService from '../AnalyticsService';
 import AnalyticsTracker from '../AnalyticsTracker';
 import { toolRateLimiter, globalToolLimiter } from '../ToolRateLimiter';
 
-export interface ExecutionState {
-  history: { role: string; content: string | { type: string; text?: string; source?: { type: string; data: string } }[] }[];
+interface ExecutionState {
+  history: { role: string; content: string }[];
   currentPrompt: string;
   clarificationAttempts: number;
 }
@@ -251,7 +250,7 @@ async function executeSingleTool(
   onThought?.(result!.success ? obs : `⚠️ ${toolCall.id} failed — trying alternative...`);
 
   if (result!.success) {
-    useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources, result!.structuredResult);
+    useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources);
     if (sourcesAcc && result!.sources?.length) {
       for (const s of result!.sources) {
         if (!sourcesAcc.includes(s.url)) sourcesAcc.push(s.url);
@@ -266,10 +265,10 @@ async function executeSingleTool(
       sa.completeEvent(msg);
       if (toolCall.id === 'web_search') {
         sa.addEvent({ type: 'info', message: `Found ${result!.sources?.length || 0} results`, done: true });
-        result!.sources?.forEach((s: { title: string; url: string }) => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
+        result!.sources?.forEach(s => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
       } else {
         if (result!.sources?.length) {
-          result!.sources.forEach((s: { title: string; url: string }) => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
+          result!.sources.forEach(s => sa.addSource({ title: s.title, url: s.url, snippet: '', source: 'web' }));
         } else {
           sa.addSource({ title: (toolCall.args.url as string) || '', url: (toolCall.args.url as string) || '', snippet: '', source: 'web' });
         }

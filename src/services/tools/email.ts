@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { Tool } from './types';
 import emailService from '../EmailService';
 import connectionManager from '../ConnectionManager';
-import ToolRegistry from '../ToolRegistry';
 
 function formatZodError(issues: z.ZodIssue[]): string {
   return issues.map(i => {
@@ -216,8 +215,3 @@ export const emailTools: Tool[] = [
   emailRead,
   emailSearch,
 ];
-
-
-export function registerEmailTools() {
-  for (const tool of emailTools) ToolRegistry.register(tool);
-}

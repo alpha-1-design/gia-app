@@ -142,7 +142,7 @@ TEST_CMD="echo 'Alpine $(cat ${ROOTFS_DIR}/etc/alpine-release 2>/dev/null || ech
 if [ -n "$PRoot_CMD" ]; then
   SSL_CERT_FILE="${SSL_CERT_FILE}" $PRoot_CMD -r "$ROOTFS_DIR" -b "$WORKSPACE_DIR:/workspace" -w /workspace sh -c "$TEST_CMD"
 else
-  sudo chroot "$ROOTFS_DIR" sh -c "$TEST_CMD"
+  chroot "$ROOTFS_DIR" sh -c "$TEST_CMD"
 fi
 
 echo ""
