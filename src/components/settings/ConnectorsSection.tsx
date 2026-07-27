@@ -4,11 +4,11 @@ import connectorManager from '../../services/connectors/ConnectorManager';
 import { useGiaStore } from '../../store/useGiaStore';
 
 export const ConnectorsSection: React.FC = () => {
-  const [connectors, setConnectors] = useState(connectorManager.getAll());
+  const [connectors, setConnectors] = useState(() => connectorManager.getAll().filter(c => c.id !== 'telegram' && c.id !== 'whatsapp'));
   const [editId, setEditId] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
-  const refresh = () => setConnectors(connectorManager.getAll());
+  const refresh = () => setConnectors(connectorManager.getAll().filter(c => c.id !== 'telegram' && c.id !== 'whatsapp'));
 
   useEffect(() => { refresh(); }, []);
 

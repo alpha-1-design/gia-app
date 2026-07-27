@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { ThinkingPanel } from './ThinkingPanel';
+import { ReasoningChain } from './ReasoningChain';
 import { WorkLog } from './WorkLog';
 import TaskProgress from './TaskProgress';
 import GiaIcon from './GiaIcon';
@@ -14,6 +14,7 @@ import MessageFullScreen from './MessageFullScreen';
 import { ChatSkeleton } from './feedback';
 import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
 import ToolTray from './ToolTray';
+import InlineToolCalls from './InlineToolCalls';
 import { useProtocolStore } from '../store/useProtocolStore';
 import type { Message, ThinkingPhase } from '../store/useGiaStore';
 
@@ -303,11 +304,18 @@ const MessageList: React.FC<MessageListProps> = ({
                       <ArtifactsPanel artifacts={msg.artifacts} />
                     )}
                     {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id).length > 0 && (
-                      <ToolTray
-                        protocols={consoleProtocols
-                          .filter(p => p.messageId === msg.id)
-                          .sort((a, b) => a.createdAt - b.createdAt)}
-                      />
+                      <>
+                        <InlineToolCalls
+                          protocols={consoleProtocols
+                            .filter(p => p.messageId === msg.id)
+                            .sort((a, b) => a.createdAt - b.createdAt)}
+                        />
+                        <ToolTray
+                          protocols={consoleProtocols
+                            .filter(p => p.messageId === msg.id)
+                            .sort((a, b) => a.createdAt - b.createdAt)}
+                        />
+                      </>
                     )}
                     {(liveThoughts[msg.id] || msg.thoughts) && (
                       <div className="rounded-xl overflow-hidden transition-all duration-300" style={{
@@ -329,7 +337,8 @@ const MessageList: React.FC<MessageListProps> = ({
                           </span>
                           {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                         </button>
-                        <ThinkingPanel
+                        <ReasoningChain
+                          messageId={msg.id}
                           thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
                           isLive={!!liveThoughts[msg.id]}
                           isExpanded={showThoughts.has(msg.id)}

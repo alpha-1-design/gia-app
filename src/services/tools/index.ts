@@ -45,6 +45,20 @@ import { registerNeuraTools } from './neura';
 import { registerBrowserAutomationTools } from './browserAutomation';
 import { registerPdfTools } from './readPdf';
 import { registerAdvancedTools } from './advanced';
+import { registerCustomInstructionTools } from './customInstructions';
+import { registerIdentityTools } from './identity';
+import { registerProviderHealthTools } from './providerHealth';
+import { registerResponseCacheTools } from './responseCache';
+import { registerLongRunningTools } from './longRunning';
+import { registerBrainCloudTools } from './brainCloud';
+import { registerMCPTools } from './mcp';
+import { registerPluginTools } from './plugin';
+import { registerSearchConfigTools } from './searchConfig';
+import { registerCodeExecTools } from './codeExec';
+import { registerCodeHistoryTools } from './codeHistory';
+import { registerSessionTools } from './session';
+import { registerPersonalEnhancedTools } from './personalEnhanced';
+import { registerScheduledTaskTools } from './scheduledTasks';
 
 export function registerAllTools() {
   registerCoreTools();
@@ -94,4 +108,18 @@ export function registerAllTools() {
   registerBrowserAutomationTools();
   registerPdfTools();
   registerAdvancedTools();
+  registerCustomInstructionTools();
+  registerIdentityTools();
+  registerProviderHealthTools();
+  registerResponseCacheTools();
+  registerLongRunningTools();
+  registerBrainCloudTools();
+  registerMCPTools();
+  registerPluginTools();
+  registerSearchConfigTools();
+  registerCodeExecTools();
+  registerCodeHistoryTools();
+  registerSessionTools();
+  registerPersonalEnhancedTools();
+  registerScheduledTaskTools();
 }

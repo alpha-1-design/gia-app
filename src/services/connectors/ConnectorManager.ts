@@ -46,7 +46,7 @@ class ConnectorManager {
     this.load();
   }
 
-  private registerDefaults() {
+private registerDefaults() {
     const defaults: ConnectorConfig[] = [
       { id: 'openweather', name: 'OpenWeatherMap', description: 'Weather data API', type: 'api', icon: 'cloud-sun', baseUrl: 'https://api.openweathermap.org/data/2.5', enabled: false, status: 'disconnected', fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'Paste API key...', type: 'password', required: true }] },
       { id: 'newsapi', name: 'NewsAPI', description: 'News articles and headlines', type: 'api', icon: 'newspaper', baseUrl: 'https://newsapi.org/v2', enabled: false, status: 'disconnected', fields: [{ key: 'apiKey', label: 'API Key', placeholder: 'Paste API key...', type: 'password', required: true }] },
@@ -70,7 +70,7 @@ class ConnectorManager {
         { key: 'clientEmail', label: 'Service Account Email', placeholder: 'gserviceaccount.com...', type: 'text', required: true },
         { key: 'privateKey', label: 'Private Key', placeholder: '-----BEGIN PRIVATE KEY-----\\n...', type: 'password', required: true },
         { key: 'projectId', label: 'Project ID', placeholder: 'your-gcp-project-id', type: 'text', required: true }
-      ]}
+      ]},
     ];
     for (const c of defaults) {
       this.connectors.set(c.id, c);

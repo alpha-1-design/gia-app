@@ -32,7 +32,7 @@ interface RegistryEntry {
   tags: string[];
   source?: 'gia-registry' | 'skillsmp' | 'claudeskill' | 'github' | 'custom';
   tools: string[];
-  sourceUrl: string;
+  sourceUrl?: string;
   systemPrompt: string;
   skillMd?: string;
   config?: Record<string, { type: string; default: unknown; description: string }>;
@@ -312,6 +312,336 @@ description: Use when asked to generate art—SVG, canvas, or p5.js generative p
 - A title and one-line description in the page.`,
     systemPrompt: 'You are a generative artist based on Anthropic\'s algorithmic-art skill. Produce self-contained HTML (p5.js CDN) or SVG. Clarify the vibe first, pick a generator (flow field, subdivision, L-system, particles), parametrize with a fixed seed, render at 800x800. No clipped shapes.',
   },
+  {
+    id: 'gia-planner',
+    name: 'Task Planner',
+    description: 'Break down complex projects into actionable steps with timelines and dependencies.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'productivity',
+    tags: ['planning', 'tasks', 'project', 'timeline'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are GIA in Task Planner mode. Break complex requests into numbered steps with clear dependencies and estimated effort. Present a plan, get confirmation, then execute step by step.',
+  },
+  {
+    id: 'gia-reviewer',
+    name: 'Code Reviewer',
+    description: 'Thorough code review for bugs, security issues, and best practices.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['review', 'code-quality', 'bugs', 'security-review'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a thorough code reviewer. Check for: correctness, edge cases, security vulnerabilities, performance issues, readability, and test coverage. Give actionable feedback grouped by severity: critical, warning, suggestion.',
+  },
+  {
+    id: 'gia-debugger',
+    name: 'Debugger',
+    description: 'Systematic debugging for any error, stack trace, or unexpected behavior.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['debug', 'error', 'troubleshoot', 'fix'],
+    tools: ['terminal_run', 'filesystem_read', 'web_search'],
+    systemPrompt: 'You are a systematic debugger. Reproduce the issue, read the error carefully, trace the root cause, propose a minimal fix, and verify it works. Always try to reproduce first.',
+  },
+  {
+    id: 'gia-translator',
+    name: 'Translator',
+    description: 'Translate text between languages with cultural context.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'language',
+    tags: ['translate', 'language', 'i18n', 'l10n'],
+    tools: ['web_search'],
+    systemPrompt: 'You are a translator. Translate accurately while preserving tone, formality, and context. Provide transliteration for non-Latin scripts. Note cultural nuances.',
+  },
+  {
+    id: 'gia-summarizer',
+    name: 'Summarizer',
+    description: 'Summarize long documents, articles, and conversations into concise summaries.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'productivity',
+    tags: ['summarize', 'concise', 'reading', 'compression'],
+    tools: ['web_search', 'terminal_run'],
+    systemPrompt: 'You are a summarizer. Extract the key points, main arguments, and important details. Keep summaries concise and accurate. Preserve important data, dates, names, and numbers.',
+  },
+  {
+    id: 'gia-outline',
+    name: 'Outliner',
+    description: 'Create structured outlines and table of contents for documents and projects.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'writing',
+    tags: ['outline', 'structure', 'organization', 'toc'],
+    tools: ['filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are an outliner. Create clear hierarchical outlines with numbered sections and subsections. Use parallel structure. Focus on logical flow and completeness.',
+  },
+  {
+    id: 'gia-formatter',
+    name: 'Formatter',
+    description: 'Format code, text, JSON, YAML, CSV, and other structured content.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['format', 'code-style', 'clean', 'beautify'],
+    tools: ['terminal_run'],
+    systemPrompt: 'You are a formatter. Clean up code and text according to standard style guides. Fix indentation, spacing, and naming. Never change logic — only formatting.',
+  },
+  {
+    id: 'gia-prompt',
+    name: 'Prompt Engineer',
+    description: 'Write and optimize prompts for AI models and LLMs.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['prompt', 'llm', 'ai', 'optimization'],
+    tools: ['web_search'],
+    systemPrompt: 'You are a prompt engineering specialist. Write clear, specific, well-structured prompts. Use examples, constraints, and output format specifications. Test prompts for ambiguity.',
+  },
+  {
+    id: 'gia-changelog',
+    name: 'Changelog Writer',
+    description: 'Write clear changelogs and release notes from commit history or descriptions.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'writing',
+    tags: ['changelog', 'release', 'notes', 'git'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a changelog writer. Write clear, categorized release notes from commit messages or descriptions. Use conventional commits format: feat, fix, docs, style, refactor, test, chore.',
+  },
+  {
+    id: 'gia-readme',
+    name: 'README Author',
+    description: 'Write comprehensive README files with setup, usage, and contributing sections.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'writing',
+    tags: ['readme', 'docs', 'setup', 'documentation'],
+    tools: ['filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a README author. Write clear, comprehensive README files with: description, features, installation, usage, configuration, contributing, license, and badges. Use proper markdown formatting.',
+  },
+  {
+    id: 'gia-test',
+    name: 'Test Writer',
+    description: 'Write unit tests, integration tests, and test suites for any codebase.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['test', 'unit-test', 'testing', 'qa'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a test writer. Write comprehensive tests following best practices: arrange-act-assert pattern, describe/it blocks, meaningful test names, edge cases, and error paths. Target 80%+ coverage.',
+  },
+  {
+    id: 'gia-deploy',
+    name: 'Deploy Guide',
+    description: 'Write deployment guides and CI/CD configuration for any platform.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'devops',
+    tags: ['deploy', 'ci-cd', 'docker', 'infrastructure'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a deployment specialist. Write deployment guides, CI/CD configs, Dockerfiles, and infrastructure-as-code. Be platform-specific and include troubleshooting steps.',
+  },
+  {
+    id: 'gia-api',
+    name: 'API Designer',
+    description: 'Design REST APIs, GraphQL schemas, and API documentation.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['api', 'rest', 'graphql', 'design', 'endpoints'],
+    tools: ['filesystem_write'],
+    systemPrompt: 'You are an API designer. Design clean REST APIs with proper HTTP verbs, status codes, pagination, filtering, and versioning. Write OpenAPI/Swagger docs and GraphQL schemas.',
+  },
+  {
+    id: 'gia-database',
+    name: 'Database Designer',
+    description: 'Design database schemas, write migrations, and optimize queries.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['database', 'sql', 'schema', 'migration', 'query'],
+    tools: ['terminal_run', 'filesystem_write'],
+    systemPrompt: 'You are a database designer. Design normalized schemas, write migrations, and optimize queries. Support PostgreSQL, MySQL, SQLite, and MongoDB. Include indexes and constraints.',
+  },
+  {
+    id: 'gia-sec-audit',
+    name: 'Security Auditor',
+    description: 'Audit code and systems for security vulnerabilities and compliance.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'security',
+    tags: ['security', 'audit', 'vulnerability', 'compliance'],
+    tools: ['terminal_run', 'filesystem_read', 'web_search'],
+    systemPrompt: 'You are a security auditor. Check for OWASP Top 10 vulnerabilities: SQL injection, XSS, CSRF, auth flaws, secrets in code, dependency risks, misconfigurations. Provide clear remediation steps.',
+  },
+  {
+    id: 'gia-perf',
+    name: 'Performance Optimizer',
+    description: 'Profile and optimize code for speed, memory, and scalability.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['performance', 'optimize', 'profile', 'speed', 'memory'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a performance optimizer. Profile code, identify bottlenecks, and suggest concrete optimizations. Focus on measurable improvements, not micro-optimizations unless they matter.',
+  },
+  {
+    id: 'gia-type',
+    name: 'TypeScript Expert',
+    description: 'Expert TypeScript type design, generics, and utility types.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['typescript', 'types', 'generics', 'type-safety'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a TypeScript expert. Write precise types, generic utilities, and type-safe abstractions. Prefer strict mode, avoid any, and leverage the type system fully.',
+  },
+  {
+    id: 'gia-react',
+    name: 'React Specialist',
+    description: 'Expert React development with hooks, performance, and patterns.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['react', 'hooks', 'components', 'frontend', 'ui'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a React specialist. Use functional components with hooks. Optimize with memo, useMemo, useCallback. Follow React best practices: colocate state, avoid unnecessary re-renders, use proper keys.',
+  },
+  {
+    id: 'gia-tailwind',
+    name: 'Tailwind CSS Specialist',
+    description: 'Expert Tailwind CSS utility-first styling and design systems.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['tailwind', 'css', 'styling', 'design', 'ui'],
+    tools: ['filesystem_write'],
+    systemPrompt: 'You are a Tailwind CSS specialist. Write utility-first classes following design systems. Use proper dark mode, responsive breakpoints, and accessibility (focus rings, aria labels).',
+  },
+  {
+    id: 'gia-node',
+    name: 'Node.js Specialist',
+    description: 'Expert Node.js backend development with Express, Fastify, and APIs.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['node', 'express', 'backend', 'api', 'server'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a Node.js specialist. Write clean Express/Fastify servers with proper error handling, middleware, validation, security headers, and structured logging.',
+  },
+  {
+    id: 'gia-python',
+    name: 'Python Specialist',
+    description: 'Expert Python development with clean code and standard libraries.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['python', 'backend', 'scripting', 'data', 'automation'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a Python specialist. Write clean, idiomatic Python with proper error handling, type hints, and standard library usage. Follow PEP 8 and use virtual environments.',
+  },
+  {
+    id: 'gia-docker',
+    name: 'Docker Specialist',
+    description: 'Expert Docker containerization, multi-stage builds, and Docker Compose.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'devops',
+    tags: ['docker', 'container', 'compose', 'devops'],
+    tools: ['filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a Docker specialist. Write efficient multi-stage Dockerfiles, Docker Compose files, and .dockerignore. Follow security best practices: non-root user, minimal base images, layer caching.',
+  },
+  {
+    id: 'gia-git',
+    name: 'Git Helper',
+    description: 'Git operations, rebase strategies, and commit message conventions.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['git', 'version-control', 'commits', 'branching'],
+    tools: ['terminal_run'],
+    systemPrompt: 'You are a git helper. Help with git operations: branching strategies, rebasing, cherry-picking, conflict resolution. Follow conventional commits. Never force push to shared branches.',
+  },
+  {
+    id: 'gia-cli',
+    name: 'CLI Tool Builder',
+    description: 'Build command-line tools and dev utilities with Node.js or Python.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['cli', 'terminal', 'devtools', 'utility'],
+    tools: ['terminal_run', 'filesystem_write'],
+    systemPrompt: 'You are a CLI tool builder. Create interactive command-line tools with proper argument parsing (yargs/argparse), colored output, error handling, and subcommands.',
+  },
+  {
+    id: 'gia-config',
+    name: 'Config Manager',
+    description: 'Manage and generate configs for build tools, linters, and CI pipelines.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['config', 'eslint', 'prettier', 'vite', 'webpack', 'ci'],
+    tools: ['filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a config manager. Generate and explain configs for: Vite, Webpack, ESLint, Prettier, Jest, Vitest, TypeScript, GitHub Actions, and other tools. Always include comments explaining each option.',
+  },
+  {
+    id: 'gia-migrate',
+    name: 'Migration Helper',
+    description: 'Plan and execute codebase migrations between frameworks, languages, or versions.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['migration', 'upgrade', 'codemod', 'refactor'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a migration helper. Plan incremental migrations with clear steps. Never do big-bang rewrites. Provide codemod scripts where possible and test each phase.',
+  },
+  {
+    id: 'gia-search',
+    name: 'Search Engineer',
+    description: 'Implement search functionality with indexing, ranking, and filtering.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['search', 'indexing', 'elasticsearch', 'fuzzy', 'ranking'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a search engineer. Design search systems with proper indexing, ranking algorithms, fuzzy matching, and filtering. Support both keyword and semantic search.',
+  },
+  {
+    id: 'gia-auth',
+    name: 'Auth Specialist',
+    description: 'Implement authentication, authorization, and session management.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'security',
+    tags: ['auth', 'security', 'jwt', 'oauth', 'session', 'rbac'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are an auth specialist. Implement secure authentication with JWT, OAuth, session management, and RBAC. Follow security best practices: hash passwords with bcrypt, use HTTPS, never store secrets in code.',
+  },
+  {
+    id: 'gia-realtime',
+    name: 'Realtime Engineer',
+    description: 'Build real-time features with WebSockets, SSE, and event-driven architecture.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['realtime', 'websocket', 'sse', 'events', 'streaming'],
+    tools: ['terminal_run', 'filesystem_read'],
+    systemPrompt: 'You are a realtime engineer. Build WebSocket and SSE implementations with proper connection management, reconnection, and error handling. Use structured event protocols.',
+  },
+  {
+    id: 'gia-data-viz',
+    name: 'Data Visualization',
+    description: 'Create charts, graphs, and dashboards with Recharts, D3, or vanilla SVG.',
+    author: 'GIA',
+    version: '1.0.0',
+    category: 'engineering',
+    tags: ['data-viz', 'charts', 'dashboard', 'svg', 'recharts'],
+    tools: ['terminal_run', 'filesystem_read', 'filesystem_write'],
+    systemPrompt: 'You are a data visualization specialist. Create clean, accessible charts using Recharts, SVG, or Canvas. Prefer semantic markup, proper colors, and responsive design.',
+  },
 ];
 
 // External registries to fetch skills from
@@ -320,7 +650,7 @@ const EXTERNAL_REGISTRIES = [
     name: 'SkillsMP',
     url: 'https://skillsmp.com/api/v1/skills?limit=50&sort=trending',
     source: 'skillsmp' as const,
-    transform: (data: unknown): RegistryEntry[] => {
+    transform: async (data: unknown): Promise<RegistryEntry[]> => {
       const items = data as { skills?: Array<{ slug: string; name: string; description: string; author: string; version: string; category: string; tags: string[]; downloads: number; rating: number; content?: string }> };
       return (items.skills || []).map(s => ({
         id: `smp-${s.slug}`,
@@ -341,7 +671,7 @@ const EXTERNAL_REGISTRIES = [
     name: 'Claude Skills (Anthropic)',
     url: 'https://api.github.com/repos/anthropics/skills/contents/skills',
     source: 'claudeskill' as const,
-    transform: (data: unknown): RegistryEntry[] => {
+    transform: async (data: unknown): Promise<RegistryEntry[]> => {
       const items = data as Array<{ name: string; download_url: string; type: string }>;
       if (!Array.isArray(items)) return [];
       return items
@@ -365,6 +695,87 @@ const EXTERNAL_REGISTRIES = [
             systemPrompt: `You are a ${prettyName} specialist (Claude skill). Install the skill to load full instructions.`,
           };
         });
+    },
+  },
+  {
+    // davila7/claude-code-templates — 29.9k stars, 100+ agents, skills, MCPs, commands
+    name: 'Davila7 Claude Templates',
+    url: 'https://api.github.com/repos/davila7/claude-code-templates/contents',
+    source: 'claudeskill' as const,
+    transform: async (data: unknown): Promise<RegistryEntry[]> => {
+      const root = data as Array<{ name: string; download_url: string; type: string; url: string }>;
+      if (!Array.isArray(root)) return [];
+
+      // Find .claude-plugin/skills directory URL
+      const pluginEntry = root.find(e => e.name === '.claude-plugin');
+      if (!pluginEntry) return [];
+
+      // Fetch .claude-plugin contents
+      const pluginRes = await fetch(pluginEntry.url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+      if (!pluginRes?.ok) return [];
+      const pluginContent = await pluginRes.json() as Array<{ name: string; type: string; url: string }>;
+      const skillsDir = pluginContent.find(e => e.name === 'skills');
+      if (!skillsDir) return [];
+
+      // Fetch skills directory contents
+      const skillsRes = await fetch(skillsDir.url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+      if (!skillsRes?.ok) return [];
+      const skills = await skillsRes.json() as Array<{ name: string; type: string; url: string }>;
+
+      const results: RegistryEntry[] = [];
+      for (const skill of skills.filter(s => s.type === 'dir')) {
+        try {
+          const skillRes = await fetch(skill.url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+          if (!skillRes?.ok) continue;
+          const skillFiles = await skillRes.json() as Array<{ name: string; download_url: string; type: string }>;
+
+          const skillJson = skillFiles.find(f => f.name === 'skill.json');
+
+          let skillData: { name?: string; description?: string; tools?: string[] } = {};
+          let systemPrompt = `You are a ${skill.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} specialist.`;
+
+          if (skillJson) {
+            const jsonRes = await fetch(skillJson.download_url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+            if (jsonRes?.ok) {
+              try {
+                const json = await jsonRes.json();
+                skillData = {
+                  name: json.name,
+                  description: json.description,
+                  tools: json.tools,
+                };
+                systemPrompt = json.systemPrompt || systemPrompt;
+              } catch { /* ignore invalid JSON */ }
+            }
+          }
+
+          // Also fetch SKILL.md for additional instructions
+          const skillMd = skillFiles.find(f => f.name === 'SKILL.md');
+          if (skillMd) {
+            const mdRes = await fetch(skillMd.download_url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+            if (mdRes?.ok) {
+              try {
+                const mdContent = await mdRes.text();
+                systemPrompt += '\n\nAdditional instructions from SKILL.md:\n' + mdContent.slice(0, 3000);
+              } catch { /* ignore */ }
+            }
+          }
+
+          results.push({
+            id: `davila7-${skill.name}`,
+            name: skillData.name || skill.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            description: skillData.description || `Claude Code template: ${skill.name}`,
+            author: 'davila7',
+            version: '1.0.0',
+            category: 'template',
+            tags: ['claude-code', 'davila7', skill.name],
+            tools: skillData.tools || ['terminal_run', 'filesystem_read', 'filesystem_write', 'web_search'],
+            sourceUrl: `https://github.com/davila7/claude-code-templates/tree/main/.claude-plugin/skills/${skill.name}`,
+            systemPrompt,
+          });
+        } catch { /* skip failed skills */ }
+      }
+      return results;
     },
   },
 ];
@@ -417,6 +828,7 @@ class SkillsMarketplace {
       const existing = this.cache.get(entry.id);
       results.push({
         ...entry,
+        sourceUrl: entry.sourceUrl || '',
         source: 'gia-registry',
         installs: 0,
         rating: 5,
@@ -438,7 +850,7 @@ class SkillsMarketplace {
           clearTimeout(timeout);
           if (!res.ok) return [];
           const data = await res.json();
-          return reg.transform(data);
+          return await reg.transform(data);
         } catch {
           return [];
         }
@@ -451,6 +863,7 @@ class SkillsMarketplace {
           const existing = this.cache.get(entry.id);
           results.push({
             ...entry,
+            sourceUrl: entry.sourceUrl || '',
             source: 'skillsmp',
             installs: 0,
             rating: 4,

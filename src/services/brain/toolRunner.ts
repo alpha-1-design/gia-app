@@ -251,7 +251,7 @@ async function executeSingleTool(
   onThought?.(result!.success ? obs : `⚠️ ${toolCall.id} failed — trying alternative...`);
 
   if (result!.success) {
-    useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources);
+    useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources, result!.structuredResult);
     if (sourcesAcc && result!.sources?.length) {
       for (const s of result!.sources) {
         if (!sourcesAcc.includes(s.url)) sourcesAcc.push(s.url);

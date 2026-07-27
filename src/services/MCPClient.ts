@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 import type { MCPServerConfig } from '../store/useMCPStore';
-import type { ToolResult } from './tools/types';
+import type { ToolResult, MCPStructuredResult } from './tools/types';
 
 export interface MCPToolDefinition {
   name: string;
@@ -15,7 +15,7 @@ interface MCPClientEvents {
 interface MCPClientHandle {
   connect(transport: unknown): Promise<void>;
   close(): Promise<void>;
-  callTool(params: { name: string; arguments: Record<string, unknown> }, options?: Record<string, unknown>, requestOptions?: Record<string, unknown>): Promise<{ content: Array<{ type: string; text?: string; resource?: { text?: string; uri?: string } }>; isError?: boolean }>;
+  callTool(params: { name: string; arguments: Record<string, unknown> }, options?: Record<string, unknown>, requestOptions?: Record<string, unknown>): Promise<{ content: Array<{ type: string; text?: string; resource?: Record<string, unknown> }>; isError?: boolean }>;
   listTools(): Promise<{ tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> }>;
 }
 
@@ -99,20 +99,38 @@ export class MCPClient {
         }
       );
 
-      const content = result.content
-        ? result.content
-            .map((part) => {
-              if (part.type === 'text') return part.text;
-              if (part.type === 'resource') return `[Resource: ${part.resource?.text || part.resource?.uri || ''}]`;
-              return JSON.stringify(part);
-            })
-            .filter(Boolean)
-            .join('\n')
-        : JSON.stringify(result);
+      // Check for structured results (resources with mime types)
+      const structuredResults: MCPStructuredResult[] = [];
+      let textContent = '';
+
+      if (result.content) {
+        for (const part of result.content) {
+          if (part.type === 'text') {
+            textContent += part.text + '\n';
+          } else if (part.type === 'resource' && part.resource) {
+            const r = part.resource as Record<string, unknown>;
+            const mimeType = typeof r.mimeType === 'string' ? r.mimeType : 'application/octet-stream';
+            const blobData = r.blob as string | undefined;
+            const textData = r.text as string | undefined;
+            const data = blobData || textData || '';
+            const metadata = {
+              title: (typeof r.title === 'string' ? r.title : undefined) || (typeof r.name === 'string' ? r.name : undefined) || (typeof r.uri === 'string' ? r.uri : undefined),
+              description: typeof r.description === 'string' ? r.description : undefined,
+            };
+            structuredResults.push({
+              contentType: mimeType as MCPStructuredResult['contentType'],
+              data: blobData ? Uint8Array.from(atob(blobData), c => c.charCodeAt(0)) : data,
+              metadata,
+              encoding: blobData ? 'base64' : 'utf-8',
+            });
+          }
+        }
+      }
 
       return {
         success: !result.isError,
-        content,
+        content: textContent || '',
+        structuredResult: structuredResults.length === 1 ? structuredResults[0] : structuredResults.length > 1 ? structuredResults : undefined,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

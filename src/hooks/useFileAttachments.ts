@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import PDFService from '../services/PDFService';
+import RAGService from '../services/RAGService';
 import { knowledgeGraphService } from '../services/KnowledgeGraphService';
 
 export type Attachment = { name: string; type: string; content: string; preview?: string };
@@ -47,6 +48,9 @@ export function useFileAttachments() {
               newAtts.push({ name: file.name, type: file.type, content: text });
               if (text && text.length > 20) {
                 knowledgeGraphService.extractFromDocument(file.name, text, `doc-${Date.now()}`);
+                const id = `rag-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                const title = file.name.replace(/\.[^/.]+$/, '');
+                try { await RAGService.indexDocument(id, title, text); } catch { /* ignore RAG errors */ }
               }
             } catch {
               newAtts.push({ name: file.name, type: file.type, content: 'Failed to extract PDF text.' });
@@ -61,6 +65,9 @@ export function useFileAttachments() {
             newAtts.push({ name: file.name, type: file.type || 'text/plain', content: text });
             if (text && text.length > 20) {
               knowledgeGraphService.extractFromDocument(file.name, text, `doc-${Date.now()}`);
+              const id = `rag-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+              const title = file.name.replace(/\.[^/.]+$/, '');
+              RAGService.indexDocument(id, title, text).catch(() => {/* ignore */});
             }
             resolve();
           };

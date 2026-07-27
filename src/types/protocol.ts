@@ -1,3 +1,5 @@
+import type { MCPStructuredResult } from '../services/mcp/MCPContentTypes';
+
 export type ProtocolImpact = 'read' | 'write' | 'destructive' | 'network' | 'location' | 'notification' | 'execution';
 
 export type ProtocolState = 'proposed' | 'confirmed' | 'executing' | 'completed' | 'failed' | 'rejected' | 'modified';
@@ -20,7 +22,8 @@ export type ProtocolType =
   | 'environment_info'
   | 'show_map'
   | 'device_action'
-  | 'custom';
+  | 'custom'
+  | 'mcp';
 
 export interface ProtocolProposal {
   id: string;
@@ -41,6 +44,7 @@ export interface ProtocolProposal {
   messageId?: string;
   progress?: number;
   progressLabel?: string;
+  structuredResult?: MCPStructuredResult | MCPStructuredResult[];
 }
 
 export interface ProtocolAction {
@@ -68,5 +72,6 @@ export const PROTOCOL_META: Record<ProtocolType, { icon: string; color: string; 
   environment_info:    { icon: 'ℹ', color: '#6b7280', label: 'Environment Info' },
   show_map:            { icon: '🗺', color: '#10b981', label: 'Show Map' },
   device_action:       { icon: '📱', color: '#8b5cf6', label: 'Device Action' },
+  mcp:                 { icon: '🔌', color: '#06b6d4', label: 'MCP Tool' },
   custom:              { icon: '🔧', color: '#6b7280', label: 'Custom' },
 };
