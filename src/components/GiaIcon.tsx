@@ -36,7 +36,7 @@ const GiaIcon: React.FC<GiaIconProps> = ({
       aria-label="GIA"
     >
       {/* Outer star — clockwise */}
-      <g style={spinCw} transform-origin="12 12">
+      <g style={{ ...spinCw, transformOrigin: '12px 12px' }}>
         <path
           d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"
           fill={color}
@@ -44,7 +44,7 @@ const GiaIcon: React.FC<GiaIconProps> = ({
         />
       </g>
       {/* Dashed ring — counter-clockwise */}
-      <g style={spinCcw} transform-origin="12 12">
+      <g style={{ ...spinCcw, transformOrigin: '12px 12px' }}>
         <circle
           cx="12" cy="12" r="8"
           stroke={color}

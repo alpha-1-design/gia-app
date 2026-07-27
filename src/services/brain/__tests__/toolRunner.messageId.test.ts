@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { executeToolBlocks } from '../toolRunner';
 import { useProtocolStore } from '../../../store/useProtocolStore';
+import { registerAllTools } from '../../tools';
 
 function toolBlock(id: string, args: Record<string, unknown> = {}) {
   return `\`\`\`tool\n${JSON.stringify({ id, args })}\n\`\`\``;
@@ -13,6 +14,7 @@ const TEST_TOOL = 'list_goals';
 
 describe('executeToolBlocks — messageId attribution', () => {
   beforeEach(() => {
+    registerAllTools();
     useProtocolStore.setState({ consoleProtocols: [], fullAutonomy: true });
   });
 

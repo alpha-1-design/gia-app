@@ -45,7 +45,12 @@ describe('filegen — download fallback helpers', () => {
       readFileMock.mockResolvedValue('native file content');
       const blob = await getFileBlob('report.pdf', null);
       expect(readFileMock).toHaveBeenCalledWith('report.pdf');
-      const text = await blob.text();
+      const text = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(blob);
+      });
       expect(text).toBe('native file content');
     });
 
