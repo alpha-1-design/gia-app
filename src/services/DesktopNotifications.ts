@@ -1,5 +1,3 @@
-import { logger } from '../utils/logger';
-
 class DesktopNotifications {
   private _granted = false;
 
@@ -29,7 +27,9 @@ class DesktopNotifications {
         tag: options?.tag || 'gia',
         silent: false,
       });
-    } catch (e) { logger.error('[DesktopNotifications] Notification API not supported:', e); }
+    } catch {
+      // Notification API is restricted or not supported in current frame
+    }
   }
 
   async notifyOnComplete(title: string, body: string): Promise<void> {

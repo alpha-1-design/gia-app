@@ -109,7 +109,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastResultRef = useRef(0);
   const srRef = useRef<BrowserSpeechRecognition | null>(null);
-  const isCapacitor = !!SpeechRecognitionAPI.Capacitor;
+  const isCapacitor = Capacitor.isNativePlatform() && !!SpeechRecognitionAPI.Capacitor;
   const isNative = isCapacitor && Capacitor.isPluginAvailable?.('GIAWakeWord');
   const listeningLoopRef = useRef(false);
   const wakeWordRegexRef = useRef(new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i'));
@@ -174,7 +174,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         srRef.current.onend = null;
         srRef.current = null;
       }
-    } catch (e) { logger.error('[useVoiceControl] Failed to stop speech recognition:', e); }
+    } catch { /* ignore if speech recognition was not active or unimplemented on web */ }
     setIsListening(false);
     setIsHearing(false);
   }, [isCapacitor, isNative]);
