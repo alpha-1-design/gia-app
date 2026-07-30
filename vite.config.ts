@@ -10,11 +10,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: false,
+    pool: 'threads',
   },
   plugins: [
     react(),
-    tailwindcss(),
-  ],
+    !process.env.VITEST && tailwindcss(),
+  ].filter(Boolean),
   server: {
     port: 3000,
     host: '0.0.0.0',

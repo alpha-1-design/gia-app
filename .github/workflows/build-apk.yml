@@ -36,11 +36,6 @@ jobs:
 
       - run: chmod +x android/gradlew
 
-      - name: Generate Gradle wrapper
-        run: |
-          cd android
-          ./gradlew wrapper --gradle-version 8.5
-
       - name: Generate release keystore
         run: |
           keytool -genkey -v -keystore android/app/release.keystore \
