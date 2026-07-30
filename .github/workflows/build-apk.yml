@@ -31,12 +31,20 @@ jobs:
           java-version: 21
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            tools
+            platform-tools
+            build-tools;36
+            platforms;android-36
+            platforms;android-35
 
       - run: npx cap sync android
 
+      - run: chmod +x android/gradlew
+
       - name: Ensure gradle wrapper jar exists
         run: |
-          chmod +x android/gradlew
           JAR="android/gradle/wrapper/gradle-wrapper.jar"
           if [ ! -f "$JAR" ]; then
             echo "gradle-wrapper.jar missing — downloading"
