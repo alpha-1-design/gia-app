@@ -38,15 +38,14 @@ jobs:
 
       - name: Ensure gradle wrapper jar exists
         run: |
-          JAR="android/gradle/wrapper/gradle-wrapper.jar"
-          if [ ! -f "$JAR" ]; then
-            echo "gradle-wrapper.jar missing — downloading"
-            GRADLE_VERSION=$(grep 'distributionUrl' android/gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-//;s/-.*//')
-            curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle-bin.zip
-            unzip -o -q /tmp/gradle-bin.zip -d /tmp/gradle
-            cp "/tmp/gradle/gradle-${GRADLE_VERSION}/lib/gradle-wrapper-${GRADLE_VERSION}.jar" "$JAR"
-            rm -rf /tmp/gradle /tmp/gradle-bin.zip
-          fi
+          echo "Regenerating gradle-wrapper.jar from Gradle distribution"
+          GRADLE_VERSION=$(grep 'distributionUrl' android/gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-//;s/-.*//')
+          curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle-bin.zip
+          unzip -o -q /tmp/gradle-bin.zip -d /tmp/gradle
+          cp "/tmp/gradle/gradle-${GRADLE_VERSION}/lib/gradle-wrapper-${GRADLE_VERSION}.jar" "android/gradle/wrapper/gradle-wrapper.jar"
+          ls -la "android/gradle/wrapper/gradle-wrapper.jar"
+          jar tf "android/gradle/wrapper/gradle-wrapper.jar" | head -5 || echo "NOT A VALID JAR"
+          rm -rf /tmp/gradle /tmp/gradle-bin.zip
 
       - name: Generate release keystore
         run: |
