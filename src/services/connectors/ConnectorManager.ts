@@ -66,10 +66,9 @@ class ConnectorManager {
         { key: 'username', label: 'Email / Username', placeholder: 'yourname@example.com', type: 'text', required: true },
         { key: 'password', label: 'Password / App Password', placeholder: 'App-specific password...', type: 'password', required: true }
       ]},
-      { id: 'google-services', name: 'Google Services Gateway', description: 'Manually connect Google Sheets, Drive, Gmail, or Calendar via custom service account credentials', type: 'cloud', icon: 'google', enabled: false, status: 'disconnected', fields: [
-        { key: 'clientEmail', label: 'Service Account Email', placeholder: 'gserviceaccount.com...', type: 'text', required: true },
-        { key: 'privateKey', label: 'Private Key', placeholder: '-----BEGIN PRIVATE KEY-----\\n...', type: 'password', required: true },
-        { key: 'projectId', label: 'Project ID', placeholder: 'your-gcp-project-id', type: 'text', required: true }
+      { id: 'google-workspace', name: 'Google Workspace', description: 'Connect Gmail, Google Calendar, and Google Drive using your Google Account email and an app password. Generate an app password at https://myaccount.google.com/apppasswords', type: 'cloud', icon: 'google', enabled: false, status: 'disconnected', fields: [
+        { key: 'email', label: 'Google Account Email', placeholder: 'you@yourdomain.com', type: 'text', required: true },
+        { key: 'appPassword', label: 'App Password', placeholder: 'xxxx xxxx xxxx xxxx (16 chars with spaces)', type: 'password', required: true }
       ]}
     ];
     for (const c of defaults) {
@@ -142,6 +141,47 @@ class ConnectorManager {
       this.save();
       return false;
     }
+    if (id === 'google-workspace') {
+      const email = cfg.email || '';
+      const password = cfg.appPassword || '';
+      if (!email || !password) {
+        connector.status = 'disconnected';
+        connector.errorMessage = 'Email and app password are required';
+        this.save();
+        return false;
+      }
+      if (!email.includes('@')) {
+        connector.status = 'error';
+        connector.errorMessage = 'Enter a valid Google Account email address';
+        this.save();
+        return false;
+      }
+      const stripped = password.replace(/\s/g, '');
+      if (stripped.length !== 16) {
+        connector.status = 'error';
+        connector.errorMessage = 'App passwords are exactly 16 characters. Generate one at myaccount.google.com/apppasswords using "Mail" as the app.';
+        this.save();
+        return false;
+      }
+      try {
+        const res = await fetch('https://accounts.google.com/.well-known/openid-configuration', {
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) {
+          connector.status = 'error';
+          connector.errorMessage = 'Cannot reach Google servers — check your internet connection';
+          this.save();
+          return false;
+        }
+        connector.status = 'connected';
+        connector.errorMessage = undefined;
+      } catch (e) {
+        connector.status = 'error';
+        connector.errorMessage = e instanceof Error ? e.message : 'Connection failed';
+      }
+      this.save();
+      return connector.status === 'connected';
+    }
     if (id === 'supabase' || id === 'firebase' || id === 'aws' || id === 'email' || id === 'google-services') {
       connector.status = 'connected';
       connector.errorMessage = undefined;
@@ -205,6 +245,13 @@ class ConnectorManager {
       throw new Error('AWS S3 calls require native SDK — use connector_config to set credentials');
     } else if (id === 'firebase') {
       throw new Error('Firebase calls use Firebase SDK — configure via connector_config');
+    } else if (id === 'google-workspace') {
+      const email = cfg.email || '';
+      const password = cfg.appPassword || '';
+      if (!email || !password) throw new Error('Google Workspace not configured — set email and app password first');
+      urlStr = request.endpoint;
+      const encoded = btoa(email + ':' + password.replace(/\s/g, ''));
+      headers['Authorization'] = 'Basic ' + encoded;
     } else {
       if (!connector.baseUrl) throw new Error(`Connector "${id}" has no base URL configured`);
       urlStr = `${connector.baseUrl.replace(/\/+$/, '')}${request.endpoint}`;
