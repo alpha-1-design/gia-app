@@ -257,6 +257,41 @@ const MessageList: React.FC<MessageListProps> = ({
                         />
                       </div>
                     )}
+                    {(liveThoughts[msg.id] || msg.thoughts) && (
+                      <div className="mb-3 rounded-xl overflow-hidden transition-all duration-300" style={{
+                        border: '1px solid rgba(251,191,36,0.12)',
+                        background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
+                      }}>
+                        <button
+                          onClick={() => setShowThoughts(prev => {
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) next.delete(msg.id);
+                            else next.add(msg.id);
+                            return next;
+                          })}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
+                          style={{ color: '#f59e0b' }}
+                        >
+                          <Brain size={12} />
+                          <span className="text-[11px] font-medium flex-1">
+                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} reasoning ({(liveThoughts[msg.id] || msg.thoughts || '').split(' ').length} words)
+                          </span>
+                          {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        </button>
+                        <ReasoningChain
+                          messageId={msg.id}
+                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
+                          isLive={!!liveThoughts[msg.id]}
+                          isExpanded={showThoughts.has(msg.id)}
+                          onToggle={() => setShowThoughts(prev => {
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) next.delete(msg.id);
+                            else next.add(msg.id);
+                            return next;
+                          })}
+                        />
+                      </div>
+                    )}
                     {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
                       <>
                         <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} />
@@ -318,41 +353,6 @@ const MessageList: React.FC<MessageListProps> = ({
                             .sort((a, b) => a.createdAt - b.createdAt)}
                         />
                       </>
-                    )}
-                    {(liveThoughts[msg.id] || msg.thoughts) && (
-                      <div className="rounded-xl overflow-hidden transition-all duration-300" style={{
-                        border: '1px solid rgba(251,191,36,0.12)',
-                        background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
-                      }}>
-                        <button
-                          onClick={() => setShowThoughts(prev => {
-                            const next = new Set(prev);
-                            if (next.has(msg.id)) next.delete(msg.id);
-                            else next.add(msg.id);
-                            return next;
-                          })}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
-                          style={{ color: '#f59e0b' }}
-                        >
-                          <Brain size={12} />
-                          <span className="text-[11px] font-medium flex-1">
-                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} reasoning ({(msg.thoughts || '').split(' ').length} words)
-                          </span>
-                          {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                        </button>
-                        <ReasoningChain
-                          messageId={msg.id}
-                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                          isLive={!!liveThoughts[msg.id]}
-                          isExpanded={showThoughts.has(msg.id)}
-                          onToggle={() => setShowThoughts(prev => {
-                            const next = new Set(prev);
-                            if (next.has(msg.id)) next.delete(msg.id);
-                            else next.add(msg.id);
-                            return next;
-                          })}
-                        />
-                      </div>
                     )}
                     {msg.sources && msg.sources.length > 0 && (
                       <SourcesBlock sources={msg.sources} />

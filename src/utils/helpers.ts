@@ -160,7 +160,8 @@ interface CapacitorWindow {
 export const isNativePlatform = (): boolean => {
   if (typeof window === 'undefined') return false;
   const cap = (window as unknown as CapacitorWindow).Capacitor;
-  return typeof cap !== 'undefined' && (cap.isNativePlatform?.() ?? false);
+  if (typeof cap === 'undefined') return false;
+  return typeof cap.isNativePlatform === 'function' ? cap.isNativePlatform() : true;
 };
 
 const platformFeatures = {

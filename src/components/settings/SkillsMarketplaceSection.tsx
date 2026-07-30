@@ -4,6 +4,7 @@ import { Search, Download, Trash2, Plus, RefreshCw, Star, ExternalLink, Package,
 import SkillsMarketplace from '../../services/SkillsMarketplace';
 import type { MarketplaceSkill } from '../../services/SkillsMarketplace';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   engineering: <Code size={14} style={{ color: '#3b82f6' }} />,
@@ -43,7 +44,11 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
   const [customDesc, setCustomDesc] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [customCategory, setCustomCategory] = useState('general');
-  const { activeSkillId, setSkill, addNotification } = useGiaStore();
+  const { activeSkillId, setSkill, addNotification } = useGiaStore(useShallow(s => ({
+    activeSkillId: s.activeSkillId,
+    setSkill: s.setSkill,
+    addNotification: s.addNotification,
+  })));
 
   const fetchSkills = useCallback(async (force = false) => {
     setLoading(true);

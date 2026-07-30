@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useMemoryStore } from './store/useMemoryStore';
 import { useAutonomyStore } from './store/useAutonomyStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import ChatModule from './modules/ChatModule';
 import WriterModule from './modules/WriterModule';
@@ -85,7 +86,7 @@ async function checkProviderHealth(provider: string, apiKey: string, model: stri
 }
 
 const ModuleView: React.FC = () => {
-  const { currentModule } = useGiaStore();
+  const currentModule = useGiaStore(s => s.currentModule);
   const Fallback = () => (
     <div className="flex items-center justify-center h-full">
       <div className="flex flex-col items-center gap-2">
@@ -348,7 +349,9 @@ const App: React.FC = () => {
   useEffect(() => {
     // Load provider definitions dynamically
     useProviderStore.getState().loadProviders().catch(e => logger.error('[App] Failed to load providers:', e));
-    LocalNotifications.requestPermissions();
+    if (Capacitor.isNativePlatform()) {
+      LocalNotifications.requestPermissions().catch(() => {});
+    }
 
     // Register all tool definitions into the ToolRegistry singleton
     import('./services/tools/index').then(m => m.registerAllTools());
@@ -896,7 +899,18 @@ const App: React.FC = () => {
       )}
 
       <AnimatePresence>
-        {showSetup && <motion.div key="setup-wizard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}><SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} /></motion.div>}
+        {showSetup && (
+          <motion.div
+            key="setup-wizard"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[200] w-full h-[100dvh] bg-[var(--gia-bg)] flex flex-col overflow-y-auto"
+          >
+            <SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <AnimatePresence>

@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { isNativePlatform } from '../utils/helpers';
 import ttsService from '../services/TTSService';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
@@ -109,8 +110,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastResultRef = useRef(0);
   const srRef = useRef<BrowserSpeechRecognition | null>(null);
-  const isCapacitor = Capacitor.isNativePlatform() && !!SpeechRecognitionAPI.Capacitor;
-  const isNative = isCapacitor && Capacitor.isPluginAvailable?.('GIAWakeWord');
+  const isCapacitor = isNativePlatform() && !!SpeechRecognitionAPI.Capacitor;
+  const isNative = isCapacitor && (typeof Capacitor !== 'undefined' && typeof Capacitor?.isPluginAvailable === 'function' ? Capacitor.isPluginAvailable('GIAWakeWord') : false);
   const listeningLoopRef = useRef(false);
   const wakeWordRegexRef = useRef(new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i'));
   const nativeListenerRef = useRef<{ remove: () => void } | null>(null);

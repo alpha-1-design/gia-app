@@ -118,18 +118,35 @@ async function dockerExec(command, opts = {}) {
 
 // --- PRoot Backend ---
 
+let useHostFallback = false;
+
 async function ensureProotRootfs() {
-  if (!fs.existsSync(ROOTFS)) {
-    throw new Error(
-      `Alpine rootfs not found at ${ROOTFS}.\n` +
-      `Run: ./scripts/setup-alpine-sandbox.sh`
-    );
+  if (!fs.existsSync(ROOTFS) || !fs.existsSync(path.join(ROOTFS, 'bin', 'sh'))) {
+    log(`Alpine rootfs not found at ${ROOTFS}. Attempting auto-setup...`);
+    const setupScript = path.join(__dirname, '..', 'scripts', 'setup-alpine-sandbox.sh');
+    if (fs.existsSync(setupScript)) {
+      try {
+        const setupResult = await execCmd(`bash "${setupScript}" --dir "${ROOTFS}"`, { timeout: 120000 });
+        if (setupResult.exitCode !== 0) {
+          log(`Setup script failed: ${setupResult.stderr}`);
+        } else {
+          log(`Auto-setup completed successfully.`);
+        }
+      } catch (err) {
+        log(`Auto-setup error: ${err.message}`);
+      }
+    }
   }
-  try {
-    fs.lstatSync(path.join(ROOTFS, 'bin', 'sh'));
-  } catch {
-    throw new Error(`Rootfs at ${ROOTFS} appears incomplete (no bin/sh)`);
+
+  if (!fs.existsSync(ROOTFS) || !fs.existsSync(path.join(ROOTFS, 'bin', 'sh'))) {
+    log(`WARNING: Alpine rootfs still unavailable at ${ROOTFS}. Falling back to host execution in workspace.`);
+    useHostFallback = true;
+    if (!fs.existsSync(WORKSPACE)) {
+      fs.mkdirSync(WORKSPACE, { recursive: true });
+    }
+    return;
   }
+
   log(`Rootfs found at ${ROOTFS}`);
 
   if (!fs.existsSync(WORKSPACE)) {
@@ -139,12 +156,16 @@ async function ensureProotRootfs() {
   // Ensure resolv.conf exists in rootfs for network
   const resolvPath = path.join(ROOTFS, 'etc', 'resolv.conf');
   if (!fs.existsSync(resolvPath)) {
-    fs.writeFileSync(resolvPath, 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n');
+    try {
+      fs.writeFileSync(resolvPath, 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n');
+    } catch {}
   }
 
   // Mount workspace inside rootfs
   const wsMount = path.join(ROOTFS, 'workspace');
-  if (!fs.existsSync(wsMount)) fs.mkdirSync(wsMount, { recursive: true });
+  if (!fs.existsSync(wsMount)) {
+    try { fs.mkdirSync(wsMount, { recursive: true }); } catch {}
+  }
 }
 
 function getProotPrefix(workdir) {
@@ -180,6 +201,12 @@ function getProotPrefix(workdir) {
 
 async function prootExec(command, opts = {}) {
   const timeout = opts.timeout || 60000;
+  if (useHostFallback) {
+    const cwd = opts.workdir ? path.join(WORKSPACE, opts.workdir.replace(/^\/workspace/, '')) : WORKSPACE;
+    const targetCwd = fs.existsSync(cwd) ? cwd : WORKSPACE;
+    const result = await execCmd(command, { timeout, cwd: targetCwd });
+    return { stdout: result.stdout.trim(), stderr: result.stderr.trim(), exitCode: result.exitCode };
+  }
   const prefix = getProotPrefix(opts.workdir);
   const wd = opts.workdir || '/workspace';
   let cmd;

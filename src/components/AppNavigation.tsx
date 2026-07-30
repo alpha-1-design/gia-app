@@ -39,12 +39,12 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
   }, [moduleOpen]);
 
   return (
-    <header className="flex items-center justify-between px-4 py-2 shrink-0 relative z-50 h-14 overflow-hidden">
+    <header className="flex items-center justify-between px-4 py-2 shrink-0 relative z-[100] h-14 overflow-visible">
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
           <h1 className="text-lg font-bold tracking-tight leading-none" style={{ color: 'var(--gia-text)' }}>GIA</h1>
         </div>
-        <div ref={moduleRef} className="relative">
+        <div ref={moduleRef} className="relative z-[105]">
           {(() => {
             const cur = MODULES.find(m => m.id === currentModule) ?? MODULES[0];
             return (
@@ -55,7 +55,7 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
                   <ChevronDown size={12} className={`transition-transform ${moduleOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {moduleOpen && (
-                  <motion.div initial={{ opacity: 0, y: -4, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.96 }} transition={{ duration: 0.12 }} className="absolute top-full left-0 mt-1 min-w-[160px] rounded-xl overflow-hidden shadow-2xl border z-50" style={{ background: 'rgba(20, 20, 28, 0.98)', borderColor: 'var(--gia-border)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}>
+                  <motion.div initial={{ opacity: 0, y: -4, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.96 }} transition={{ duration: 0.12 }} className="absolute top-full left-0 mt-1 min-w-[160px] rounded-xl overflow-hidden shadow-2xl border z-[110]" style={{ background: 'rgba(20, 20, 28, 0.98)', borderColor: 'var(--gia-border)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}>
                     {MODULES.map((mod) => {
                       const active = currentModule === mod.id;
                       return (

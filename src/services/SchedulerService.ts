@@ -3,7 +3,7 @@ import GiaBrain from './GiaBrain';
 import { useGiaStore, ScheduledTask } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { getIntervalMs, formatNextRun, notifId } from '../utils/helpers';
+import { getIntervalMs, formatNextRun, notifId, isNativePlatform } from '../utils/helpers';
 import socialManager from './social/SocialManager';
 import messagingBridge from './MessagingBridge';
 
@@ -55,15 +55,19 @@ class SchedulerService {
         const nextRun = Date.now() + getIntervalMs(task.interval);
         updateTaskStatus(task.id, 'pending', res.text, nextRun);
 
-        await LocalNotifications.schedule({
-          notifications: [{
-            title: `⏰ ${task.title}`,
-            body: `Next run ${formatNextRun(nextRun)}`,
-            id: notifId(),
-            schedule: { at: new Date(nextRun) },
-            sound: 'default',
-          }],
-        });
+        if (isNativePlatform()) {
+          try {
+            await LocalNotifications.schedule({
+              notifications: [{
+                title: `⏰ ${task.title}`,
+                body: `Next run ${formatNextRun(nextRun)}`,
+                id: notifId(),
+                schedule: { at: new Date(nextRun) },
+                sound: 'default',
+              }],
+            });
+          } catch { /* ignore notification errors on web/unsupported */ }
+        }
       } else {
         updateTaskStatus(task.id, 'done', res.text);
       }
@@ -79,17 +83,19 @@ class SchedulerService {
         }).catch(e => logger.warn('[SchedulerService] Messaging delivery failed:', e));
       }
 
-      try {
-        await LocalNotifications.schedule({
-          notifications: [{
-            title: '✅ GIA Task Complete',
-            body: res.text.slice(0, 120),
-            id: notifId(),
-            schedule: { at: new Date(Date.now() + 2000) },
-            sound: 'default',
-          }],
-        });
-      } catch (e) { logger.error('[SchedulerService] Failed to show notification for task:', e); }
+      if (isNativePlatform()) {
+        try {
+          await LocalNotifications.schedule({
+            notifications: [{
+              title: '✅ GIA Task Complete',
+              body: res.text.slice(0, 120),
+              id: notifId(),
+              schedule: { at: new Date(Date.now() + 2000) },
+              sound: 'default',
+            }],
+          });
+        } catch { /* ignore notification errors on web/unsupported */ }
+      }
     } catch {
       updateTaskStatus(task.id, 'error', 'Task failed.');
     }

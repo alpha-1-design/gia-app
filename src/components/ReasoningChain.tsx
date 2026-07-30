@@ -8,6 +8,7 @@ import GiaIcon from './GiaIcon';
 import { TOOL_LABELS } from '../utils/toolLabels';
 import type { ProtocolProposal } from '../types/protocol';
 import { useGiaStore } from '../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 
 interface ReasoningStep {
   id: string;
@@ -169,7 +170,7 @@ function parseThoughtsToSteps(thoughts: string, currentTool?: string | null): Re
         id: `step-${stepIdx}`,
         type: isReasoning ? 'reasoning' : 'substep',
         label: isReasoning ? 'Reasoning' : 'Step',
-        description: line.slice(0, 200),
+        description: line.trim().slice(0, 500),
         color: isReasoning ? '#a855f7' : '#f59e0b',
         status: 'done',
         startedAt: now - (stepIdx * 200),
@@ -323,8 +324,8 @@ function ReasoningStepItem({ step, index, total }: { step: ReasoningStep; index:
 
       {/* Step content */}
       <div className="flex-1 min-w-0 pb-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-medium" style={{
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-semibold shrink-0" style={{
             color: step.status === 'running' ? step.color :
               step.status === 'error' ? '#ef4444' : 'var(--gia-text)'
           }}>
@@ -332,7 +333,7 @@ function ReasoningStepItem({ step, index, total }: { step: ReasoningStep; index:
           </span>
 
           {step.toolId && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{
+            <span className="text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{
               background: `${step.color}15`,
               color: step.color,
             }}>
@@ -341,7 +342,7 @@ function ReasoningStepItem({ step, index, total }: { step: ReasoningStep; index:
           )}
 
           {step.detail && step.status !== 'running' && (
-            <span className="text-[9px] truncate max-w-[180px] font-mono" style={{ color: 'var(--gia-muted-2)' }}>
+            <span className="text-[9px] truncate max-w-[180px] font-mono shrink-0" style={{ color: 'var(--gia-muted-2)' }}>
               {step.detail}
             </span>
           )}
@@ -350,6 +351,13 @@ function ReasoningStepItem({ step, index, total }: { step: ReasoningStep; index:
             <ElapsedTimer startedAt={step.startedAt} endedAt={step.endedAt} />
           </span>
         </div>
+
+        {/* Step description text */}
+        {step.description && (
+          <div className="text-[11px] mt-0.5 leading-snug font-normal break-words" style={{ color: 'var(--gia-text)', opacity: 0.88 }}>
+            {step.description}
+          </div>
+        )}
 
         {/* Sub-steps */}
         {step.subSteps && step.subSteps.length > 0 && step.status === 'running' && (
@@ -421,7 +429,11 @@ export const ReasoningChain: React.FC<ReasoningChainProps> = ({
   onToggle,
 }) => {
   const [expanded, setExpanded] = useState(isExpanded);
-  const { thinkingPhase, extThinking } = useGiaStore();
+  const [viewMode, setViewMode] = useState<'structured' | 'raw'>('structured');
+  const { thinkingPhase, extThinking } = useGiaStore(useShallow(s => ({
+    thinkingPhase: s.thinkingPhase,
+    extThinking: s.extThinking,
+  })));
 
   useEffect(() => {
     setExpanded(isExpanded);
@@ -539,8 +551,39 @@ export const ReasoningChain: React.FC<ReasoningChainProps> = ({
             transition={{ type: 'spring', stiffness: 260, damping: 30 }}
             style={{ overflow: 'hidden' }}
           >
+            {/* View switcher header */}
+            <div className="flex items-center justify-between px-3 pt-1 pb-1 border-b" style={{ borderColor: 'rgba(168,85,247,0.08)' }}>
+              <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>
+                View Mode
+              </span>
+              <div className="flex items-center gap-1 bg-black/20 p-0.5 rounded-lg border" style={{ borderColor: 'var(--gia-border)' }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setViewMode('structured'); }}
+                  className={`px-2 py-0.5 rounded text-[9px] font-medium transition-all ${
+                    viewMode === 'structured' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Steps ({steps.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setViewMode('raw'); }}
+                  className={`px-2 py-0.5 rounded text-[9px] font-medium transition-all ${
+                    viewMode === 'raw' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Raw Log
+                </button>
+              </div>
+            </div>
+
             <div className="max-h-72 overflow-y-auto scroll-smooth" style={{ padding: '8px 12px 12px' }}>
-              {steps.length === 0 ? (
+              {viewMode === 'raw' ? (
+                <div className="text-[11px] font-mono leading-relaxed whitespace-pre-wrap rounded-lg p-2.5 border" style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'var(--gia-border)', color: 'var(--gia-text)' }}>
+                  {thoughts || (isLive ? 'Gathering internal thoughts...' : 'No raw logs available.')}
+                </div>
+              ) : steps.length === 0 ? (
                 <div className="flex items-center gap-2 py-2">
                   <motion.div
                     className="flex gap-1"

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMemoryStore, MemoryCategory, MemoryEntry } from '../store/useMemoryStore';
 import { useGiaStore } from '../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Search, Pin, PinOff, Plus, X, Download, Upload, Brain, BookOpen, Star, Target, AlertTriangle, Heart, Briefcase, FileText, RotateCcw, Trash2, Database, File as FileIcon, Loader2 } from 'lucide-react';
 import RAGService from '../services/RAGService';
 
@@ -42,8 +43,17 @@ const KnowledgeCard: React.FC<{ entry: MemoryEntry; pinned: boolean; onTogglePin
 };
 
 export const KnowledgePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { memories, addMemory, deleteMemory } = useMemoryStore();
-  const { customInstructions, setCustomInstructions, pinnedMemories, togglePinnedMemory } = useGiaStore();
+  const { memories, addMemory, deleteMemory } = useMemoryStore(useShallow(s => ({
+    memories: s.memories,
+    addMemory: s.addMemory,
+    deleteMemory: s.deleteMemory,
+  })));
+  const { customInstructions, setCustomInstructions, pinnedMemories, togglePinnedMemory } = useGiaStore(useShallow(s => ({
+    customInstructions: s.customInstructions,
+    setCustomInstructions: s.setCustomInstructions,
+    pinnedMemories: s.pinnedMemories,
+    togglePinnedMemory: s.togglePinnedMemory,
+  })));
   const [tab, setTab] = useState<'knowledge' | 'instructions' | 'documents'>('knowledge');
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<MemoryCategory | 'pinned' | 'all'>('all');

@@ -140,6 +140,11 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
                     streamTokenUsage = json.usage;
                   }
 
+                  const reasoningDelta = delta?.reasoning_content || delta?.reasoning || delta?.thought;
+                  if (reasoningDelta) {
+                    try { req.onThought?.(reasoningDelta); } catch { /* ignore */ }
+                  }
+
                   const textDelta = delta?.content || '';
                 if (textDelta) {
                   fullText += textDelta;

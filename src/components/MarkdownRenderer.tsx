@@ -236,12 +236,15 @@ const wrapBareVisualBlocks = (text: string): string => {
 
 const tryParseVisualBlock = (text: string): React.ReactNode | null => {
   const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
   try {
     const parsed = JSON.parse(trimmed);
     if (parsed && typeof parsed === 'object' && parsed.type && parsed.data) {
       return <VisualRenderer code={trimmed} />;
     }
-  } catch (e) { logger.error('[MarkdownRenderer] Failed to parse visual block JSON:', e); }
+  } catch {
+    /* Not valid visual JSON block, ignore */
+  }
   return null;
 };
 

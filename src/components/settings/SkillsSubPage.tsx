@@ -1,10 +1,16 @@
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 import { SubPageHeader } from './SubPageHeader';
 
 export const SkillsSubPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { skills, addSkill, removeSkill, addNotification } = useGiaStore();
+  const { skills, addSkill, removeSkill, addNotification } = useGiaStore(useShallow(s => ({
+    skills: s.skills,
+    addSkill: s.addSkill,
+    removeSkill: s.removeSkill,
+    addNotification: s.addNotification,
+  })));
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>

@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Key, X } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { logger } from '../utils/logger';
 
 const ApiKeyInputPanel: React.FC = () => {
-  const { pendingApiKeyRequest, setPendingApiKeyRequest } = useGiaStore(s => ({
-    pendingApiKeyRequest: s.pendingApiKeyRequest,
-    setPendingApiKeyRequest: s.setPendingApiKeyRequest,
-  }));
+  const { pendingApiKeyRequest, setPendingApiKeyRequest } = useGiaStore(
+    useShallow(s => ({
+      pendingApiKeyRequest: s.pendingApiKeyRequest,
+      setPendingApiKeyRequest: s.setPendingApiKeyRequest,
+    }))
+  );
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

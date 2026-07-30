@@ -35,7 +35,7 @@ const BOOT: Line[] = [
 ];
 
 const EngineRoom: React.FC = () => {
-  const { setShowTerminal } = useGiaStore();
+  const setShowTerminal = useGiaStore(s => s.setShowTerminal);
   const { providers, activeProvider, setProviderKey, setProviderModel, setActiveProvider, setProviderBaseUrl, disconnectProvider, fetchModels } = useProviderStore(useShallow(s => ({
     providers: s.providers, activeProvider: s.activeProvider,
     setProviderKey: s.setProviderKey, setProviderModel: s.setProviderModel,

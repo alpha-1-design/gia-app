@@ -106,7 +106,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
   const wizard = useWizardStore();
   const { setProviderKey, setProviderModel, setActiveProvider, fetchModels } = useProviderStore();
   const { addCustomProvider } = useCustomProviderStore();
-  const { setShowTerminal } = useGiaStore();
+  const setShowTerminal = useGiaStore(s => s.setShowTerminal);
   const [testing, setTesting] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [keyError, setKeyError] = useState('');
@@ -216,31 +216,33 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
   // ── Welcome Step ──────────────────────────────────────────────────
   if (wizard.step === 'welcome') {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center px-8">
-        <div className="mb-6">
-          <Activity size={48} className="text-indigo-400" />
+      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col items-center justify-center text-center px-8 py-8">
+        <div className="mb-6 w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+          <Activity size={36} className="text-indigo-400" />
         </div>
         <h1 className="text-2xl font-bold text-zinc-100 mb-2">Welcome to GIA</h1>
         <p className="text-zinc-400 text-sm max-w-md mb-8">
-          Your intelligent Android assistant. Let's get you connected to an AI provider so
-          you can start chatting, coding, researching, and more.
+          Your intelligent AI assistant. Connect an AI provider below to begin chatting, coding, researching, and automating tasks.
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button
             onClick={() => wizard.setStep('select-provider')}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
+            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-indigo-600/20"
           >
-            Connect Cloud AI <ArrowRight size={16} />
+            Connect AI Provider <ArrowRight size={16} />
           </button>
           <button
-            onClick={() => { handleClose(); }}
-            className="flex items-center justify-center gap-2 px-6 py-3 border border-violet-500/30 text-violet-300 hover:bg-violet-500/10 rounded-lg font-medium transition-colors"
+            onClick={() => {
+              setActiveProvider('local-llm');
+              handleClose();
+            }}
+            className="flex items-center justify-center gap-2 px-6 py-3.5 border border-violet-500/30 text-violet-300 hover:bg-violet-500/10 rounded-xl font-medium transition-colors"
           >
             <Cpu size={16} /> Start Offline (Local AI)
           </button>
           <button
             onClick={handleClose}
-            className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors py-2"
           >
             Skip for now
           </button>
@@ -302,7 +304,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     };
 
     return (
-      <div className="flex flex-col h-full px-6 py-4">
+      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col px-6 py-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => wizard.setStep('welcome')} className="text-zinc-400 hover:text-zinc-200">
             <ArrowLeft size={18} />
@@ -423,7 +425,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     };
 
     return (
-      <div className="flex flex-col h-full px-6 py-4">
+      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col px-6 py-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => wizard.setStep('select-provider')} className="text-zinc-400 hover:text-zinc-200">
             <ArrowLeft size={18} />
@@ -488,7 +490,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
 
   if (wizard.step === 'test-connection') {
     return (
-      <div className="flex flex-col h-full px-6 py-4">
+      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col px-6 py-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => wizard.setStep('enter-key')} className="text-zinc-400 hover:text-zinc-200">
             <ArrowLeft size={18} />
@@ -600,7 +602,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     };
 
     return (
-      <div className="flex flex-col h-full px-6 py-4">
+      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col px-6 py-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => wizard.setStep('test-connection')} className="text-zinc-400 hover:text-zinc-200">
             <ArrowLeft size={18} />
@@ -668,7 +670,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
       { label: wizard.provider, id: wizard.provider };
 
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center px-8">
+      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col items-center justify-center text-center px-8 py-8">
         <div className="mb-6">
           <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center">
             <CheckCircle2 size={40} className="text-emerald-400" />

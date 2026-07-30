@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GitBranch, Plus, Trash2, Check, X } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { ChatSession } from '../../store/useGiaStore';
 
 interface BranchViewProps {
@@ -10,7 +11,13 @@ interface BranchViewProps {
 }
 
 export const BranchView: React.FC<BranchViewProps> = ({ session, onClose, messages }) => {
-  const { switchBranch, addBranch, renameBranch, deleteBranch, addNotification } = useGiaStore();
+  const { switchBranch, addBranch, renameBranch, deleteBranch, addNotification } = useGiaStore(useShallow(s => ({
+    switchBranch: s.switchBranch,
+    addBranch: s.addBranch,
+    renameBranch: s.renameBranch,
+    deleteBranch: s.deleteBranch,
+    addNotification: s.addNotification,
+  })));
   const [editingBranch, setEditingBranch] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);

@@ -1,10 +1,18 @@
 import React from 'react';
 import { Battery, BatteryCharging, Cpu, Moon, Vibrate } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Switch } from '../ui/Switch';
 
 export const PowerSection: React.FC = () => {
-  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback } = useGiaStore();
+  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback } = useGiaStore(useShallow(s => ({
+    longRunningMode: s.longRunningMode,
+    setLongRunningMode: s.setLongRunningMode,
+    autoModelUnload: s.autoModelUnload,
+    setAutoModelUnload: s.setAutoModelUnload,
+    hapticFeedback: s.hapticFeedback,
+    setHapticFeedback: s.setHapticFeedback,
+  })));
 
   return (
     <div className="gia-card p-4">
