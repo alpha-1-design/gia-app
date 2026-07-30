@@ -34,7 +34,18 @@ jobs:
 
       - run: npx cap sync android
 
-      - run: chmod +x android/gradlew
+      - name: Ensure gradle wrapper jar exists
+        run: |
+          chmod +x android/gradlew
+          JAR="android/gradle/wrapper/gradle-wrapper.jar"
+          if [ ! -f "$JAR" ]; then
+            echo "gradle-wrapper.jar missing — downloading"
+            GRADLE_VERSION=$(grep 'distributionUrl' android/gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-//;s/-.*//')
+            curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle-bin.zip
+            unzip -o -q /tmp/gradle-bin.zip -d /tmp/gradle
+            cp "/tmp/gradle/gradle-${GRADLE_VERSION}/lib/gradle-wrapper-${GRADLE_VERSION}.jar" "$JAR"
+            rm -rf /tmp/gradle /tmp/gradle-bin.zip
+          fi
 
       - name: Generate release keystore
         run: |
