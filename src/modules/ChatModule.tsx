@@ -34,7 +34,6 @@ import { useProviderStore } from '../store/useProviderStore';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { LiveFileEditor } from '../components/LiveFileEditor';
-import { ThinkingStatus } from '../components/ThinkingStatus';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -476,12 +475,6 @@ const ChatModule: React.FC = () => {
         )}
       </AnimatePresence>
 
-        {loading && (
-          <div className="mb-1 px-1">
-            <ThinkingStatus phase={thinkingPhase} toolName={currentTool} />
-          </div>
-        )}
-
         <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
         {showAgentMention && (
           <AgentMentionPicker
@@ -596,12 +589,6 @@ const ChatModule: React.FC = () => {
             onToggle={(key) => toggleFeature(key as 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate')}
           />
         </div>
-
-        {loading && (
-          <div className="mb-1 px-1">
-            <ThinkingStatus phase={thinkingPhase} toolName={currentTool} />
-          </div>
-        )}
 
         <AmbientInput value={input} onChange={handleInputChange} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={buildMode ? 'Describe what to build…' : webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} prefix={buildMode ? <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium shrink-0 mr-1"><Hammer size={10} />Build</span> : undefined} />
       </div>

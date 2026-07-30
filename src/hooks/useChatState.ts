@@ -302,8 +302,19 @@ export function useChatState() {
 
     if (action.type === 'deep-link') {
       const url = (action.data?.url as string) || '';
-      setInput(`Handle this link: ${url}`);
-      useGiaStore.getState().addNotification(`🔗 Deep link ready to process: ${url.slice(0, 50)}`);
+      // Handle MCP OAuth callback
+      if (url.startsWith('gia://mcp-oauth-callback')) {
+        import('../services/MCPManager').then(({ default: MCPManager }) => {
+          MCPManager.handleOAuthCallback(url).catch((e) => {
+            console.error('[Chat] MCP OAuth callback failed:', e);
+            useGiaStore.getState().addNotification('❌ MCP OAuth failed');
+          });
+        });
+        useGiaStore.getState().setPendingAction(null);
+      } else {
+        setInput(`Handle this link: ${url}`);
+        useGiaStore.getState().addNotification(`🔗 Deep link ready to process: ${url.slice(0, 50)}`);
+      }
     } else if (action.type === 'file-open') {
       const file = action.data as { name?: string; type?: string; content?: string } | undefined;
       if (file?.name) {

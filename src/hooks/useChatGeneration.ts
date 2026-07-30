@@ -381,9 +381,10 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
                   TTSService.speak(lastChunk, true);
                 }
               },
-              onThought: (thought) => {
-                parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
-                setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+onThought: (thought) => {
+                 parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
+                 setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                 useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
                 streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
                 useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
               },
@@ -425,6 +426,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
             onThought: (thought) => {
               parserState.thoughtsAccumulated += (parserState.thoughtsAccumulated ? '\n' : '') + thought;
               setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+              useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
               streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
               useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
             },
@@ -533,6 +535,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       unregisterGenerationController(genKey);
       allGenKeysRef.current.delete(genKey);
       setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
+      useGiaStore.getState().setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
@@ -631,6 +634,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           contParserState.thoughtsAccumulated += (contParserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
+          useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
           streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         },
       });
@@ -757,6 +761,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         onThought: (thought) => {
           clarParserState.thoughtsAccumulated += (clarParserState.thoughtsAccumulated ? '\n' : '') + thought;
           setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
+          useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           useGiaStore.setState({ showConsole: true });

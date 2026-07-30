@@ -1,12 +1,15 @@
 import { logger } from '../utils/logger';
 import { MCPClient, type MCPToolDefinition } from './MCPClient';
-import { useMCPStore } from '../store/useMCPStore';
+import { useMCPStore, type MCPServerConfig } from '../store/useMCPStore';
 import GiaTools from './GiaTools';
+import { Browser } from '@capacitor/browser';
 
 class MCPManager {
   private clients: Map<string, MCPClient> = new Map();
   private toolToServer: Map<string, string> = new Map();
   private initialized = false;
+  private pendingAuth: Map<string, { resolve: (v: boolean) => void; reject: (e: Error) => void }> = new Map();
+  private codeVerifiers: Map<string, { serverId: string; verifier: string }> = new Map();
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -52,6 +55,22 @@ class MCPManager {
 
     store.setConnectionState(serverId, { status: 'connecting', toolCount: 0 });
 
+    // Check if OAuth is configured and we need to authenticate
+    if (config.oauthUrl && config.oauthClientId && !config.accessToken) {
+      store.setConnectionState(serverId, { status: 'connecting', toolCount: 0, error: 'Authentication required' });
+      const authenticated = await this._startOAuthFlow(config);
+      if (!authenticated) {
+        store.setConnectionState(serverId, { status: 'disconnected', toolCount: 0, error: 'Authentication cancelled' });
+        return;
+      }
+      // Refresh config with new tokens
+      const updatedConfig = store.getServer(serverId);
+      if (!updatedConfig?.accessToken) {
+        store.setConnectionState(serverId, { status: 'disconnected', toolCount: 0, error: 'Authentication failed' });
+        return;
+      }
+    }
+
     const client = new MCPClient(config, {
       onToolsChanged: (tools) => this._onToolsChanged(serverId, tools),
     });
@@ -71,6 +90,151 @@ class MCPManager {
         toolCount: 0,
       });
       throw err;
+    }
+  }
+
+  private async _startOAuthFlow(config: MCPServerConfig): Promise<boolean> {
+    if (!config.oauthUrl) {
+      logger.error('[MCPManager] oauthUrl is required for OAuth flow');
+      return false;
+    }
+    if (!config.oauthClientId) {
+      logger.error('[MCPManager] oauthClientId is required for OAuth flow');
+      return false;
+    }
+    const state = crypto.randomUUID();
+    const codeVerifier = this._generateCodeVerifier();
+    const codeChallenge = await this._generateCodeChallenge(codeVerifier);
+
+    const authUrl = new URL(config.oauthUrl);
+    authUrl.searchParams.set('client_id', config.oauthClientId);
+    authUrl.searchParams.set('redirect_uri', config.oauthRedirectUri || 'gia://mcp-oauth-callback');
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', config.oauthScopes || 'openid profile email');
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+
+    return new Promise((resolve, reject) => {
+      this.pendingAuth.set(state, { resolve, reject });
+
+      // Store code verifier for later token exchange
+      this.codeVerifiers.set(state, { serverId: config.id, verifier: codeVerifier });
+
+      // Open browser for OAuth
+      (async () => {
+        try {
+          await Browser.open({ url: authUrl.toString() });
+        } catch (e) {
+          logger.error('[MCPManager] Failed to open browser for OAuth:', e);
+          this.pendingAuth.delete(state);
+          reject(e as Error);
+        }
+      })();
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        if (this.pendingAuth.has(state)) {
+          this.pendingAuth.delete(state);
+          reject(new Error('OAuth timeout'));
+        }
+      }, 5 * 60 * 1000);
+    });
+  }
+
+  private _generateCodeVerifier(): string {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode(...array))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  private async _generateCodeChallenge(verifier: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  async handleOAuthCallback(url: string): Promise<void> {
+    const urlObj = new URL(url);
+    const code = urlObj.searchParams.get('code');
+    const state = urlObj.searchParams.get('state');
+    const error = urlObj.searchParams.get('error');
+
+    const pending = this.pendingAuth.get(state || '');
+    if (!pending) {
+      logger.warn('[MCPManager] No pending auth for state:', state);
+      return;
+    }
+
+    this.pendingAuth.delete(state || '');
+
+    if (error) {
+      pending.reject(new Error(`OAuth error: ${error}`));
+      return;
+    }
+
+    if (!code) {
+      pending.reject(new Error('No authorization code received'));
+      return;
+    }
+
+    // Find the server that matches this state
+    const store = useMCPStore.getState();
+    const servers = store.servers;
+    const pendingEntry = this.codeVerifiers.get(state || '');
+    if (!pendingEntry) {
+      pending.reject(new Error('No pending OAuth entry found'));
+      return;
+    }
+    const server = servers.find(s => s.id === pendingEntry.serverId);
+    if (!server) {
+      pending.reject(new Error('No server found for OAuth callback'));
+      return;
+    }
+    const codeVerifier = pendingEntry.verifier;
+    this.codeVerifiers.delete(state || '');
+
+    try {
+      if (!server.oauthUrl) {
+        pending.reject(new Error('Server has no oauthUrl configured'));
+        return;
+      }
+      const tokenUrl = new URL(server.oauthUrl);
+      tokenUrl.searchParams.set('grant_type', 'authorization_code');
+      tokenUrl.searchParams.set('code', code);
+      tokenUrl.searchParams.set('redirect_uri', server.oauthRedirectUri || 'gia://mcp-oauth-callback');
+      tokenUrl.searchParams.set('client_id', server.oauthClientId || '');
+      tokenUrl.searchParams.set('code_verifier', codeVerifier);
+
+      const response = await fetch(tokenUrl.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Token exchange failed: ${response.statusText}`);
+      }
+
+      const tokens = await response.json();
+      store.setTokens(server.id, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+      });
+
+      pending.resolve(true);
+      // Retry connection
+      this.connect(server.id).catch(e => logger.error('[MCPManager] Reconnect after OAuth failed:', e));
+    } catch (e) {
+      logger.error('[MCPManager] OAuth token exchange failed:', e);
+      pending.reject(e as Error);
     }
   }
 
@@ -107,6 +271,22 @@ class MCPManager {
 
   getToolNames(): string[] {
     return Array.from(this.toolToServer.keys());
+  }
+
+  getConnectedTools(): { id: string; name: string; description: string; serverId: string; inputSchema: Record<string, unknown> }[] {
+    const tools: { id: string; name: string; description: string; serverId: string; inputSchema: Record<string, unknown> }[] = [];
+    for (const [serverId, client] of this.clients) {
+      for (const tool of client.tools) {
+        tools.push({
+          id: `mcp__${serverId}__${tool.name}`,
+          name: tool.name,
+          description: tool.description || '',
+          serverId,
+          inputSchema: tool.inputSchema || {},
+        });
+      }
+    }
+    return tools;
   }
 
   isConnected(serverId: string): boolean {

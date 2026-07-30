@@ -288,7 +288,11 @@ interface GiaState {
   smartFallback: boolean;
   multiProvider: boolean;
   hapticFeedback: boolean;
+  fullScreenMode: boolean;
+  toggleFullScreenMode: () => void;
   thinkingPhase: ThinkingPhase;
+  liveThoughts: Record<string, string>;
+  showThoughts: string[];
   clarification: Clarification | null;
   wakeWord: string;
   keepListening: boolean;
@@ -317,7 +321,9 @@ interface GiaState {
   pendingFiles: { name: string; type: string; content: string; preview?: string }[];
   setPendingFiles: (v: { name: string; type: string; content: string; preview?: string }[]) => void;
   pendingAction: { type: string; data: Record<string, unknown> } | null;
+  pendingApiKeyRequest: { providerId: string; description: string } | null;
   setPendingAction: (v: { type: string; data: Record<string, unknown> } | null) => void;
+  setPendingApiKeyRequest: (v: { providerId: string; description: string } | null) => void;
   deepLinkQueue: string[];
   setDeepLinkQueue: (v: string[]) => void;
   liveFileEdit: LiveFileEdit | null;
@@ -352,6 +358,8 @@ interface GiaState {
   setMultiProvider: (enabled: boolean) => void;
   setHapticFeedback: (enabled: boolean) => void;
   setThinkingPhase: (phase: ThinkingPhase) => void;
+  setLiveThoughts: (thoughts: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
+  setShowThoughts: (thoughts: string[]) => void;
   setWakeWord: (word: string) => void;
   setKeepListening: (on: boolean) => void;
   setAutoStartWakeWord: (on: boolean) => void;
@@ -513,6 +521,8 @@ export const useGiaStore = create<GiaState>()(
       multiProvider: false,
       hapticFeedback: true,
       thinkingPhase: 'idle',
+      liveThoughts: {},
+      showThoughts: [],
       clarification: null,
       wakeWord: (() => { try { return localStorage.getItem('gia-wake-word') || 'hey gia'; } catch { return 'hey gia'; } })(),
       keepListening: (() => { try { return localStorage.getItem('gia-keep-listening') === 'true'; } catch { return false; } })(),
@@ -536,6 +546,7 @@ export const useGiaStore = create<GiaState>()(
       pendingInputAutoSend: true,
       pendingFiles: [],
       pendingAction: null,
+      pendingApiKeyRequest: null,
       deepLinkQueue: [],
       liveFileEdit: null,
       buildMode: false,
@@ -544,6 +555,7 @@ export const useGiaStore = create<GiaState>()(
       sandboxEnvReady: null,
       longRunningMode: false,
       autoModelUnload: true,
+      fullScreenMode: false,
 
       setBuildMode: (v) => set((s) => ({ buildMode: v, buildSessionId: v ? s.activeSessionId : s.buildSessionId })),
       setBuildPreview: (url) => set({ buildPreviewUrl: url }),
@@ -637,6 +649,10 @@ export const useGiaStore = create<GiaState>()(
       setMultiProvider: (enabled) => set({ multiProvider: enabled }),
       setHapticFeedback: (enabled) => set({ hapticFeedback: enabled }),
       setThinkingPhase: (phase) => set({ thinkingPhase: phase }),
+      setLiveThoughts: (thoughts) => set((state) => ({
+        liveThoughts: typeof thoughts === 'function' ? thoughts(state.liveThoughts) : thoughts
+      })),
+      setShowThoughts: (thoughts: string[]) => set({ showThoughts: thoughts }),
       setWakeWord: (word) => {
         localStorage.setItem('gia-wake-word', word);
         set({ wakeWord: word });
@@ -674,6 +690,7 @@ export const useGiaStore = create<GiaState>()(
       setPendingInput: (v, opts) => set({ pendingInput: v, pendingInputAutoSend: opts?.autoSend ?? true }),
       setPendingFiles: (v) => set({ pendingFiles: v }),
       setPendingAction: (v) => set({ pendingAction: v }),
+      setPendingApiKeyRequest: (v) => set({ pendingApiKeyRequest: v }),
       setDeepLinkQueue: (v) => set({ deepLinkQueue: v }),
       setLiveFileEdit: (edit) => set({ liveFileEdit: edit }),
       setLongRunningMode: (v) => { localStorage.setItem('gia-long-running', String(v)); set({ longRunningMode: v }); },
@@ -953,6 +970,7 @@ export const useGiaStore = create<GiaState>()(
       setTheme: (theme) => set({ theme }),
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setProviderConnected: (connected) => set({ providerConnected: connected }),
+      toggleFullScreenMode: () => set((s) => ({ fullScreenMode: !s.fullScreenMode })),
     }),
     {
       name: 'gia-store-v3',

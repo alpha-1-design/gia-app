@@ -5,14 +5,15 @@ import {
   Terminal, User, Save, ChevronRight,
   Zap, Smartphone, Sun, Moon, Sparkles,
   UserCircle, PlugZap, Battery, Cpu,   Puzzle, Info,
-  Network, Bot, Activity, Download, CheckCircle, XCircle, Shield,
+  Network, Bot, Activity, Download, CheckCircle, XCircle, Shield, Globe, Brain,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { isNativePlatform } from '../utils/helpers';
 import { updateService, formatSize } from '../services/UpdateService';
 import type { UpdateInfo, DownloadProgress } from '../services/UpdateService';
-import MCPSettings from '../components/MCPSettings';
+import { MCPPage } from '../components/settings/MCPPage';
+import { KnowledgePage } from '../components/settings/KnowledgePage';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { ProfileIdentityPage } from '../components/settings/ProfileIdentityPage';
 import { ConnectionsPage } from '../components/settings/ConnectionsPage';
@@ -29,11 +30,13 @@ import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
 
-type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox';
+type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge';
 
 const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
   { id: 'profile-identity', icon: <UserCircle size={20} />, label: 'Profile & Identity', desc: 'Your profile, GIA identity, skills, memory & brain export', sections: '5 sections', color: '#a855f7' },
   { id: 'connections', icon: <PlugZap size={20} />, label: 'Connections', desc: 'API connectors, social media, gateway, browser & search', sections: '5 sections', color: '#f59e0b' },
+  { id: 'mcp', icon: <Globe size={20} />, label: 'MCP Servers', desc: 'Model Context Protocol servers — tools, data sources & OAuth', sections: 'Server management', color: '#a855f7' },
+  { id: 'knowledge', icon: <Brain size={20} />, label: 'Knowledge Base', desc: 'Upload & index documents for semantic search & RAG', sections: 'Document management', color: '#10b981' },
   { id: 'system', icon: <Battery size={20} />, label: 'System & Performance', desc: 'Security, code execution, voice, power & reliability', sections: '7 sections', color: '#34d399' },
   { id: 'local-ai', icon: <Cpu size={20} />, label: 'Local AI', desc: 'On-device LLM models & vision recognition', sections: '2 sections', color: '#22c55e' },
   { id: 'app-extensions', icon: <Puzzle size={20} />, label: 'App & Extensions', desc: 'Plugins, install APK, code history & developer settings', sections: '5 sections', color: '#a855f7' },
@@ -127,8 +130,10 @@ const SettingsModule: React.FC = () => {
       <SkillsMarketplaceUI mode="settings" onClose={() => setSettingsPage('main')} />
     </div>
   );
+  if (settingsPage === 'mcp') return <MCPPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'knowledge') return <KnowledgePage onBack={() => setSettingsPage('main')} />;
 
-  // ── Main page ────────────────────────────────────────────────────
+  // ── Main page ────────────────────────────────────────────
   return (
     <div
       className="flex flex-col h-full overflow-y-auto"
@@ -295,7 +300,18 @@ const SettingsModule: React.FC = () => {
       </button>
 
       {/* MCP Servers */}
-      <div className="gia-card p-4"><MCPSettings /></div>
+      <button onClick={() => setSettingsPage('mcp')} className="gia-card p-4 flex items-center justify-between" style={{ cursor: 'pointer' }}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(168,85,247,0.15)' }}>
+            <Globe size={18} style={{ color: '#a855f7' }} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>MCP Servers</p>
+            <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>Model Context Protocol servers — tools, data sources & OAuth</p>
+          </div>
+        </div>
+        <ChevronRight size={16} style={{ color: 'var(--gia-muted)' }} />
+      </button>
 
       {/* Provider Capability Matrix */}
       <div className="gia-card p-4">

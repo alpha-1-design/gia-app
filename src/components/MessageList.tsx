@@ -183,10 +183,11 @@ const MessageList: React.FC<MessageListProps> = ({
                       isLive={!!liveThoughts[msg.id]}
                       isExpanded={showThoughts.has(msg.id) || !!liveThoughts[msg.id]}
                       onToggle={() => setShowThoughts(prev => {
-                        const n = new Set(prev);
-                        if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                        return n;
-                      })}
+                          const next = new Set(prev);
+                          if (next.has(msg.id)) next.delete(msg.id);
+                          else next.add(msg.id);
+                          return next;
+                        })}
                       currentTool={currentTool}
                       thinkingPhase={thinkingPhase}
                       startTime={msg.timestamp}
@@ -245,9 +246,10 @@ const MessageList: React.FC<MessageListProps> = ({
                           isLive={!!liveThoughts[msg.id]}
                           isExpanded={showThoughts.has(msg.id)}
                           onToggle={() => setShowThoughts(prev => {
-                            const n = new Set(prev);
-                            if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                            return n;
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) next.delete(msg.id);
+                            else next.add(msg.id);
+                            return next;
                           })}
                           currentTool={currentTool}
                           thinkingPhase={thinkingPhase}
@@ -324,9 +326,10 @@ const MessageList: React.FC<MessageListProps> = ({
                       }}>
                         <button
                           onClick={() => setShowThoughts(prev => {
-                            const n = new Set(prev);
-                            if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                            return n;
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) next.delete(msg.id);
+                            else next.add(msg.id);
+                            return next;
                           })}
                           className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
                           style={{ color: '#f59e0b' }}
@@ -343,9 +346,10 @@ const MessageList: React.FC<MessageListProps> = ({
                           isLive={!!liveThoughts[msg.id]}
                           isExpanded={showThoughts.has(msg.id)}
                           onToggle={() => setShowThoughts(prev => {
-                            const n = new Set(prev);
-                            if (n.has(msg.id)) n.delete(msg.id); else n.add(msg.id);
-                            return n;
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) next.delete(msg.id);
+                            else next.add(msg.id);
+                            return next;
                           })}
                         />
                       </div>

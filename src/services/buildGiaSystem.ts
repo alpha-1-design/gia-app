@@ -8,6 +8,7 @@ import { isNativePlatform } from '../utils/helpers';
 import { GIA_VOICE } from '../config/gia-identity';
 import connectorManager from '../services/connectors/ConnectorManager';
 import socialManager from '../services/social/SocialManager';
+import MCPManager from '../services/MCPManager';
 
 let _cachedSystemContext = '';
 
@@ -120,11 +121,20 @@ Your current model (${activeCfg?.model || 'unknown'}) doesn't natively support t
     : '\n\n**Note:** Tools you use will be sent to the user for approval before execution. Propose the tool naturally, and it will be shown to the user for confirmation.';
 
   return `## Tools you can use
-Call a tool by writing a fenced code block:
+Call a tool by writing a fenced code block with **valid JSON only**:
 
 \`\`\`tool
 { "id": "tool_id_here", "args": { "param": "value" } }
 \`\`\`
+
+**CRITICAL RULES:**
+- Use EXACTLY the format above: \`\`\`tool + newline + valid JSON + newline + \`\`\`
+- The JSON MUST have "id" (string) and "args" (object) — nothing else
+- "args" must be a JSON object {}, never a string, array, or null
+- Use ONLY tool IDs from the table below — do NOT invent or hallucinate tool names
+- One tool call per fenced block — multiple blocks allowed for parallel calls
+- Do NOT include comments, trailing commas, or extra keys in the JSON
+- If you're unsure about args, use empty object: { "id": "tool_name", "args": {} }
 
 | Tool | What it does | Args | Notes |
 |---|---|---|---|---|
@@ -240,6 +250,14 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`smart_cast\` | Cast media URL to a smart TV for playback | \`url\`, \`deviceId\`, \`title\`? | Supports Samsung Tizen, LG webOS, Android TV, DLNA |
 | \`smart_control\` | Send command to smart device (power, volume, input, etc.) | \`deviceId\`, \`command\`, \`level\`?, \`input\`?, \`appId\`?, \`mode\`?, \`color\`? | TVs: power/volume/input/remote keys. Lights: brightness/color. Thermostats: temperature/mode |
 | \`smart_status\` | Get real-time status of a smart device | \`deviceId\` | Power, volume, input, media state for TVs |
+${(() => {
+  const connectedMCPTools: string[] = [];
+  const mcpManager = MCPManager;
+  for (const tool of mcpManager.getConnectedTools()) {
+    connectedMCPTools.push(`| \`${tool.id}\` | [MCP:${tool.serverId}] ${tool.description} | ${JSON.stringify(tool.inputSchema || {})} | MCP tool from ${tool.serverId} |`);
+  }
+  return connectedMCPTools.join('\n');
+})()}
 
 ## Tool calling examples
 

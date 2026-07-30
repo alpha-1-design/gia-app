@@ -13,6 +13,15 @@ export interface MCPServerConfig {
   args: string[];
   enabled: boolean;
   autoConnect: boolean;
+  // OAuth fields for servers requiring authentication
+  oauthUrl?: string;
+  oauthClientId?: string;
+  oauthRedirectUri?: string;
+  oauthScopes?: string;
+  // Stored tokens (not persisted to IndexedDB for security)
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: number;
 }
 
 export type MCPConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -23,7 +32,7 @@ export interface MCPConnectionState {
   toolCount: number;
 }
 
-interface MCPStoreState {
+export interface MCPStoreState {
   servers: MCPServerConfig[];
   connections: Record<string, MCPConnectionState>;
   addServer: (config: Omit<MCPServerConfig, 'id'>) => string;
@@ -31,6 +40,8 @@ interface MCPStoreState {
   updateServer: (id: string, config: Partial<MCPServerConfig>) => void;
   setConnectionState: (id: string, state: MCPConnectionState) => void;
   getServer: (id: string) => MCPServerConfig | undefined;
+  setTokens: (id: string, tokens: { accessToken: string; refreshToken?: string; expiresIn?: number }) => void;
+  clearTokens: (id: string) => void;
 }
 
 export const useMCPStore = create<MCPStoreState>()(
@@ -89,6 +100,27 @@ export const useMCPStore = create<MCPStoreState>()(
         })),
 
       getServer: (id) => get().servers.find((s) => s.id === id),
+
+      setTokens: (id, tokens) =>
+        set((s) => ({
+          servers: s.servers.map((sv) =>
+            sv.id === id
+              ? {
+                  ...sv,
+                  accessToken: tokens.accessToken,
+                  refreshToken: tokens.refreshToken,
+                  tokenExpiresAt: tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined,
+                }
+              : sv
+          ),
+        })),
+
+      clearTokens: (id) =>
+        set((s) => ({
+          servers: s.servers.map((sv) =>
+            sv.id === id ? { ...sv, accessToken: undefined, refreshToken: undefined, tokenExpiresAt: undefined } : sv
+          ),
+        })),
     }),
     {
       name: 'gia-mcp-storage-v1',

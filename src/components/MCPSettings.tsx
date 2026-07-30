@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Power, PowerOff, Wifi, Loader2, Globe, Terminal } from 'lucide-react';
+import { Plus, X, Power, PowerOff, Wifi, Loader2, Globe, Terminal, Lock } from 'lucide-react';
 import { useMCPStore, MCPConnectionState } from '../store/useMCPStore';
 import MCPManager from '../services/MCPManager';
 
@@ -18,6 +18,11 @@ const MCPSettings: React.FC = () => {
   const [newUrl, setNewUrl] = useState('');
   const [newCommand, setNewCommand] = useState('');
   const [newArgs, setNewArgs] = useState('');
+  // OAuth fields
+  const [newOAuthUrl, setNewOAuthUrl] = useState('');
+  const [newOAuthClientId, setNewOAuthClientId] = useState('');
+  const [newOAuthRedirectUri, setNewOAuthRedirectUri] = useState('gia://mcp-oauth-callback');
+  const [newOAuthScopes, setNewOAuthScopes] = useState('openid profile email');
   const [connecting, setConnecting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,12 +56,21 @@ const MCPSettings: React.FC = () => {
       args: newArgs.split(' ').filter(Boolean),
       enabled: true,
       autoConnect: false,
+      // OAuth fields (only for SSE)
+      oauthUrl: newTransport === 'sse' ? newOAuthUrl.trim() : undefined,
+      oauthClientId: newTransport === 'sse' ? newOAuthClientId.trim() : undefined,
+      oauthRedirectUri: newTransport === 'sse' ? newOAuthRedirectUri.trim() : undefined,
+      oauthScopes: newTransport === 'sse' ? newOAuthScopes.trim() : undefined,
     });
 
     setNewName('');
     setNewUrl('');
     setNewCommand('');
     setNewArgs('');
+    setNewOAuthUrl('');
+    setNewOAuthClientId('');
+    setNewOAuthRedirectUri('gia://mcp-oauth-callback');
+    setNewOAuthScopes('openid profile email');
     setShowAdd(false);
   };
 
@@ -136,14 +150,51 @@ const MCPSettings: React.FC = () => {
               </div>
 
               {newTransport === 'sse' ? (
-                <input
-                  type="text"
-                  value={newUrl}
-                  onChange={e => setNewUrl(e.target.value)}
-                  placeholder="wss://my-mcp-server.com/sse"
-                  className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
-                  style={{ background: 'var(--gia-surface)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
-                />
+                <>
+                  <input
+                    type="text"
+                    value={newUrl}
+                    onChange={e => setNewUrl(e.target.value)}
+                    placeholder="wss://my-mcp-server.com/sse"
+                    className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                    style={{ background: 'var(--gia-surface)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+                  />
+                  <div className="space-y-2 pt-2 border-t" style={{ borderColor: 'var(--gia-border)' }}>
+                    <p className="text-[10px] font-medium" style={{ color: 'var(--gia-muted)' }}>OAuth (optional — for protected servers)</p>
+                    <input
+                      type="text"
+                      value={newOAuthUrl}
+                      onChange={e => setNewOAuthUrl(e.target.value)}
+                      placeholder="https://auth.example.com/oauth/authorize"
+                      className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                      style={{ background: 'var(--gia-surface)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+                    />
+                    <input
+                      type="text"
+                      value={newOAuthClientId}
+                      onChange={e => setNewOAuthClientId(e.target.value)}
+                      placeholder="Your OAuth client ID"
+                      className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                      style={{ background: 'var(--gia-surface)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+                    />
+                    <input
+                      type="text"
+                      value={newOAuthRedirectUri}
+                      onChange={e => setNewOAuthRedirectUri(e.target.value)}
+                      placeholder="gia://mcp-oauth-callback"
+                      className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                      style={{ background: 'var(--gia-surface)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+                    />
+                    <input
+                      type="text"
+                      value={newOAuthScopes}
+                      onChange={e => setNewOAuthScopes(e.target.value)}
+                      placeholder="openid profile email"
+                      className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                      style={{ background: 'var(--gia-surface)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+                    />
+                  </div>
+                </>
               ) : (
                 <>
                   <input
@@ -237,6 +288,17 @@ const MCPSettings: React.FC = () => {
                   title="Disconnect"
                 >
                   <PowerOff size={12} />
+                </button>
+              ) : server.oauthUrl && server.oauthClientId && !server.accessToken ? (
+                <button
+                  type="button"
+                  onClick={() => handleConnect(server.id)}
+                  className="p-1.5 rounded-lg transition-colors flex items-center gap-1"
+                  style={{ color: '#a855f7' }}
+                  title="Authenticate via OAuth"
+                >
+                  <Lock size={12} />
+                  <span className="text-[9px] font-medium">Auth</span>
                 </button>
               ) : (
                 <button

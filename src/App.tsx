@@ -1,6 +1,6 @@
 import React, { useEffect, lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { MessageCircle, BarChart2, PenLine, ListTodo, Settings, Bell, X, GraduationCap, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ChevronDown, Target, Bot, ClipboardIcon } from 'lucide-react';
+import { Bell, X, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ClipboardIcon } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { setStorageErrorHandler } from './store/idb-storage';
 import { useShallow } from 'zustand/react/shallow';
@@ -13,7 +13,9 @@ import WriterModule from './modules/WriterModule';
 import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
 import ErrorBoundary from './components/ErrorBoundary';
+import ApiKeyInputPanel from './components/ApiKeyInputPanel';
 import { SourcesPanel } from './components/SourcesPanel';
+import AppNavigation from './components/AppNavigation';
 import BiometricService from './services/BiometricService';
 import { useProviderStore } from './store/useProviderStore';
 import { logger } from './utils/logger';
@@ -53,17 +55,6 @@ const AnalystModule = lazy(() => import('./modules/AnalystModule'));
 const ExamModule = lazy(() => import('./modules/ExamModule'));
 const AutonomyModule = lazy(() => import('./modules/AutonomyModule'));
 const AgentsModule = lazy(() => import('./modules/AgentsModule'));
-
-const MODULES: { id: Module; label: string; icon: React.ReactNode; color: string }[] = [
-  { id: 'chat',     label: 'Chat',     icon: <MessageCircle size={18} />, color: 'var(--mod-chat)' },
-  { id: 'exam',     label: 'Exam',     icon: <GraduationCap size={18} />, color: 'var(--mod-exam)' },
-  { id: 'analyst',  label: 'Analyst',  icon: <BarChart2 size={18} />,    color: 'var(--mod-analyst)' },
-  { id: 'writer',   label: 'Writer',   icon: <PenLine size={18} />,      color: 'var(--mod-writer)' },
-  { id: 'planner',  label: 'Planner',  icon: <ListTodo size={18} />,     color: 'var(--mod-planner)' },
-  { id: 'agents',   label: 'Agents',   icon: <Bot size={18} />,          color: 'var(--mod-agents)' },
-  { id: 'settings', label: 'Settings', icon: <Settings size={18} />,     color: 'var(--mod-settings)' },
-  { id: 'autonomy', label: 'Autonomy', icon: <Target size={18} />,       color: 'var(--mod-autonomy)' },
-];
 
 async function checkProviderHealth(provider: string, apiKey: string, model: string): Promise<boolean> {
   try {
@@ -131,17 +122,17 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentModule, setModule, showTerminal, setShowTerminal, userProfile, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, addNotification, connectionStatus, providerConnected, autoStartWakeWord } = useGiaStore(useShallow(s => ({
-    currentModule: s.currentModule, setModule: s.setModule,
-    showTerminal: s.showTerminal, setShowTerminal: s.setShowTerminal, userProfile: s.userProfile,
-    notifications: s.notifications, clearNotification: s.clearNotification,
-    showConsole: s.showConsole, consoleLogs: s.consoleLogs, setShowConsole: s.setShowConsole,
-    showProtocols: s.showProtocols, setShowProtocols: s.setShowProtocols,
-    theme: s.theme,
-    addNotification: s.addNotification,
-    connectionStatus: s.connectionStatus, providerConnected: s.providerConnected,
-    autoStartWakeWord: s.autoStartWakeWord,
-  })));
+  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
+      setModule: s.setModule,
+      showTerminal: s.showTerminal, setShowTerminal: s.setShowTerminal,
+      notifications: s.notifications, clearNotification: s.clearNotification,
+      showConsole: s.showConsole, consoleLogs: s.consoleLogs, setShowConsole: s.setShowConsole,
+      showProtocols: s.showProtocols, setShowProtocols: s.setShowProtocols,
+      theme: s.theme,
+      addNotification: s.addNotification,
+      autoStartWakeWord: s.autoStartWakeWord,
+      fullScreenMode: s.fullScreenMode,
+    })));
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
 
   // Hardware Back button (Android): close top overlay → back through module
@@ -165,13 +156,28 @@ const App: React.FC = () => {
     const handle = CapacitorApp.addListener('backButton', () => backActionRef.current());
     return () => { handle.then(h => h.remove()); };
   }, []);
+
+  // Deep link handling for Android (Capacitor appUrlOpen)
+  useEffect(() => {
+    const handle = CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => {
+      const url = event.url;
+      if (url.startsWith('gia://')) {
+        const target = url.replace('gia://', '');
+        useGiaStore.getState().setPendingAction({
+          type: 'deep-link',
+          data: { url: target, raw: url },
+        });
+        useGiaStore.getState().addNotification(`🔗 Deep link received: ${target.slice(0, 40)}...`);
+        useGiaStore.getState().setModule('chat');
+      }
+    });
+    return () => { handle.then(h => h.remove()); };
+  }, []);
   const [showTaskBoard, setShowTaskBoard] = useState(false);
   const [showNotesPanel, setShowNotesPanel] = useState(false);
-  const [moduleOpen, setModuleOpen] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [updateNotification, setUpdateNotification] = useState<UpdateInfo | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
-  const moduleRef = useRef<HTMLDivElement>(null);
   const offsetSyncRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const showCircleSearch = useGiaStore(s => s.showCircleSearch);
@@ -656,15 +662,6 @@ const App: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [notifications, clearNotification]);
 
-  useEffect(() => {
-    if (!moduleOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (moduleRef.current && !moduleRef.current.contains(e.target as Node)) setModuleOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [moduleOpen]);
-
   if (locked) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 bg-zinc-950 px-8 text-center">
@@ -730,130 +727,11 @@ const App: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 relative z-50">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
-            <h1
-              className="text-lg font-bold tracking-tight leading-none"
-              style={{ color: 'var(--gia-text)' }}
-            >
-              GIA
-            </h1>
-          </div>
+{/* Header */}
+       {!fullScreenMode && <AppNavigation />}
 
-          {/* Module selector pill */}
-          <div ref={moduleRef} className="relative">
-            {(() => {
-              const cur = MODULES.find(m => m.id === currentModule) ?? MODULES[0];
-              return (
-                <>
-                  <button
-                    onClick={() => setModuleOpen(o => !o)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap tap-feedback"
-                    style={{
-                      background: 'var(--gia-surface-2)',
-                      border: '1px solid var(--gia-border)',
-                      color: cur.id === 'chat' ? '#a855f7' : cur.id === 'exam' ? '#f59e0b' : cur.id === 'analyst' ? '#3b82f6' : cur.id === 'writer' ? '#ec4899' : cur.id === 'planner' ? '#10b981' : cur.id === 'agents' ? '#a855f7' : '#94a3b8',
-                    }}
-                  >
-                    <span className="shrink-0">{cur.icon}</span>
-                    <span className="hidden sm:inline">{cur.label}</span>
-                    <ChevronDown size={12} className={`transition-transform ${moduleOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {moduleOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.96 }}
-                      transition={{ duration: 0.12 }}
-                      className="absolute top-full left-0 mt-1 min-w-[160px] rounded-xl overflow-hidden shadow-2xl border z-50"
-                      style={{
-                        background: 'rgba(20, 20, 28, 0.98)',
-                        borderColor: 'var(--gia-border)',
-                        backdropFilter: 'blur(24px)',
-                        WebkitBackdropFilter: 'blur(24px)',
-                      }}
-                    >
-                      {MODULES.map((mod) => {
-                        const active = currentModule === mod.id;
-                        return (
-                          <button
-                            key={mod.id}
-                            onClick={() => { setModule(mod.id); setModuleOpen(false); }}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 text-[12px] font-medium transition-all tap-feedback"
-                            style={{
-                              color: active ? 'white' : 'var(--gia-muted)',
-                              background: active ? 'rgba(168,85,247,0.1)' : 'transparent',
-                            }}
-                          >
-                            <span style={{ color: mod.id === 'chat' ? '#a855f7' : mod.id === 'exam' ? '#f59e0b' : mod.id === 'analyst' ? '#3b82f6' : mod.id === 'writer' ? '#ec4899' : mod.id === 'planner' ? '#10b981' : mod.id === 'agents' ? '#a855f7' : '#94a3b8' }}>
-                              {mod.icon}
-                            </span>
-                            <span className="flex-1 text-left">{mod.label}</span>
-                            {active && <span className="w-1.5 h-1.5 rounded-full bg-white/80" />}
-                          </button>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Avatar + Status */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{
-              background: connectionStatus === 'offline'
-                ? '#71717a'
-                : !providerConnected
-                  ? '#f59e0b'
-                  : '#34d399',
-              boxShadow: connectionStatus === 'offline'
-                ? 'none'
-                : !providerConnected
-                  ? '0 0 6px rgba(245,158,11,0.5)'
-                  : '0 0 6px rgba(52,211,153,0.5)',
-            }}
-            title={
-              connectionStatus === 'offline'
-                ? 'Offline'
-                : !providerConnected
-                  ? 'Online — connecting to provider…'
-                  : 'Connected'
-            }
-          />
-          <button
-            onClick={() => setShowProtocols(!showProtocols)}
-            className="w-7 h-7 rounded-lg flex items-center justify-center transition-all text-[10px] font-bold"
-            style={{
-              background: showProtocols ? 'rgba(168,85,247,0.15)' : 'var(--gia-surface-2)',
-              border: `1px solid ${showProtocols ? 'rgba(168,85,247,0.3)' : 'var(--gia-border)'}`,
-              color: showProtocols ? '#a855f7' : 'var(--gia-muted)',
-            }}
-            title="Protocols"
-          >
-            ⚡
-          </button>
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
-            style={{
-              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
-              boxShadow: '0 0 12px rgba(168,85,247,0.4)',
-            }}
-          >
-            {userProfile.name ? userProfile.name[0].toUpperCase() : 'G'}
-          </div>
-        </div>
-      </header>
-
-      {/* Module content */}
-      <main className="flex-1 overflow-hidden relative z-10">
+       {/* Module content */}
+       <main className="flex-1 overflow-hidden relative z-10">
         <ModuleView />
       </main>
 
@@ -1032,6 +910,7 @@ const App: React.FC = () => {
       </AnimatePresence>
 
       <SourcesPanel />
+      <ApiKeyInputPanel />
     </div>
   );
 };

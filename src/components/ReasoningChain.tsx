@@ -423,6 +423,10 @@ export const ReasoningChain: React.FC<ReasoningChainProps> = ({
   const [expanded, setExpanded] = useState(isExpanded);
   const { thinkingPhase, extThinking } = useGiaStore();
 
+  useEffect(() => {
+    setExpanded(isExpanded);
+  }, [isExpanded]);
+
   // Parse thoughts into structured steps
   const steps = useMemo(() => {
     const thoughtSteps = parseThoughtsToSteps(thoughts || '', null);

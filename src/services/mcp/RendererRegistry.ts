@@ -11,6 +11,58 @@ export interface RenderItem {
 
 export type Renderer = (item: RenderItem, container: HTMLElement) => void;
 
+export type MCPContentType =
+  | 'ebook/epub'
+  | 'ebook/pdf'
+  | 'motion-graphic/lottie'
+  | 'motion-graphic/gif'
+  | '3d/gltf'
+  | '3d/glb'
+  | '3d/usdz'
+  | 'image/png'
+  | 'image/jpeg'
+  | 'image/webp'
+  | 'image/svg+xml'
+  | 'video/mp4'
+  | 'video/webm'
+  | 'audio/mp3'
+  | 'audio/wav'
+  | 'code/html'
+  | 'code/css'
+  | 'code/javascript'
+  | 'code/typescript'
+  | 'code/python'
+  | 'application/json'
+  | 'text/plain'
+  | 'text/markdown'
+  | 'application/octet-stream';
+
+export interface MCPContentMetadata {
+  title?: string;
+  description?: string;
+  author?: string;
+  version?: string;
+  date?: string;
+  source?: string;
+  uri?: string;
+  mimeType?: string;
+  [key: string]: unknown;
+}
+
+export interface MCPStructuredResult {
+  contentType: MCPContentType;
+  data: Uint8Array | string;
+  metadata?: MCPContentMetadata;
+  encoding?: 'base64' | 'utf-8' | 'binary';
+}
+
+export interface MCPContentRenderer {
+  contentType: MCPContentType;
+  canRender(ct: MCPContentType): boolean;
+  render(result: MCPStructuredResult, container: HTMLElement): void | Promise<void>;
+  getPreview(result: MCPStructuredResult): string;
+}
+
 export class RendererRegistry {
   private renderers: Map<string, Renderer> = new Map();
 
