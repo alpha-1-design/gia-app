@@ -14,6 +14,7 @@ import OutputValidator from '../services/OutputValidator';
 import InputGuardrails from '../services/InputGuardrails';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { giaCoreServices } from '../services/GIACoreServices';
+import HapticService from '../services/HapticService';
 import type { Message } from '../store/useGiaStore';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -553,7 +554,7 @@ onThought: (thought) => {
         useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
         useGiaStore.getState().setIntentState('idle');
         useGiaStore.getState().setThinkingPhase('idle');
-        if (useGiaStore.getState().hapticFeedback) { try { navigator.vibrate?.(15); } catch { /* not supported */ } }
+        HapticService.notification('success');
       }
     }
     };
@@ -691,9 +692,7 @@ onThought: (thought) => {
       useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       useGiaStore.getState().setIntentState('idle');
       useGiaStore.getState().setThinkingPhase('idle');
-      if (useGiaStore.getState().hapticFeedback) {
-        try { navigator.vibrate?.(15); } catch { /* not supported */ }
-      }
+      HapticService.notification('success');
     }
   }, [loading, registerGenerationController, unregisterGenerationController]);
 

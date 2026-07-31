@@ -124,43 +124,138 @@ export function findJsonFenceClose(text: string, fromIndex: number): number {
   return -1;
 }
 
+export function parseToolCallContent(body: string): ToolCall | null {
+  if (!body || typeof body !== 'string') return null;
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+
+  // 1. Try JSON parsing
+  const jsonParsed = parseJsonSafely<Record<string, unknown>>(trimmed);
+  if (jsonParsed && typeof jsonParsed === 'object' && jsonParsed !== null) {
+    const id = (jsonParsed.id || jsonParsed.name || jsonParsed.tool || jsonParsed.function) as string | undefined;
+    const args = (jsonParsed.args || jsonParsed.input || jsonParsed.parameters || {}) as Record<string, unknown>;
+    if (id && typeof id === 'string' && id.trim()) {
+      return { id: id.trim(), args: typeof args === 'object' && args !== null ? args : {} };
+    }
+  }
+
+  // 2. Try XML key-value pairs (<arg_key> and <arg_value>)
+  if (trimmed.includes('<arg_key>') || trimmed.includes('<arg_value>')) {
+    const firstTagIdx = trimmed.indexOf('<arg_key>');
+    const rawHead = firstTagIdx >= 0 ? trimmed.slice(0, firstTagIdx) : trimmed;
+    const toolId = rawHead.replace(/<[^>]+>/g, '').trim().split(/\s+/)[0];
+
+    if (toolId && /^[a-zA-Z0-9_-]+$/.test(toolId)) {
+      const args: Record<string, unknown> = {};
+      const keyRegex = /<arg_key>\s*([\s\S]*?)\s*<\/arg_key>[\s\S]*?<arg_value>\s*([\s\S]*?)\s*<\/arg_value>/gi;
+      let match: RegExpExecArray | null;
+      while ((match = keyRegex.exec(trimmed)) !== null) {
+        const k = match[1].trim();
+        let v: unknown = match[2].trim();
+        if (v === 'true') v = true;
+        else if (v === 'false') v = false;
+        else if (v !== '' && !isNaN(Number(v))) v = Number(v);
+        args[k] = v;
+      }
+      return { id: toolId, args };
+    }
+  }
+
+  // 3. Fallback: bare tool name + line key:value args
+  const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    const firstLineText = lines[0].replace(/<[^>]+>/g, '').trim();
+    const toolId = firstLineText.split(/\s+/)[0];
+    if (toolId && /^[a-zA-Z0-9_-]+$/.test(toolId)) {
+      const args: Record<string, unknown> = {};
+      let hasArg = false;
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const colonIdx = line.indexOf(':');
+        if (colonIdx > 0) {
+          hasArg = true;
+          const k = line.slice(0, colonIdx).trim();
+          let v: unknown = line.slice(colonIdx + 1).trim();
+          if (v === 'true') v = true;
+          else if (v === 'false') v = false;
+          else if (v !== '' && !isNaN(Number(v))) v = Number(v);
+          args[k] = v;
+        }
+      }
+      if (hasArg) {
+        return { id: toolId, args };
+      }
+    }
+  }
+
+  return null;
+}
+
 export function extractToolCalls(text: string): ToolCall[] {
   const calls: ToolCall[] = [];
   let pos = 0;
 
+  const tagNames = ['tool_call', 'tool_code', 'tool-code', 'function_call', 'function-call', 'tool'];
+
   while (pos < text.length) {
-    // Find next ```tool or ```json opening
     const toolIdx = text.indexOf('```tool', pos);
     const jsonIdx = text.indexOf('```json', pos);
-    let fenceIdx = -1;
-    let fenceLen = 0;
 
-    if (toolIdx >= 0 && (jsonIdx < 0 || toolIdx < jsonIdx)) {
-      fenceIdx = toolIdx;
-      fenceLen = 7; // ```tool
-    } else if (jsonIdx >= 0) {
-      fenceIdx = jsonIdx;
-      fenceLen = 7; // ```json
-    }
-
-    if (fenceIdx < 0) break;
-
-    const contentStart = fenceIdx + fenceLen;
-    // Skip past newline if present
-    const bodyStart = text[contentStart] === '\n' ? contentStart + 1 : contentStart;
-
-    const closeIdx = findJsonFenceClose(text, bodyStart);
-    if (closeIdx < 0) break;
-
-    const body = text.slice(bodyStart, closeIdx).trim();
-    if (body) {
-      const parsed = parseJsonSafely<ToolCall>(body);
-      if (parsed && parsed.id && typeof parsed.args === 'object') {
-        calls.push(parsed);
+    let earliestXmlIdx = -1;
+    let earliestTag = '';
+    for (const tag of tagNames) {
+      const idx = text.indexOf(`<${tag}`, pos);
+      if (idx >= 0 && (earliestXmlIdx === -1 || idx < earliestXmlIdx)) {
+        earliestXmlIdx = idx;
+        earliestTag = tag;
       }
     }
 
-    pos = closeIdx + 3; // skip past the closing ```
+    let minIdx = -1;
+    let mode: 'fence' | 'xml' = 'fence';
+    let fenceLen = 0;
+
+    if (toolIdx >= 0 && (minIdx === -1 || toolIdx < minIdx)) {
+      minIdx = toolIdx;
+      mode = 'fence';
+      fenceLen = 7;
+    }
+    if (jsonIdx >= 0 && (minIdx === -1 || jsonIdx < minIdx)) {
+      minIdx = jsonIdx;
+      mode = 'fence';
+      fenceLen = 7;
+    }
+    if (earliestXmlIdx >= 0 && (minIdx === -1 || earliestXmlIdx < minIdx)) {
+      minIdx = earliestXmlIdx;
+      mode = 'xml';
+    }
+
+    if (minIdx === -1) break;
+
+    if (mode === 'fence') {
+      const contentStart = minIdx + fenceLen;
+      const bodyStart = text[contentStart] === '\n' ? contentStart + 1 : contentStart;
+      const closeIdx = findJsonFenceClose(text, bodyStart);
+      if (closeIdx < 0) break;
+      const body = text.slice(bodyStart, closeIdx).trim();
+      if (body) {
+        const parsed = parseToolCallContent(body);
+        if (parsed) calls.push(parsed);
+      }
+      pos = closeIdx + 3;
+    } else {
+      const openTagEnd = text.indexOf('>', minIdx);
+      if (openTagEnd < 0) { pos = minIdx + 1; continue; }
+      const closeTagStr = `</${earliestTag}>`;
+      const closeIdx = text.indexOf(closeTagStr, openTagEnd);
+      if (closeIdx < 0) { pos = openTagEnd + 1; continue; }
+      const body = text.slice(openTagEnd + 1, closeIdx).trim();
+      if (body) {
+        const parsed = parseToolCallContent(body);
+        if (parsed) calls.push(parsed);
+      }
+      pos = closeIdx + closeTagStr.length;
+    }
   }
 
   return calls;

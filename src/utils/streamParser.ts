@@ -1,4 +1,4 @@
-import { findFenceClose } from './jsonRepair';
+import { findFenceClose, parseToolCallContent } from './jsonRepair';
 
 export interface TaskData {
   id: string;
@@ -19,6 +19,9 @@ export interface StreamParserState {
   thoughtsAccumulated: string;
   inThinkBlock: boolean;
   inToolBlock: boolean;
+  inXmlToolBlock: boolean;
+  xmlTagBuffer: string;
+  xmlTagName: string;
   inJsonBlock: boolean;
   inArtifactBlock: boolean;
   jsonBlockBuffer: string;
@@ -36,6 +39,9 @@ export const createStreamParser = (): StreamParserState => ({
   thoughtsAccumulated: '',
   inThinkBlock: false,
   inToolBlock: false,
+  inXmlToolBlock: false,
+  xmlTagBuffer: '',
+  xmlTagName: '',
   inJsonBlock: false,
   inArtifactBlock: false,
   jsonBlockBuffer: '',
@@ -48,19 +54,16 @@ export const createStreamParser = (): StreamParserState => ({
   pendingTaskMarker: '',
 });
 
-/** Check if the given string (body of a json block) looks like a tool call JSON.
- *  Uses a stricter heuristic to reduce false positives: requires both `id`/`name` and `args`/`input`
- *  keys, and the `args` value must be an object (starts with `{`) not a primitive. */
+/** Check if the given string (body of a json block) looks like a tool call JSON. */
 function isToolCallJson(body: string): boolean {
+  if (parseToolCallContent(body) !== null) return true;
   const hasKey = (pattern: RegExp) => pattern.test(body);
   const hasId = hasKey(/"(?:id|tool|function|name)"\s*:/);
   const hasArgs = hasKey(/"(?:args|input)"\s*:/);
   if (!hasId || !hasArgs) return false;
-  // Extra guard: the value of `args` should look like an object or array, not a string
   const argsMatch = body.match(/"args"\s*:\s*([{[])/);
   const inputMatch = body.match(/"input"\s*:\s*([{[])/);
   if (argsMatch || inputMatch) return true;
-  // If we can't find args with an object value, check `input`
   return false;
 }
 
@@ -91,6 +94,16 @@ export const processStreamChunk = (
         state.inThinkBlock = false;
       } else {
         state.thoughtsAccumulated += remaining;
+        remaining = '';
+      }
+    } else if (state.inXmlToolBlock) {
+      const closeTag = `</${state.xmlTagName || 'tool_call'}>`;
+      const endIdx = remaining.indexOf(closeTag);
+      if (endIdx >= 0) {
+        remaining = remaining.slice(endIdx + closeTag.length);
+        state.inXmlToolBlock = false;
+        state.xmlTagName = '';
+      } else {
         remaining = '';
       }
     } else if (state.inToolBlock) {
@@ -173,17 +186,49 @@ export const processStreamChunk = (
       let artifactStart = remaining.indexOf('```artifact');
       if (artifactStart > 0 && remaining[artifactStart - 1] !== '\n') artifactStart = -1;
 
+      let xmlToolStart = -1;
+      let matchedXmlTag = '';
+      const xmlTags = ['tool_call', 'tool_code', 'tool-code', 'function_call', 'function-call', 'tool'];
+      for (const tag of xmlTags) {
+        const idx = remaining.indexOf(`<${tag}`);
+        if (idx >= 0 && (xmlToolStart === -1 || idx < xmlToolStart)) {
+          xmlToolStart = idx;
+          matchedXmlTag = tag;
+        }
+      }
+
       const firstMarker = (() => {
-        const candidates: { idx: number; type: string }[] = [];
+        const candidates: { idx: number; type: string; tag?: string }[] = [];
         if (toolStart >= 0) candidates.push({ idx: toolStart, type: 'tool' });
         if (thinkStart >= 0) candidates.push({ idx: thinkStart, type: 'think' });
         if (jsonStart >= 0) candidates.push({ idx: jsonStart, type: 'json' });
         if (artifactStart >= 0) candidates.push({ idx: artifactStart, type: 'artifact' });
+        if (xmlToolStart >= 0) candidates.push({ idx: xmlToolStart, type: 'xml_tool', tag: matchedXmlTag });
         candidates.sort((a, b) => a.idx - b.idx);
         return candidates.length > 0 ? candidates[0] : null;
       })();
 
-      if (firstMarker && firstMarker.type === 'tool') {
+      if (firstMarker && firstMarker.type === 'xml_tool') {
+        const before = remaining.slice(0, firstMarker.idx);
+        displayChunk += before;
+        const tag = firstMarker.tag!;
+        const closeTag = `</${tag}>`;
+        const openTagEnd = remaining.indexOf('>', firstMarker.idx);
+        if (openTagEnd >= 0) {
+          const closeIdx = remaining.indexOf(closeTag, openTagEnd);
+          if (closeIdx >= 0) {
+            remaining = remaining.slice(closeIdx + closeTag.length);
+          } else {
+            state.inXmlToolBlock = true;
+            state.xmlTagName = tag;
+            remaining = '';
+          }
+        } else {
+          state.inXmlToolBlock = true;
+          state.xmlTagName = tag;
+          remaining = '';
+        }
+      } else if (firstMarker && firstMarker.type === 'tool') {
         const before = remaining.slice(0, firstMarker.idx);
         displayChunk += before;
         const afterFence = remaining.slice(firstMarker.idx + 7);
@@ -320,6 +365,13 @@ export const processStreamChunk = (
 
 export const stripToolBlocks = (text: string): string => {
   let result = text;
+
+  // Remove XML tool blocks (<tool_call>...</tool_call>, etc.)
+  const xmlTags = ['tool_call', 'tool_code', 'tool-code', 'function_call', 'function-call', 'tool'];
+  for (const tag of xmlTags) {
+    const regex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi');
+    result = result.replace(regex, '');
+  }
 
   // Remove ```tool blocks using character-by-character iteration to handle nested backticks
   let stripped = '';
