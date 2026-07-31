@@ -177,14 +177,9 @@ export const processStreamChunk = (
       }
     } else {
       const thinkStart = remaining.indexOf('<think>');
-      let toolStart = remaining.indexOf('```tool');
-      if (toolStart > 0 && remaining[toolStart - 1] !== '\n') toolStart = -1;
-
-      let jsonStart = remaining.indexOf('```json');
-      if (jsonStart > 0 && remaining[jsonStart - 1] !== '\n') jsonStart = -1;
-
-      let artifactStart = remaining.indexOf('```artifact');
-      if (artifactStart > 0 && remaining[artifactStart - 1] !== '\n') artifactStart = -1;
+      const toolStart = remaining.indexOf('```tool');
+      const jsonStart = remaining.indexOf('```json');
+      const artifactStart = remaining.indexOf('```artifact');
 
       let xmlToolStart = -1;
       let matchedXmlTag = '';

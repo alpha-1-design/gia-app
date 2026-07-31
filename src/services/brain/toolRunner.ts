@@ -250,7 +250,7 @@ async function executeSingleTool(
   const obs = result!.success
     ? `OBSERVATION: Success\n${result!.content}`
     : `TOOL FAILED: ${toolCall.id} — ${result!.error || 'Unknown error'}. ${hint ? `Try using '${hint}' instead or use a completely different approach.` : 'Use a different approach or tool to achieve the same goal.'} If no alternative works, inform the user about the failure and suggest next steps.`;
-  onThought?.(result!.success ? obs : `⚠️ ${toolCall.id} failed — trying alternative...`);
+  onThought?.(result!.success ? `✅ ${toolCall.id} completed successfully` : `⚠️ ${toolCall.id} failed — trying alternative...`);
 
   if (result!.success) {
     useProtocolStore.getState().setCompleted(protocolId, result!.content, result!.sources);

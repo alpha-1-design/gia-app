@@ -15,7 +15,9 @@ export interface SandboxFileEntry {
   mode: string;
 }
 
-const DEFAULT_SANDBOX_URL = 'http://localhost:3081';
+const DEFAULT_SANDBOX_URL = typeof window !== 'undefined' && window.location?.origin
+  ? '/api/sandbox'
+  : 'http://localhost:3081';
 
 class SandboxService {
   private baseUrl: string = DEFAULT_SANDBOX_URL;

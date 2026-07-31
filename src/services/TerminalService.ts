@@ -47,7 +47,7 @@ export interface StatusInfo {
  */
 function getPlugin(): unknown {
   try {
-    if (Capacitor.isPluginAvailable('GIATerminal')) {
+    if (Capacitor.isNativePlatform() || Capacitor.isPluginAvailable('GIATerminal')) {
       return registerPlugin('GIATerminal');
     }
     console.warn('[TerminalService] GIATerminal plugin not available');
