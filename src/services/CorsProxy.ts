@@ -20,22 +20,20 @@ export class CorsProxy {
 
   fetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
     // Try direct first
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const res = await fetch(url, {
-          ...options,
-          mode: 'cors',
-          credentials: 'omit',
-        });
-        if (res.ok || res.status < 500) {
-          return res;
-        }
-      } catch (e) {
-        logger.warn('[CorsProxy] Direct fetch failed, trying proxy:', e);
+    try {
+      const res = await fetch(url, {
+        ...options,
+        mode: 'cors',
+        credentials: 'omit',
+      });
+      if (res.ok || res.status < 500) {
+        return res;
       }
+    } catch (e) {
+      logger.debug('[CorsProxy] Direct fetch failed:', e instanceof Error ? e.message : e);
     }
 
-    // Try custom proxy
+    // Try custom proxy if configured
     if (this.customProxy) {
       try {
         const proxyUrl = this.customProxy + encodeURIComponent(url);
@@ -44,22 +42,28 @@ export class CorsProxy {
           logger.log('[CorsProxy] Used custom proxy for:', url.slice(0, 80));
           return res;
         }
-      } catch (e) { logger.warn('[CorsProxy] Custom proxy unavailable:', e); }
+      } catch (e) { logger.warn('[CorsProxy] Custom proxy unavailable:', e instanceof Error ? e.message : e); }
     }
 
-    // Try public proxies
-    for (const proxy of PROXY_LIST) {
-      try {
-        const proxyUrl = proxy + encodeURIComponent(url);
-        const res = await fetch(proxyUrl, options);
-        if (res.ok) {
-          logger.log('[CorsProxy] Used proxy:', proxy);
-          return res;
-        }
-      } catch (e) { logger.warn('[CorsProxy] Public proxy unavailable:', e); }
+    // Public proxies only support GET requests without custom authorization headers
+    const isGet = !options.method || options.method.toUpperCase() === 'GET';
+    const headers = options.headers as Record<string, string> | undefined;
+    const hasAuthHeaders = headers && (headers['Authorization'] || headers['authorization'] || headers['x-api-key']);
+
+    if (isGet && !hasAuthHeaders) {
+      for (const proxy of PROXY_LIST) {
+        try {
+          const proxyUrl = proxy + encodeURIComponent(url);
+          const res = await fetch(proxyUrl, options);
+          if (res.ok) {
+            logger.log('[CorsProxy] Used proxy:', proxy);
+            return res;
+          }
+        } catch (e) { logger.debug('[CorsProxy] Public proxy unavailable:', e instanceof Error ? e.message : e); }
+      }
     }
 
-    throw new Error(`Failed to fetch ${url.slice(0, 60)} — all proxies exhausted`);
+    throw new Error(`Failed to fetch ${url.slice(0, 60)} — ${isGet ? 'all proxies exhausted' : 'direct connection failed'}`);
   }
 
   proxyUrl = (url: string): string => {

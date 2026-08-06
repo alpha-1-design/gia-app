@@ -72,7 +72,7 @@ overallScore is 0-100. Be specific with recommendations. Pure JSON, no markdown.
           systemPromptMode: 'append',
           forceJson: true,
           temperature: 0.3,
-          maxTokens: 2000,
+          maxTokens: 4000,
         }),
         { moduleName: 'ExamAssessment' }
       );

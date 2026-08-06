@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { isNativePlatform } from '../utils/helpers';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Folder, File, ChevronRight, ArrowLeft, RefreshCw, X } from 'lucide-react';
 
@@ -7,6 +8,17 @@ interface FileEntry {
   path: string;
   kind: 'file' | 'directory';
 }
+
+// Picks the right filesystem backend for the current platform: MobileFS
+// (Capacitor Filesystem, no folder picker needed) on native, DesktopFS
+// (File System Access API, requires a user-picked directory) in the browser.
+// Both expose the same interface, so callers don't need to branch.
+const getFS = async () => {
+  if (isNativePlatform()) {
+    return (await import('../services/MobileFS')).default;
+  }
+  return (await import('../services/DesktopFS')).default;
+};
 
 interface FileBrowserProps {
   onClose: () => void;
@@ -25,8 +37,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
     setLoading(true);
     setError('');
     try {
-      const DesktopFS = (await import('../services/DesktopFS')).default;
-      const result = await DesktopFS.listFiles(path);
+      const fs = await getFS();
+      const result = await fs.listFiles(path);
       result.sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
         return a.name.localeCompare(b.name);
@@ -42,8 +54,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
 
   const readFile = useCallback(async (path: string) => {
     try {
-      const DesktopFS = (await import('../services/DesktopFS')).default;
-      const content = await DesktopFS.readFile(path);
+      const fs = await getFS();
+      const content = await fs.readFile(path);
       setFilePreview({ path, content: content.slice(0, 5000) });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -52,10 +64,21 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
 
   useEffect(() => {
     (async () => {
-      const DesktopFS = (await import('../services/DesktopFS')).default;
-      setRootName(DesktopFS.rootName);
-      setHasHandle(DesktopFS.hasHandle);
-      if (DesktopFS.hasHandle) {
+      const fs = await getFS();
+      // On native, there's no folder picker step — Documents is always
+      // available, so mount straight away instead of waiting for a tap.
+      if (isNativePlatform()) {
+        const result = await fs.pickDirectory();
+        if (result) {
+          setRootName(result.name);
+          setHasHandle(true);
+          loadEntries('');
+          return;
+        }
+      }
+      setRootName(fs.rootName);
+      setHasHandle(fs.hasHandle);
+      if (fs.hasHandle) {
         loadEntries('');
       }
     })();
@@ -77,8 +100,8 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ onClose }) => {
 
   const pickFolder = async () => {
     try {
-      const DesktopFS = (await import('../services/DesktopFS')).default;
-      const result = await DesktopFS.pickDirectory();
+      const fs = await getFS();
+      const result = await fs.pickDirectory();
       if (result) {
         setRootName(result.name);
         setHasHandle(true);

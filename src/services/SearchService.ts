@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import { CapacitorHttp } from '@capacitor/core';
+import { isNativePlatform } from '../utils/helpers';
 
 export interface SearchResult {
   title: string;
@@ -27,8 +28,8 @@ class SearchService {
     const cached = this.cache.get(query);
     if (cached && Date.now() - cached.ts < this.cacheTTL) return cached.results;
 
-    // Strategy A: direct via Capacitor (native)
-    if (typeof CapacitorHttp !== 'undefined') {
+    // Strategy A: direct via Capacitor (native only)
+    if (isNativePlatform() && typeof CapacitorHttp !== 'undefined') {
       try {
         const res = await CapacitorHttp.get({
           url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
@@ -39,7 +40,7 @@ class SearchService {
           const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
           return this.parseResults(html);
         }
-      } catch (e) { logger.error('[SearchService] Strategy A (axios) failed:', e); }
+      } catch (e) { logger.debug('[SearchService] Strategy A (Capacitor) failed:', e instanceof Error ? e.message : e); }
     }
 
     // Strategy B: try CORS proxies in order
@@ -55,7 +56,7 @@ class SearchService {
           this.cache.set(query, { results: parsed, ts: Date.now() });
           return parsed;
         }
-      } catch (e) { logger.error('[SearchService] Proxy fetch failed, trying next:', e); }
+      } catch (e) { logger.debug('[SearchService] Proxy fetch attempt failed, trying next:', e instanceof Error ? e.message : e); }
     }
 
     return [];

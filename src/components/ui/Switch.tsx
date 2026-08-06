@@ -20,12 +20,12 @@ export const Switch: React.FC<SwitchProps> = ({
   disabled = false,
 }) => {
   return (
-    <label
-      className="flex items-center gap-3 tap-feedback"
+    <div
+      onClick={() => !disabled && onChange(!checked)}
+      className="flex items-center gap-3 tap-feedback select-none"
       style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
     >
       <div
-        onClick={() => !disabled && onChange(!checked)}
         className="w-8 h-4 rounded-full relative transition-all shrink-0"
         style={{
           background: checked
@@ -50,6 +50,6 @@ export const Switch: React.FC<SwitchProps> = ({
           {description}
         </p>
       </div>
-    </label>
+    </div>
   );
 };

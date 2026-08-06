@@ -553,8 +553,8 @@ export const useGiaStore = create<GiaState>()(
       buildSessionId: null,
       buildPreviewUrl: null,
       sandboxEnvReady: null,
-      longRunningMode: false,
-      autoModelUnload: true,
+      longRunningMode: (() => { try { return localStorage.getItem('gia-long-running') === 'true'; } catch { return false; } })(),
+      autoModelUnload: (() => { try { return localStorage.getItem('gia-auto-model-unload') !== 'false'; } catch { return true; } })(),
       fullScreenMode: false,
 
       setBuildMode: (v) => set((s) => ({ buildMode: v, buildSessionId: v ? s.activeSessionId : s.buildSessionId })),

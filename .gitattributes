@@ -1,0 +1,19 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Explicitly mark binary files to prevent text corruption
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.tar.gz binary
+*.tgz binary
+*.gz binary
+*.zip binary
+*.so binary
+proot binary
+libproot.so binary
+*.jar binary
+*.aar binary

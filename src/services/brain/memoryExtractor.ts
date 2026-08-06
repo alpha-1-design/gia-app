@@ -2,7 +2,6 @@ import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { providerRegistry } from '../ProviderRegistry';
-import { corsProxy } from '../CorsProxy';
 
 export async function extractMemories(userMessage: string, assistantResponse: string): Promise<void> {
   if (!userMessage || !assistantResponse || assistantResponse.length < 100) return;
@@ -29,8 +28,9 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
   let text = '';
 
   try {
+    let res: Response;
     if (activeProvider === 'anthropic') {
-      const res = await corsProxy.fetch('https://api.anthropic.com/v1/messages', {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': config.apiKey,
@@ -51,7 +51,7 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
       const data: { content?: { type: string; text?: string }[] } = await res.json();
       text = data.content?.find(b => b.type === 'text')?.text || '';
     } else if (activeProvider === 'gemini') {
-      const res = await corsProxy.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`, {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
         body: JSON.stringify({
@@ -67,7 +67,7 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
     } else {
       const baseUrl = providerRegistry.getBaseUrl(activeProvider);
       if (!baseUrl) return;
-      const res = await corsProxy.fetch(`${baseUrl}/chat/completions`, {
+      res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
@@ -96,6 +96,6 @@ Valid categories: "profile" | "subject" | "score" | "weak_area" | "fact" | "pref
       useMemoryStore.getState().compactMemories();
     }
   } catch (e) {
-    logger.error('[MemoryExtractor] Failed:', e);
+    logger.warn('[MemoryExtractor] Non-critical memory extraction skipped:', e instanceof Error ? e.message : e);
   }
 }
