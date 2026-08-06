@@ -48,6 +48,24 @@ GIA_JSEOF`;
   }
 }
 
+function normalizeLanguage(val: unknown): 'sh' | 'python' | 'js' | 'cpp' {
+  if (typeof val !== 'string' || !val.trim()) return 'sh';
+  const l = val.toLowerCase().trim();
+  if (['python', 'python3', 'py', 'python2'].includes(l)) return 'python';
+  if (['js', 'javascript', 'node', 'nodejs', 'ts', 'typescript'].includes(l)) return 'js';
+  if (['cpp', 'c++', 'c', 'cplusplus'].includes(l)) return 'cpp';
+  return 'sh';
+}
+
+function normalizeArgs(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'object' || raw === null) return {};
+  const obj = { ...(raw as Record<string, unknown>) };
+  if ((!obj.command || typeof obj.command !== 'string') && typeof obj.code === 'string') {
+    obj.command = obj.code;
+  }
+  return obj;
+}
+
 const terminalRun: Tool = {
   id: 'terminal_run',
   name: 'terminal_run',
@@ -59,7 +77,7 @@ const terminalRun: Tool = {
       language: {
         type: 'string',
         enum: ['sh', 'python', 'js', 'cpp'],
-        description: 'Language/execution mode. Use "python" for Python scripts, "js" for Node.js, "cpp" for compiled C++, "sh" (default) for shell commands.',
+        description: 'Language/execution mode. Use "python" for Python scripts, "js" for Node.js, "cpp" for compiled C++, "sh" (default) for shell/bash commands.',
       },
       workdir: { type: 'string', description: 'Optional working directory inside the proot environment' },
       timeout: { type: 'number', description: 'Timeout in milliseconds (default: 30000, max: 300000)' },
@@ -67,14 +85,15 @@ const terminalRun: Tool = {
     required: ['command'],
   },
   execute: async (args, ctx?: ToolContext) => {
+    const preparedArgs = normalizeArgs(args);
     const schema = z.object({
       command: z.string().min(1, 'Command is required').max(10000),
-      language: z.enum(['sh', 'python', 'js', 'cpp']).default('sh'),
+      language: z.preprocess(normalizeLanguage, z.enum(['sh', 'python', 'js', 'cpp'])).default('sh'),
       workdir: z.string().max(500).optional(),
       timeout: z.number().min(1000).max(300000).default(30000),
     });
 
-    const parsed = schema.safeParse(args);
+    const parsed = schema.safeParse(preparedArgs);
     if (!parsed.success) {
       return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     }

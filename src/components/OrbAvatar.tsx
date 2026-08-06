@@ -20,7 +20,8 @@ const OrbAvatar: React.FC<OrbAvatarProps> = ({
   icon,
   className = '',
 }) => {
-  const id = `orb-${color.replace('#', '')}-${size}`;
+  const reactId = React.useId().replace(/[^a-zA-Z0-9]/g, '');
+  const id = `orb-${reactId}`;
 
   // color may be a hex directly, or (for backwards-compat) an icon name to resolve
   let resolved = color;

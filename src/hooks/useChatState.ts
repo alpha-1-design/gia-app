@@ -340,7 +340,7 @@ export function useChatState() {
         setTimeout(() => genRef.current.handleSend(text, [], (v) => setInput(v), (v) => setAttachmentsRef.current(v as Attachment[])), 50);
         return;
       }
-    } else if (action.type === 'assist') {
+    } else if (action.type === 'assist' || action.type === 'voice-start') {
       useGiaStore.getState().setModule('chat');
       setTimeout(() => { voiceRef.current?.startListening(true); }, 300);
     }

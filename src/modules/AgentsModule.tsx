@@ -1,10 +1,11 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, Trash2, Upload, FileText,
   ChevronLeft, Send, Loader2, Settings2,
   Code2, Brain, Compass, Cpu, Cloud, BookOpen, Target, Image, PenLine,
   AlertTriangle, RefreshCw, Search, Globe, Sparkles,
+  ArrowUpDown, MessageSquare, Check, Filter,
   type LucideIcon,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -20,6 +21,7 @@ import OrbAvatar from '../components/OrbAvatar';
 const MAX_MESSAGES_PER_SESSION = 100;
 
 type ViewState = 'list' | 'chat';
+type SortOption = 'newest' | 'alphabetical' | 'tools' | 'files';
 
 const AGENT_ICONS: { name: string; color: string }[] = [
   { name: 'Bot', color: '#a855f7' },
@@ -66,21 +68,30 @@ const AGENT_ICONS: { name: string; color: string }[] = [
   { name: 'Flag', color: '#ef4444' },
 ];
 
-const AVAILABLE_TOOLS: { id: string; label: string; icon: LucideIcon; description: string }[] = [
-  { id: 'web_search', label: 'Web Search', icon: Search, description: 'Search the web for current information' },
-  { id: 'read_url', label: 'Read URL', icon: Globe, description: 'Extract content from any web page' },
-  { id: 'terminal_run', label: 'Code Execution', icon: Code2, description: 'Run code (Python, JS, bash) in sandbox' },
-  { id: 'filesystem_read', label: 'Read Files', icon: FileText, description: 'Read files from device' },
-  { id: 'filesystem_write', label: 'Write Files', icon: PenLine, description: 'Save files to device' },
-  { id: 'image_generation', label: 'Image Gen', icon: Image, description: 'Generate images from prompts' },
-  { id: 'browser_navigate', label: 'Browser', icon: Compass, description: 'Full JS-rendered web pages' },
-  { id: 'get_user_location', label: 'Location', icon: Target, description: 'Get GPS location' },
-  { id: 'weather', label: 'Weather', icon: Cloud, description: 'Current weather for any city' },
-  { id: 'wikipedia', label: 'Wikipedia', icon: BookOpen, description: 'Wikipedia article summaries' },
-  { id: 'github', label: 'GitHub', icon: Code2, description: 'GitHub user/repo/file data' },
-  { id: 'save_memory', label: 'Memory', icon: Brain, description: 'Save and recall facts' },
-  { id: 'clipboard', label: 'Clipboard', icon: FileText, description: 'Read/write system clipboard' },
-  { id: 'device_info', label: 'Device Info', icon: Cpu, description: 'Device battery, OS, network info' },
+const AVAILABLE_TOOLS: { id: string; label: string; icon: LucideIcon; description: string; category: string }[] = [
+  { id: 'web_search', label: 'Web Search', icon: Search, description: 'Search the web for current information', category: 'web' },
+  { id: 'read_url', label: 'Read URL', icon: Globe, description: 'Extract content from any web page', category: 'web' },
+  { id: 'browser_navigate', label: 'Browser', icon: Compass, description: 'Full JS-rendered web pages', category: 'web' },
+  { id: 'wikipedia', label: 'Wikipedia', icon: BookOpen, description: 'Wikipedia article summaries', category: 'web' },
+  { id: 'terminal_run', label: 'Code Execution', icon: Code2, description: 'Run code (Python, JS, bash) in sandbox', category: 'code' },
+  { id: 'github', label: 'GitHub', icon: Code2, description: 'GitHub user/repo/file data', category: 'code' },
+  { id: 'filesystem_read', label: 'Read Files', icon: FileText, description: 'Read files from device', category: 'files' },
+  { id: 'filesystem_write', label: 'Write Files', icon: PenLine, description: 'Save files to device', category: 'files' },
+  { id: 'image_generation', label: 'Image Gen', icon: Image, description: 'Generate images from prompts', category: 'creative' },
+  { id: 'save_memory', label: 'Memory', icon: Brain, description: 'Save and recall facts', category: 'creative' },
+  { id: 'get_user_location', label: 'Location', icon: Target, description: 'Get GPS location', category: 'system' },
+  { id: 'weather', label: 'Weather', icon: Cloud, description: 'Current weather for any city', category: 'system' },
+  { id: 'clipboard', label: 'Clipboard', icon: FileText, description: 'Read/write system clipboard', category: 'system' },
+  { id: 'device_info', label: 'Device Info', icon: Cpu, description: 'Device battery, OS, network info', category: 'system' },
+];
+
+const CATEGORY_FILTERS = [
+  { id: 'all', label: 'All Agents' },
+  { id: 'web', label: 'Web & Search' },
+  { id: 'code', label: 'Code & Dev' },
+  { id: 'files', label: 'Files & Storage' },
+  { id: 'creative', label: 'AI & Creative' },
+  { id: 'system', label: 'System Tools' },
 ];
 
 function getIconColor(name: string): string {
@@ -119,7 +130,7 @@ class AgentErrorBoundary extends React.Component<
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
             <AlertTriangle size={22} style={{ color: '#f87171' }} />
           </div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Agent crashed</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Agents view encountered an error</p>
           <p className="text-xs leading-relaxed max-w-[260px]" style={{ color: 'var(--gia-muted)' }}>
             {this.state.error?.message || 'Something went wrong'}
           </p>
@@ -128,10 +139,10 @@ class AgentErrorBoundary extends React.Component<
               this.setState({ hasError: false, error: null });
               this.props.onReset?.();
             }}
-            className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl font-medium mt-2"
+            className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl font-medium mt-2 tap-feedback"
             style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
           >
-            <RefreshCw size={12} /> Try again
+            <RefreshCw size={12} /> Reload Agents
           </button>
         </div>
       );
@@ -152,9 +163,8 @@ const PARTICLE_CONFIGS = Array.from({ length: 8 }, (_, i) => ({
 }));
 
 const AgentsModule: React.FC = () => {
-  const { agents, updateAgent, removeAgent } = useAgentStore(useShallow(s => ({
-    agents: s.agents,
-    updateAgent: s.updateAgent,
+  const { agents, removeAgent } = useAgentStore(useShallow(s => ({
+    agents: s.agents || [],
     removeAgent: s.removeAgent,
   })));
 
@@ -163,15 +173,25 @@ const AgentsModule: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editAgentId, setEditAgentId] = useState<string | null>(null);
 
-  const safeAgents = agents ?? [];
-  const editingAgent = editAgentId ? safeAgents.find(a => a.id === editAgentId) ?? null : null;
+  const safeAgents = useMemo(() => agents || [], [agents]);
+  const editingAgent = useMemo(() => {
+    if (!editAgentId) return null;
+    return safeAgents.find(a => a.id === editAgentId) || null;
+  }, [editAgentId, safeAgents]);
 
-  const openChat = (id: string) => { setChatAgentId(id); setView('chat'); };
-  const agent = chatAgentId ? safeAgents.find(a => a.id === chatAgentId) ?? null : null;
+  const openChat = useCallback((id: string) => {
+    setChatAgentId(id);
+    setView('chat');
+  }, []);
+
+  const agent = useMemo(() => {
+    if (!chatAgentId) return null;
+    return safeAgents.find(a => a.id === chatAgentId) || null;
+  }, [chatAgentId, safeAgents]);
 
   return (
     <AgentErrorBoundary onReset={() => { setView('list'); setChatAgentId(null); }}>
-      <div className="flex flex-col h-full" style={{ background: 'var(--gia-bg)' }}>
+      <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--gia-bg)' }}>
         {view === 'list' && (
           <AgentListView
             agents={safeAgents}
@@ -195,23 +215,22 @@ const AgentsModule: React.FC = () => {
             openChat(agentId);
           }}
         />
-        <CreateAgentModal
-          isOpen={editAgentId !== null}
-          editAgent={editingAgent}
-          onClose={() => setEditAgentId(null)}
-          onSave={() => {
-            if (editingAgent) {
-              updateAgent(editingAgent.id, {});
+        {editAgentId && editingAgent && (
+          <CreateAgentModal
+            isOpen={true}
+            editAgent={editingAgent}
+            onClose={() => setEditAgentId(null)}
+            onSave={() => {
               setEditAgentId(null);
-            }
-          }}
-        />
+            }}
+          />
+        )}
       </div>
     </AgentErrorBoundary>
   );
 };
 
-/* ─── List View ─────────────────────────────────────────── */
+/* ─── List View with Layout Animations & Filtering ─────────────────────── */
 
 const AgentListView: React.FC<{
   agents: CustomAgent[];
@@ -219,144 +238,388 @@ const AgentListView: React.FC<{
   onCreateNew: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-}> = ({ agents, onOpenChat, onCreateNew, onEdit, onDelete }) => (
-  <div className="flex flex-col h-full overflow-hidden agent-cosmic-bg">
-    <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0">
-      <div>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--gia-text)' }}>Agents</h1>
-        {agents.length > 0 && (
+}> = ({ agents, onOpenChat, onCreateNew, onEdit, onDelete }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // Filtered & sorted agents list
+  const filteredAgents = useMemo(() => {
+    let result = [...agents];
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(a =>
+        a.name.toLowerCase().includes(q) ||
+        (a.description && a.description.toLowerCase().includes(q)) ||
+        (a.systemPrompt && a.systemPrompt.toLowerCase().includes(q)) ||
+        a.tools.some(t => t.toLowerCase().includes(q))
+      );
+    }
+
+    // Category tool filter
+    if (categoryFilter !== 'all') {
+      const categoryToolIds = AVAILABLE_TOOLS.filter(t => t.category === categoryFilter).map(t => t.id);
+      result = result.filter(a => a.tools.some(t => categoryToolIds.includes(t)));
+    }
+
+    // Sort order
+    result.sort((a, b) => {
+      if (sortBy === 'newest') return (b.createdAt || 0) - (a.createdAt || 0);
+      if (sortBy === 'alphabetical') return a.name.localeCompare(b.name);
+      if (sortBy === 'tools') return b.tools.length - a.tools.length;
+      if (sortBy === 'files') return b.files.length - a.files.length;
+      return 0;
+    });
+
+    return result;
+  }, [agents, searchQuery, categoryFilter, sortBy]);
+
+  const totalToolsCount = useMemo(() => {
+    const unique = new Set<string>();
+    agents.forEach(a => a.tools.forEach(t => unique.add(t)));
+    return unique.size;
+  }, [agents]);
+
+  const totalFilesCount = useMemo(() => {
+    return agents.reduce((acc, a) => acc + a.files.length, 0);
+  }, [agents]);
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden agent-cosmic-bg">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
+        <div>
+          <h1 className="text-lg font-bold" style={{ color: 'var(--gia-text)' }}>Agents</h1>
           <p className="text-[11px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>
-            {agents.length} {agents.length === 1 ? 'agent' : 'agents'}
-          </p>
-        )}
-      </div>
-      <button onClick={onCreateNew} className="w-9 h-9 rounded-xl flex items-center justify-center tap-feedback" style={{ background: 'var(--gia-accent)', color: 'white' }}>
-        <Plus size={16} />
-      </button>
-    </div>
-
-    {agents.length === 0 ? (
-      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden px-6 pb-12">
-        {/* Stable cosmic rays — no Math.random() in render */}
-        <div className="agent-cosmic-ray" style={{ left: '15%', animationDuration: '7s', animationDelay: '0.5s' }} />
-        <div className="agent-cosmic-ray" style={{ left: '40%', animationDuration: '9s', animationDelay: '2s' }} />
-        <div className="agent-cosmic-ray" style={{ left: '65%', animationDuration: '8s', animationDelay: '1s' }} />
-        <div className="agent-cosmic-ray" style={{ left: '85%', animationDuration: '10s', animationDelay: '3s' }} />
-
-        {/* Portal rings */}
-        <div className="agent-portal-ring" style={{ width: 220, height: 220, top: '35%', left: '50%', marginLeft: -110, marginTop: -160 }} />
-        <div className="agent-portal-ring-inner" style={{ width: 180, height: 180, top: '35%', left: '50%', marginLeft: -90, marginTop: -140 }} />
-
-        {/* Stable orbiting particles — positions precomputed, never random in render */}
-        {PARTICLE_CONFIGS.map((p, i) => (
-          <div
-            key={i}
-            className="agent-particle"
-            style={{
-              width: p.size + 1,
-              height: p.size + 1,
-              top: '35%', left: '50%',
-              marginTop: -1, marginLeft: -1,
-              '--orbit-r': `${p.orbitR}px`,
-              '--delay': `${p.delay}s`,
-              animationDuration: `${p.duration}s`,
-              background: `rgba(${168 + p.colorOffset}, ${85 + p.colorOffset}, 247, ${p.alpha})`,
-            } as React.CSSProperties}
-          />
-        ))}
-
-        {/* Floating shapes — stable */}
-        <div className="agent-shape" style={{ top: '15%', left: '20%', '--dx': '80px', '--dy': '60px', '--dr': '360deg', '--duration': '14s', '--delay': '0.5s' } as React.CSSProperties}>
-          <div className="w-4 h-4 border border-violet-500/10 rounded" style={{ transform: 'rotate(45deg)' }} />
-        </div>
-        <div className="agent-shape" style={{ top: '25%', right: '20%', '--dx': '-60px', '--dy': '80px', '--dr': '-270deg', '--duration': '16s', '--delay': '1.5s' } as React.CSSProperties}>
-          <div className="w-3 h-3 border border-purple-400/10 rounded-full" />
-        </div>
-        <div className="agent-shape" style={{ bottom: '30%', left: '15%', '--dx': '100px', '--dy': '-50px', '--dr': '180deg', '--duration': '12s', '--delay': '2.5s' } as React.CSSProperties}>
-          <div className="w-5 h-0.5 bg-violet-400/10 rounded-full" />
-        </div>
-
-        {/* Core icon */}
-        <div className="agent-core-icon relative z-10 mb-6">
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(139,92,246,0.08))', border: '1px solid rgba(168,85,247,0.12)' }}>
-            <Sparkles size={36} style={{ color: 'rgba(168,85,247,0.7)' }} />
-          </div>
-        </div>
-
-        <div className="relative z-10 text-center">
-          <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--gia-text)' }}>
-            <span className="agent-empty-word">Unleash</span>{' '}
-            <span className="agent-empty-word">your</span>{' '}
-            <span className="agent-empty-word" style={{ background: 'linear-gradient(135deg, #a855f7, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>agents</span>
-          </h2>
-          <p className="agent-empty-subtitle text-xs leading-relaxed max-w-xs mx-auto" style={{ color: 'var(--gia-muted)' }}>
-            Craft powerful AI agents with custom knowledge, tools, and personalities.
+            {agents.length} {agents.length === 1 ? 'custom agent' : 'custom agents'} · {totalToolsCount} tools · {totalFilesCount} files
           </p>
         </div>
-
-        <button onClick={onCreateNew} className="agent-empty-btn mt-8 gia-btn gia-btn-primary rounded-xl px-6 py-3 text-sm font-semibold relative z-10 flex items-center gap-2" style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)' }}>
-          <Sparkles size={14} />
-          Awaken Your First Agent
+        <button
+          onClick={onCreateNew}
+          className="w-9 h-9 rounded-xl flex items-center justify-center tap-feedback transition-transform hover:scale-105"
+          style={{ background: 'var(--gia-accent)', color: 'white', boxShadow: '0 4px 14px rgba(168,85,247,0.35)' }}
+        >
+          <Plus size={18} />
         </button>
       </div>
-    ) : (
-      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2.5">
-        <AnimatePresence mode="popLayout">
-          {agents.map((agent, i) => {
-            return (
-              <motion.div
-                key={agent.id}
-                layout
-                initial={{ opacity: 0, y: 16, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92, filter: 'blur(4px)' }}
-                transition={{ duration: 0.35, delay: i * 0.05, ease: [0.16, 1, 0.3, 1], layout: { type: 'spring', stiffness: 300, damping: 30 } }}
-                whileTap={{ scale: 0.98 }}
-                className="gia-card p-4 cursor-pointer"
-                onClick={() => onOpenChat(agent.id)}
+
+      {agents.length > 0 && (
+        <div className="px-4 pb-2 shrink-0 space-y-2">
+          {/* Search bar & Sort Controls */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--gia-muted-2)' }} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter agents by name, tool, or prompt..."
+                className="gia-input text-xs py-2 pl-8 pr-8 rounded-xl w-full"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center"
+                  style={{ color: 'var(--gia-muted)' }}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Sort button dropdown toggle */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSortMenu(!showSortMenu)}
+                className="h-8 px-2.5 rounded-xl flex items-center gap-1.5 text-xs font-medium tap-feedback border"
+                style={{
+                  background: sortBy !== 'newest' ? 'rgba(168,85,247,0.12)' : 'var(--gia-surface)',
+                  borderColor: sortBy !== 'newest' ? 'rgba(168,85,247,0.3)' : 'var(--gia-border)',
+                  color: sortBy !== 'newest' ? '#a855f7' : 'var(--gia-text)',
+                }}
               >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(agent.icon)}15` }}>
-                    <OrbAvatar color={getIconColor(agent.icon)} size={34} animate={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</h3>
-                      {agent.files.length > 0 && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>{agent.files.length}</span>
-                      )}
+                <ArrowUpDown size={12} />
+                <span className="capitalize">{sortBy}</span>
+              </button>
+
+              <AnimatePresence>
+                {showSortMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                    className="absolute right-0 top-10 z-30 w-36 py-1.5 rounded-xl shadow-xl border overflow-hidden"
+                    style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}
+                  >
+                    {[
+                      { id: 'newest', label: 'Newest First' },
+                      { id: 'alphabetical', label: 'Alphabetical' },
+                      { id: 'tools', label: 'Most Tools' },
+                      { id: 'files', label: 'Most Files' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => {
+                          setSortBy(opt.id as SortOption);
+                          setShowSortMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-[11px] font-medium flex items-center justify-between hover:bg-purple-500/10 transition-colors"
+                        style={{ color: sortBy === opt.id ? '#a855f7' : 'var(--gia-text)' }}
+                      >
+                        {opt.label}
+                        {sortBy === opt.id && <Check size={12} />}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Filter Pills Category Row */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {CATEGORY_FILTERS.map((cat) => {
+              const active = categoryFilter === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className="relative px-3 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap transition-colors tap-feedback shrink-0"
+                  style={{
+                    color: active ? '#ffffff' : 'var(--gia-muted)',
+                  }}
+                >
+                  {active && (
+                    <motion.div
+                      layoutId="activeFilterPill"
+                      className="absolute inset-0 rounded-full"
+                      style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)' }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      {agents.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden px-6 pb-12">
+          {/* Stable cosmic rays */}
+          <div className="agent-cosmic-ray" style={{ left: '15%', animationDuration: '7s', animationDelay: '0.5s' }} />
+          <div className="agent-cosmic-ray" style={{ left: '40%', animationDuration: '9s', animationDelay: '2s' }} />
+          <div className="agent-cosmic-ray" style={{ left: '65%', animationDuration: '8s', animationDelay: '1s' }} />
+          <div className="agent-cosmic-ray" style={{ left: '85%', animationDuration: '10s', animationDelay: '3s' }} />
+
+          {/* Portal rings */}
+          <div className="agent-portal-ring" style={{ width: 220, height: 220, top: '35%', left: '50%', marginLeft: -110, marginTop: -160 }} />
+          <div className="agent-portal-ring-inner" style={{ width: 180, height: 180, top: '35%', left: '50%', marginLeft: -90, marginTop: -140 }} />
+
+          {/* Orbiting particles */}
+          {PARTICLE_CONFIGS.map((p, i) => (
+            <div
+              key={i}
+              className="agent-particle"
+              style={{
+                width: p.size + 1,
+                height: p.size + 1,
+                top: '35%', left: '50%',
+                marginTop: -1, marginLeft: -1,
+                '--orbit-r': `${p.orbitR}px`,
+                '--delay': `${p.delay}s`,
+                animationDuration: `${p.duration}s`,
+                background: `rgba(${168 + p.colorOffset}, ${85 + p.colorOffset}, 247, ${p.alpha})`,
+              } as React.CSSProperties}
+            />
+          ))}
+
+          {/* Core icon */}
+          <div className="agent-core-icon relative z-10 mb-6">
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(139,92,246,0.08))', border: '1px solid rgba(168,85,247,0.12)' }}>
+              <Sparkles size={36} style={{ color: 'rgba(168,85,247,0.7)' }} />
+            </div>
+          </div>
+
+          <div className="relative z-10 text-center">
+            <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--gia-text)' }}>
+              <span className="agent-empty-word">Unleash</span>{' '}
+              <span className="agent-empty-word">your</span>{' '}
+              <span className="agent-empty-word" style={{ background: 'linear-gradient(135deg, #a855f7, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>agents</span>
+            </h2>
+            <p className="agent-empty-subtitle text-xs leading-relaxed max-w-xs mx-auto" style={{ color: 'var(--gia-muted)' }}>
+              Craft powerful AI agents with custom knowledge, tools, and personalities.
+            </p>
+          </div>
+
+          <button onClick={onCreateNew} className="agent-empty-btn mt-8 gia-btn gia-btn-primary rounded-xl px-6 py-3 text-sm font-semibold relative z-10 flex items-center gap-2 tap-feedback" style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)' }}>
+            <Sparkles size={14} />
+            Awaken Your First Agent
+          </button>
+        </div>
+      ) : filteredAgents.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <Filter size={32} style={{ color: 'var(--gia-muted-2)' }} className="mb-2" />
+          <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>No matching agents found</p>
+          <p className="text-[11px] mt-1" style={{ color: 'var(--gia-muted)' }}>Try clearing your search query or category filter.</p>
+          <button
+            onClick={() => { setSearchQuery(''); setCategoryFilter('all'); }}
+            className="mt-3 text-xs px-3 py-1.5 rounded-lg font-medium tap-feedback"
+            style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}
+          >
+            Reset Filters
+          </button>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 pb-6">
+          <motion.div
+            layout
+            className="grid grid-cols-1 gap-2.5"
+          >
+            <AnimatePresence mode="popLayout">
+              {filteredAgents.map((agent) => {
+                const color = getIconColor(agent.icon);
+                const IconComponent = resolveAgentIcon(agent.icon);
+
+                return (
+                  <motion.div
+                    key={agent.id}
+                    layout
+                    layoutId={`agent-card-${agent.id}`}
+                    initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -8, filter: 'blur(4px)' }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 350,
+                      damping: 32,
+                      mass: 0.8,
+                    }}
+                    whileHover={{ scale: 1.01, y: -1 }}
+                    whileTap={{ scale: 0.985 }}
+                    onClick={() => onOpenChat(agent.id)}
+                    className="gia-card p-3.5 cursor-pointer relative overflow-hidden group border transition-all"
+                    style={{
+                      background: 'var(--gia-surface)',
+                      borderColor: 'var(--gia-border)',
+                    }}
+                  >
+                    {/* Background Subtle Accent Glow */}
+                    <div
+                      className="absolute -right-12 -top-12 w-28 h-28 rounded-full pointer-events-none opacity-20 transition-opacity group-hover:opacity-40"
+                      style={{
+                        background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
+                        filter: 'blur(16px)',
+                      }}
+                    />
+
+                    <div className="flex items-start gap-3 relative z-10">
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}15`, border: `1px solid ${color}30` }}>
+                        <OrbAvatar color={color} size={34} animate={false} icon={<IconComponent size={18} />} />
+                      </div>
+
+                      {/* Main Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold truncate" style={{ color: 'var(--gia-text)' }}>
+                            {agent.name}
+                          </h3>
+                          {agent.files.length > 0 && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-1" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>
+                              <FileText size={9} />
+                              {agent.files.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {agent.description ? (
+                          <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+                            {agent.description}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] italic truncate mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>
+                            No description provided
+                          </p>
+                        )}
+
+                        {/* Assigned Tools Badges */}
+                        <div className="flex flex-wrap items-center gap-1 mt-2">
+                          {agent.tools.slice(0, 4).map((tId) => {
+                            const tDef = AVAILABLE_TOOLS.find(t => t.id === tId);
+                            const TIcon = tDef?.icon || Code2;
+                            return (
+                              <span
+                                key={tId}
+                                className="inline-flex items-center gap-1 text-[8px] px-1.5 py-0.5 rounded-md font-medium"
+                                style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
+                              >
+                                <TIcon size={8} style={{ color: color }} />
+                                {tDef?.label || tId}
+                              </span>
+                            );
+                          })}
+                          {agent.tools.length > 4 && (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: 'rgba(168,85,247,0.08)', color: '#a855f7' }}>
+                              +{agent.tools.length - 4} more
+                            </span>
+                          )}
+                          {agent.tools.length === 0 && (
+                            <span className="text-[8px] px-1.5 py-0.5 rounded-md font-medium" style={{ color: 'var(--gia-muted-2)' }}>
+                              No tools
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onOpenChat(agent.id); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center tap-feedback hover:bg-purple-500/10"
+                          style={{ color: '#a855f7' }}
+                          title="Open Chat"
+                        >
+                          <MessageSquare size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEdit(agent.id); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center tap-feedback hover:bg-gray-500/10"
+                          style={{ color: 'var(--gia-muted)' }}
+                          title="Settings"
+                        >
+                          <Settings2 size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDelete(agent.id); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center tap-feedback hover:bg-red-500/10"
+                          style={{ color: 'var(--gia-muted-2)' }}
+                          title="Delete Agent"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {agent.description && (
-                        <p className="text-[11px] truncate" style={{ color: 'var(--gia-muted)' }}>{agent.description}</p>
-                      )}
-                      <span className="text-[8px] px-1 py-0.5 rounded shrink-0" style={{ background: 'rgba(168,85,247,0.05)', color: 'var(--gia-muted-2)' }}>
-                        {agent.tools.length} tool{agent.tools.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={(e) => { e.stopPropagation(); onEdit(agent.id); }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: 'var(--gia-muted-2)' }}>
-                      <Settings2 size={12} />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(agent.id); }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: 'var(--gia-muted-2)' }}>
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-    )}
-  </div>
-);
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ─── Chat View ─────────────────────────────────────────── */
 
 function buildToolSection(tools: string[]): string {
-  if (tools.length === 0) return '';
+  if (!tools || tools.length === 0) return '';
   const lines = [
     '## Tools you can use',
     'Call a tool by writing a fenced code block:',
@@ -385,13 +648,23 @@ const AgentChatView: React.FC<{
   const addMsg = useAgentStore(s => s.addMessage);
   const clear = useAgentStore(s => s.clearChat);
 
+  const accumulatedRef = useRef('');
+  const rafIdRef = useRef<number | null>(null);
+
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     });
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+  useEffect(() => { scrollToBottom(); }, [messages.length, scrollToBottom]);
+
+  // Clean up RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    };
+  }, []);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -403,7 +676,6 @@ const AgentChatView: React.FC<{
     setLoading(true);
 
     const asstId = genId();
-    // Safe: set generation state but don't let it block cleanup
     try {
       useGiaStore.getState().setGenerationState({ active: true, module: 'agents', sessionId: agent.id, messageId: asstId });
     } catch { /* non-critical */ }
@@ -414,10 +686,10 @@ const AgentChatView: React.FC<{
     try {
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
 
-      // RAG search — graceful fallback, never throws
+      // RAG search — graceful fallback
       let ragResults: Awaited<ReturnType<typeof searchAgentRAG>> = [];
       let sources: AgentSource[] = [];
-      if (agent.files.length > 0) {
+      if (agent.files && agent.files.length > 0) {
         try {
           ragResults = await searchAgentRAG(agent.id, text, 8);
           sources = ragResults.map(r => ({ fileName: r.title, score: r.score, excerpt: r.text.slice(0, 200) }));
@@ -427,15 +699,10 @@ const AgentChatView: React.FC<{
       }
 
       const fileContext = ragResults.length > 0
-        ? `
-
-## Knowledge files
-Relevant passages from the user's knowledge files. Cite the specific file name when you use information from it.
-
-${ragResults.map((r, i) => `[Source ${i + 1}: ${r.title}]\n${r.text.slice(0, 600)}`).join('\n\n')}`
+        ? `\n\n## Knowledge files\nRelevant passages from the user's knowledge files. Cite the specific file name when you use information from it.\n\n${ragResults.map((r, i) => `[Source ${i + 1}: ${r.title}]\n${r.text.slice(0, 600)}`).join('\n\n')}`
         : '';
 
-      const toolSection = buildToolSection(agent.tools);
+      const toolSection = buildToolSection(agent.tools || []);
 
       const systemPrompt = `${agent.systemPrompt}
 
@@ -443,7 +710,7 @@ You are "${agent.name}" — embody this persona fully.
 ${agent.description ? `Your purpose: ${agent.description}` : ''}
 
 ## Your knowledge files
-${agent.files.length > 0
+${agent.files && agent.files.length > 0
   ? `You have access to ${agent.files.length} knowledge file(s). Answer from these files when relevant. When you use information from a file, name it.`
   : 'No knowledge files uploaded.'}
 
@@ -455,7 +722,8 @@ ${toolSection}
 - Be thorough and direct. No unnecessary restrictions.
 - Format your responses beautifully: use headings, code blocks, bullet lists, bold text as appropriate.${fileContext}`;
 
-      let accumulated = '';
+      accumulatedRef.current = '';
+
       const res = await GiaBrain.generate({
         prompt: text,
         history,
@@ -463,25 +731,32 @@ ${toolSection}
         systemPromptMode: 'replace',
         temperature: 0.8,
         onStream: (chunk) => {
-          accumulated += chunk;
-          useAgentStore.setState(s => ({
-            chatSessions: {
-              ...s.chatSessions,
-              [agent.id]: (s.chatSessions[agent.id] || []).map(m =>
-                m.id === asstId ? { ...m, content: accumulated } : m
-              ),
-            },
-          }));
+          accumulatedRef.current += chunk;
+
+          // Throttled UI state updates via requestAnimationFrame to avoid frame drops
+          if (!rafIdRef.current) {
+            rafIdRef.current = requestAnimationFrame(() => {
+              rafIdRef.current = null;
+              const currentContent = accumulatedRef.current;
+              useAgentStore.setState(s => ({
+                chatSessions: {
+                  ...s.chatSessions,
+                  [agent.id]: (s.chatSessions[agent.id] || []).map(m =>
+                    m.id === asstId ? { ...m, content: currentContent } : m
+                  ),
+                },
+              }));
+            });
+          }
         },
       });
 
-      const finalContent = accumulated || res.text;
+      const finalContent = accumulatedRef.current || res.text;
 
       useAgentStore.setState(s => {
         const session = (s.chatSessions[agent.id] || []).map(m =>
           m.id === asstId ? { ...m, content: finalContent, sources } : m
         );
-        // Cap session size to avoid IDB bloat / quota exceeded on Android
         const capped = session.length > MAX_MESSAGES_PER_SESSION
           ? session.slice(session.length - MAX_MESSAGES_PER_SESSION)
           : session;
@@ -507,7 +782,7 @@ ${toolSection}
         useGiaStore.getState().setGenerationState({ active: false, module: null, sessionId: null, messageId: null });
       } catch { /* non-critical */ }
 
-      // Background notification if user left agents
+      // Background notification
       (async () => {
         try {
           const { default: DesktopNotifications } = await import('../services/DesktopNotifications');
@@ -522,23 +797,26 @@ ${toolSection}
     }
   };
 
+  const color = getIconColor(agent.icon);
+  const IconComponent = resolveAgentIcon(agent.icon);
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
         <button onClick={onBack} className="w-7 h-7 rounded-lg flex items-center justify-center tap-feedback" style={{ color: 'var(--gia-muted)' }}>
           <ChevronLeft size={16} />
         </button>
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(agent.icon)}15` }}>
-          <OrbAvatar color={getIconColor(agent.icon)} size={26} animate={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}15` }}>
+          <OrbAvatar color={color} size={26} animate={false} icon={<IconComponent size={14} />} />
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</h2>
           <div className="flex items-center gap-2 mt-0.5">
-            {agent.tools.length > 0 && (
+            {agent.tools && agent.tools.length > 0 && (
               <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }}>{agent.tools.length} tools</span>
             )}
-            {agent.files.length > 0 && (
+            {agent.files && agent.files.length > 0 && (
               <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }}>{agent.files.length} files</span>
             )}
           </div>
@@ -550,7 +828,7 @@ ${toolSection}
       </div>
 
       {/* Files strip */}
-      {agent.files.length > 0 && (
+      {agent.files && agent.files.length > 0 && (
         <div className="flex items-center gap-1.5 px-4 py-2 overflow-x-auto shrink-0" style={{ background: 'var(--gia-surface)', borderBottom: '1px solid var(--gia-border)' }}>
           <FileText size={11} style={{ color: 'var(--gia-muted-2)' }} />
           {agent.files.map(f => (
@@ -562,17 +840,17 @@ ${toolSection}
         </div>
       )}
 
-      {/* Messages — renders MarkdownRenderer for assistant content */}
+      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${getIconColor(agent.icon)}08` }}>
-              <OrbAvatar color={getIconColor(agent.icon)} size={46} animate glow={false} icon={React.createElement(resolveAgentIcon(agent.icon))} />
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${color}08` }}>
+              <OrbAvatar color={color} size={46} animate glow={false} icon={<IconComponent size={22} />} />
             </div>
             <p className="text-xs font-medium" style={{ color: 'var(--gia-muted)' }}>Ask {agent.name} anything</p>
             <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-              {agent.tools.length > 0 ? `${agent.tools.length} tool(s) available` : 'No tools assigned'}
-              {agent.files.length > 0 ? ` · ${agent.files.length} file(s)` : ''}
+              {agent.tools && agent.tools.length > 0 ? `${agent.tools.length} tool(s) available` : 'No tools assigned'}
+              {agent.files && agent.files.length > 0 ? ` · ${agent.files.length} file(s)` : ''}
             </p>
           </div>
         )}
@@ -593,13 +871,10 @@ ${toolSection}
                   style={isLatestAssistant ? { boxShadow: '0 0 20px rgba(168,85,247,0.08)' } : {}}
                 >
                   {msg.role === 'user' ? (
-                    // User messages: plain text
                     msg.content || null
                   ) : msg.content ? (
-                    // Assistant messages: full MarkdownRenderer
                     <MarkdownRenderer content={msg.content} />
                   ) : (
-                    // Loading dots
                     <span className="flex items-center gap-1.5 py-1">
                       <span className="agent-thinking-dot w-[5px] h-[5px] rounded-full" style={{ background: 'var(--gia-accent)' }} />
                       <span className="agent-thinking-dot w-[5px] h-[5px] rounded-full" style={{ background: 'var(--gia-accent)' }} />
@@ -615,9 +890,9 @@ ${toolSection}
                       <div
                         key={i}
                         className="agent-source-chip group relative flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] cursor-default"
-                        style={{ background: 'rgba(168,85,247,0.04)', border: '1px solid rgba(168,85,247,0.08)', animationDelay: `${0.15 + i * 0.08}s` }}
+                        style={{ background: 'rgba(168,85,247,0.04)', border: '1px solid rgba(168,85,247,0.08)' }}
                       >
-                        <FileText size={9} style={{ color: getIconColor(agent.icon) }} />
+                        <FileText size={9} style={{ color: color }} />
                         <span style={{ color: 'var(--gia-muted)' }}>{s.fileName}</span>
                         <span className="text-[7px] font-mono" style={{ color: s.score > 0.7 ? '#34d399' : s.score > 0.5 ? '#f59e0b' : '#71717a' }}>
                           {(s.score * 100).toFixed(0)}%
@@ -659,9 +934,6 @@ ${toolSection}
 
 /* ─── Create / Edit Modal ────────────────────────────────── */
 
-// FIX: onSave now receives the created agent's ID, not the input object
-// This eliminates the double-creation bug where the old code called addAgent
-// both inside the modal AND in the parent's onSave handler.
 const CreateAgentModal: React.FC<{
   isOpen: boolean;
   editAgent: CustomAgent | null;
@@ -692,7 +964,7 @@ const CreateAgentModal: React.FC<{
 
   if (!isOpen) return null;
 
-  const isEditing = editAgent !== null;
+  const isEditing = Boolean(editAgent);
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -764,6 +1036,9 @@ const CreateAgentModal: React.FC<{
     }
   };
 
+  const currentIconColor = getIconColor(icon);
+  const CurrentIconComponent = resolveAgentIcon(icon);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <motion.div
@@ -791,18 +1066,19 @@ const CreateAgentModal: React.FC<{
         <div className="p-5 space-y-4">
           {/* Icon picker */}
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Avatar</label>
+            <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Avatar Icon</label>
             <div className="flex items-center gap-3 mt-2">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${getIconColor(icon)}15` }}>
-                <OrbAvatar color={getIconColor(icon)} size={34} animate glow={false} icon={React.createElement(resolveAgentIcon(icon))} />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${currentIconColor}15` }}>
+                <OrbAvatar color={currentIconColor} size={34} animate glow={false} icon={<CurrentIconComponent size={18} />} />
               </div>
-              <div className="flex-1 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+              <div className="flex-1 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
                 {AGENT_ICONS.map(a => {
+                  const AIcon = resolveAgentIcon(a.name);
                   return (
                     <button key={a.name} onClick={() => setIcon(a.name)}
                       className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback"
                       style={{ background: icon === a.name ? `${a.color}20` : 'var(--gia-surface-2)', border: icon === a.name ? `1px solid ${a.color}40` : '1px solid var(--gia-border)' }}>
-                      <OrbAvatar color={a.color} size={16} animate={false} glow={icon === a.name} />
+                      <OrbAvatar color={a.color} size={16} animate={false} glow={icon === a.name} icon={<AIcon size={10} />} />
                     </button>
                   );
                 })}
@@ -832,7 +1108,7 @@ const CreateAgentModal: React.FC<{
           {/* Tool selection */}
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
-              Tools <span className="text-[8px] font-normal lowercase" style={{ color: 'var(--gia-muted-2)' }}>(pick what this agent can do)</span>
+              Tools <span className="text-[8px] font-normal lowercase" style={{ color: 'var(--gia-muted-2)' }}>(select capabilities)</span>
             </label>
             <div className="mt-1.5 grid grid-cols-2 gap-1.5">
               {AVAILABLE_TOOLS.map(t => {
@@ -841,8 +1117,8 @@ const CreateAgentModal: React.FC<{
                 return (
                   <button key={t.id} onClick={() => setTools(prev => active ? prev.filter(x => x !== t.id) : [...prev, t.id])}
                     className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[10px] text-left tap-feedback transition-all"
-                    style={{ background: active ? `${getIconColor(icon)}10` : 'var(--gia-surface-2)', border: active ? `1px solid ${getIconColor(icon)}30` : '1px solid var(--gia-border)' }}>
-                    <T size={12} style={{ color: active ? getIconColor(icon) : 'var(--gia-muted-2)' }} />
+                    style={{ background: active ? `${currentIconColor}10` : 'var(--gia-surface-2)', border: active ? `1px solid ${currentIconColor}30` : '1px solid var(--gia-border)' }}>
+                    <T size={12} style={{ color: active ? currentIconColor : 'var(--gia-muted-2)' }} />
                     <div className="flex-1 min-w-0">
                       <span className="block font-medium truncate" style={{ color: active ? 'var(--gia-text)' : 'var(--gia-muted)' }}>{t.label}</span>
                       <span className="block text-[8px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{t.description}</span>
@@ -857,7 +1133,7 @@ const CreateAgentModal: React.FC<{
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Knowledge Files</label>
 
-            {isEditing && editAgent && editAgent.files.length > 0 && (
+            {isEditing && editAgent && editAgent.files && editAgent.files.length > 0 && (
               <div className="mt-1.5 space-y-1 mb-2">
                 {editAgent.files.map(f => (
                   <div key={f.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px]" style={{ background: 'var(--gia-surface-2)' }}>

@@ -7,6 +7,15 @@ import type { Skill } from '../../store/useGiaStore';
 
 const isNative = isNativePlatform;
 
+function normalizeLanguage(val: unknown): 'sh' | 'python' | 'js' | 'cpp' {
+  if (typeof val !== 'string' || !val.trim()) return 'sh';
+  const l = val.toLowerCase().trim();
+  if (['python', 'python3', 'py', 'python2'].includes(l)) return 'python';
+  if (['js', 'javascript', 'node', 'nodejs', 'ts', 'typescript'].includes(l)) return 'js';
+  if (['cpp', 'c++', 'c', 'cplusplus'].includes(l)) return 'cpp';
+  return 'sh';
+}
+
 const buildProject: Tool = {
   id: 'build_project',
   name: 'build_project',
@@ -53,7 +62,7 @@ const buildProject: Tool = {
         content: z.string().max(10 * 1024 * 1024),
       })).min(1, 'At least one file is required'),
       build_command: z.string().max(10000).optional(),
-      language: z.enum(['sh', 'python', 'js', 'cpp']).default('sh'),
+      language: z.preprocess(normalizeLanguage, z.enum(['sh', 'python', 'js', 'cpp'])).default('sh'),
       output_filename: z.string().max(200).default('project.zip'),
       entry: z.string().max(500).optional(),
     });

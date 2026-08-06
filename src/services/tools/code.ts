@@ -3,6 +3,14 @@ import CodeRunner from '../CodeRunner';
 import type { Tool } from './types';
 import ToolRegistry from '../ToolRegistry';
 
+function normalizeCodeLanguage(val: unknown): 'js' | 'python' | 'ts' {
+  if (typeof val !== 'string' || !val.trim()) return 'python';
+  const l = val.toLowerCase().trim();
+  if (['js', 'javascript', 'node', 'nodejs'].includes(l)) return 'js';
+  if (['ts', 'typescript'].includes(l)) return 'ts';
+  return 'python';
+}
+
 const codeExecution: Tool = {
   id: 'code_execution',
   name: 'code_execution',
@@ -17,7 +25,7 @@ const codeExecution: Tool = {
   },
   execute: async ({ language, code }) => {
     const codeSchema = z.object({
-      language: z.enum(['js', 'python', 'ts']),
+      language: z.preprocess(normalizeCodeLanguage, z.enum(['js', 'python', 'ts'])).default('python'),
       code: z.string().min(1, "Code is required").max(10000, "Code too long"),
     });
 
