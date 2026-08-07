@@ -2,8 +2,10 @@
 set -euo pipefail
 ROOT_DIR="$(pwd)/server"
 OUT_DIR="$ROOT_DIR/prebuilt-rootfs"
-ASSET_DIR="$(pwd)/android/app/src/main/assets/rootfs"
-mkdir -p "$OUT_DIR" "$ASSET_DIR"
+ASSET_ROOT="$(pwd)/android/app/src/main/assets"
+ASSET_DIR="$ASSET_ROOT/rootfs"
+PROOT_ASSET_DIR="$ASSET_ROOT/proot"
+mkdir -p "$OUT_DIR" "$ASSET_DIR" "$PROOT_ASSET_DIR"
 
 # Optionally force building images for arm64 (requires qemu/binfmt support)
 PLATFORM_ARG=""
@@ -13,9 +15,8 @@ if [ "${USE_ARM64:-0}" = "1" ]; then
 fi
 
 # Packages to preinstall (adjust as needed)
-ALPINE_PKGS="bash curl wget python3 nodejs npm build-base proot"
-DEBIAN_PKGS="bash curl wget python3 nodejs npm build-essential proot"
-UBUNTU_PKGS="$DEBIAN_PKGS"
+ALPINE_PKGS="bash curl wget python3 nodejs npm build-base git proot"
+UBUNTU_PKGS="bash curl wget python3 nodejs npm build-essential git proot openjdk-17-jre-headless"
 
 # Helper to build and export container filesystem
 build_and_export() {
@@ -38,6 +39,26 @@ build_and_export() {
     docker exec "$cid" sh -c "apt-get clean || true"
   fi
 
+  # Try to copy a proot binary from the container (best-effort)
+  echo ">>> Attempting to copy proot binary from container (if present)"
+  if docker exec "$cid" sh -c "command -v proot >/dev/null 2>&1"; then
+    # docker cp requires container to be running or exist; use docker cp from container path
+    set +e
+    docker cp "$cid":/usr/bin/proot "$OUT_DIR/${name}-proot" 2>/dev/null || true
+    docker cp "$cid":/usr/local/bin/proot "$OUT_DIR/${name}-proot" 2>/dev/null || true
+    set -e
+    if [ -f "$OUT_DIR/${name}-proot" ]; then
+      echo ">>> Found proot in container: $OUT_DIR/${name}-proot"
+      chmod +x "$OUT_DIR/${name}-proot" || true
+      cp -f "$OUT_DIR/${name}-proot" "$PROOT_ASSET_DIR/proot"
+      echo ">>> Copied proot to assets: $PROOT_ASSET_DIR/proot"
+    else
+      echo ">>> proot binary not found via docker cp; it may be in a different path or dynamically provided"
+    fi
+  else
+    echo ">>> proot not installed in container or not found"
+  fi
+
   echo ">>> Exporting filesystem for $name (uncompressed .tar)"
   docker export "$cid" > "$OUT_DIR/${name}-rootfs.tar"
 
@@ -55,10 +76,12 @@ build_and_export() {
   docker rm -f "$cid" >/dev/null 2>&1 || true
 }
 
-echo ">>> Starting prebuilt rootfs creation"
+echo ">>> Starting prebuilt rootfs creation (alpine + ubuntu only)"
 build_and_export "alpine:3.21" "alpine" "$ALPINE_PKGS"
-build_and_export "debian:12-slim" "debian" "$DEBIAN_PKGS"
 build_and_export "ubuntu:22.04" "ubuntu" "$UBUNTU_PKGS"
 
 echo ">>> All done. Artifacts placed in: $ASSET_DIR"
 ls -lh "$ASSET_DIR" || true
+if [ -f "$PROOT_ASSET_DIR/proot" ]; then
+  ls -lh "$PROOT_ASSET_DIR/proot" || true
+fi
