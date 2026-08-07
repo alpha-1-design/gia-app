@@ -18,6 +18,10 @@ OUT_DIR="$ROOT_DIR/prebuilt-rootfs"
 ASSET_DIR="$(pwd)/android/app/src/main/assets/terminal"
 mkdir -p "$OUT_DIR" "$ASSET_DIR"
 
+# Build Ubuntu rootfs too? Default OFF: keeps the APK small (~190MB vs ~505MB).
+# Set BUILD_UBUNTU=1 to re-enable. Alpine is always built.
+BUILD_UBUNTU="${BUILD_UBUNTU:-0}"
+
 PLATFORM_ARG=""
 if [ "${USE_ARM64:-1}" = "1" ]; then
   PLATFORM_ARG="--platform=linux/arm64"
@@ -98,11 +102,15 @@ build_and_export() {
   docker rm -f "$cid" >/dev/null 2>&1 || true
 }
 
-echo ">>> Starting prebuilt rootfs creation (alpine + ubuntu)"
+echo ">>> Starting prebuilt rootfs creation (alpine${BUILD_UBUNTU:+ + ubuntu})"
 # Each build is independent — a failure in one must not abort the other.
 set +e
 build_and_export "alpine:3.21" "alpine" "$ALPINE_PKGS" "alpine-minirootfs.tar.gz"
-build_and_export "ubuntu:22.04" "ubuntu" "$UBUNTU_PKGS" "ubuntu-rootfs.tar.gz"
+if [ "$BUILD_UBUNTU" = "1" ]; then
+  build_and_export "ubuntu:22.04" "ubuntu" "$UBUNTU_PKGS" "ubuntu-rootfs.tar.gz"
+else
+  echo ">>> Skipping Ubuntu rootfs (BUILD_UBUNTU=0) — alpine-minirootfs is the bundled terminal distro"
+fi
 set -e
 
 echo ">>> All done. Artifacts placed in: $ASSET_DIR"

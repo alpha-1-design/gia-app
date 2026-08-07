@@ -30,13 +30,15 @@ jobs:
         with:
           platforms: arm64
 
-      - name: Build preinstalled Alpine + Ubuntu rootfs for terminal
+      - name: Build preinstalled Alpine rootfs for terminal (Ubuntu optional)
         shell: bash
         run: |
           chmod +x scripts/create-rootfs-ci.sh
           USE_ARM64=1 bash scripts/create-rootfs-ci.sh
         env:
           DOCKER_BUILDKIT: 1
+          # Alpine-only by default → small APK (~190MB). Set to 1 for Ubuntu too.
+          BUILD_UBUNTU: 0
 
       - name: Verify terminal rootfs assets exist
         shell: bash
@@ -49,7 +51,7 @@ jobs:
               echo "ubuntu-rootfs.tar.gz: $(du -h android/app/src/main/assets/terminal/ubuntu-rootfs.tar.gz | cut -f1)"
               gzip -t android/app/src/main/assets/terminal/ubuntu-rootfs.tar.gz && echo "ubuntu gzip OK"
             else
-              echo "WARNING: ubuntu-rootfs.tar.gz missing — terminal will use Alpine"
+              echo "NOTE: ubuntu-rootfs.tar.gz not bundled (BUILD_UBUNTU=0) — terminal uses Alpine"
             fi
           else
             echo "ERROR: terminal rootfs assets missing!" >&2
