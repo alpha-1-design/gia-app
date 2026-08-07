@@ -25,7 +25,6 @@ build_and_export() {
   docker pull $PLATFORM_ARG "$image"
 
   echo ">>> Creating container $cname from $image"
-  # Create (but don't run) a container so we can exec install then export
   cid=$(docker create $PLATFORM_ARG --name "$cname" "$image" /bin/sh -c "sleep 300")
   docker start "$cid"
 
@@ -39,15 +38,21 @@ build_and_export() {
     docker exec "$cid" sh -c "apt-get clean || true"
   fi
 
-  echo ">>> Exporting filesystem for $name"
-  docker export "$cid" | gzip -c > "$OUT_DIR/${name}-rootfs.tar.gz"
+  echo ">>> Exporting filesystem for $name (uncompressed .tar)"
+  docker export "$cid" > "$OUT_DIR/${name}-rootfs.tar"
+
+  # Verify the tar is valid
+  if tar -tf "$OUT_DIR/${name}-rootfs.tar" >/dev/null 2>&1; then
+    echo ">>> Export looks valid"
+    echo ">>> Moving ${name}-rootfs.tar -> assets"
+    cp -f "$OUT_DIR/${name}-rootfs.tar" "$ASSET_DIR/${name}-rootfs.tar"
+    echo ">>> Saved $ASSET_DIR/${name}-rootfs.tar (size: $(du -h "$ASSET_DIR/${name}-rootfs.tar" | cut -f1))"
+  else
+    echo ">>> ERROR: exported tar invalid for $name, skipping copy" >&2
+  fi
 
   echo ">>> Cleaning up container $cid"
   docker rm -f "$cid" >/dev/null 2>&1 || true
-
-  echo ">>> Moving ${name}-rootfs.tar.gz -> assets"
-  cp -f "$OUT_DIR/${name}-rootfs.tar.gz" "$ASSET_DIR/"
-  echo ">>> Saved $ASSET_DIR/${name}-rootfs.tar.gz (size: $(du -h "$ASSET_DIR/${name}-rootfs.tar.gz" | cut -f1))"
 }
 
 echo ">>> Starting prebuilt rootfs creation"
