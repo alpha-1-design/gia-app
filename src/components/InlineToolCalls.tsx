@@ -5,6 +5,7 @@ import { ToolIcon } from './ToolIcons';
 import { TOOL_LABELS } from '../utils/toolLabels';
 import type { ProtocolProposal } from '../types/protocol';
 import { rendererRegistry } from '../services/mcp/RendererRegistry';
+import { ClaudeTerminalBlock } from './ClaudeTerminalBlock';
 
 const STATUS_LABELS: Record<string, string> = {
   send_whatsapp: 'WhatsApp message prepared', send_email: 'Email composed',
@@ -35,6 +36,23 @@ const toolColor = (type: string) => TOOL_COLORS[type] || '#a855f7';
 const ProtocolCard: React.FC<{ protocol: ProtocolProposal; idx: number }> = ({ protocol, idx }) => {
   const [expandInput, setExpandInput] = useState(false);
   const [expandOutput, setExpandOutput] = useState(false);
+
+  const isTerminalTool = ['terminal_run', 'code_execution', 'sandbox_exec', 'build_project'].includes(protocol.type);
+
+  if (isTerminalTool) {
+    const durationMs = protocol.createdAt && protocol.completedAt ? protocol.completedAt - protocol.createdAt : undefined;
+    return (
+      <ClaudeTerminalBlock
+        command={(protocol.args?.command as string) || (protocol.args?.code as string)}
+        language={(protocol.args?.language as string) || 'sh'}
+        status={protocol.state}
+        output={protocol.result}
+        error={protocol.error}
+        durationMs={durationMs}
+        args={protocol.args}
+      />
+    );
+  }
 
   const color = toolColor(protocol.type);
   const isCompleted = protocol.state === 'completed';

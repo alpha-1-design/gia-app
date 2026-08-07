@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import terminalService from '../TerminalService';
+import terminalService, { getSmartTimeout } from '../TerminalService';
 import SandboxService from '../SandboxService';
 import CodeRunner from '../CodeRunner';
 import type { Tool, ToolContext } from './types';
@@ -99,6 +99,7 @@ const terminalRun: Tool = {
     }
 
     const { command, language, workdir, timeout } = parsed.data;
+    const effectiveTimeout = getSmartTimeout(command, timeout);
     const shellCommand = buildShellCommand(command, language);
     const errors: string[] = [];
 
@@ -106,7 +107,7 @@ const terminalRun: Tool = {
     ctx?.onProgress?.(0.1, 'Running in terminal…');
     ctx?.onThought?.(`💻 Running: ${shellCommand.slice(0, 80)}...`);
     try {
-      const result = await terminalService.exec(shellCommand, workdir, undefined, timeout);
+      const result = await terminalService.exec(shellCommand, workdir, undefined, effectiveTimeout);
 
       // exitCode -1 + sessionId 'mock' = plugin not available (web fallback)
       if (!(result.exitCode === -1 && result.sessionId === 'mock')) {

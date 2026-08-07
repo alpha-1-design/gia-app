@@ -125,6 +125,8 @@ CSS variables in `src/styles/globals.css`:
 | Service | Path | Role |
 |---------|------|------|
 | `GiaBrain` | `services/GiaBrain.ts` | Generation orchestrator, tool loop |
+| `ClaudeTerminalBlock` | `components/ClaudeTerminalBlock.tsx` | Claude-style dark terminal execution block UI |
+| `TerminalService` | `services/TerminalService.ts` | Native shell execution & smart timeout manager (`getSmartTimeout`) |
 | `buildGiaSystem` | `services/buildGiaSystem.ts` | System prompt assembly |
 | `ProviderRegistry` | `services/ProviderRegistry.ts` | Provider definitions |
 | `ProviderMonitor` | `services/ProviderMonitor.ts` | Health tracking, smart fallback |
@@ -135,7 +137,7 @@ CSS variables in `src/styles/globals.css`:
 | `InputGuardrails` | `services/InputGuardrails.ts` | Prompt injection blocking |
 | `ResponseCache` | `services/ResponseCache.ts` | Request dedup with TTL |
 | `PluginManager` | `services/PluginManager.ts` | Hook-based plugin system |
-| `MCPManager` | `services/MCPManager.ts` | MCP server lifecycle |
+| `MCPManager` | `services/MCPManager.ts` | MCP server lifecycle & OAuth deep-link handler (`gia://mcp-oauth-callback`) |
 | `ToolRunner` | `services/brain/toolRunner.ts` | Tool execution with retry + protocol approvals |
 | `ToolExecutionService` | `services/ToolExecutionService.ts` | Full tool orchestration |
 | `ToolRegistry` | `services/ToolRegistry.ts` | Tool definition registration |

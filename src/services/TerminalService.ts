@@ -72,6 +72,30 @@ interface GiaTerminalPlugin {
   getStatus(): Promise<{ running: boolean; sessionCount: number }>;
 }
 
+export function getSmartTimeout(command: string, requestedTimeout?: number): number {
+  if (requestedTimeout && requestedTimeout > 30000 && requestedTimeout !== 60000) {
+    return requestedTimeout;
+  }
+  const cmd = command.toLowerCase();
+  // Package installation / dependency downloads
+  if (/(npm\s+(install|ci|i|add)|yarn\s+(install|add)|pnpm\s+(install|add)|pip3?\s+install|apt-get\s+install|apk\s+add|cargo\s+(install|build)|go\s+get|composer\s+install)/.test(cmd)) {
+    return 300000; // 5 minutes
+  }
+  // Heavy builds & compilations
+  if (/(npm\s+run\s+build|vite\s+build|tsc|g\+\+|gcc|make|cmake|gradle|docker\s+build|npx\s+cap\s+sync)/.test(cmd)) {
+    return 240000; // 4 minutes
+  }
+  // Git clones / network downloads
+  if (/(git\s+clone|wget|curl|git\s+fetch|git\s+pull)/.test(cmd)) {
+    return 180000; // 3 minutes
+  }
+  // Tests / python scripts / node runs
+  if (/(pytest|vitest|npm\s+test|python3?|node)/.test(cmd)) {
+    return 120000; // 2 minutes
+  }
+  return requestedTimeout || 60000; // 1 minute default for simple commands
+}
+
 class TerminalService {
   private plugin: unknown;
 
@@ -116,12 +140,13 @@ class TerminalService {
       };
     }
 
+    const effectiveTimeout = getSmartTimeout(command, timeout);
     try {
       const result = await this.p.exec({
         command,
         workdir: workdir || '',
         env: env || {},
-        timeout: timeout || 30000,
+        timeout: effectiveTimeout,
       });
       return {
         output: result.output ?? '',

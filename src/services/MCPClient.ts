@@ -163,9 +163,22 @@ export class MCPClient {
         args: args || [],
       });
     } catch {
+      // Fallback: Try GIA Stdio Bridge SSE on localhost:3080
+      try {
+        const bridgeRes = await fetch('http://localhost:3080/health', { signal: AbortSignal.timeout(1500) });
+        if (bridgeRes.ok) {
+          const { SSEClientTransport } = await import(
+            '@modelcontextprotocol/sdk/client/sse'
+          ) as unknown as { SSEClientTransport: new (url: URL) => unknown };
+          return new SSEClientTransport(new URL('http://localhost:3080/sse'));
+        }
+      } catch {
+        /* Bridge unavailable */
+      }
+
       throw new Error(
-        'Stdio transport is only available in Node.js environments. ' +
-        'Use SSE transport for browser/mobile, or run GIA in a Node.js backend.'
+        `Stdio transport for "${command}" requires Node.js or GIA Stdio Bridge. ` +
+        'For mobile/web, please use SSE transport or enable GIA Stdio Bridge.'
       );
     }
   }

@@ -231,6 +231,9 @@ Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, 
 |------|---------|
 | **Agentic Loop** | Autonomous reasoning with multi-turn tool execution, sub-agent delegation |
 | **Live Reasoning** | Real-time streaming thought panel during generation |
+| **Claude Terminal UI** | Claude Code-style dark terminal execution cards with status badges, exit code tracking, duration, and collapsible output logs |
+| **Terminal Direct Chat** | Chat directly with GIA inside the Terminal console (commands like `gia ...`, `@gia ...`, `build ...`) with streaming response and tool call capabilities |
+| **Smart Execution Timeout** | Dynamic execution timeout scaling (up to 5 min for installs, 4 min for builds, 3 min for downloads) preventing premature command kills |
 | **Deep Memory** | On-device persistent memory with relevance scoring, auto-extraction, pinning, and manual fact management |
 | **Custom Instructions** | User-defined rules injected into every conversation system prompt |
 | **Voice** | Push-to-talk, transcript polishing, TTS (wake-word proposed) |

@@ -5,6 +5,7 @@ import { ToolIcon } from './ToolIcons';
 import type { ProtocolProposal } from '../types/protocol';
 import { TOOL_LABELS } from '../utils/toolLabels';
 import { useProtocolStore } from '../store/useProtocolStore';
+import { ClaudeTerminalBlock } from './ClaudeTerminalBlock';
 
 const STATE_CFG: Record<string, { label: string; color: string }> = {
   proposed:  { label: 'Proposed',  color: '#3b82f6' },
@@ -57,6 +58,22 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
     const t = setTimeout(() => setShowContent(true), 100 + index * 80);
     return () => clearTimeout(t);
   }, [index]);
+
+  const isTerminalTool = ['terminal_run', 'code_execution', 'sandbox_exec', 'build_project'].includes(protocol.type);
+
+  if (isTerminalTool) {
+    return (
+      <ClaudeTerminalBlock
+        command={(protocol.args?.command as string) || (protocol.args?.code as string)}
+        language={(protocol.args?.language as string) || 'sh'}
+        status={protocol.state}
+        output={protocol.result}
+        error={protocol.error}
+        progressLabel={protocol.progressLabel}
+        args={protocol.args}
+      />
+    );
+  }
 
   return (
     <motion.div
