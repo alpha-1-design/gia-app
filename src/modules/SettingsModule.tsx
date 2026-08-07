@@ -24,13 +24,14 @@ import { AboutPage } from '../components/settings/AboutPage';
 import { NeuraPage } from '../components/settings/NeuraPage';
 import { NexusPage } from '../components/settings/NexusPage';
 import { MicalPage } from '../components/settings/MicalPage';
+import { TerminalPage } from '../components/settings/TerminalPage';
 import { SkillsMarketplaceUI } from '../components/settings/SkillsMarketplaceSection';
 import { DashboardModule } from './DashboardModule';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
 
-type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge';
+type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge' | 'terminal';
 
 const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
   { id: 'profile-identity', icon: <UserCircle size={20} />, label: 'Profile & Identity', desc: 'Your profile, GIA identity, skills, memory & brain export', sections: '5 sections', color: '#a855f7' },
@@ -132,6 +133,7 @@ const SettingsModule: React.FC = () => {
   );
   if (settingsPage === 'mcp') return <MCPPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'knowledge') return <KnowledgePage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'terminal') return <TerminalPage onBack={() => setSettingsPage('main')} />;
 
   // ── Main page ────────────────────────────────────────────
   return (
@@ -297,6 +299,22 @@ const SettingsModule: React.FC = () => {
           </span>
           <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
         </div>
+      </button>
+
+      {/* Terminal */}
+      <button onClick={() => setSettingsPage('terminal')} className="gia-card p-4 flex items-center gap-4 w-full text-left tap-feedback"
+        style={{ transition: 'border-color 0.2s' }}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#0d0d14', border: '1px solid rgba(168,85,247,0.25)' }}>
+          <Terminal size={18} style={{ color: '#a855f7' }} />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Terminal</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
+            Manual command shell · chat with GIA · packages & root environment
+          </p>
+        </div>
+        <ChevronRight size={14} style={{ color: 'var(--gia-muted)' }} />
       </button>
 
       {/* MCP Servers */}

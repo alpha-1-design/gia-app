@@ -25,6 +25,20 @@ jobs:
 
       - run: npm run build
 
+      - name: Register QEMU for arm64 rootfs builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build preinstalled Alpine + Ubuntu rootfs for terminal
+        shell: bash
+        run: |
+          chmod +x scripts/create-rootfs-ci.sh
+          # Best-effort: if the rootfs build fails (docker/network), continue so the APK still builds
+          USE_ARM64=1 bash scripts/create-rootfs-ci.sh || echo "WARNING: rootfs build failed; using existing terminal assets"
+        env:
+          DOCKER_BUILDKIT: 1
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

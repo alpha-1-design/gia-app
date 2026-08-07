@@ -44,6 +44,7 @@ public class GIATerminalService extends Service {
     private static final String TERMINAL_DIR = "terminal";
     private static final String PROOT_BINARY = "proot";
     private static final String ALPINE_ARCHIVE = "alpine-minirootfs.tar.gz";
+    private static final String UBUNTU_ARCHIVE = "ubuntu-rootfs.tar.gz";
     private static final String ROOTFS_DIR = "rootfs";
 
     /**
@@ -230,22 +231,68 @@ public class GIATerminalService extends Service {
             Log.i(TAG, "Extracted proot binary to " + prootFile.getAbsolutePath());
         }
 
-        // Extract and unpack Alpine minirootfs
+        // Extract and unpack rootfs archive — prefer Ubuntu (preinstalled stack),
+        // fall back to Alpine minirootfs when Ubuntu isn't bundled.
         File rootfsDir = new File(terminalDir, ROOTFS_DIR);
-        if (!rootfsDir.exists()) {
-            rootfsDir.mkdirs();
-            File archive = new File(terminalDir, ALPINE_ARCHIVE);
-            try (InputStream in = am.open("terminal/" + ALPINE_ARCHIVE);
-                 FileOutputStream out = new FileOutputStream(archive)) {
-                copyStream(in, out);
+        File marker = new File(rootfsDir, ".gia-rootfs-ok");
+        if (!marker.exists()) {
+            if (rootfsDir.exists()) {
+                // Previous extraction was partial/failed — retry clean
+                deleteRecursive(rootfsDir);
             }
-            Log.i(TAG, "Extracted Alpine archive to " + archive.getAbsolutePath());
+            rootfsDir.mkdirs();
 
-            // Extract tar.gz into rootfs
-            untar(archive, rootfsDir);
-            archive.delete();
-            Log.i(TAG, "Unpacked Alpine rootfs to " + rootfsDir.getAbsolutePath());
+            String archiveName = null;
+            String distroLabel = null;
+            if (assetExists(am, "terminal/" + UBUNTU_ARCHIVE)) {
+                archiveName = UBUNTU_ARCHIVE;
+                distroLabel = "Ubuntu";
+            } else if (assetExists(am, "terminal/" + ALPINE_ARCHIVE)) {
+                archiveName = ALPINE_ARCHIVE;
+                distroLabel = "Alpine";
+            }
+
+            if (archiveName != null) {
+                File archive = new File(terminalDir, archiveName);
+                try (InputStream in = am.open("terminal/" + archiveName);
+                     FileOutputStream out = new FileOutputStream(archive)) {
+                    copyStream(in, out);
+                }
+                Log.i(TAG, "Extracted " + distroLabel + " archive to " + archive.getAbsolutePath());
+
+                // Extract tar.gz into rootfs
+                untar(archive, rootfsDir);
+                archive.delete();
+
+                // Sentinel so a partial/failed extraction is retried next launch
+                if (new File(rootfsDir, "bin").exists() && new File(rootfsDir, "etc").exists()) {
+                    marker.createNewFile();
+                    Log.i(TAG, "Unpacked " + distroLabel + " rootfs to " + rootfsDir.getAbsolutePath());
+                } else {
+                    throw new IOException(distroLabel + " rootfs extraction incomplete — bin/etc missing");
+                }
+            } else {
+                throw new IOException("No rootfs archive found in assets (expected terminal/ubuntu-rootfs.tar.gz or terminal/alpine-minirootfs.tar.gz)");
+            }
         }
+    }
+
+    private static boolean assetExists(AssetManager am, String path) {
+        try {
+            am.open(path).close();
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static void deleteRecursive(File f) {
+        if (f == null || !f.exists()) return;
+        File[] children = f.listFiles();
+        if (children != null) {
+            for (File c : children) deleteRecursive(c);
+        }
+        f.delete();
     }
 
     /**
@@ -508,6 +555,7 @@ public class GIATerminalService extends Service {
         byte[] buf = new byte[8192];
         // Tar format: each entry is 512-byte header + data blocks
         byte[] header = new byte[512];
+        String pendingLongName = null;
         while (true) {
             int read = in.read(header);
             if (read < 512) break;
@@ -528,6 +576,44 @@ public class GIATerminalService extends Service {
             // Determine file type (byte 156)
             int fileType = header[156] & 0xff;
 
+            // GNU long name entry (././@LongLink): read the real name from payload
+            if (name.equals("././@LongLink") && (fileType == 'L' || fileType == 'K')) {
+                byte[] nameBuf = new byte[(int) size];
+                int got = 0;
+                while (got < size) {
+                    int n = in.read(nameBuf, got, (int) size - got);
+                    if (n == -1) break;
+                    got += n;
+                }
+                pendingLongName = new String(nameBuf, 0, got, "UTF-8").trim();
+                skipPadding(in, size);
+                continue;
+            }
+
+            // PAX extended header (x/g): parse key=value pairs, skip the payload
+            if (fileType == 'x' || fileType == 'g') {
+                byte[] paxBuf = new byte[(int) size];
+                int got = 0;
+                while (got < size) {
+                    int n = in.read(paxBuf, got, (int) size - got);
+                    if (n == -1) break;
+                    got += n;
+                }
+                String pax = new String(paxBuf, 0, got, "UTF-8");
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("path=(.*)").matcher(pax);
+                if (m.find()) {
+                    String paxPath = m.group(1).replaceAll("\\s+$", "").trim();
+                    if (!paxPath.isEmpty()) pendingLongName = paxPath;
+                }
+                skipPadding(in, size);
+                continue;
+            }
+
+            if (pendingLongName != null) {
+                name = pendingLongName;
+                pendingLongName = null;
+            }
+
             File entryFile = new File(destDir, name);
 
             // Security: prevent tar path traversal
@@ -541,29 +627,23 @@ public class GIATerminalService extends Service {
             if (fileType == '5') {
                 // Directory
                 entryFile.mkdirs();
-            } else if (fileType == '2' || fileType == 'L') {
-                // Symlink or long name — skip for simplicity
-                // Actually handle long name: GNU tar uses '././@LongLink'
-                if (name.equals("././@LongLink")) {
-                    // Read the long name
-                    byte[] nameBuf = new byte[(int) size];
-                    in.read(nameBuf, 0, (int) size);
-                    // The next header is the actual file
-                    // Skip padding
-                    long padding = (512 - (size % 512)) % 512;
-                    in.skip(padding);
-                    continue;
-                }
-                // Skip symlinks
-                if (size > 0) {
-                    long remaining = size;
-                    while (remaining > 0) {
-                        long skipped = in.skip(Math.min(remaining, 8192));
-                        remaining -= skipped;
+            } else if (fileType == '2') {
+                // Symlink — create the link
+                int linkEnd = 0;
+                while (linkEnd < 100 && header[157 + linkEnd] != 0) linkEnd++;
+                String linkTarget = new String(header, 157, linkEnd, "UTF-8");
+                if (linkEnd > 0) {
+                    entryFile.getParentFile().mkdirs();
+                    try {
+                        entryFile.delete();
+                        java.nio.file.Files.createSymbolicLink(
+                                entryFile.toPath(), new File(linkTarget).toPath());
+                    } catch (Exception e) {
+                        Log.w(TAG, "Skipping symlink " + name + " -> " + linkTarget + ": " + e.getMessage());
                     }
                 }
             } else {
-                // Regular file
+                // Regular file (or device/special — written as empty file)
                 entryFile.getParentFile().mkdirs();
                 try (FileOutputStream fout = new FileOutputStream(entryFile)) {
                     long remaining = size;
@@ -580,12 +660,16 @@ public class GIATerminalService extends Service {
             }
 
             // Skip padding to next 512-byte boundary
-            long padding = (512 - (size % 512)) % 512;
-            long remaining = padding;
-            while (remaining > 0) {
-                long skipped = in.skip(Math.min(remaining, 8192));
-                remaining -= skipped;
-            }
+            skipPadding(in, size);
+        }
+    }
+
+    private static void skipPadding(InputStream in, long size) throws IOException {
+        long padding = (512 - (size % 512)) % 512;
+        long remaining = padding;
+        while (remaining > 0) {
+            long skipped = in.skip(Math.min(remaining, 8192));
+            remaining -= skipped;
         }
     }
 
