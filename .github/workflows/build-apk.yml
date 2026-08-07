@@ -34,10 +34,27 @@ jobs:
         shell: bash
         run: |
           chmod +x scripts/create-rootfs-ci.sh
-          # Best-effort: if the rootfs build fails (docker/network), continue so the APK still builds
-          USE_ARM64=1 bash scripts/create-rootfs-ci.sh || echo "WARNING: rootfs build failed; using existing terminal assets"
+          USE_ARM64=1 bash scripts/create-rootfs-ci.sh
         env:
           DOCKER_BUILDKIT: 1
+
+      - name: Verify terminal rootfs assets exist
+        shell: bash
+        run: |
+          if [ -f android/app/src/main/assets/terminal/alpine-minirootfs.tar.gz ] && [ -f android/app/src/main/assets/terminal/proot ]; then
+            echo "alpine-minirootfs.tar.gz: $(du -h android/app/src/main/assets/terminal/alpine-minirootfs.tar.gz | cut -f1)"
+            echo "proot: $(du -h android/app/src/main/assets/terminal/proot | cut -f1)"
+            gzip -t android/app/src/main/assets/terminal/alpine-minirootfs.tar.gz && echo "gzip OK"
+            if [ -f android/app/src/main/assets/terminal/ubuntu-rootfs.tar.gz ]; then
+              echo "ubuntu-rootfs.tar.gz: $(du -h android/app/src/main/assets/terminal/ubuntu-rootfs.tar.gz | cut -f1)"
+              gzip -t android/app/src/main/assets/terminal/ubuntu-rootfs.tar.gz && echo "ubuntu gzip OK"
+            else
+              echo "WARNING: ubuntu-rootfs.tar.gz missing — terminal will use Alpine"
+            fi
+          else
+            echo "ERROR: terminal rootfs assets missing!" >&2
+            exit 1
+          fi
 
       - uses: actions/setup-java@v4
         with:
