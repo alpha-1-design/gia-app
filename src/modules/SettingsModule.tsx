@@ -57,6 +57,18 @@ const SettingsModule: React.FC = () => {
   const providers = useProviderStore(s => s.providers);
 
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
+  // The main list is conditionally unmounted whenever settingsPage switches to
+  // a sub-page (see the `if (settingsPage === X) return <SubPage/>` block
+  // below), so its scroll container is a brand-new DOM node each time you
+  // come back to 'main' — scrollTop resets to 0 by default. Remember the
+  // position on scroll and restore it after the container remounts.
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const mainScrollPos = useRef(0);
+  useEffect(() => {
+    if (settingsPage === 'main' && mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = mainScrollPos.current;
+    }
+  }, [settingsPage]);
   const [editProfile, setEditProfile] = useState(false);
   const [name, setProfileName] = useState(userProfile.name);
   const [bio, setBio] = useState(userProfile.bio);
@@ -138,6 +150,8 @@ const SettingsModule: React.FC = () => {
   // ── Main page ────────────────────────────────────────────
   return (
     <div
+      ref={mainScrollRef}
+      onScroll={(e) => { mainScrollPos.current = e.currentTarget.scrollTop; }}
       className="flex flex-col h-full overflow-y-auto"
       style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}
     >
