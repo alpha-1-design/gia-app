@@ -562,6 +562,9 @@ export const useGiaStore = create<GiaState>()(
       setSandboxEnvReady: (v) => set({ sandboxEnvReady: v }),
       setModule: (module) => set((s) => {
         if (s.currentModule === module) return {};
+        // Fire-and-forget: dynamic import avoids a circular dependency, since
+        // HapticService itself reads this store's hapticFeedback flag.
+        import('../services/HapticService').then(m => m.default.selection());
         // Preserve context across module switches so the next module can pick
         // up where the previous left off (e.g. chat → planner with context).
         const prevModule = s.currentModule;
@@ -582,11 +585,19 @@ export const useGiaStore = create<GiaState>()(
         const s = get();
         if (s.moduleHistory.length === 0) return false;
         const prev = s.moduleHistory[s.moduleHistory.length - 1];
+        import('../services/HapticService').then(m => m.default.selection());
         set((st) => ({ currentModule: prev, moduleHistory: st.moduleHistory.slice(0, -1) }));
         return true;
       },
       setShowEngine: (v) => set({ showEngine: v }),
-      setGenerationState: (generationState) => set({ generationState }),
+      setGenerationState: (generationState) => set((s) => {
+        // Single choke point for all 5 "generation finished" call sites (chat
+        // streaming, agents, errors, aborts) rather than touching each one.
+        if (s.generationState.active && !generationState.active) {
+          import('../services/HapticService').then(m => m.default.notification('success'));
+        }
+        return { generationState };
+      }),
       registerGenerationController: (key, controller) => set((s) => {
         const newControllers = new Map(s.generationControllers);
         newControllers.set(key, controller);
