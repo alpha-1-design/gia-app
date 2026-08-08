@@ -155,7 +155,18 @@ public class GIATerminalService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        startForeground(NOTIFICATION_ID, buildNotification(0));
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(0));
+        } catch (Exception e) {
+            // On API 34+, a specialUse foreground service without a declared
+            // PROPERTY_SPECIAL_USE_FGS_SUBTYPE throws here and takes the whole
+            // process down with it if unguarded. Log and stop cleanly instead
+            // so a missing manifest property degrades to "terminal unavailable"
+            // rather than crashing plugin registration for the whole app.
+            Log.e(TAG, "startForeground failed in onCreate: " + e.getMessage(), e);
+            stopSelf();
+            return;
+        }
         Log.i(TAG, "GIATerminalService created");
     }
 

@@ -136,6 +136,9 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone|mediaProjection|dataSync|connectedDevice|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="gia_core_autonomy" />
         </service>
 
         <!-- Hidden Terminal foreground service (proot+Alpine) -->
@@ -144,6 +147,9 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="on_device_terminal_sandbox" />
         </service>
 
         <!-- Wake word foreground service -->
@@ -168,6 +174,9 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_screen_orb" />
         </service>
 
         <!-- Media Playback Service -->

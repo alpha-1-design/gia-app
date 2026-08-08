@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 import RAGService from '../services/RAGService';
+import PDFService from '../services/PDFService';
 
 export interface AgentFile {
   id: string;
@@ -55,8 +56,20 @@ function agentNamespace(agentId: string): string {
   return `agent:${agentId}:`;
 }
 
+async function extractFileText(file: File): Promise<string> {
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  if (isPdf) {
+    // Raw PDF bytes decoded as UTF-8 text (the old file.text() path) produce
+    // garbled binary with almost no sentence boundaries, which used to blow
+    // up into a single multi-megabyte "chunk" during indexing below and lock
+    // the main thread — this looked like the upload just hanging forever.
+    return PDFService.extractText(file);
+  }
+  return file.text();
+}
+
 export async function indexAgentFile(agentId: string, file: File): Promise<void> {
-  const text = await file.text();
+  const text = await extractFileText(file);
   const docId = `${agentNamespace(agentId)}${file.name}`;
   await RAGService.indexDocument(docId, file.name, text);
 }

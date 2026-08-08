@@ -54,9 +54,21 @@ function tfidfEmbed(text: string): number[] {
   return vec.map(v => v / norm);
 }
 
+const EMBED_TIMEOUT_MS = 15000;
+
 async function safeEmbed(text: string): Promise<number[]> {
   try {
-    const result = await LocalAI.embed(text);
+    // LocalAI.embed lazily downloads the Transformers.js model on first use
+    // with no timeout of its own. On a slow/dropped mobile connection this
+    // promise simply never settles, which is what "uploading... 85% forever"
+    // actually was — not a stuck progress bar, a genuinely hung await. Race
+    // it against a timeout so we always fall back instead of hanging.
+    const result = await Promise.race([
+      LocalAI.embed(text),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('LocalAI.embed timed out')), EMBED_TIMEOUT_MS)
+      ),
+    ]);
     if (result.embedding && result.embedding.length > 0) return result.embedding;
   } catch (e) {
     logger.warn('[RAGService] LocalAI embed failed, using TF-IDF fallback:', e);
@@ -81,6 +93,14 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-10);
 }
 
+// Hard ceiling on any single chunk, regardless of how the sentence split went.
+// Without this, a "sentence" with no punctuation for a long stretch (e.g.
+// mis-decoded binary content) sails straight past CHUNK_SIZE in one piece,
+// since the size check only fires *before* appending. A multi-MB chunk then
+// hits safeEmbed/tfidfEmbed's regex+split synchronously on the main thread
+// and freezes the UI. This forces a hard split no matter what the input looks like.
+const MAX_CHUNK_HARD_CAP = CHUNK_SIZE * 4;
+
 function chunkText(text: string): string[] {
   const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
   const chunks: string[] = [];
@@ -92,6 +112,13 @@ function chunkText(text: string): string[] {
       current = overlap + ' ' + s;
     } else {
       current += ' ' + s;
+    }
+    // A single "sentence" can itself be arbitrarily long (no punctuation for
+    // a long stretch). Hard-split it so nothing ever reaches embedding as one
+    // unbounded blob.
+    while (current.length > MAX_CHUNK_HARD_CAP) {
+      chunks.push(current.slice(0, MAX_CHUNK_HARD_CAP).trim());
+      current = current.slice(MAX_CHUNK_HARD_CAP - CHUNK_OVERLAP);
     }
   }
   if (current.trim()) chunks.push(current.trim());

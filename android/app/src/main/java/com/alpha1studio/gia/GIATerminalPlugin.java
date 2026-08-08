@@ -36,11 +36,23 @@ public class GIATerminalPlugin extends Plugin {
 
     /**
      * Start the foreground terminal service.
+     *
+     * Deliberately swallows any exception here. This runs inside load(),
+     * which Capacitor calls while registering the plugin with the bridge —
+     * an uncaught exception at this point can knock the plugin registration
+     * itself out, which is what makes JS see "GIATerminal plugin is not
+     * implemented on android" instead of a real error from exec(). Service
+     * start failures now surface as a normal call rejection the next time
+     * exec() is used, instead of poisoning plugin availability app-wide.
      */
     private void startTerminalService() {
-        Context context = getContext();
-        Intent serviceIntent = new Intent(context, GIATerminalService.class);
-        context.startForegroundService(serviceIntent);
+        try {
+            Context context = getContext();
+            Intent serviceIntent = new Intent(context, GIATerminalService.class);
+            context.startForegroundService(serviceIntent);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start GIATerminalService: " + e.getMessage(), e);
+        }
     }
 
     /**
