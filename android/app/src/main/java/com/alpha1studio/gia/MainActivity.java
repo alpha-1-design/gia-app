@@ -12,7 +12,13 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        // registerPlugin() must run BEFORE super.onCreate(): BridgeActivity's own
+        // onCreate() builds the Bridge (via this.load()) and reads whatever plugins
+        // are registered at that exact moment. Anything registered after
+        // super.onCreate() returns is too late — the Bridge is already built and
+        // those plugins are simply invisible to the JS side from then on, which is
+        // what was producing "plugin is not implemented on android" for
+        // GIATerminal with no crash or error anywhere to point at it.
         registerPlugin(GIAWakeWordPlugin.class);
         registerPlugin(GIAIntentPlugin.class);
         registerPlugin(GIAOverlayPlugin.class);
@@ -21,6 +27,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GIATerminalPlugin.class);
         registerPlugin(GIAMediaPlugin.class);
         registerPlugin(GIAUpdatePlugin.class);
+        super.onCreate(savedInstanceState);
     }
 
     @Override
