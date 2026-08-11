@@ -383,6 +383,18 @@ public class GIATerminalService extends Service {
         pb.environment().put("HOME", "/root");
         pb.environment().put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
         pb.environment().put("SHELL", "/bin/sh");
+        // proot needs a writable scratch directory to build its "glue" rootfs.
+        // Android apps have no /tmp, and without this proot fails immediately
+        // with "can't create temporary directory" before it ever gets to the
+        // guest rootfs — which is also what was producing the downstream
+        // "can't chdir /root/." and "/usr/bin/env not found" errors, since
+        // proot's own initialization never completed.
+        File prootTmpDir = new File(context.getCacheDir(), "proot-tmp");
+        if (!prootTmpDir.exists()) {
+            prootTmpDir.mkdirs();
+        }
+        pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
+        pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
 
         Process process;
         try {

@@ -130,8 +130,8 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
         animate={{ opacity: 1, y: 0 }}
         className="rounded-xl border overflow-hidden"
         style={{
-          background: isActive ? `${catColor}10` : 'rgba(20,20,28,0.6)',
-          borderColor: isActive ? `${catColor}40` : 'rgba(255,255,255,0.06)',
+          background: isActive ? `${catColor}10` : 'var(--gia-surface)',
+          borderColor: isActive ? `${catColor}40` : 'var(--gia-border)',
         }}
       >
         <div
@@ -179,10 +179,10 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
               exit={{ height: 0, opacity: 0 }}
               className="px-3 pb-3 overflow-hidden"
             >
-              <div className="pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--gia-border)' }}>
                 <div className="flex flex-wrap gap-1 mb-2">
                   {skill.tags.map(tag => (
-                    <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--gia-muted)' }}>
+                    <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--gia-border)', color: 'var(--gia-muted)' }}>
                       {tag}
                     </span>
                   ))}
@@ -288,7 +288,7 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
         <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--gia-muted-2)' }} />
         <input
           className="w-full text-[11px] pl-8 pr-3 py-2 rounded-xl"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--gia-text)' }}
+          style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)' }}
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search skills..."
@@ -301,9 +301,9 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
           onClick={() => setSelectedCategory(null)}
           className="text-[9px] px-2.5 py-1 rounded-full whitespace-nowrap font-medium"
           style={{
-            background: !selectedCategory ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.04)',
+            background: !selectedCategory ? 'rgba(168,85,247,0.2)' : 'var(--gia-surface-2)',
             color: !selectedCategory ? '#a855f7' : 'var(--gia-muted)',
-            border: `1px solid ${!selectedCategory ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.06)'}`,
+            border: `1px solid ${!selectedCategory ? 'rgba(168,85,247,0.3)' : 'var(--gia-border)'}`,
           }}
         >
           All
@@ -314,9 +314,9 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
             onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
             className="text-[9px] px-2.5 py-1 rounded-full whitespace-nowrap font-medium flex items-center gap-1"
             style={{
-              background: selectedCategory === cat ? `${CATEGORY_COLORS[cat] || '#94a3b8'}20` : 'rgba(255,255,255,0.04)',
+              background: selectedCategory === cat ? `${CATEGORY_COLORS[cat] || '#94a3b8'}20` : 'var(--gia-surface-2)',
               color: selectedCategory === cat ? CATEGORY_COLORS[cat] || '#94a3b8' : 'var(--gia-muted)',
-              border: `1px solid ${selectedCategory === cat ? `${CATEGORY_COLORS[cat] || '#94a3b8'}40` : 'rgba(255,255,255,0.06)'}`,
+              border: `1px solid ${selectedCategory === cat ? `${CATEGORY_COLORS[cat] || '#94a3b8'}40` : 'var(--gia-border)'}`,
             }}
           >
             {CATEGORY_ICONS[cat]}
@@ -338,7 +338,7 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
           <button
             onClick={() => fetchSkills(true)}
             className="text-[9px] px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1"
-            style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--gia-muted)', border: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)', border: '1px solid var(--gia-border)' }}
           >
             <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
@@ -364,21 +364,21 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
             </div>
             <input
               className="w-full text-[10px] px-2.5 py-1.5 rounded-lg mb-2"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--gia-text)' }}
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)' }}
               value={customName}
               onChange={e => setCustomName(e.target.value)}
               placeholder="Skill name"
             />
             <input
               className="w-full text-[10px] px-2.5 py-1.5 rounded-lg mb-2"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--gia-text)' }}
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)' }}
               value={customDesc}
               onChange={e => setCustomDesc(e.target.value)}
               placeholder="Short description"
             />
             <select
               className="w-full text-[10px] px-2.5 py-1.5 rounded-lg mb-2"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--gia-text)' }}
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)' }}
               value={customCategory}
               onChange={e => setCustomCategory(e.target.value)}
             >
@@ -387,7 +387,7 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
             </select>
             <textarea
               className="w-full text-[10px] px-2.5 py-1.5 rounded-lg mb-2 resize-none"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--gia-text)', minHeight: '60px' }}
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)', minHeight: '60px' }}
               value={customPrompt}
               onChange={e => setCustomPrompt(e.target.value)}
               placeholder="System prompt — how should GIA behave with this skill?"

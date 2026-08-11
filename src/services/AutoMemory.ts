@@ -40,6 +40,16 @@ const EMOTION_PATTERNS = [
   { pattern: /\b(?:anxious|worried|nervous|stressed|overwhelmed|tired|exhausted)\b/i, label: 'anxious' },
 ];
 
+// Whole-message match (after trim) for common filler that carries no
+// information worth remembering as a "session summary".
+const TRIVIAL_MESSAGE_RE = /^(hi|hello|hey|yo|sup|ok|okay|k|sure|yes|no|yep|nope|thanks|thank you|thx|ty|cool|nice|lol|bye|goodbye|good morning|good night|what time|what's up|wassup|hmm|huh|test|testing)[.!?\s]*$/i;
+
+function isTrivialMessage(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 15) return true;
+  return TRIVIAL_MESSAGE_RE.test(trimmed);
+}
+
 export class AutoMemory {
   private config: AutoMemoryConfig = { ...DEFAULT_CONFIG };
   private processedMessages = new Set<string>();
@@ -132,13 +142,21 @@ export class AutoMemory {
         this.scheduleEntityExtraction(text, messageId);
       }
 
-      knowledgeStore.addMemory({
-        key: `session:${new Date().toISOString().slice(0, 10)}`,
-        value: `${role}: ${text.slice(0, 300)}`,
-        category: 'session_summary',
-        tier: 'episodic',
-        confidence: 0.3,
-      });
+      // This isn't real summarization — it's a raw snippet of whatever
+      // message happens to get processed, and since the key is just the
+      // date, the last message of the day silently overwrites whatever was
+      // there before. Without a floor on substance, "what time" or "hi" ends
+      // up as the entire stored "summary" for that day. Skip trivial/filler
+      // messages so only something worth remembering gets captured.
+      if (!isTrivialMessage(text)) {
+        knowledgeStore.addMemory({
+          key: `session:${new Date().toISOString().slice(0, 10)}`,
+          value: `${role}: ${text.slice(0, 300)}`,
+          category: 'session_summary',
+          tier: 'episodic',
+          confidence: 0.3,
+        });
+      }
     } catch (e) {
       logger.warn('[AutoMemory] Error processing message:', e);
     }
