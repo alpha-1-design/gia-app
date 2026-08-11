@@ -260,3 +260,38 @@ export function extractToolCalls(text: string): ToolCall[] {
 
   return calls;
 }
+
+/**
+ * extractToolCalls silently drops any tool call block whose opening
+ * fence/tag never finds a matching close (`break` for fences, skip-and-continue
+ * for XML tags) — there's no signal anywhere that a tool call was attempted
+ * and lost. This happens most with providers that have no native structured
+ * tool calling (local.ts / on-device models) and free-generate the tag
+ * syntax as raw text: hitting the token limit mid-tag, or just garbling the
+ * format, silently discards the attempt and whatever partial text is left
+ * gets shown to the user as the final answer — dangling opening tags and all.
+ * This does a cheap presence check so the caller can retry instead of
+ * showing that garbage to the user.
+ */
+export function hasTruncatedToolCall(text: string): boolean {
+  const toolIdx = text.lastIndexOf('```tool');
+  const jsonIdx = text.lastIndexOf('```json');
+  const fenceIdx = Math.max(toolIdx, jsonIdx);
+  if (fenceIdx >= 0) {
+    const contentStart = fenceIdx + 7;
+    const bodyStart = text[contentStart] === '\n' ? contentStart + 1 : contentStart;
+    if (findJsonFenceClose(text, bodyStart) < 0) return true;
+  }
+
+  const tagNames = ['tool_call', 'tool_code', 'tool-code', 'function_call', 'function-call', 'tool'];
+  for (const tag of tagNames) {
+    const openIdx = text.lastIndexOf(`<${tag}`);
+    if (openIdx < 0) continue;
+    const openTagEnd = text.indexOf('>', openIdx);
+    if (openTagEnd < 0) return true; // opening tag itself got cut off
+    const closeIdx = text.indexOf(`</${tag}>`, openTagEnd);
+    if (closeIdx < 0) return true;
+  }
+
+  return false;
+}

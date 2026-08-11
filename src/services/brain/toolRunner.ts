@@ -7,7 +7,7 @@ import { ProtocolProposal } from '../../types/protocol';
 import { validateToolArgs, toolToProtocolType, toolToImpact } from './toolSchemas';
 import { delegateTask } from './subAgent';
 import { SubAgentManager } from './SubAgentManager';
-import { extractToolCalls, ToolCall } from '../../utils/jsonRepair';
+import { extractToolCalls, hasTruncatedToolCall, ToolCall } from '../../utils/jsonRepair';
 import AnalyticsService from '../AnalyticsService';
 import AnalyticsTracker from '../AnalyticsTracker';
 import { toolRateLimiter, globalToolLimiter } from '../ToolRateLimiter';
@@ -299,7 +299,20 @@ export async function executeToolBlocks(
   messageId?: string,
 ): Promise<{ didExecute: boolean; result?: string }> {
   const toolCalls = extractToolCalls(text);
-  if (!toolCalls.length) return { didExecute: false };
+  if (!toolCalls.length) {
+    // A tool call block was opened but never closed (hit the token limit, or
+    // just got the syntax wrong — mainly seen with local/on-device models
+    // that have no native structured tool calling and have to free-generate
+    // the tag syntax as raw text). Previously this silently fell through to
+    // didExecute: false and the dangling opening tag / partial JSON got
+    // shown to the user as if it were the real answer. Ask for a clean
+    // retry instead of surfacing that.
+    if (hasTruncatedToolCall(text)) {
+      state.currentPrompt = 'Your previous response was cut off in the middle of a tool call. Please retry the tool call from the start, complete, in a single message.';
+      return { didExecute: true, result: 'truncated_tool_call' };
+    }
+    return { didExecute: false };
+  }
 
   const isGodMode = useGiaStore.getState().extThinking;
 

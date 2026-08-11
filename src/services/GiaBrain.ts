@@ -104,6 +104,12 @@ class GiaBrain {
         currentPrompt = `Your previous response had invalid JSON in a tool block. Fix the syntax and try again.`;
         continue;
       }
+
+      if (toolResult.result === 'truncated_tool_call') {
+        // currentPrompt was already set specifically by toolRunner above via
+        // toolState.currentPrompt -> currentPrompt at line 83; don't clobber it.
+        continue;
+      }
     }
     throw new Error('Max agentic iterations reached.');
   }
