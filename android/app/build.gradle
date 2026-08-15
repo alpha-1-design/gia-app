@@ -1,4 +1,10 @@
 apply plugin: 'com.android.application'
+// Kotlin support for the app module — the home-screen Glance widget
+// (GIAAppWidget.kt) and GIAWidgetPlugin.kt are Kotlin, and MainActivity
+// registers GIAWidgetPlugin from Java. Without these plugins the .kt files
+// were silently skipped by the build (widget never compiled into the APK).
+apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 android {
     namespace "com.alpha1studio.gia"
@@ -18,6 +24,18 @@ android {
             // AGP recompression to avoid compressDebugAssets OOM + wasted time.
             noCompress 'tar.gz'
         }
+    }
+    // Glance widgets are built on Jetpack Compose — required by the
+    // org.jetbrains.kotlin.plugin.compose compiler.
+    buildFeatures {
+        compose = true
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions {
+        jvmTarget = '21'
     }
     signingConfigs {
         release {
@@ -67,6 +85,10 @@ dependencies {
     implementation "androidx.glance:glance-material3:1.1.1"
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"
     implementation "androidx.work:work-runtime-ktx:2.9.0"
+
+    // Widget state + coroutines (GIAAppWidget.kt / GIAWidgetPlugin.kt)
+    implementation "androidx.datastore:datastore-preferences:1.1.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
 }
 
 apply from: 'capacitor.build.gradle'
