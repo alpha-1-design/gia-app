@@ -227,7 +227,7 @@
 
         <!-- GIA Home Screen Widget -->
         <receiver
-            android:name=".widget.GIAWidgetReceiver"
+            android:name=".widget.GIAWidgetProvider"
             android:exported="true"
             android:label="@string/widget_name">
             <intent-filter>

@@ -94,7 +94,7 @@ export const WidgetSection: React.FC = () => {
         <div className="flex-1 min-w-0">
           <h3 className="text-xs font-bold" style={{ color: 'var(--gia-text)' }}>Widgets & Screen Overlay</h3>
           <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
-            Configure Android Home Screen Glance widgets, floating Screen Agent Orb overlay, and in-chat metric visual cards.
+            Configure Android Home Screen widgets, floating Screen Agent Orb overlay, and in-chat metric visual cards.
           </p>
         </div>
       </div>
@@ -109,12 +109,12 @@ export const WidgetSection: React.FC = () => {
             </span>
           </div>
           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
-            Jetpack Glance
+            Native AppWidget
           </span>
         </div>
 
         <p className="text-[11px]" style={{ color: 'var(--gia-muted)' }}>
-          Interactive simulator of the Glance home screen widget installed on your Android device. Tap action buttons below to test live intent integration:
+          Interactive simulator of the home screen widget installed on your Android device. Tap action buttons below to test live intent integration:
         </p>
 
         {/* Live Widget Phone Frame Preview */}
@@ -170,7 +170,7 @@ export const WidgetSection: React.FC = () => {
             </div>
             <div className="flex items-center gap-1 text-[9px] text-purple-400">
               <Sparkles size={10} />
-              <span>GIA Glance Widget</span>
+              <span>GIA Home Widget</span>
             </div>
           </div>
         </div>

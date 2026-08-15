@@ -10,7 +10,7 @@ interface GIAWidgetPlugin {
 /**
  * WidgetSyncService — keeps the Android home-screen GIA widget live.
  *
- * The widget's Glance UI reads provider/task state from its own preferences;
+ * The native AppWidget reads provider/task state from its own preferences;
  * this service is the only writer. It subscribes to the provider + task stores
  * and pushes a debounced snapshot (provider pill + next task) to the native
  * GIAWidgetPlugin, which also computes battery/storage on-device.
