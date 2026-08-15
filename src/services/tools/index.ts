@@ -24,6 +24,7 @@ import { gatewayDaemonTools } from './gatewayDaemon';
 import { geolocationTools } from './geolocation';
 import { hapticsTools } from './haptics';
 import { locationTools } from './location';
+import { mcpTools } from './mcp';
 import { mediaAccessTools } from './mediaAccess';
 import { memoryTools } from './memory';
 import { messagingTools } from './messaging';
@@ -38,6 +39,7 @@ import { pdfTools } from './readPdf';
 import { sandboxTools } from './sandbox';
 import { securityTools } from './security';
 import { shareTools } from './share';
+import { skillTools } from './skills';
 import { smartHomeTools } from './smartHome';
 import { socialMediaTools } from './socialMedia';
 import { sshTools } from './ssh';
@@ -72,6 +74,7 @@ export function registerAllTools(): void {
     geolocationTools,
     hapticsTools,
     locationTools,
+    mcpTools,
     mediaAccessTools,
     memoryTools,
     messagingTools,
@@ -86,6 +89,7 @@ export function registerAllTools(): void {
     sandboxTools,
     securityTools,
     shareTools,
+    skillTools,
     smartHomeTools,
     socialMediaTools,
     sshTools,

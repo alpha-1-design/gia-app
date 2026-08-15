@@ -5,7 +5,7 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera, Terminal,
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
-  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal,
+  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -26,6 +26,7 @@ import ToolTray from '../components/ToolTray';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
 import { EngineSheet } from '../components/chat/EngineSheet';
 import ModelSwitcherSheet from '../components/chat/ModelSwitcherSheet';
+import ToolsCatalogSheet from '../components/chat/ToolsCatalogSheet';
 import ProviderIcon from '../components/ProviderIcon';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
@@ -71,7 +72,7 @@ const ChatModule: React.FC = () => {
     messages, activeSession, providerConnected, providerLabel,
     activeModel,
     toggleFeature, handleStop, handleUndoDelete,
-    handleInputChange, handleSend, handleClarificationAnswer,
+    handleInputChange, handleSend, sendText, handleClarificationAnswer,
     handleDeleteWithUndo, handleContinue, handleFork, handleRetry, handleRewrite, handleEditResend,
     handlePaste, handleDragEnter, handleDragLeave,
     handleDragOver, handleDrop, handleFile, removeAttachment, addFiles,
@@ -103,6 +104,13 @@ const ChatModule: React.FC = () => {
     { key: 'translate', label: 'Translate', icon: Languages, active: localTranslate, color: '#14b8a6' },
   ];
   const activeToolCount = toolItems.filter(t => t.active).length;
+  const activeSkill = skills.find(s => s.id === activeSkillId);
+
+  // Tappable follow-up suggestion chips → send the text like a normal message.
+  const handleSuggestionClick = React.useCallback((text: string) => {
+    if (!text.trim() || loading) return;
+    sendText(text.trim());
+  }, [sendText, loading]);
 
   React.useEffect(() => {
     if (!buildMode) return;
@@ -124,6 +132,7 @@ const ChatModule: React.FC = () => {
   const showEngine = useGiaStore((s) => s.showEngine);
   const setShowEngine = useGiaStore((s) => s.setShowEngine);
   const showModelSwitcher = useGiaStore((s) => s.showModelSwitcher);
+  const [showToolsCatalog, setShowToolsCatalog] = React.useState(false);
   const setShowModelSwitcher = useGiaStore((s) => s.setShowModelSwitcher);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
   const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
@@ -244,6 +253,21 @@ const ChatModule: React.FC = () => {
               <span className="text-[8px] font-medium" style={{ color: '#ec4899' }}>LIVE</span>
             </div>
           )}
+          {activeSkill && (
+            <button
+              onClick={() => setShowSkillPicker(true)}
+              title={`Active skill: ${activeSkill.name}`}
+              className="gia-pill flex items-center gap-1 px-2.5 py-1 rounded-lg shrink-0 tap-feedback transition-all"
+              style={{
+                background: 'rgba(168,85,247,0.12)',
+                color: '#c4b5fd',
+                border: '1px solid rgba(168,85,247,0.3)',
+              }}
+            >
+              <Sparkles size={11} />
+              <span className="text-[9px] font-semibold max-w-[70px] truncate">{activeSkill.name}</span>
+            </button>
+          )}
           <button
             onClick={() => setShowModelSwitcher(true)}
             className="gia-pill flex items-center gap-1.5 flex-1 min-w-0 max-w-[180px] tap-feedback transition-all"
@@ -263,6 +287,7 @@ const ChatModule: React.FC = () => {
           </button>
           <button onClick={() => setShowFileManager(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="File Manager" title="File Manager"><Upload size={13} /></button>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Knowledge" title="Knowledge"><Brain size={13} /></button>
+          <button onClick={() => setShowToolsCatalog(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Tools catalog" title="Browse all tools"><Wrench size={13} /></button>
           <SearchActivityButton />
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Export chat" title="Export chat"><Download size={13} /></button>
           <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Clear chat" title="Clear chat"><Trash2 size={13} /></button>
@@ -371,7 +396,7 @@ const ChatModule: React.FC = () => {
           </div>
         )}
 
-        <div className="max-w-3xl mx-auto w-full px-4 space-y-2 sm:space-y-3">
+        <div className="w-full px-3 sm:px-4 space-y-2 sm:space-y-3">
         {!providerConnected && !loading && (
           <div onClick={() => setShowModelSwitcher(true)} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
@@ -408,6 +433,7 @@ const ChatModule: React.FC = () => {
           onRetry={handleRetry}
           onEditResend={handleEditResend}
           onRewrite={handleRewrite}
+          onSuggestionClick={handleSuggestionClick}
         />
 
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
@@ -425,6 +451,7 @@ const ChatModule: React.FC = () => {
         )}
         {createPortal(<EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />, document.body)}
         {createPortal(<ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} onOpenEngine={() => setShowEngine(true)} />, document.body)}
+        {createPortal(<ToolsCatalogSheet open={showToolsCatalog} onClose={() => setShowToolsCatalog(false)} />, document.body)}
 
         <AnimatePresence>
           {liveFileEdit && (

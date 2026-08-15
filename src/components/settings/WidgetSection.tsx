@@ -54,9 +54,10 @@ export const WidgetSection: React.FC = () => {
         setOrbShowing(true);
         addNotification('Screen Orb activated');
       }
-    } catch {
-      addNotification('Screen Orb toggled');
-      setOrbShowing(!orbShowing);
+    } catch (e) {
+      // Don't flip the toggle state on failure — the overlay didn't change.
+      // Surface the real reason instead of the old generic "Screen Orb toggled".
+      addNotification(e instanceof Error ? e.message : 'Screen Orb unavailable on this device');
     }
   };
 

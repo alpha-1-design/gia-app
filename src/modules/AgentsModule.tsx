@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, X, Trash2, Upload, FileText,
   ChevronLeft, Send, Loader2, Settings2,
-  Code2, Brain, Compass, Cpu, Cloud, BookOpen, Target, Image, PenLine,
+  Code2, Cpu, Image,
   AlertTriangle, RefreshCw, Search, Globe, Sparkles,
   ArrowUpDown, MessageSquare, Check, Filter,
   type LucideIcon,
@@ -11,6 +11,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useAgentStore, type CustomAgent, type AgentMessage, type AgentSource, searchAgentRAG } from '../store/useAgentStore';
 import GiaBrain from '../services/GiaBrain';
+import giaTools from '../services/GiaTools';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
 import { resolveAgentIcon } from '../utils/agentIcons';
@@ -68,22 +69,38 @@ const AGENT_ICONS: { name: string; color: string }[] = [
   { name: 'Flag', color: '#ef4444' },
 ];
 
-const AVAILABLE_TOOLS: { id: string; label: string; icon: LucideIcon; description: string; category: string }[] = [
-  { id: 'web_search', label: 'Web Search', icon: Search, description: 'Search the web for current information', category: 'web' },
-  { id: 'read_url', label: 'Read URL', icon: Globe, description: 'Extract content from any web page', category: 'web' },
-  { id: 'browser_navigate', label: 'Browser', icon: Compass, description: 'Full JS-rendered web pages', category: 'web' },
-  { id: 'wikipedia', label: 'Wikipedia', icon: BookOpen, description: 'Wikipedia article summaries', category: 'web' },
-  { id: 'terminal_run', label: 'Code Execution', icon: Code2, description: 'Run code (Python, JS, bash) in sandbox', category: 'code' },
-  { id: 'github', label: 'GitHub', icon: Code2, description: 'GitHub user/repo/file data', category: 'code' },
-  { id: 'filesystem_read', label: 'Read Files', icon: FileText, description: 'Read files from device', category: 'files' },
-  { id: 'filesystem_write', label: 'Write Files', icon: PenLine, description: 'Save files to device', category: 'files' },
-  { id: 'image_generation', label: 'Image Gen', icon: Image, description: 'Generate images from prompts', category: 'creative' },
-  { id: 'save_memory', label: 'Memory', icon: Brain, description: 'Save and recall facts', category: 'creative' },
-  { id: 'get_user_location', label: 'Location', icon: Target, description: 'Get GPS location', category: 'system' },
-  { id: 'weather', label: 'Weather', icon: Cloud, description: 'Current weather for any city', category: 'system' },
-  { id: 'clipboard', label: 'Clipboard', icon: FileText, description: 'Read/write system clipboard', category: 'system' },
-  { id: 'device_info', label: 'Device Info', icon: Cpu, description: 'Device battery, OS, network info', category: 'system' },
+// ── Tool picker ─────────────────────────────────────────────────────────────
+// The registry registers ~100 tools at app startup (registerAllTools). The
+// picker is generated from that registry instead of a hand-curated list of
+// ~14, so agents can be granted ANY capability GIA has — social posting,
+// security scans, SSH, databases, smart-home control, WebSockets, MCP, etc.
+const CATEGORY_RULES: { test: (id: string) => boolean; category: string; icon: LucideIcon }[] = [
+  { test: (id) => ['web_search', 'read_url', 'browser_navigate', 'wikipedia', 'page_info', 'search_places', 'show_map', 'get_directions', 'web_scrape', 'http_request', 'network_scan', 'network_connectivity', 'network_detect'].includes(id), category: 'web', icon: Globe },
+  { test: (id) => /^(terminal_|code_|build_|zip_|github|ssh_|db_|filegen|create_pdf|read_pdf|document)/.test(id), category: 'code', icon: Code2 },
+  { test: (id) => /^(filesystem_|list_files|file_|rag_|neura_)/.test(id), category: 'files', icon: FileText },
+  { test: (id) => /^(image_|save_memory|forget_memory|request_clarification|summarize_|brain_|skill)/.test(id), category: 'creative', icon: Image },
+  { test: (id) => /^(social_|connector_|gateway_|telegram_|messaging_|smart_|security_|autonomy|goal|scheduled|calendar|email_|mcp_|plugin_|ws_)/.test(id), category: 'system', icon: Cpu },
+  { test: () => true, category: 'system', icon: Cpu },
 ];
+
+function toolDisplayLabel(id: string): string {
+  return id.split('_').map(w => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ');
+}
+
+function getAllAgentTools(): { id: string; label: string; icon: LucideIcon; description: string; category: string }[] {
+  return giaTools.getAllTools()
+    .map(t => {
+      const rule = CATEGORY_RULES.find(r => r.test(t.id)) || CATEGORY_RULES[CATEGORY_RULES.length - 1];
+      return {
+        id: t.id,
+        label: toolDisplayLabel(t.id),
+        icon: rule.icon,
+        description: t.description || '',
+        category: rule.category,
+      };
+    })
+    .sort((a, b) => a.category.localeCompare(b.category) || a.label.localeCompare(b.label));
+}
 
 const CATEGORY_FILTERS = [
   { id: 'all', label: 'All Agents' },
@@ -261,7 +278,7 @@ const AgentListView: React.FC<{
 
     // Category tool filter
     if (categoryFilter !== 'all') {
-      const categoryToolIds = AVAILABLE_TOOLS.filter(t => t.category === categoryFilter).map(t => t.id);
+      const categoryToolIds = getAllAgentTools().filter(t => t.category === categoryFilter).map(t => t.id);
       result = result.filter(a => a.tools.some(t => categoryToolIds.includes(t)));
     }
 
@@ -551,7 +568,7 @@ const AgentListView: React.FC<{
                         {/* Assigned Tools Badges */}
                         <div className="flex flex-wrap items-center gap-1 mt-2">
                           {agent.tools.slice(0, 4).map((tId) => {
-                            const tDef = AVAILABLE_TOOLS.find(t => t.id === tId);
+                            const tDef = getAllAgentTools().find(t => t.id === tId);
                             const TIcon = tDef?.icon || Code2;
                             return (
                               <span
@@ -984,16 +1001,16 @@ const CreateAgentModal: React.FC<{
         for (let i = 0; i < total; i++) {
           const file = files[i];
           try {
+            // Each file owns a slice of the progress bar; the chunk callback
+            // reports REAL indexing progress instead of a fake timer, so
+            // "Uploading… 85%" actually reflects embedding work done.
+            const startPct = Math.round((i / total) * 80) + 10;
             const endPct = Math.round(((i + 1) / total) * 80) + 10;
-            const progressInterval = setInterval(() => {
-              setUploadProgress(prev => Math.min(prev + 2, endPct - 5));
-            }, 100);
-            try {
-              await useAgentStore.getState().addFileToAgent(editAgent.id, file);
-              setUploadProgress(endPct);
-            } finally {
-              clearInterval(progressInterval);
-            }
+            await useAgentStore.getState().addFileToAgent(editAgent.id, file, (done, totalChunks) => {
+              const frac = totalChunks > 0 ? done / totalChunks : 1;
+              setUploadProgress(Math.min(startPct + frac * (endPct - startPct), endPct));
+            });
+            setUploadProgress(endPct);
           } catch (e) { console.error('Upload failed:', file.name, e); }
         }
         setUploadProgress(100);
@@ -1012,16 +1029,13 @@ const CreateAgentModal: React.FC<{
         for (let i = 0; i < total; i++) {
           const file = files[i];
           try {
+            const startPct = Math.round((i / total) * 80) + 10;
             const endPct = Math.round(((i + 1) / total) * 80) + 10;
-            const progressInterval = setInterval(() => {
-              setUploadProgress(prev => Math.min(prev + 2, endPct - 5));
-            }, 100);
-            try {
-              await useAgentStore.getState().addFileToAgent(agent.id, file);
-              setUploadProgress(endPct);
-            } finally {
-              clearInterval(progressInterval);
-            }
+            await useAgentStore.getState().addFileToAgent(agent.id, file, (done, totalChunks) => {
+              const frac = totalChunks > 0 ? done / totalChunks : 1;
+              setUploadProgress(Math.min(startPct + frac * (endPct - startPct), endPct));
+            });
+            setUploadProgress(endPct);
           } catch (e) { console.error('Upload failed:', file.name, e); }
         }
         setUploadProgress(100);
@@ -1105,28 +1119,41 @@ const CreateAgentModal: React.FC<{
               className="gia-input mt-1.5 text-[11px] font-mono resize-none" style={{ minHeight: '80px' }} />
           </div>
 
-          {/* Tool selection */}
+          {/* Tool selection — every registered tool, grouped by category */}
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
-              Tools <span className="text-[8px] font-normal lowercase" style={{ color: 'var(--gia-muted-2)' }}>(select capabilities)</span>
+              Tools <span className="text-[8px] font-normal lowercase" style={{ color: 'var(--gia-muted-2)' }}>({getAllAgentTools().length} registered — select capabilities)</span>
             </label>
-            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-              {AVAILABLE_TOOLS.map(t => {
-                const T = t.icon;
-                const active = tools.includes(t.id);
-                return (
-                  <button key={t.id} onClick={() => setTools(prev => active ? prev.filter(x => x !== t.id) : [...prev, t.id])}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[10px] text-left tap-feedback transition-all"
-                    style={{ background: active ? `${currentIconColor}10` : 'var(--gia-surface-2)', border: active ? `1px solid ${currentIconColor}30` : '1px solid var(--gia-border)' }}>
-                    <T size={12} style={{ color: active ? currentIconColor : 'var(--gia-muted-2)' }} />
-                    <div className="flex-1 min-w-0">
-                      <span className="block font-medium truncate" style={{ color: active ? 'var(--gia-text)' : 'var(--gia-muted)' }}>{t.label}</span>
-                      <span className="block text-[8px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{t.description}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            {(() => {
+              const grouped = getAllAgentTools().reduce<Record<string, { id: string; label: string; icon: LucideIcon; description: string; category: string }[]>>((acc, t) => {
+                (acc[t.category] ||= []).push(t);
+                return acc;
+              }, {});
+              return Object.entries(grouped).map(([cat, list]) => (
+                <div key={cat} className="mt-2">
+                  <p className="text-[8px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--gia-muted-2)' }}>
+                    {CATEGORY_FILTERS.find(c => c.id === cat)?.label || cat} · {list.length}
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {list.map(t => {
+                      const T = t.icon;
+                      const active = tools.includes(t.id);
+                      return (
+                        <button key={t.id} onClick={() => setTools(prev => active ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                          className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[10px] text-left tap-feedback transition-all"
+                          style={{ background: active ? `${currentIconColor}10` : 'var(--gia-surface-2)', border: active ? `1px solid ${currentIconColor}30` : '1px solid var(--gia-border)' }}>
+                          <T size={12} style={{ color: active ? currentIconColor : 'var(--gia-muted-2)' }} />
+                          <div className="flex-1 min-w-0">
+                            <span className="block font-medium truncate" style={{ color: active ? 'var(--gia-text)' : 'var(--gia-muted)' }}>{t.label}</span>
+                            <span className="block text-[8px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{t.description}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
 
           {/* File upload */}

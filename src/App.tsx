@@ -361,6 +361,7 @@ const App: React.FC = () => {
     let svc: Record<string, any> | null = null;
     const servicesReady = Promise.all([
       import('./services/SchedulerService').then(m => { m.default.start(); }),
+      import('./services/WidgetSyncService').then(m => { m.default.start(); }),
       import('./services/MCPManager').then(m => m.default),
       import('./services/autonomy/ProactiveEngine').then(m => { m.proactiveEngine.start(); return m.proactiveEngine; }),
       import('./services/IdleManager').then(m => m.default),
@@ -371,7 +372,7 @@ const App: React.FC = () => {
       import('./services/GIAForegroundService').then(m => m.default),
       import('./services/MessagingBridge').then(m => m.default),
       import('./services/BackgroundRecovery').then(m => m.backgroundRecovery),
-    ]).then(([, MCPManager, proactiveEngine, idleManager, SystemService, setSystemContext, wakeLockService, keepaliveService, giaForegroundService, messagingBridge, backgroundRecovery]) => {
+    ]).then(([, , MCPManager, proactiveEngine, idleManager, SystemService, setSystemContext, wakeLockService, keepaliveService, giaForegroundService, messagingBridge, backgroundRecovery]) => {
       svc = { idleManager, SystemService, setSystemContext, wakeLockService, keepaliveService, giaForegroundService, messagingBridge, backgroundRecovery, proactiveEngine, MCPManager };
       return svc;
     });

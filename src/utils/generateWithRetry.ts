@@ -2,7 +2,9 @@ import { extractJSON } from './helpers';
 import { logger } from './logger';
 import OutputValidator from '../services/OutputValidator';
 
-const RETRY_DELAYS_MS = [1000, 3000, 6000, 10000];
+// Deliberately short: JSON-only modules (Exam/Planner) should feel near-
+// instant — a bad parse shouldn't burn 6-10s just sleeping before retrying.
+const RETRY_DELAYS_MS = [800, 2000, 3000, 3000];
 const MAX_RETRIES = 4;
 
 interface RetryOptions {

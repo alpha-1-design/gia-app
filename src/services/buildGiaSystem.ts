@@ -9,6 +9,7 @@ import { GIA_VOICE } from '../config/gia-identity';
 import connectorManager from '../services/connectors/ConnectorManager';
 import socialManager from '../services/social/SocialManager';
 import MCPManager from '../services/MCPManager';
+import { providerRegistry } from './ProviderRegistry';
 
 let _cachedSystemContext = '';
 
@@ -102,6 +103,8 @@ ${memory}
 
 ${neuraCtx ? `\n## What Neura knows\nNeura is GIA's living knowledge graph — every entity, concept, and connection discovered during conversations lives here. You can query it anytime with the neura_query tool.\n${neuraCtx}` : ''}
 
+## Your knowledge base & ecosystem\nYou have an official, machine-readable knowledge base at https://alpha-1-design.github.io/gia-app/docs/gia-docs.json — the same documentation shown on your landing page (https://alpha-1-design.github.io/gia-app/). It covers every module, tool, setting, and workflow in GIA. Whenever you are unsure how a feature, capability, or setting works — or what the app can and cannot do — fetch that URL with read_url and read the relevant section before answering. Never guess about your own capabilities when the answer is one fetch away.\n\nYour skills live in the Skills Marketplace (Settings → Skills): you can list them with skill_list and switch the active one with skill_activate. Community skills are published by users and install directly into the app — check for a matching skill before every major task.\n
+
 ${userContext || ''}
 
 ${(() => {
@@ -111,7 +114,12 @@ ${(() => {
   const supportsTools = activeModelCfg?.tools !== false;
   const imageProviders = ['openai', 'openrouter', 'huggingface'] as const;
   const hasImageProvider = imageProviders.some(p => providers[p]?.enabled && !!providers[p]?.apiKey);
-  const supportsImageGen = hasImageProvider;
+  // Any enabled provider with a resolvable image model (registry default or the
+  // per-provider override set in Model & Provider) can serve image_generation —
+  // not just the three legacy providers.
+  const supportsImageGen = hasImageProvider || Object.entries(providers).some(
+    ([id, cfg]) => cfg?.enabled && !!cfg?.apiKey && (cfg?.imageModel || providerRegistry.getImageModel(id))
+  );
 
   if (!supportsTools) return `## Limited tool support
 Your current model (${activeCfg?.model || 'unknown'}) doesn't natively support tool calling. You can still answer questions conversationally and provide code/output. When you need web access or execution, describe what you'd do with each tool and ask the user to switch to a tool-capable model in Settings.`;
@@ -147,6 +155,8 @@ Call a tool by writing a fenced code block with **valid JSON only**:
 | \`zip_project\` | Bundle existing files into ZIP | \`filename\`, \`files\` or \`paths\` | From device or content |
 | \`build_project\` | Scaffold, build, and package project into ZIP | \`files\`, \`build_command\`, \`language\`, \`output_filename\`, \`entry\` | Full build pipeline |
 | \`install_skill\` | Install a new skill from URL or package | \`source\` (URL/package name), \`name\`, \`id\` | Expands GIA capabilities |
+| \`skill_list\` | List installed skills + which is active | none | See what GIA can specialize in |
+| \`skill_activate\` | Switch the active skill | \`skillId\` | Adopts its behavior immediately |
 ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |\n` : ''}| \`switch_module\` | Navigate to module | \`module\`: chat/exam/analyst/writer/planner/settings | |
 | \`toggle_feature\` | Toggle features | \`feature\`: web_search/thinking/hands_off, \`enabled\` | |
 | \`show_notification\` | Toast notification | \`message\` | |
@@ -162,6 +172,7 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`page_info\` | Page metadata (OG tags) | \`url\` | Lightweight, no full fetch |
 | \`github\` | GitHub user/repo/file data | \`action\`, \`username\`, \`repo\`, \`path\` | Ask user for username |
 | \`create_pdf\` | Generate a PDF from title + content | \`title\`, \`content\`, \`filename\`?, \`author\`? | Shows preview -> Save or Download |
+| \`generate_file\` | Generate a real document file (PDF, DOCX, PPTX, or ZIP) from markdown/slides | \`format\` (pdf/docx/pptx/zip), \`filename\`, \`content\` (markdown body) or \`slides\`[], \`title\`? | File is stored in the sandbox and a preview link is shown — view it right in the app |
 | \`browser_navigate\` | Full JS-rendered page | \`url\` | Uses iframe sandbox |
 | \`search_places\` | OSM place search | \`query\` | Free Nominatim |
 | \`show_map\` | Interactive map | \`center\`: {lat, lng}, \`markers\`[], \`route\`[] | Include route from get_directions |
@@ -182,6 +193,11 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`make_phone_call\` | Initiate phone call | \`phone\` (with country code) | Opens dialer pre-filled |
 | \`set_alarm\` | Set an alarm | \`hour\` (0-23), \`minute\` (0-59), \`label\`, \`days\`[] | Sets directly via AlarmManager |
 | \`create_goal\` | Create an autonomous goal | \`title\`, \`description\`, \`priority\` | GIA plans & executes autonomously |
+| \`task_create\` | Add a to-do item | \`title\`, \`description\`?, \`priority\`? (low/medium/high/critical), \`tags\`[], \`dueDate\`? | Build & manage to-do lists |
+| \`task_read\` | Read a task by ID or list tasks | \`id\`? or \`status\`? (todo/in_progress/done) | See current tasks |
+| \`task_update\` | Edit a task (mark done, change priority…) | \`id\`, \`title\`?, \`description\`?, \`status\`?, \`priority\`?, \`dueDate\`? | Track progress |
+| \`task_delete\` | Remove a task | \`id\` | Clean up |
+| \`task_move\` | Move a task to another status | \`id\`, \`status\` (todo/in_progress/done) | Organize |
 | \`list_goals\` | List all goals | none | Status, progress, priority |
 | \`goal_progress\` | Goal progress report | \`goalTitle\` | Shows steps & reflections |
 | \`pause_goal\` | Pause/resume/cancel a goal | \`goalTitle\`, \`action\` | Use pause/cancel/resume |
@@ -232,6 +248,10 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`ws_wait\` | Wait for a WebSocket message | \`connectionId\`, \`timeout\`? (30s) | Blocks until message arrives |
 | \`ws_close\` | Close a WebSocket connection | \`connectionId\` | |
 | \`ws_status\` | Check all WebSocket connections | none | |
+| \`mcp_server_add\` | Add an MCP server | \`name\`, \`transport\` (sse/stdio), \`url\`? (sse), \`command\`?/\`args\`[]? (stdio) | Connect it to unlock its tools |
+| \`mcp_server_list\` | List MCP servers | none | Status + transport |
+| \`mcp_server_remove\` | Remove an MCP server | \`serverId\` | Unregisters its tools |
+| \`mcp_server_test\` | Test MCP server connectivity | \`serverId\` | Verify config |
 | \`file_search\` | Search uploaded files by name, type, tags, or content | \`query\`?, \`type\`?, \`tag\`?, \`limit\`? | Searches persistent file store |
 | \`file_get\` | Retrieve full content of a previously uploaded file | \`id\` (from file_search) | Includes text or image data URL |
 | \`file_list\` | List all uploaded files, optionally filtered | \`source\`?, \`limit\`? | Sorted newest first |
@@ -307,7 +327,9 @@ You have full root access inside the Alpine/Linux sandbox environment (\`termina
 {"id":"create_pdf","args":{"title":"Weekly Report","content":"Summary of findings...","filename":"report.pdf"}}
 \`\`\`
 
-Rules: you can call multiple independent tools in a single message by putting each in its own \`\`\`tool block. Tools that read (list, get, stats, logs) are safe to run in parallel. For dependent tools, run them sequentially and wait for each observation. Never fabricate URLs — use tools for maps, images, and visualizations.${approvalNote}`;
+Rules: you can call multiple independent tools in a single message by putting each in its own \`\`\`tool block. Tools that read (list, get, stats, logs) are safe to run in parallel. For dependent tools, run them sequentially and wait for each observation. Never fabricate URLs — use tools for maps, images, and visualizations.${approvalNote}
+
+**Rich visuals:** render data-heavy answers as polished visual blocks by emitting a fenced block with JSON: \`{"type":"chart"|"mindmap"|"diff"|"table"|"gallery"|"timeline"|"terminal"|"widget"|"waveform"|"map"|"slides"|"canvas"|"3d"|"graph"|"file","data":{...}}\`. Maps render real OpenStreetMap tiles — for anything location-based use \`show_map\` with a route from \`get_directions\` (live OSRM turn-by-turn routing). For 3D, emit a \`3d\` visual with \`objects\` (box, sphere, cylinder, cone, torus, plane, text), \`lights\` (ambient/directional/point), and \`camera\` position. Prefer a visual block over raw JSON tables whenever it makes the answer clearer.`;
 })()}
 
 ## Modules you can navigate to

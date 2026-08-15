@@ -82,4 +82,44 @@ describe('GiaTools', () => {
       expect(schema!.properties).toHaveProperty('prompt');
     });
   });
+
+  describe('smoke test — every tool family registers', () => {
+    it('registers the full registry (not a curated subset)', () => {
+      const tools = giaTools.getAllTools();
+      // The registry intentionally carries the full ~100-tool surface (web,
+      // terminal, security, social, connectors, gateway, SSH, DB, smart home,
+      // websockets, MCP, goals...). The UI pickers generate from this list.
+      expect(tools.length).toBeGreaterThanOrEqual(90);
+    });
+
+    it('includes reachable tools from every family', () => {
+      const ids = giaTools.getAllTools().map(t => t.id);
+      const required = [
+        // Web & navigation
+        'web_search', 'read_url', 'browser_navigate', 'wikipedia', 'show_map', 'get_directions',
+        // Code & execution
+        'terminal_run', 'build_project', 'zip_project', 'github', 'ssh_connect', 'db_query', 'generate_file',
+        // Files
+        'filesystem_read', 'filesystem_write', 'file_search', 'file_get', 'create_pdf', 'read_pdf',
+        // Creative / memory
+        'image_generation', 'save_memory', 'forget_memory', 'request_clarification',
+        // Device & system
+        'device_info', 'device_health', 'get_user_location', 'weather', 'define', 'clipboard', 'share_content',
+        'set_alarm', 'send_sms', 'send_whatsapp', 'send_email', 'make_phone_call', 'open_url',
+        // Security
+        'security_install_tools', 'security_scan', 'security_firewall', 'security_trace', 'security_quarantine',
+        // Social / connectors / gateway / messaging
+        'social_publish', 'social_analytics', 'connector_call', 'connector_list',
+        'gateway_call', 'gateway_stats', 'telegram_post', 'messaging_status',
+        // Smart home / network / websockets
+        'smart_discover', 'smart_control', 'smart_cast', 'network_scan', 'ws_send', 'ws_status',
+        // Autonomy / agents / MCP / notes & tasks / skills
+        'create_goal', 'list_goals', 'task_create', 'note_read', 'neura_query', 'mcp_server_add', 'mcp_server_list',
+        'skill_list', 'skill_activate',
+      ];
+      for (const id of required) {
+        expect(ids, `tool "${id}" is not registered`).toContain(id);
+      }
+    });
+  });
 });

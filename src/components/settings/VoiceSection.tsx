@@ -27,6 +27,7 @@ export const VoiceSection: React.FC = () => {
   const [keepListening, setKeepListening] = useState(() => localStorage.getItem('gia-keep-listening') === 'true');
   const [autoStart, setAutoStart] = useState(() => localStorage.getItem('gia-auto-start-wake-word') === 'true');
   const [ttsEnabled, setTtsEnabled] = useState(() => TTSService.isEnabled());
+  const [modelVoiceEnabled, setModelVoiceEnabled] = useState(() => TTSService.isModelVoiceEnabled());
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
   const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
   const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
@@ -220,6 +221,12 @@ export const VoiceSection: React.FC = () => {
               <span>More detections</span>
             </div>
           </div>
+          {!accessKey.trim() && (
+            <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
+              <AlertTriangle size={10} className="inline mr-1" />
+              No Porcupine access key set — GIA will use on-device speech recognition instead. That works while the app is open; always-on background detection needs the free key from console.picovoice.ai.
+            </div>
+          )}
           <div>
             <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
               Porcupine Access Key
@@ -264,6 +271,14 @@ export const VoiceSection: React.FC = () => {
         label="Voice Response (TTS)"
         description="GIA will read her responses out loud."
         accentColor="#ec4899"
+      />
+
+      <Switch
+        checked={modelVoiceEnabled}
+        onChange={v => { setModelVoiceEnabled(v); TTSService.setModelVoiceEnabled(v); }}
+        label="Model Voice"
+        description="Use the model's own voice (OpenAI / Gemini native speech) instead of the device voice. Auto-falls back to device TTS when unavailable."
+        accentColor="#a855f7"
       />
 
       <div className="border-t" style={{ borderColor: 'var(--gia-border)', margin: '4px 0' }} />

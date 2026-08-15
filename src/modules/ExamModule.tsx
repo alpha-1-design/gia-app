@@ -145,7 +145,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
           temperature: 0.4,
           maxTokens: 3000,
         }),
-        { moduleName: 'ExamModule', onRetry: (attempt, err) => setRetryStatus(`Retry ${attempt + 1}/4: ${err}`) }
+        { moduleName: 'ExamModule', maxRetries: 2, onRetry: (attempt, err) => setRetryStatus(`Retry ${attempt + 1}/3: ${err}`) }
       );
       if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
         throw new Error('AI returned an invalid response format. Please try again.');

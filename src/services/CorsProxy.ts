@@ -45,12 +45,14 @@ export class CorsProxy {
       } catch (e) { logger.warn('[CorsProxy] Custom proxy unavailable:', e instanceof Error ? e.message : e); }
     }
 
-    // Public proxies only support GET requests without custom authorization headers
+    // Public proxies support GET requests; corsproxy.io and the project's own
+    // worker (cors-anywhere.gia.workers.dev) forward request headers, so
+    // authenticated GETs (e.g. `GET /models` with an Authorization header) can
+    // pass through too. Each proxy is only accepted when res.ok — proxies that
+    // strip auth headers just fail and we move on to the next.
     const isGet = !options.method || options.method.toUpperCase() === 'GET';
-    const headers = options.headers as Record<string, string> | undefined;
-    const hasAuthHeaders = headers && (headers['Authorization'] || headers['authorization'] || headers['x-api-key']);
 
-    if (isGet && !hasAuthHeaders) {
+    if (isGet) {
       for (const proxy of PROXY_LIST) {
         try {
           const proxyUrl = proxy + encodeURIComponent(url);

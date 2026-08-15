@@ -1,0 +1,167 @@
+{
+  "version": "2.3.3-beta.1",
+  "updated": "2026-08-15",
+  "sections": [
+    {
+      "id": "start",
+      "title": "Getting Started",
+      "blocks": [
+        { "type": "p", "text": "GIA is a private AI workspace that runs on your Android device or in the browser. There is no account to create and no cloud backend." },
+        { "type": "p", "text": "To use cloud models, open Settings → Engine Room and connect a provider with your own API key. To go fully on-device, enable On-Device Mode and load a local model in Settings → Local LLM." },
+        { "type": "ul", "items": [
+          "Download the APK from GitHub Releases (Android) or open the Web app.",
+          "Connect a provider, or enable On-Device Mode for zero-key use.",
+          "Start chatting — GIA remembers what you tell it across modules."
+        ] }
+      ]
+    },
+    {
+      "id": "chat",
+      "title": "Chat",
+      "blocks": [
+        { "type": "p", "text": "The core workspace. Talk to GIA with tools, files, memory, and real-time streaming." },
+        { "type": "ul", "items": [
+          "Attach files, images, or share from another app. Long pasted text is auto-wrapped as a .txt attachment.",
+          "GIA streams responses token-by-token and runs tools in a loop. Tool runs render as visual cards with live status.",
+          "Every response is tagged on-device or cloud so you always know where it ran.",
+          "Tap the provider pill in the chat header to switch model, thinking, and per-provider image model.",
+          "The 🔧 All Tools button opens the full tool catalog — tap any tool to copy its ID, then ask GIA to use it."
+        ] }
+      ]
+    },
+    {
+      "id": "exam",
+      "title": "Exam",
+      "blocks": [
+        { "type": "p", "text": "Built for students. Generate WASSCE and BECE quizzes, walk through past questions, and get instant feedback." },
+        { "type": "ul", "items": [
+          "Create a practice quiz from a topic or past paper.",
+          "Step-by-step solutions with hints before answers.",
+          "Track what you have and have not mastered."
+        ] }
+      ]
+    },
+    {
+      "id": "analyst",
+      "title": "Analyst",
+      "blocks": [
+        { "type": "p", "text": "Turn raw data into clear, structured insight with charts and JSON-ready analysis." },
+        { "type": "ul", "items": [
+          "Upload documents and query them with on-device RAG.",
+          "Produce charts and reports rendered inline.",
+          "Persistent memory of your metrics and goals."
+        ] }
+      ]
+    },
+    {
+      "id": "writer",
+      "title": "Writer",
+      "blocks": [
+        { "type": "p", "text": "Long-form and visual content — drafts, documents, slides, and code — generated and rendered inline. Files can be exported as PDF, DOCX, PPTX, or ZIP and previewed in the app." }
+      ]
+    },
+    {
+      "id": "planner",
+      "title": "Planner",
+      "blocks": [
+        { "type": "p", "text": "Break big goals into calm, actionable steps — a study week, a project plan, or a personal roadmap." }
+      ]
+    },
+    {
+      "id": "agents",
+      "title": "Agents",
+      "blocks": [
+        { "type": "p", "text": "Build autonomous agents with their own memory and RAG. Delegate work and oversee the result." },
+        { "type": "ul", "items": [
+          "Define an agent with a name, role, instructions, and a per-agent tool grant (pick any of the 200+ registered tools).",
+          "Each agent gets per-agent retrieval over your files.",
+          "Mention agents inline with @Name to route a task.",
+          "GIA can delegate sub-tasks to agents via sub_agent_call and reads back their output."
+        ] }
+      ]
+    },
+    {
+      "id": "autonomy",
+      "title": "Autonomy",
+      "blocks": [
+        { "type": "p", "text": "Set a goal and let GIA drive toward it — planning, executing, and adapting without hand-holding." }
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "Tools & Visual Blocks",
+      "blocks": [
+        { "type": "p", "text": "GIA has 200+ registered tools: web search & browsing, code execution, terminal, files, PDF/DOCX generation, tasks & to-dos, security scanning, SSH, databases, smart home, MCP servers, plugins, image generation, maps, and more." },
+        { "type": "ul", "items": [
+          "GIA calls tools by emitting ```tool blocks with a registered tool ID and JSON args.",
+          "Tool runs show live status cards with elapsed time, results, and errors.",
+          "Visual blocks render charts, maps (OpenStreetMap + live OSRM routing), 3D scenes, mind maps, and widgets inline in chat.",
+          "The full catalog is one tap away in chat (🔧 All Tools) and per-agent in Agents."
+        ] }
+      ]
+    },
+    {
+      "id": "skills",
+      "title": "Skills & Ecosystem",
+      "blocks": [
+        { "type": "p", "text": "Skills are packaged instructions that shape how GIA handles a task. GIA ships with built-in skills and can install community skills from the Skills Marketplace (Settings → Skills)." },
+        { "type": "ul", "items": [
+          "GIA can list and switch skills itself via skill_list and skill_activate.",
+          "The active skill shows as a chip in the chat header.",
+          "Community skills come from SkillsMP, Anthropic's official skill collection, and the davila7 Claude templates registry.",
+          "Users can publish skills to the community via the landing page or the marketplace sources."
+        ] }
+      ]
+    },
+    {
+      "id": "voice",
+      "title": "Voice & Wake Word",
+      "blocks": [
+        { "type": "p", "text": "GIA supports voice input, text-to-speech, and a wake word." },
+        { "type": "ul", "items": [
+          "Without a key, GIA uses its built-in on-device recognizer — the wake word works while the app is open.",
+          "Adding a free Picovoice access key enables the always-on native wake word engine.",
+          "Model Voice: with OpenAI or Gemini connected, GIA can read answers in the model's own native voice (OpenAI audio/speech, Gemini TTS) instead of the device voice — toggle it in Settings → Voice.",
+          "Configure voice settings under Settings → Voice."
+        ] }
+      ]
+    },
+    {
+      "id": "ondevice",
+      "title": "On-Device Mode",
+      "blocks": [
+        { "type": "p", "text": "On-Device Mode prefers the local LLM for every response when a model is loaded. Memory, embeddings, and translation run locally — nothing leaves your device." },
+        { "type": "ul", "items": [
+          "Enable in Settings → Reliability → On-Device Mode.",
+          "Load a model in Settings → Local LLM (downloads via CDN).",
+          "If the local model is not ready, GIA falls back to your cloud provider and tags the response accordingly."
+        ] }
+      ]
+    },
+    {
+      "id": "privacy",
+      "title": "Privacy & Security",
+      "blocks": [
+        { "type": "p", "text": "GIA has no cloud backend and no telemetry. Your data stays on your device unless you explicitly choose a cloud model." },
+        { "type": "ul", "items": [
+          "No account, no tracking, no server-side logs.",
+          "API keys are stored locally and never sent to GIA servers.",
+          "Input guardrails block prompt injection and dangerous commands.",
+          "Security tools (security_scan, security_firewall, security_threat_intel) are built in."
+        ] }
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "blocks": [
+        { "type": "ul", "items": [
+          "No provider connected? Connect one in Settings → Engine Room, or enable On-Device Mode with the local Qwen LLM (zero key).",
+          "Image generation needs a provider that supports an images endpoint — set the image model in the chat header's Model & Provider sheet.",
+          "Terminal commands hang? The Android build includes a fix for the process-exit race — rebuild the APK from GitHub Actions.",
+          "Agent file uploads index on-device; the first index after a failed model load falls back to fast keyword search automatically."
+        ] }
+      ]
+    }
+  ]
+}

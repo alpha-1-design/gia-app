@@ -45,7 +45,7 @@ interface AgentStore {
   updateAgentTools: (id: string, tools: string[]) => void;
   updateAgent: (id: string, updates: Partial<CustomAgent>) => void;
   removeAgent: (id: string) => void;
-  addFileToAgent: (agentId: string, file: File) => Promise<void>;
+  addFileToAgent: (agentId: string, file: File, onProgress?: (done: number, total: number) => void) => Promise<void>;
   removeFileFromAgent: (agentId: string, fileId: string) => void;
   getAgent: (id: string) => CustomAgent | undefined;
   addMessage: (agentId: string, msg: AgentMessage) => void;
@@ -68,10 +68,14 @@ async function extractFileText(file: File): Promise<string> {
   return file.text();
 }
 
-export async function indexAgentFile(agentId: string, file: File): Promise<void> {
+export async function indexAgentFile(
+  agentId: string,
+  file: File,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
   const text = await extractFileText(file);
   const docId = `${agentNamespace(agentId)}${file.name}`;
-  await RAGService.indexDocument(docId, file.name, text);
+  await RAGService.indexDocument(docId, file.name, text, onProgress);
 }
 
 export async function searchAgentRAG(agentId: string, query: string, topK = 5) {
@@ -121,7 +125,7 @@ export const useAgentStore = create<AgentStore>()(
         });
       },
 
-      addFileToAgent: async (agentId, file) => {
+      addFileToAgent: async (agentId, file, onProgress) => {
         const agentFile: AgentFile = {
           id: genId(),
           name: file.name,
@@ -136,7 +140,7 @@ export const useAgentStore = create<AgentStore>()(
               : a
           ),
         }));
-        await indexAgentFile(agentId, file);
+        await indexAgentFile(agentId, file, onProgress);
       },
 
       removeFileFromAgent: (agentId, fileId) => {

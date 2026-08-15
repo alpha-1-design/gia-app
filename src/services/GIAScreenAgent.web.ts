@@ -91,10 +91,12 @@ export class GIAScreenAgentWeb implements ScreenAgentPlugin {
   }
 
   async showOrb(): Promise<void> {
-    // Web: no floating overlay support
+    // No floating overlay on web — throw so the UI reports the real reason
+    // instead of silently pretending the orb is active.
+    throw new Error('Screen Orb overlay is only available on Android');
   }
   async hideOrb(): Promise<void> {
-    // Web: no floating overlay support
+    // Nothing to hide on web (the orb never shows).
   }
   async isOrbShowing(): Promise<{ showing: boolean; size: number }> {
     return { showing: false, size: 56 };

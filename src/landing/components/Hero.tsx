@@ -32,7 +32,10 @@ export function Hero() {
             >
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/15 text-violet-400 text-xs font-semibold mb-6 tracking-widest uppercase">
                 <Sparkles size={12} />
-                v2.3.1 — Now Available
+                <span className="rounded-full bg-violet-500/20 border border-violet-500/25 px-2 py-0.5 text-[10px] font-bold text-violet-300">
+                  BETA
+                </span>
+                v2.3.3-beta.1 — Latest Release
               </div>
             </motion.div>
 

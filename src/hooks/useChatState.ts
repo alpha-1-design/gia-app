@@ -413,6 +413,14 @@ export function useChatState() {
     setAgentMentionQuery('');
   }, [input, setInput]);
 
+  // Send an arbitrary text immediately (used by follow-up suggestion chips and
+  // other programmatic sends) — bypasses the input-bound wrapper above.
+  const sendText = useCallback((text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    genRef.current.handleSend(t, [], setInput, v => setAttachmentsRef.current(v as Attachment[]));
+  }, [setInput]);
+
   const handleSend = useCallback(() => {
     // ── Slash commands ──────────────────────────────────────
     if (input.trim().startsWith('/')) {
@@ -541,7 +549,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     handleContinue: gen.handleContinue,
     handleDeleteWithUndo: msgOps.handleDeleteWithUndo,
     handleUndoDelete: msgOps.handleUndoDelete,
-    handleInputChange, handleSend,
+    handleInputChange, handleSend, sendText,
     handleClarificationAnswer: gen.handleClarificationAnswer,
     addFiles, handlePaste, handleDragEnter, handleDragLeave,
     handleDragOver, handleDrop, handleFork: msgOps.handleFork,

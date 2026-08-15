@@ -21,6 +21,8 @@ export interface ProviderConfig {
   model: string;
   enabled: boolean;
   baseUrl?: string;
+  /** Overrides the provider's default image-generation model (e.g. dall-e-3). */
+  imageModel?: string;
   tokenBalance?: number;
   tokenLimit?: number;
 }
@@ -38,11 +40,14 @@ export interface PendingTask {
 interface GiaProviderState {
   providers: Record<string, ProviderConfig>;
   availableModels: Record<string, ModelOption[]>;
+  /** Whether each provider's model list came from a live API fetch or the curated fallback catalog. */
+  modelListStatus: Record<string, 'live' | 'catalog'>;
   activeProvider: string;
   initialised: boolean;
   pendingTasks: PendingTask[];
   setProviderKey: (p: string, key: string) => void;
   setProviderModel: (p: string, model: string) => void;
+  setProviderImageModel: (p: string, model: string) => void;
   setActiveProvider: (p: string) => void;
   setProviderBaseUrl: (p: string, url: string) => void;
   setProviderTokenBalance: (p: string, balance: number) => void;
@@ -82,6 +87,7 @@ export const useProviderStore = create<GiaProviderState>()(
     (set, get) => ({
       providers: {},
       availableModels: {},
+      modelListStatus: {},
       activeProvider: 'opencode',
       initialised: false,
       pendingTasks: [],
@@ -132,6 +138,9 @@ export const useProviderStore = create<GiaProviderState>()(
       setProviderModel: (p, model) =>
         set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false }), model } } })),
 
+      setProviderImageModel: (p, model) =>
+        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false, model: providerRegistry.getDefaultModel(p) }), imageModel: model.trim() || undefined } } })),
+
       setActiveProvider: (p) => set({ activeProvider: p }),
 
       setProviderBaseUrl: (p, url) =>
@@ -149,6 +158,7 @@ export const useProviderStore = create<GiaProviderState>()(
             providers,
             activeProvider,
             availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) },
+            modelListStatus: { ...s.modelListStatus, [p]: 'catalog' as const },
           };
         }),
 
@@ -158,9 +168,18 @@ export const useProviderStore = create<GiaProviderState>()(
         const def = providerRegistry.getProvider(p);
         if (!def) return [];
 
+        const markLive = (list: ModelOption[]): ModelOption[] => {
+          set((s) => ({ availableModels: { ...s.availableModels, [p]: list }, modelListStatus: { ...s.modelListStatus, [p]: 'live' as const } }));
+          return list;
+        };
+        const markCatalog = (list: ModelOption[]): ModelOption[] => {
+          set((s) => ({ availableModels: { ...s.availableModels, [p]: list }, modelListStatus: { ...s.modelListStatus, [p]: 'catalog' as const } }));
+          return list;
+        };
+
         const isPublicListingSupported = p === 'opencode' || p === 'openrouter';
         if (!config?.apiKey && def.needsApiKey && !isPublicListingSupported) {
-          return providerRegistry.getModels(p);
+          return markCatalog(providerRegistry.getModels(p));
         }
 
         const baseUrl = config?.baseUrl || def.baseUrl;
@@ -170,8 +189,7 @@ export const useProviderStore = create<GiaProviderState>()(
         try {
           // Providers without dynamic listing
           if (listingType === 'huggingface' || listingType === 'local') {
-            set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
-            return providerRegistry.getModels(p);
+            return markCatalog(providerRegistry.getModels(p));
           }
 
           // Anthropic supports CORS from the browser via the dangerous-direct-browser-access
@@ -199,15 +217,12 @@ export const useProviderStore = create<GiaProviderState>()(
                   vision: true,
                 }));
                 formatted.sort((a, b) => b.id.localeCompare(a.id));
-                set((s) => ({ availableModels: { ...s.availableModels, [p]: formatted } }));
-                return formatted;
+                return markLive(formatted);
               }
             } catch (e) {
               logger.warn(`[fetchModels] Anthropic live listing failed, using curated catalog:`, e);
             }
-            const fallback = providerRegistry.getModels(p);
-            set((s) => ({ availableModels: { ...s.availableModels, [p]: fallback } }));
-            return fallback;
+            return markCatalog(providerRegistry.getModels(p));
           }
 
           // Ollama local listing
@@ -225,13 +240,11 @@ export const useProviderStore = create<GiaProviderState>()(
                   vision: m.name?.toLowerCase().includes('vision') || false,
                 }));
                 if (data.length > 0) {
-                  set((s) => ({ availableModels: { ...s.availableModels, [p]: data } }));
-                  return data;
+                  return markLive(data);
                 }
               }
             } catch { /* fallback */ }
-            set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
-            return providerRegistry.getModels(p);
+            return markCatalog(providerRegistry.getModels(p));
           }
 
           // LM Studio local listing (OpenAI-compatible /models endpoint)
@@ -250,13 +263,11 @@ export const useProviderStore = create<GiaProviderState>()(
                     tools: true,
                     vision: /vision|pixtral|llava|vl/i.test(m.id),
                   }));
-                  set((s) => ({ availableModels: { ...s.availableModels, [p]: data } }));
-                  return data;
+                  return markLive(data);
                 }
               }
             } catch { /* fallback */ }
-            set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
-            return providerRegistry.getModels(p);
+            return markCatalog(providerRegistry.getModels(p));
           }
 
           // Gemini listing — use header auth to avoid exposing API key through CORS proxy
@@ -274,8 +285,7 @@ export const useProviderStore = create<GiaProviderState>()(
               free: true,
               context: m.inputTokenLimit ? `${Math.round(m.inputTokenLimit / 1000)}k` : '1M',
             }));
-            set((s) => ({ availableModels: { ...s.availableModels, [p]: formatted } }));
-            return formatted;
+            return markLive(formatted);
           }
 
           // OpenAI-compatible listing
@@ -327,12 +337,10 @@ export const useProviderStore = create<GiaProviderState>()(
             return 0;
           });
 
-          set((s) => ({ availableModels: { ...s.availableModels, [p]: result } }));
-          return result;
+          return markLive(result);
         } catch (e) {
           logger.warn(`Fetch models failed for ${p}:`, e);
-          set((s) => ({ availableModels: { ...s.availableModels, [p]: providerRegistry.getModels(p) } }));
-          return providerRegistry.getModels(p);
+          return markCatalog(providerRegistry.getModels(p));
         }
       },
 

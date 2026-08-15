@@ -54,10 +54,19 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
   const [showContent, setShowContent] = useState(false);
   const [expandInput, setExpandInput] = useState(false);
   const [expandOutput, setExpandOutput] = useState(isCompleted || isFailed);
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const t = setTimeout(() => setShowContent(true), 100 + index * 80);
     return () => clearTimeout(t);
   }, [index]);
+
+  // Live elapsed-time counter while a tool is executing.
+  useEffect(() => {
+    if (!isExecuting) { setElapsed(0); return; }
+    const start = Date.now();
+    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [isExecuting]);
 
   const isTerminalTool = ['terminal_run', 'code_execution', 'sandbox_exec', 'build_project'].includes(protocol.type);
 
@@ -81,7 +90,7 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
       animate={showContent ? { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' } : {}}
       transition={{ type: 'spring', stiffness: 200, damping: 20, mass: 0.8 }}
       layout
-      className="my-1 rounded-xl overflow-hidden"
+      className="my-1 rounded-xl overflow-hidden relative"
       style={{
         background: isPending
           ? `linear-gradient(135deg, ${toolColor}06, ${toolColor}02)`
@@ -103,6 +112,14 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
             : 'none',
       }}
     >
+      {/* State accent strip — instant color read on status */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[3px]"
+        style={{
+          background: isFailed ? '#ef4444' : isCompleted ? '#22c55e' : isExecuting ? toolColor : 'transparent',
+          boxShadow: isExecuting ? `0 0 8px ${toolColor}60` : 'none',
+        }}
+      />
       {/* Glass reflection line */}
       <div className="absolute top-0 left-4 right-4 h-px" style={{ background: `linear-gradient(90deg, transparent, ${toolColor}20, transparent)` }} />
 
@@ -180,6 +197,9 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
             {isFailed && <XCircle size={9} />}
             {isPending && <Clock size={9} />}
             {stateCfg.label}
+            {isExecuting && elapsed > 0 && (
+              <span style={{ opacity: 0.75 }}>· {elapsed}s</span>
+            )}
           </motion.div>
         </div>
 
@@ -359,13 +379,16 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
 
         {isFailed && (
           <motion.div
-            className="flex items-center gap-1.5 text-[9px]"
+            className="flex items-start gap-1.5 text-[9px] leading-relaxed"
             style={{ color: '#ef4444' }}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <AlertCircle size={10} />
-            Action failed
+            <AlertCircle size={10} className="shrink-0 mt-0.5" />
+            <span className="min-w-0">
+              Action failed
+              {protocol.error ? ` — ${protocol.error.length > 140 ? protocol.error.slice(0, 140) + '…' : protocol.error}` : ''}
+            </span>
           </motion.div>
         )}
       </div>

@@ -77,7 +77,7 @@ const EngineRoom: React.FC = () => {
 
   const showModels = (models: ModelOption[], provider?: string) =>
     models.map((m, i) => {
-      const caps = provider ? getProviderCapabilities(providerRegistry.getListingType(provider), m.id, m.vision, m.tools) : null;
+      const caps = provider ? getProviderCapabilities(providerRegistry.getListingType(provider), m.id, m.vision, m.tools, providerRegistry.getImageModel(provider)) : null;
       const capStr = caps
         ? `${caps.vision ? '👁' : '  '}${caps.tools ? '🛠' : '  '}${caps.thinking ? '🧠' : '  '}${caps.jsonMode ? '📋' : '  '}`
         : `${m.vision ? '👁' : '  '}${m.tools === false ? '   ' : ' 🛠'}    `;
@@ -300,7 +300,7 @@ const EngineRoom: React.FC = () => {
         const errs = health.failedCalls > 0 ? ` ⚠${health.failedCalls}` : '';
         push(mk(cfg?.enabled ? 'success' : 'err', `  ${status} ${def.label.padEnd(12)} ${model}${latency}${errs}${active}`));
         if (cfg?.enabled && model !== 'off') {
-          const caps = getProviderCapabilities(def.listingType, model);
+          const caps = getProviderCapabilities(def.listingType, model, undefined, undefined, providerRegistry.getImageModel(def.id));
           const capStr = (Object.keys(CAPABILITY_LABELS) as (keyof ProviderCapabilities)[])
             .filter(k => caps[k])
             .map(k => CAPABILITY_LABELS[k].icon)
@@ -338,7 +338,7 @@ const EngineRoom: React.FC = () => {
       const p = activeProvider;
       const cfg = providers[p];
       if (!cfg?.enabled) { push(mk('err', 'No active provider.')); return; }
-      const caps = getProviderCapabilities(providerRegistry.getListingType(p), cfg.model);
+      const caps = getProviderCapabilities(providerRegistry.getListingType(p), cfg.model, undefined, undefined, providerRegistry.getImageModel(p));
       const def = providerRegistry.getProvider(p);
       push(mk('res', ''), mk('info', `CAPABILITIES: ${def?.label || p}`));
       push(mk('res', `  Model:     ${cfg.model}`));

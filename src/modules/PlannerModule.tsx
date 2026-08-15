@@ -143,7 +143,7 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
           temperature: 0.45,
           maxTokens: 1500,
         }),
-        { moduleName: 'PlannerModule' }
+        { moduleName: 'PlannerModule', maxRetries: 2 }
       );
       if (wasRepaired) {
         logger.warn('[PlannerModule] AI response was repaired by OutputValidator');

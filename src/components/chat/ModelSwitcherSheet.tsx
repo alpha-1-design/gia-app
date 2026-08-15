@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu } from 'lucide-react';
+import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw } from 'lucide-react';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../../services/ProviderRegistry';
 import { useShallow } from 'zustand/react/shallow';
@@ -34,24 +34,33 @@ const ModelBadges: React.FC<{ free?: boolean; vision?: boolean; tools?: boolean 
 
 const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, onOpenEngine }) => {
   const {
-    providers, activeProvider, availableModels,
-    setActiveProvider, setProviderModel, setProviderKey, fetchModels,
+    providers, activeProvider, availableModels, modelListStatus,
+    setActiveProvider, setProviderModel, setProviderImageModel, setProviderKey, fetchModels,
   } = useProviderStore(useShallow((s) => ({
     providers: s.providers,
     activeProvider: s.activeProvider,
     availableModels: s.availableModels,
+    modelListStatus: s.modelListStatus,
     setActiveProvider: s.setActiveProvider,
     setProviderModel: s.setProviderModel,
+    setProviderImageModel: s.setProviderImageModel,
     setProviderKey: s.setProviderKey,
     fetchModels: s.fetchModels,
   })));
 
   const [selected, setSelected] = useState(activeProvider);
   const [keyInput, setKeyInput] = useState('');
+  const [imageModelInput, setImageModelInput] = useState('');
   const [loadingModels, setLoadingModels] = useState(false);
 
   // Keep the selected provider in sync when the sheet (re)opens.
   useEffect(() => { if (open) setSelected(activeProvider); }, [open, activeProvider]);
+
+  // Load the current image-model override whenever the selected provider changes.
+  useEffect(() => {
+    setImageModelInput(providers[selected]?.imageModel ?? providerRegistry.getImageModel(selected) ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, open]);
 
   const providerIds = providerRegistry.getAllIds();
   const selectedCfg = providers[selected];
@@ -59,18 +68,21 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
   const selectedNeedsKey = providerRegistry.getNeedsApiKey(selected);
   const currentModelId = selectedCfg?.model;
 
-  // Pull live models for the selected provider when it's connected but unlisted.
+  // Pull LIVE models for the selected provider whenever the current list is
+  // missing OR is just the curated fallback catalog — so opening the sheet with
+  // a stale/catalog list auto-refreshes instead of being stuck on fallback.
   useEffect(() => {
     let cancelled = false;
     if (open && selectedConnected) {
       const have = availableModels[selected]?.length ?? 0;
-      if (have === 0) {
+      const isLive = modelListStatus[selected] === 'live';
+      if (have === 0 || !isLive) {
         setLoadingModels(true);
         fetchModels(selected).catch(() => {}).finally(() => { if (!cancelled) setLoadingModels(false); });
       }
     }
     return () => { cancelled = true; };
-  }, [open, selected, selectedConnected, availableModels, fetchModels]);
+  }, [open, selected, selectedConnected, availableModels, modelListStatus, fetchModels]);
 
   const models = selectedConnected
     ? (availableModels[selected] ?? [])
@@ -89,6 +101,10 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
     setProviderModel(selected, modelId);
     if (selected !== activeProvider) setActiveProvider(selected);
     onClose();
+  };
+
+  const saveImageModel = () => {
+    setProviderImageModel(selected, imageModelInput);
   };
 
   return (
@@ -238,19 +254,54 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
                 )}
               </div>
 
-              {/* Retry fetch (no manual ID typing — models come from the API or curated catalog) */}
-              {selectedConnected && !loadingModels && models.length === 0 && (
+              {/* Live model refresh — always available so you can re-fetch from the API anytime */}
+              {selectedConnected && (
                 <div className="p-3 shrink-0 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--gia-border)' }}>
-                  <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-                    Couldn&apos;t load models from {providerRegistry.getLabel(selected)}.
-                  </p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {loadingModels ? (
+                      <div className="w-4 h-4 rounded-full border-2 animate-spin shrink-0" style={{ borderColor: 'var(--gia-border)', borderTopColor: '#a855f7' }} />
+                    ) : (
+                      <span className="text-[9px] truncate" style={{ color: modelListStatus[selected] === 'live' ? '#34d399' : 'var(--gia-muted-2)' }}>
+                        {modelListStatus[selected] === 'live'
+                          ? '● Live model list from API'
+                          : '○ Showing built-in catalog — refresh to fetch live models'}
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => { setLoadingModels(true); fetchModels(selected).catch(() => {}).finally(() => setLoadingModels(false)); }}
-                    className="px-3 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                    disabled={loadingModels}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-semibold disabled:opacity-40 transition-all"
                     style={{ background: 'rgba(168,85,247,0.18)', color: '#c4b5fd', border: '1px solid rgba(168,85,247,0.3)' }}
                   >
-                    Retry
+                    <RefreshCw size={11} className={loadingModels ? 'animate-spin' : ''} /> Refresh
                   </button>
+                </div>
+              )}
+
+              {/* Image model override — the image_generation tool is NOT stuck on dall-e-3. */}
+              {selectedConnected && (
+                <div className="p-3 shrink-0 flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--gia-border)' }}>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-semibold" style={{ color: 'var(--gia-muted)' }}>
+                      Image model <span style={{ color: 'var(--gia-muted-2)' }}>(used by image_generation)</span>
+                    </label>
+                    <span className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+                      default: {providerRegistry.getImageModel(selected) || 'none'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={imageModelInput}
+                      onChange={(e) => setImageModelInput(e.target.value)}
+                      onBlur={saveImageModel}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { saveImageModel(); (e.target as HTMLInputElement).blur(); } }}
+                      placeholder={providerRegistry.getImageModel(selected) ? 'Override…' : 'e.g. dall-e-3 · gpt-image-1 · flux'}
+                      className="gia-input flex-1"
+                      style={{ fontSize: '11px' }}
+                    />
+                  </div>
                 </div>
               )}
             </div>

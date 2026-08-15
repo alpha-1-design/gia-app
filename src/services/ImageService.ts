@@ -19,21 +19,32 @@ class ImageService {
     }
   }
 
+  /**
+   * Resolve the image model for a provider: a per-provider override set in
+   * the Model & Provider sheet wins, otherwise the registry default (which is
+   * dall-e-3 for OpenAI/OpenRouter — override it with gpt-image-1, a flux
+   * variant, or any model your endpoint accepts via /images/generations).
+   */
+  private resolveImageModel(providerId: string): string | undefined {
+    const { providers } = useProviderStore.getState();
+    return providers[providerId]?.imageModel || providerRegistry.getImageModel(providerId);
+  }
+
   async generate(prompt: string): Promise<ImageGenResult> {
     const { activeProvider, providers } = useProviderStore.getState();
 
     // Determine best image-capable provider
     let targetProvider = activeProvider;
-    if (!providerRegistry.getImageModel(activeProvider) || !providers[activeProvider]?.enabled) {
+    if (!this.resolveImageModel(activeProvider) || !providers[activeProvider]?.enabled) {
       if (providers.openrouter?.enabled) targetProvider = 'openrouter';
       else if (providers.openai?.enabled) targetProvider = 'openai';
-      else return { url: '', error: 'No image-capable provider connected. GIA needs OpenAI (DALL-E 3) or OpenRouter with a compatible image model configured in Engine Room.' };
+      else return { url: '', error: 'No image-capable provider connected. Open Model & Provider and set an image model for a connected provider.' };
     }
 
     const config = providers[targetProvider];
     const baseUrl = providerRegistry.getBaseUrl(targetProvider);
     if (!baseUrl) return { url: '', error: `${targetProvider} is not fully configured.` };
-    const imageModel = providerRegistry.getImageModel(targetProvider);
+    const imageModel = this.resolveImageModel(targetProvider);
 
     if (!imageModel) {
       return { url: '', error: `${providerRegistry.getLabel(targetProvider)} does not support image generation. Please switch to OpenAI or OpenRouter.` };

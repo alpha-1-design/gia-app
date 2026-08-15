@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
   Rocket, MessageSquare, GraduationCap, BarChart3, PenLine,
-  ListTodo, Bot, Target, Cpu, ShieldCheck, BookOpen,
+  ListTodo, Bot, Target, Cpu, ShieldCheck, BookOpen, Wrench, Sparkles, AudioLines,
 } from 'lucide-react'
 
 type DocSection = {
@@ -12,7 +12,16 @@ type DocSection = {
   blocks: { type: 'p' | 'ul'; text?: string; items?: string[] }[]
 }
 
-const sections: DocSection[] = [
+type RawSection = {
+  id: string
+  title: string
+  blocks: { type: 'p' | 'ul'; text?: string; items?: string[] }[]
+}
+
+// Embedded fallback — shown only if the machine-readable docs can't be fetched.
+// The canonical, richer version lives in public/docs/gia-docs.json and is the
+// same file GIA fetches from her system prompt.
+const fallbackSections: DocSection[] = [
   {
     id: 'start', icon: Rocket, title: 'Getting Started',
     blocks: [
@@ -40,22 +49,12 @@ const sections: DocSection[] = [
     id: 'exam', icon: GraduationCap, title: 'Exam',
     blocks: [
       { type: 'p', text: 'Built for students. Generate WASSCE and BECE quizzes, walk through past questions, and get instant feedback.' },
-      { type: 'ul', items: [
-        'Create a practice quiz from a topic or past paper.',
-        'Step-by-step solutions with hints before answers.',
-        'Track what you have and have not mastered.',
-      ] },
     ],
   },
   {
     id: 'analyst', icon: BarChart3, title: 'Analyst',
     blocks: [
       { type: 'p', text: 'Turn raw data into clear, structured insight with charts and JSON-ready analysis.' },
-      { type: 'ul', items: [
-        'Upload documents and query them with on-device RAG.',
-        'Produce charts and reports rendered inline.',
-        'Persistent memory of your metrics and goals.',
-      ] },
     ],
   },
   {
@@ -74,45 +73,60 @@ const sections: DocSection[] = [
     id: 'agents', icon: Bot, title: 'Agents',
     blocks: [
       { type: 'p', text: 'Build autonomous agents with their own memory and RAG. Delegate work and oversee the result.' },
-      { type: 'ul', items: [
-        'Define an agent with a name, role, and instructions.',
-        'Each agent gets per-agent retrieval over your files.',
-        'Mention agents inline with @Name to route a task.',
-      ] },
-    ],
-  },
-  {
-    id: 'autonomy', icon: Target, title: 'Autonomy',
-    blocks: [
-      { type: 'p', text: 'Set a goal and let GIA drive toward it — planning, executing, and adapting without hand-holding.' },
     ],
   },
   {
     id: 'ondevice', icon: Cpu, title: 'On-Device Mode',
     blocks: [
       { type: 'p', text: 'On-Device Mode prefers the local LLM for every response when a model is loaded. Memory, embeddings, and translation run locally — nothing leaves your device.' },
-      { type: 'ul', items: [
-        'Enable in Settings → Reliability → On-Device Mode.',
-        'Load a model in Settings → Local LLM (downloads via CDN).',
-        'If the local model is not ready, GIA falls back to your cloud provider and tags the response accordingly.',
-      ] },
     ],
   },
   {
     id: 'privacy', icon: ShieldCheck, title: 'Privacy & Security',
     blocks: [
       { type: 'p', text: 'GIA has no cloud backend and no telemetry. Your data stays on your device unless you explicitly choose a cloud model.' },
-      { type: 'ul', items: [
-        'No account, no tracking, no server-side logs.',
-        'API keys are stored locally and never sent to GIA servers.',
-        'Input guardrails block prompt injection and dangerous commands.',
-      ] },
     ],
   },
 ]
 
+const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  start: Rocket,
+  chat: MessageSquare,
+  exam: GraduationCap,
+  analyst: BarChart3,
+  writer: PenLine,
+  planner: ListTodo,
+  agents: Bot,
+  autonomy: Target,
+  ondevice: Cpu,
+  privacy: ShieldCheck,
+  tools: Wrench,
+  skills: Sparkles,
+  voice: AudioLines,
+  troubleshooting: BookOpen,
+}
+
 export function Docs() {
+  const [fetched, setFetched] = useState<RawSection[] | null>(null)
   const [active, setActive] = useState('start')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${import.meta.env.BASE_URL}docs/gia-docs.json`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('docs fetch failed'))))
+      .then((data: { sections?: RawSection[] }) => {
+        if (!cancelled && Array.isArray(data?.sections) && data.sections.length > 0) {
+          setFetched(data.sections)
+        }
+      })
+      .catch(() => { /* keep fallback */ })
+    return () => { cancelled = true }
+  }, [])
+
+  const sections: DocSection[] = fetched
+    ? fetched.map((s) => ({ ...s, icon: ICONS[s.id] ?? BookOpen }))
+    : fallbackSections
+
   const current = sections.find((s) => s.id === active) ?? sections[0]
 
   return (
@@ -125,6 +139,10 @@ export function Docs() {
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
             Everything you need to <span className="gradient-text">run GIA.</span>
           </h2>
+          <p className="text-sm text-zinc-500 max-w-2xl mx-auto">
+            These docs are machine-readable — GIA reads the very same page from her knowledge base
+            when she's unsure about a feature, so the answers you see here are the answers she gives.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">

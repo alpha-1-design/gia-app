@@ -83,7 +83,17 @@ public class GIATerminalPlugin extends Plugin {
 
             // Wait for output with timeout
             String output = session.awaitOutput(timeout);
+
+            // Give the OS a short grace window to reap the child before reading
+            // its exit code. Previously we called process.exitValue() directly
+            // after stream EOF, which races the JVM's reaper thread and throws
+            // IllegalThreadStateException("process hasn't exited") — surfacing
+            // as "Unexpected error: process hasn't exited" on every command.
+            boolean exited = session.awaitExit(2000);
             int exitCode = session.exitCode();
+            if (!exited) {
+                output += "\n[command still running after " + timeout + "ms — session terminated]";
+            }
 
             // Clean up the session
             GIATerminalService.killSession(sessionId);

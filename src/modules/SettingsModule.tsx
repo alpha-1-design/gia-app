@@ -366,10 +366,17 @@ const SettingsModule: React.FC = () => {
                 const p = providers[id];
                 const model = p?.model || providerRegistry.getDefaultModel(id);
                 const listingType = providerRegistry.getListingType(id);
-                const caps = getProviderCapabilities(listingType, model);
+                // Use the static vision/tools flags the registry ships for
+                // known models so the matrix reflects the ACTUAL model, not
+                // just the provider type.
+                const modelDef = providerRegistry.getModels(id).find(m => m.id === model);
+                const caps = getProviderCapabilities(listingType, model, modelDef?.vision, modelDef?.tools, providers[id]?.imageModel || providerRegistry.getImageModel(id));
                 return (
                   <tr key={id} className="border-t" style={{ borderColor: 'var(--gia-border)' }}>
-                    <td className="py-2 pr-3 font-medium" style={{ color: 'var(--gia-text)' }}>{providerRegistry.getLabel(id)}</td>
+                    <td className="py-2 pr-3">
+                      <span className="block font-medium" style={{ color: 'var(--gia-text)' }}>{providerRegistry.getLabel(id)}</span>
+                      <span className="block text-[9px] max-w-[140px] truncate" style={{ color: 'var(--gia-muted-2)' }} title={model}>{model}</span>
+                    </td>
                     {(Object.keys(CAPABILITY_LABELS) as Array<keyof ProviderCapabilities>).map(key => (
                       <td key={key} className="px-2 py-2 text-center">
                         {caps[key] ? <span className="text-green-400">✓</span> : <span className="opacity-20">—</span>}

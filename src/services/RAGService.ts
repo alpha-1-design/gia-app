@@ -55,8 +55,27 @@ function tfidfEmbed(text: string): number[] {
 }
 
 const EMBED_TIMEOUT_MS = 15000;
+// The on-device embedder (Transformers.js MiniLM). LocalAI.embed() would
+// lazily DOWNLOAD this model on first use (~90MB, unannounced). Agent-file
+// indexing must never trigger a download the user didn't approve, so we only
+// use it when the pipeline is already loaded — otherwise TF-IDF (instant,
+// zero network) handles the embeddings.
+const EMBED_MODEL = 'Xenova/all-MiniLM-L6-v2';
+
+// After a LocalAI embed failure (model download hang, timeout, OOM), skip it
+// for one minute. Indexing a document embeds EVERY chunk — without this a
+// stuck Transformers.js model download burns the full 15s timeout per chunk,
+// which is what made agent file uploads appear to hang forever on-device
+// (N chunks × 15s of dead time). Once we know LocalAI is unavailable we go
+// straight to TF-IDF for the rest of the run; the window lets us retry the
+// real model after the download has had a chance to finish.
+let localAIUnavailableUntil = 0;
 
 async function safeEmbed(text: string): Promise<number[]> {
+  // No silent ~90MB model download. TF-IDF unless the user already loaded the
+  // embedder themselves (Local AI page / other on-device features).
+  if (!LocalAI.isLoaded('feature-extraction', EMBED_MODEL)) return tfidfEmbed(text);
+  if (Date.now() < localAIUnavailableUntil) return tfidfEmbed(text);
   try {
     // LocalAI.embed lazily downloads the Transformers.js model on first use
     // with no timeout of its own. On a slow/dropped mobile connection this
@@ -71,6 +90,7 @@ async function safeEmbed(text: string): Promise<number[]> {
     ]);
     if (result.embedding && result.embedding.length > 0) return result.embedding;
   } catch (e) {
+    localAIUnavailableUntil = Date.now() + 60_000;
     logger.warn('[RAGService] LocalAI embed failed, using TF-IDF fallback:', e);
   }
   return tfidfEmbed(text);
@@ -157,14 +177,20 @@ class RAGService {
     return this.dbPromise;
   }
 
-  async indexDocument(id: string, title: string, text: string): Promise<RAGDocument> {
+  async indexDocument(
+    id: string,
+    title: string,
+    text: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<RAGDocument> {
     const db = await this.db();
     const chunks = chunkText(text);
 
     // Embed chunks sequentially to avoid OOM on Android
     const embeddings: number[][] = [];
-    for (const chunk of chunks) {
-      embeddings.push(await safeEmbed(chunk));
+    for (let i = 0; i < chunks.length; i++) {
+      embeddings.push(await safeEmbed(chunks[i]));
+      onProgress?.(i + 1, chunks.length);
     }
 
     const doc: RAGDocument = {

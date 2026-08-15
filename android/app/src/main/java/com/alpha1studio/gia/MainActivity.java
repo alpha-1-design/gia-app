@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         // what was producing "plugin is not implemented on android" for
         // GIATerminal with no crash or error anywhere to point at it.
         registerPlugin(GIAWakeWordPlugin.class);
+        registerPlugin(GIAWidgetPlugin.class);
         registerPlugin(GIAIntentPlugin.class);
         registerPlugin(GIAOverlayPlugin.class);
         registerPlugin(GIASMSPlugin.class);

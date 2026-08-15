@@ -74,6 +74,41 @@ class CodeRunner {
     }
   }
 
+  /**
+   * Fall back to on-device Pyodide (WASM Python, no server needed) when the
+   * Piston API rejects the request — it went auth-required in Feb 2026, so
+   * without a configured API key every call returns 401. Rather than burning
+   * the retry budget on an endpoint that will keep rejecting us, run Python
+   * locally and tell the user what actually happened.
+   */
+  private async runWithPyodide(req: CodeRunRequest): Promise<CodeRunResult> {
+    const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
+    try {
+      const mod = await import('./PyodideRunner');
+      const { output, error } = await mod.runPython(req.code);
+      const result: CodeRunResult = {
+        output,
+        error,
+        exitCode: error ? 1 : 0,
+        language: lang,
+        version: 'Pyodide (WASM)',
+      };
+      this.saveRun({ id: uuid(), ts: Date.now(), language: lang, code: req.code, output, error, exitCode: result.exitCode });
+      return result;
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : 'Pyodide failed to load';
+      const result: CodeRunResult = {
+        output: '',
+        error: `Pyodide fallback failed: ${errMsg}`,
+        exitCode: 1,
+        language: lang,
+        version: 'Pyodide (WASM)',
+      };
+      this.saveRun({ id: uuid(), ts: Date.now(), language: lang, code: req.code, output: '', error: result.error, exitCode: 1 });
+      return result;
+    }
+  }
+
   private async runInSandbox(req: CodeRunRequest): Promise<CodeRunResult> {
     const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
     try {
@@ -180,13 +215,31 @@ class CodeRunner {
       this.saveRun({ id: uuid(), ts: Date.now(), language: lang, code: req.code, output: result.output, error: result.error, exitCode: result.exitCode });
       return result;
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (/requires authentication/i.test(errMsg)) {
+        // Piston went auth-required in Feb 2026. Without a configured API key
+        // every call 401s — don't retry it. For Python, run on-device via
+        // Pyodide instead; otherwise surface the auth error immediately.
+        if (/^(py|python|py3)$/.test(req.language.toLowerCase())) {
+          return this.runWithPyodide(req);
+        }
+        const result: CodeRunResult = {
+          output: '',
+          error: errMsg,
+          exitCode: 1,
+          language: lang,
+          version: '',
+        };
+        this.saveRun({ id: uuid(), ts: Date.now(), language: lang, code: req.code, output: '', error: errMsg, exitCode: 1 });
+        return result;
+      }
       if (attempts < maxAttempts) {
         await new Promise(r => setTimeout(r, 2000 * (attempts + 1)));
         return this.run(req, attempts + 1);
       }
       const result: CodeRunResult = {
         output: '',
-        error: e instanceof Error ? e.message : 'Execution failed',
+        error: errMsg,
         exitCode: 1,
         language: lang,
         version: '',

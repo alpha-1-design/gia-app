@@ -56,6 +56,10 @@ export interface Message {
   agentIcon?: string;
   tasks?: TaskItem[];
   source?: 'on-device' | 'cloud';
+  /** True when the provider hit max_tokens — UI shows a "tap to continue" chip. */
+  wasTruncated?: boolean;
+  /** Tappable follow-up prompts suggested after this message completes. */
+  suggestions?: string[];
 }
 
 export interface MessageNode {
@@ -937,7 +941,17 @@ export const useGiaStore = create<GiaState>()(
       setUserProfile: (p) => set((s) => ({ userProfile: { ...s.userProfile, ...p } })),
 
       addNotification: (msg) =>
-        set((s) => ({ notifications: [{ id: genId(), message: msg, ts: Date.now() }, ...s.notifications.slice(0, 9)] })),
+        set((s) => {
+          const now = Date.now();
+          const last = s.notifications[0];
+          // Dedupe rapid repeats of the same message (e.g. repeated taps on a
+          // failing toggle) — refresh its timestamp so it stays "just now"
+          // instead of stacking identical cards.
+          if (last && last.message === msg && now - last.ts < 8000) {
+            return { notifications: [{ ...last, ts: now }, ...s.notifications.slice(1, 9)] };
+          }
+          return { notifications: [{ id: genId(), message: msg, ts: now }, ...s.notifications.slice(0, 9)] };
+        }),
       clearNotification: (id) => set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 
       addExamResult: (r) => set((s) => ({ examHistory: [r, ...s.examHistory].slice(0, 50) })),

@@ -16,9 +16,41 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { giaCoreServices } from '../services/GIACoreServices';
 import HapticService from '../services/HapticService';
 import type { Message } from '../store/useGiaStore';
-import { isNativePlatform } from '../utils/helpers';
+import { extractJSON, isNativePlatform } from '../utils/helpers';
 
 const BACKGROUND_NOTIF_ID = 42;
+
+// ── Follow-up suggestions ───────────────────────────────────────────────────
+// Fired in the BACKGROUND after a message completes, so it never delays the
+// answer. Failures are silent — suggestions are a nicety, not a contract.
+const SUGGESTION_MIN_LEN = 120;
+
+async function generateFollowUpSuggestions(sessionId: string, asstId: string, content: string): Promise<void> {
+  try {
+    const res = await GiaBrain.generate({
+      prompt: `Based on the assistant's answer below, suggest 3 short follow-up questions a user would naturally tap next.\n\nAnswer: ${content.slice(0, 2000)}`,
+      systemPrompt: 'Return ONLY a JSON array of exactly 3 short strings (4-9 words each). No markdown, no commentary. Example: ["Explain the key point more simply", "What are the main downsides?", "Give me a practical example"]',
+      systemPromptMode: 'replace',
+      forceJson: true,
+      maxTokens: 160,
+    });
+    const parsed = extractJSON<string[]>(res.text);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const suggestions = parsed.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 3);
+      if (suggestions.length > 0) {
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, suggestions } } : m) }
+              : s
+          ),
+        });
+      }
+    }
+  } catch {
+    // Suggestions are a nicety — never surface failures.
+  }
+}
 
 async function notifyIfBackground(module: 'chat' | 'agents', sessionId: string, asstId: string): Promise<void> {
   const state = useGiaStore.getState();
@@ -517,6 +549,23 @@ onThought: (thought) => {
       if (res.modelSwitched && res.switchReason) {
         state.addNotification(res.switchReason);
       }
+      // Final spoken output — prefers the model's native voice (OpenAI/Gemini TTS).
+      if (finalText.trim().length > 1) {
+        TTSService.speakFinal(finalText);
+      }
+      if (res.wasTruncated) {
+        // Show a "tap to continue" chip instead of a silent cut-off.
+        useGiaStore.setState({
+          sessions: useGiaStore.getState().sessions.map(s =>
+            s.id === sessionId
+              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, wasTruncated: true } } : m) }
+              : s
+          ),
+        });
+      } else if (finalText.length >= SUGGESTION_MIN_LEN && !finalText.startsWith('🤖 _Taking action..._')) {
+        // Non-blocking tappable follow-ups for completed answers.
+        generateFollowUpSuggestions(sessionId, asstId, finalText);
+      }
       notifyIfBackground('chat', sessionId, asstId);
     } catch (err: unknown) {
       streamCancel(streamKey);
@@ -650,6 +699,15 @@ onThought: (thought) => {
         if (contParserState.artifacts.length > 0) {
           state.updateMessageArtifacts(state.activeSessionId!, asstId, contParserState.artifacts);
         }
+        if (contRes.wasTruncated) {
+          useGiaStore.setState({
+            sessions: useGiaStore.getState().sessions.map(s =>
+              s.id === state.activeSessionId
+                ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, wasTruncated: true } } : m) }
+                : s
+            ),
+          });
+        }
         if (contRes.model || contRes.tokenUsage) {
           useGiaStore.setState({
             sessions: useGiaStore.getState().sessions.map(s =>
@@ -658,6 +716,9 @@ onThought: (thought) => {
                 : s
             ),
           });
+        }
+        if (contDisplayAccumulated.trim().length > 1) {
+          TTSService.speakFinal(contDisplayAccumulated);
         }
         notifyIfBackground('chat', state.activeSessionId!, asstId);
       }
@@ -895,7 +956,7 @@ onThought: (thought) => {
         if (genRes.modelSwitched && genRes.switchReason) {
           state.addNotification(`Model switched: ${genRes.switchReason}`);
         }
-        TTSService.speak(retryParserState.accumulated);
+        TTSService.speakFinal(retryParserState.accumulated);
         notifyIfBackground('chat', state.activeSessionId!, id);
       }
     } catch (e: unknown) {

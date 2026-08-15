@@ -26,6 +26,10 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.layout.weight
 import androidx.glance.state.Preferences
+import androidx.glance.state.updateAppWidgetState
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextOverflow
@@ -44,6 +48,9 @@ class GIAAppWidget : GlanceAppWidget() {
             val prefs = currentState<Preferences>()
             val providerConnected = prefs.getBoolean("providerConnected", false)
             val providerName = prefs.getString("providerName") ?: "GIA"
+            val nextTask = prefs.getString("nextTask")
+            val battery = prefs.getInt("battery", -1)
+            val storage = prefs.getString("storage")
 
             GIAWidgetTheme {
                 Box(
@@ -64,7 +71,7 @@ class GIAAppWidget : GlanceAppWidget() {
                                 Text(
                                     text = time,
                                     style = TextStyle(
-                                        fontSize = 48.sp,
+                                        fontSize = 34.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = GIAWidgetTheme.colors.onBackground
                                     )
@@ -72,7 +79,7 @@ class GIAAppWidget : GlanceAppWidget() {
                                 Text(
                                     text = date,
                                     style = TextStyle(
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
                                         color = GIAWidgetTheme.colors.onBackground.copy(alpha = 0.6f)
                                     )
                                 )
@@ -80,20 +87,16 @@ class GIAAppWidget : GlanceAppWidget() {
                             ProviderPill(connected = providerConnected, name = providerName)
                         }
 
-                        Spacer(modifier = GlanceModifier.weight(1f))
-                        Row(
-                            modifier = GlanceModifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "GIA",
-                                style = TextStyle(
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = GIAWidgetTheme.colors.accent
-                                )
-                            )
+                        // Live device health — pushed by the app via GIAWidgetPlugin
+                        if (battery > 0 || storage != null) {
+                            DeviceHealthRow(battery = battery, storage = storage ?: "N/A")
                         }
+
+                        // Next task from GIA's task store
+                        if (nextTask != null) {
+                            NextTaskCard(task = nextTask)
+                        }
+
                         Spacer(modifier = GlanceModifier.weight(1f))
 
                         QuickActionsRow(
@@ -108,9 +111,40 @@ class GIAAppWidget : GlanceAppWidget() {
     }
 
     companion object {
+        // GlanceAppWidgetManager calls are suspend — callers must run on a coroutine.
         @JvmStatic
-        fun updateAllWidgets(context: Context) {
+        suspend fun updateAllWidgets(context: Context) {
             val manager = GlanceAppWidgetManager(context)
+            manager.updateAllInstances(GIAAppWidget())
+        }
+
+        // Push live state (provider, next task, battery, storage) into every
+        // placed widget instance, then trigger a re-render. Invoked from the
+        // GIAWidgetPlugin when the JS side detects a provider/task change.
+        @JvmStatic
+        suspend fun updateState(
+            context: Context,
+            providerConnected: Boolean,
+            providerName: String,
+            nextTask: String?,
+            battery: Int,
+            storage: String
+        ) {
+            val manager = GlanceAppWidgetManager(context)
+            val glanceIds = manager.getGlanceIds(GIAAppWidget::class.java)
+            for (glanceId in glanceIds) {
+                updateAppWidgetState(context, glanceId) { prefs ->
+                    prefs[booleanPreferencesKey("providerConnected")] = providerConnected
+                    prefs[stringPreferencesKey("providerName")] = providerName
+                    if (nextTask != null) {
+                        prefs[stringPreferencesKey("nextTask")] = nextTask
+                    } else {
+                        prefs.remove(stringPreferencesKey("nextTask"))
+                    }
+                    prefs[intPreferencesKey("battery")] = battery
+                    prefs[stringPreferencesKey("storage")] = storage
+                }
+            }
             manager.updateAllInstances(GIAAppWidget())
         }
     }
@@ -247,7 +281,7 @@ fun DeviceHealthRow(battery: Int, storage: String) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(top = 6.dp)
     ) {
         val batteryColor = when {
             battery >= 50 -> colors.success
@@ -280,32 +314,35 @@ fun HealthPill(icon: String, label: String, value: String, valueColor: Color, mo
         modifier = modifier
             .fillMaxWidth()
             .background(colors.surfaceVariant)
-            .padding(12.dp)
+            .padding(vertical = 6.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = icon,
-                style = TextStyle(fontSize = 18.sp)
-            )
-            Text(
                 text = label,
                 style = TextStyle(
-                    fontSize = 9.sp,
+                    fontSize = 8.sp,
                     color = colors.onSurface.copy(alpha = 0.5f),
                     fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.5.em
+                    letterSpacing = 0.4.em
                 )
             )
-            Text(
-                text = value,
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = valueColor
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = icon,
+                    style = TextStyle(fontSize = 12.sp),
+                    modifier = GlanceModifier.padding(end = 3.dp)
                 )
-            )
+                Text(
+                    text = value,
+                    style = TextStyle(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = valueColor
+                    )
+                )
+            }
         }
     }
 }
@@ -317,38 +354,37 @@ fun NextTaskCard(task: String) {
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(colors.primaryContainer)
-            .padding(16.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.Start
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = GlanceModifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "\uD83C\uDFAF",
-                    modifier = GlanceModifier.padding(end = 8.dp),
-                    style = TextStyle(fontSize = 18.sp)
-                )
+            Text(
+                text = "\uD83C\uDFAF",
+                modifier = GlanceModifier.padding(end = 6.dp),
+                style = TextStyle(fontSize = 13.sp)
+            )
+            Column(modifier = GlanceModifier.weight(1f)) {
                 Text(
                     text = "NEXT UP",
                     style = TextStyle(
-                        fontSize = 10.sp,
+                        fontSize = 8.sp,
                         color = colors.primary,
                         fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.5.em
+                        letterSpacing = 0.4.em
                     )
                 )
+                Text(
+                    text = task,
+                    style = TextStyle(
+                        fontSize = 12.sp,
+                        color = colors.onSurface
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Text(
-                text = task,
-                style = TextStyle(
-                    fontSize = 14.sp,
-                    color = colors.onSurface
-                ),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }

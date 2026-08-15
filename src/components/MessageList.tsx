@@ -32,6 +32,7 @@ const AgentBadge: React.FC<{ agentName?: string; agentIcon?: string; agentTask?:
 };
 
 interface MessageListProps {
+  onSuggestionClick?: (text: string) => void;
   messages: Message[];
   loading: boolean;
   streamingMsgId: string | null;
@@ -131,6 +132,7 @@ const MessageList: React.FC<MessageListProps> = ({
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
   onFork, onRetry, onEditResend, onRewrite,
+  onSuggestionClick,
 }) => {
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
@@ -368,6 +370,38 @@ const MessageList: React.FC<MessageListProps> = ({
                   <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
                 )}
               </div>
+              {msg.role === 'assistant' && msg.wasTruncated && (
+                <button
+                  onClick={() => onContinue(msg.id)}
+                  className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-full transition-all tap-feedback active:scale-95"
+                  style={{
+                    background: 'rgba(168,85,247,0.12)',
+                    color: '#c4b5fd',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                  }}
+                >
+                  <ChevronRight size={11} />
+                  Response truncated — tap to continue
+                </button>
+              )}
+              {msg.role === 'assistant' && !msg.wasTruncated && msg.suggestions && msg.suggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {msg.suggestions.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => onSuggestionClick?.(s)}
+                      className="text-[10px] px-3 py-1.5 rounded-full transition-all tap-feedback active:scale-95"
+                      style={{
+                        background: 'var(--gia-surface-2)',
+                        color: 'var(--gia-muted)',
+                        border: '1px solid var(--gia-border)',
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
               {sheetMsgId === msg.id && (
                 <>
                   <MessageActionSheet

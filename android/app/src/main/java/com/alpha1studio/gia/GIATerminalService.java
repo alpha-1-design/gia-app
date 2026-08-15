@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -129,12 +130,36 @@ public class GIATerminalService extends Service {
             return drainOutput();
         }
 
+        /**
+         * Blocks until the underlying process has actually been reaped, or the
+         * grace window elapses.
+         *
+         * <p>Stream EOF (which flips {@code done}) and process reaping are not
+         * the same event: the JVM's reaper thread can lag behind the child
+         * closing its stdout by a few milliseconds. Calling
+         * {@link Process#exitValue()} in that window throws
+         * {@code IllegalThreadStateException("process hasn't exited")} — which
+         * is exactly the failure users saw on every command. Using
+         * {@link Process#waitFor(long, TimeUnit)} makes the race impossible.
+         *
+         * @return true if the process exited within the window
+         */
+        public boolean awaitExit(long timeoutMs) throws InterruptedException {
+            if (!process.isAlive()) return true;
+            return process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+        }
+
         public boolean isRunning() {
             return process.isAlive();
         }
 
         public int exitCode() {
-            return done ? process.exitValue() : -1;
+            try {
+                return process.exitValue();
+            } catch (IllegalThreadStateException e) {
+                // Process not reaped yet (or still running) — treat as no exit code.
+                return -1;
+            }
         }
 
         void cleanup() {

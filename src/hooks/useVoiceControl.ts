@@ -507,7 +507,13 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     activeRef.current = true;
 
-    if (manual || !(isNative && nativeWakeWord)) {
+    // Native Porcupine needs an access key. Without one the plugin starts but
+    // silently never detects — the old code sent the user into a dead end they
+    // couldn't see. Only take the native path when a key is actually set;
+    // otherwise use the keyless on-device recognizer (regex wake word over
+    // continuous transcription) which genuinely works in-app.
+    const canUseNative = isNative && nativeWakeWord && !!accessKeyRef.current;
+    if (manual || !canUseNative) {
       if (isCapacitor) {
         setIsListening(true);
         listenOnce();

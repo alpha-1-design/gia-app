@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import { isNativePlatform } from '../utils/helpers';
+import { speakWithModelVoice, stopModelVoice } from './ModelVoiceService';
 
 const cleanTTS = (text: string) =>
   text
@@ -18,6 +19,7 @@ class TTSService {
   static getInstance() { if (!this.instance) this.instance = new TTSService(); return this.instance; }
 
   private enabled: boolean = localStorage.getItem('gia-tts-enabled') === 'true';
+  private modelVoiceEnabled: boolean = localStorage.getItem('gia-model-voice-enabled') !== 'false';
   private queue: string[] = [];
   private speaking = false;
   private onComplete: SpeakCallback | null = null;
@@ -30,6 +32,13 @@ class TTSService {
   }
 
   isEnabled() { return this.enabled; }
+
+  setModelVoiceEnabled(v: boolean) {
+    this.modelVoiceEnabled = v;
+    localStorage.setItem('gia-model-voice-enabled', String(v));
+  }
+
+  isModelVoiceEnabled() { return this.modelVoiceEnabled; }
 
   isSpeaking() { return this.speaking; }
 
@@ -116,11 +125,33 @@ class TTSService {
     });
   }
 
+  /**
+   * Speak the final, complete answer — prefers the active model's NATIVE voice
+   * (OpenAI / Gemini TTS) when available, and falls back to device TTS.
+   * Unlike speak(), this is not called per streaming chunk; it runs once when
+   * the response is finished, so the model voice reads the whole answer.
+   */
+  async speakFinal(text: string) {
+    if (!this.enabled) return;
+    const cleanText = cleanTTS(text);
+    if (!cleanText || cleanText.length < 2) return;
+
+    // Clear any device-TTS stream still speaking so native audio doesn't overlap.
+    await this.stop();
+
+    if (this.modelVoiceEnabled) {
+      const spoken = await speakWithModelVoice(cleanText);
+      if (spoken) return;
+    }
+    this.enqueue(cleanText);
+  }
+
   async stop() {
     if (this.streamTimer) { clearTimeout(this.streamTimer); this.streamTimer = null; }
     this.streamBuffer = '';
     this.queue = [];
     this.speaking = false;
+    stopModelVoice();
     if (isNative) {
       try { await TextToSpeech.stop(); } catch (e) { logger.error('[TTSService] Failed to stop TTS:', e); }
     } else {

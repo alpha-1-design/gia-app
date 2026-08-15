@@ -29,10 +29,10 @@ const WIDGET_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
 
 interface WidgetDef {
   type: string;
-  data: { label: string; value: string | number; unit?: string; change?: number; icon?: string; color?: string };
+  data: { label: string; value?: string | number; unit?: string; change?: number; icon?: string; color?: string; status?: string; detail?: string };
 }
 
-type WidgetItem = { label: string; value: string | number; unit?: string; change?: number; icon?: string; color?: string };
+type WidgetItem = { label: string; value?: string | number; unit?: string; change?: number; icon?: string; color?: string; status?: string; detail?: string };
 
 function isFlatObject(v: unknown): v is Record<string, string | number | boolean> {
   return typeof v === 'object' && v !== null && !Array.isArray(v) &&
@@ -46,7 +46,8 @@ function normalizeMetrics(data: WidgetDef[] | WidgetDef): WidgetItem[] {
     const inner = (w as { data?: unknown }).data || w;
     if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
       const obj = inner as Record<string, unknown>;
-      if ('label' in obj && 'value' in obj) {
+      if ('label' in obj) {
+        // Keep status/detail checklist rows intact (they have no "value").
         result.push(obj as WidgetItem);
       } else if (isFlatObject(obj)) {
         for (const [key, val] of Object.entries(obj)) {
@@ -74,6 +75,42 @@ export const MetricWidgetVisual: React.FC<{ data: WidgetDef[] | WidgetDef }> = (
   const [copied, copy] = useCopy();
   const widgets = useMemo(() => normalizeMetrics(data), [data]);
   const copyData = useCallback(() => copy(JSON.stringify(widgets, null, 2)), [widgets, copy]);
+  // Status checklist mode: items carry status/detail (e.g. capability
+  // diagnostics, task checklists) instead of a numeric value.
+  const isChecklist = widgets.length > 0 && widgets.some(w => w.status !== undefined || w.detail !== undefined);
+
+  if (isChecklist) {
+    const statusIcon = (s: string | undefined) => {
+      const v = (s || '').toLowerCase();
+      if (v.includes('✅') || v.includes('✓') || v.includes('ok') || v.includes('pass')) return { color: '#34d399', glyph: '✓' };
+      if (v.includes('❌') || v.includes('✗') || v.includes('fail') || v.includes('error') || v.includes('no')) return { color: '#f87171', glyph: '✗' };
+      if (v.includes('⚠') || v.includes('warn') || v.includes('pending')) return { color: '#fbbf24', glyph: '⚠' };
+      return { color: 'var(--gia-muted-2)', glyph: '•' };
+    };
+    return (
+      <VisualCard title="Status" onCopy={copyData} copied={copied}>
+        <div className="space-y-1.5">
+          {widgets.map((d, i) => {
+            const { color, glyph } = statusIcon(d.status);
+            return (
+              <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+                <span
+                  className="w-5 h-5 mt-0.5 rounded-full flex items-center justify-center shrink-0 text-[9px] font-bold"
+                  style={{ background: `${color}1a`, color, border: `1px solid ${color}40` }}
+                >
+                  {glyph}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold" style={{ color: 'var(--gia-text)' }}>{d.label}</p>
+                  {d.detail && <p className="text-[10px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{d.detail}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </VisualCard>
+    );
+  }
 
   return (
     <VisualCard title="Metrics" onCopy={copyData} copied={copied}>
@@ -93,7 +130,7 @@ export const MetricWidgetVisual: React.FC<{ data: WidgetDef[] | WidgetDef }> = (
                 )}
               </div>
               <div className="relative flex items-baseline gap-1">
-                <span className="text-2xl font-extrabold leading-none tracking-tight" style={{ color: 'var(--gia-text)' }}>{fmtVal(d.value)}</span>
+                <span className="text-2xl font-extrabold leading-none tracking-tight" style={{ color: 'var(--gia-text)' }}>{d.value !== undefined ? fmtVal(d.value) : ''}</span>
                 {d.unit && <span className="text-[11px] font-semibold" style={{ color: 'var(--gia-muted)' }}>{d.unit}</span>}
               </div>
               {d.change !== undefined && (

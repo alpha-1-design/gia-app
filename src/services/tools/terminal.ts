@@ -197,13 +197,17 @@ _Exit code: ${result.exitCode}_`,
       ctx?.onProgress?.(0.8, 'Loading Python runtime…');
       ctx?.onThought?.('Loading Pyodide (WASM Python)...');
       try {
-        const pyodideMod = await import('../PyodideRuntime');
-        if (pyodideMod.isReady()) {
-          const result = await pyodideMod.runPython(command);
-          ctx?.onProgress?.(1, 'Done');
-          return { success: true, content: result, error: undefined };
+        const pyodideMod = await import('../PyodideRunner');
+        // PyodideRunner loads the WASM runtime on first use and captures
+        // stdout/stderr properly. (The old path checked isReady() but never
+        // called loadPyodide(), which is why this backend always reported
+        // "Pyodide: runtime not loaded".)
+        const { output, error } = await pyodideMod.runPython(command, ctx);
+        ctx?.onProgress?.(1, 'Done');
+        if (!error) {
+          return { success: true, content: output || '(no output)', error: undefined };
         }
-        errors.push('Pyodide: runtime not loaded');
+        errors.push(`Pyodide: ${error}`);
       } catch (e) {
         errors.push(`Pyodide: ${e instanceof Error ? e.message : 'failed'}`);
       }

@@ -1,8 +1,9 @@
 import { logger } from '../utils/logger';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X } from 'lucide-react';
+import { PenLine, Copy, Check, Download, RefreshCw, Loader2, X, Globe } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
+import giaTools from '../services/GiaTools';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import { useWriterStore } from '../store/useWriterStore';
@@ -19,6 +20,7 @@ const WriterModule: React.FC = () => {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState(true);
+  const [webResearch, setWebResearch] = useState(false);
   const { setIntentState, addNotification } = useGiaStore(useShallow(s => ({
     setIntentState: s.setIntentState,
     addNotification: s.addNotification,
@@ -31,10 +33,26 @@ const WriterModule: React.FC = () => {
     if (!text || loading) return;
     setLoading(true); setError(''); setIntentState('thinking');
     try {
+      // Writer stays lean: no agentic tool loop, no ~100-tool table in the
+      // prompt (systemPromptMode: 'replace' swaps GIA's tool-heavy base prompt
+      // for the writer instructions entirely — faster AND the model can't emit
+      // stray tool blocks into the draft). The only extra capability is an
+      // OPT-IN web search whose results are injected as grounding facts.
+      let researchCtx = '';
+      if (webResearch) {
+        const searchTool = giaTools.getTool('web_search');
+        if (searchTool) {
+          const r = await searchTool.execute({ query: text }, undefined);
+          if (r.success && r.content) researchCtx = r.content.slice(0, 4000);
+        }
+      }
       let accumulated = '';
+      const sysPrompt = `You are an expert writer. Write a ${format} of approximately ${wordTarget} words. Use clean markdown formatting — **bold** for emphasis, headers where logical, bullet points for lists. Produce only the content, no preamble or meta-commentary. Be natural, engaging, and purpose-fit.`
+        + (researchCtx ? `\n\nGround your writing in the up-to-date research below; weave real facts in naturally and cite sources inline.\n\nRESEARCH:\n${researchCtx}` : '');
       await GiaBrain.generate({
         prompt: text,
-        systemPrompt: `You are an expert writer. Write a ${format} of approximately ${wordTarget} words. Use clean markdown formatting — **bold** for emphasis, headers where logical, bullet points for lists. Produce only the content, no preamble or meta-commentary. Be natural, engaging, and purpose-fit.`,
+        systemPrompt: sysPrompt,
+        systemPromptMode: 'replace',
         temperature: 0.82,
         maxTokens: 2500,
         onStream: (chunk) => { accumulated += chunk; setDraft(accumulated); },
@@ -48,7 +66,7 @@ const WriterModule: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [prompt, format, wordTarget, loading, setIntentState, setDraft]);
+  }, [prompt, format, wordTarget, webResearch, loading, setIntentState, setDraft]);
 
   const copyDraft = async () => {
     try {
@@ -148,12 +166,26 @@ const WriterModule: React.FC = () => {
               ))}
             </div>
           </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--gia-muted)' }}>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--gia-muted)' }}>
               Target Length: ~{wordTarget} words
             </p>
-            <div className="flex items-center gap-2">
-              <input type="range" min={50} max={2000} step={50} value={wordTarget}
+            <button
+              onClick={() => setWebResearch(!webResearch)}
+              className="flex items-center gap-1.5 text-[10px] font-medium px-3 py-1.5 rounded-xl border transition-all tap-feedback"
+              style={{
+                background: webResearch ? 'rgba(59,130,246,0.15)' : 'var(--gia-surface)',
+                border: `1px solid ${webResearch ? 'rgba(59,130,246,0.35)' : 'var(--gia-border)'}`,
+                color: webResearch ? '#60a5fa' : 'var(--gia-muted)',
+              }}
+              title="Search the web first and ground the writing in real, current facts"
+            >
+              <Globe size={11} />
+              {webResearch ? 'Web research ON' : 'Web research'}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="range" min={50} max={2000} step={50} value={wordTarget}
                 onChange={e => setWordTarget(Number(e.target.value))}
                 className="flex-1"
                 style={{ accentColor: '#ec4899' }} />
@@ -169,7 +201,6 @@ const WriterModule: React.FC = () => {
                   </button>
                 ))}
               </div>
-            </div>
           </div>
           {error && (
             <div className="gia-card p-3" style={{ borderColor: 'rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.05)' }}>

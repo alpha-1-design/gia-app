@@ -31,6 +31,15 @@ const THINKING_MODEL_PATTERNS = [
   'deepseek-r1', 'deepseek-v4',
 ];
 
+// Text-to-image capable model families (OpenAI-compatible /images/generations
+// endpoints, HF Inference API, etc.). Used to report Image Gen for a model
+// even when no image model override is configured.
+const IMAGE_MODEL_PATTERNS = [
+  'gpt-image', 'dall', 'imagen', 'flux', 'sdxl', 'stable-diffusion',
+  'sana', 'pixart', 'kolors', 'playground', 'deepfloyd', 'cogview',
+  'nano-banana', 'aurora', 'lumina', 'seedream', 'hunyuan-image',
+];
+
 function modelMatches(model: string, patterns: string[]): boolean {
   const m = model.toLowerCase();
   return patterns.some(p => m.includes(p));
@@ -41,8 +50,13 @@ export function getProviderCapabilities(
   model: string,
   staticVision?: boolean,
   staticTools?: boolean,
+  imageModel?: string,
 ): ProviderCapabilities {
   const lt = listingType.toLowerCase();
+  // A configured image-generation model (registry default or per-provider
+  // override) means the provider can render images through GIA's tool.
+  const hasImageModel = !!imageModel && imageModel.length > 0;
+  const imageGeneration = hasImageModel || modelMatches(model, IMAGE_MODEL_PATTERNS);
 
   switch (lt) {
     case 'anthropic':
@@ -52,7 +66,7 @@ export function getProviderCapabilities(
         streaming: true,
         vision: staticVision ?? modelMatches(model, VISION_MODEL_PATTERNS),
         jsonMode: false,
-        imageGeneration: false,
+        imageGeneration,
       };
 
     case 'gemini':
@@ -62,7 +76,7 @@ export function getProviderCapabilities(
         streaming: true,
         vision: true,
         jsonMode: false,
-        imageGeneration: false,
+        imageGeneration,
       };
 
     case 'ollama':
@@ -72,7 +86,7 @@ export function getProviderCapabilities(
         streaming: true,
         vision: staticVision ?? modelMatches(model, VISION_MODEL_PATTERNS),
         jsonMode: false,
-        imageGeneration: false,
+        imageGeneration,
       };
 
     case 'huggingface':
@@ -82,7 +96,7 @@ export function getProviderCapabilities(
         streaming: true,
         vision: staticVision ?? modelMatches(model, VISION_MODEL_PATTERNS),
         jsonMode: false,
-        imageGeneration: false,
+        imageGeneration,
       };
 
     case 'local':
@@ -92,7 +106,7 @@ export function getProviderCapabilities(
         streaming: true,
         vision: false,
         jsonMode: false,
-        imageGeneration: false,
+        imageGeneration,
       };
 
     default:
@@ -102,7 +116,7 @@ export function getProviderCapabilities(
         streaming: true,
         vision: staticVision ?? modelMatches(model, VISION_MODEL_PATTERNS),
         jsonMode: !lt.includes('anthropic') && !lt.includes('gemini'),
-        imageGeneration: false,
+        imageGeneration,
       };
   }
 }
