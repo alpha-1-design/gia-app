@@ -2,12 +2,12 @@
 
 // Kotlin version must stay in sync with the version the Capacitor plugin
 // modules default to (org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20).
-ext {
-    kotlin_version = '2.2.20'
-}
-
+// NOTE: must be declared INSIDE buildscript{} — the buildscript block is
+// evaluated before the rest of the script body, so a top-level ext {} is
+// not visible when the classpath strings below are interpolated.
 buildscript {
-    
+    ext.kotlin_version = '2.2.20'
+
     repositories {
         google()
         mavenCentral()
@@ -23,6 +23,12 @@ buildscript {
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
+}
+
+// Project-level copy for the generated capacitor-cordova-android-plugins
+// module, which reads rootProject.ext.kotlin_version.
+ext {
+    kotlin_version = '2.2.20'
 }
 
 apply from: "variables.gradle"
