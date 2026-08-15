@@ -15,6 +15,8 @@ interface ComposerToolsSheetProps {
   onClose: () => void;
   items: ToolItem[];
   onToggle: (key: string) => void;
+  /** Optional extra rows rendered below the toggles (e.g. All Tools, active skill). */
+  footer?: React.ReactNode;
 }
 
 const Switch: React.FC<{ active: boolean; color: string }> = ({ active, color }) => (
@@ -30,7 +32,7 @@ const Switch: React.FC<{ active: boolean; color: string }> = ({ active, color })
   </span>
 );
 
-export const ComposerToolsSheet: React.FC<ComposerToolsSheetProps> = ({ open, onClose, items, onToggle }) => {
+export const ComposerToolsSheet: React.FC<ComposerToolsSheetProps> = ({ open, onClose, items, onToggle, footer }) => {
   return (
     <AnimatePresence>
       {open && (
@@ -79,6 +81,11 @@ export const ComposerToolsSheet: React.FC<ComposerToolsSheetProps> = ({ open, on
                   <Switch active={item.active} color={item.color} />
                 </button>
               ))}
+              {footer && (
+                <div className="px-3 pb-3 pt-1" style={{ borderTop: '1px solid var(--gia-border)', marginTop: 4 }}>
+                  {footer}
+                </div>
+              )}
             </div>
           </motion.div>
         </>

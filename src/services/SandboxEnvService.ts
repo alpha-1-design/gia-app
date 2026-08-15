@@ -31,6 +31,14 @@ let cached: SandboxStatus | null = null;
 const run = (command: string, timeout = 60000) =>
   terminalService.exec(command, undefined, undefined, timeout);
 
+// proot spews these to stderr when the on-device rootfs/binary is broken —
+// they must never be mistaken for a real package version.
+const PROOT_FAILURE = /fatal error|libproot|proot (error|warning)|No such file or directory|can't chdir|\/usr\/bin\/env'? ?not found/i;
+
+function isProotFailure(output: string): boolean {
+  return PROOT_FAILURE.test(output || '');
+}
+
 function parseVersion(output: string): string | null {
   const line = (output || '')
     .trim()
@@ -39,6 +47,7 @@ function parseVersion(output: string): string | null {
     .pop()
     ?.trim();
   if (!line || /not found|command not found|sh: .*: not found/i.test(line)) return null;
+  if (isProotFailure(line)) return null;
   return line;
 }
 
@@ -57,7 +66,8 @@ export const SandboxEnvService = {
     if (!terminalService.isAvailable()) return false;
     try {
       const r = await run('echo ok', 15000);
-      return !(r.exitCode === -1 && r.sessionId === 'mock');
+      if (r.exitCode === -1 && r.sessionId === 'mock') return false;
+      return !isProotFailure(r.output || '');
     } catch {
       return false;
     }
@@ -80,7 +90,10 @@ export const SandboxEnvService = {
     let resolv = false;
     try {
       const r = await run('test -f /etc/resolv.conf && echo YES || echo NO', 15000);
-      if (r.exitCode === -1 && r.sessionId === 'mock') {
+      if ((r.exitCode === -1 && r.sessionId === 'mock') || isProotFailure(r.output || '')) {
+        // proot is registered but broken (libproot.so failed to load / W^X
+        // blocks the binary). Report unavailable — NOT green checks with a
+        // "fatal error" version string.
         cached = { available: false, resolv: false, packages: [], ready: false };
         useGiaStore.getState().setSandboxEnvReady(false);
         return cached;
@@ -96,6 +109,9 @@ export const SandboxEnvService = {
       PKG_DEFS.map(async (p) => {
         try {
           const r = await run(`${p.cmd} 2>/dev/null || true`, 20000);
+          if (isProotFailure(r.output || '')) {
+            return { key: p.key, label: p.label, version: null, ok: false };
+          }
           const version = parseVersion(r.output || '');
           return { key: p.key, label: p.label, version, ok: !!version };
         } catch {

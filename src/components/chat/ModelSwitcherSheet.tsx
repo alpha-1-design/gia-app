@@ -85,7 +85,9 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
   }, [open, selected, selectedConnected, availableModels, modelListStatus, fetchModels]);
 
   const models = selectedConnected
-    ? (availableModels[selected] ?? [])
+    ? (availableModels[selected] ?? []).length > 0
+      ? (availableModels[selected] ?? [])
+      : providerRegistry.getModels(selected)   // never show a blank pane — fall back to the curated catalog
     : providerRegistry.getModels(selected);
 
   const handleConnect = () => {

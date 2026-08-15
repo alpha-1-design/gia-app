@@ -6,6 +6,7 @@ import {
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
   Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench,
+  Maximize2, ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -14,6 +15,7 @@ import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import GiaIcon from '../components/GiaIcon';
+import giaTools from '../services/GiaTools';
 import SandboxEnvService from '../services/SandboxEnvService';
 import MessageList from '../components/MessageList';
 import ComposerToolsSheet from '../components/ComposerToolsSheet';
@@ -63,7 +65,7 @@ const ChatModule: React.FC = () => {
     scrollRef, inputContainerRef, fileRef, imgRef,
     responseTimesRef, clarAnswer, setClarAnswer,
     activeSessionId, setActiveSession, sessions,
-    createSession, deleteSession, clearSession,
+    createSession, deleteSession,
     addNotification,
     webSearch, deepSearch, extThinking, handsOff,
     localVision, localTranslate,
@@ -253,21 +255,6 @@ const ChatModule: React.FC = () => {
               <span className="text-[8px] font-medium" style={{ color: '#ec4899' }}>LIVE</span>
             </div>
           )}
-          {activeSkill && (
-            <button
-              onClick={() => setShowSkillPicker(true)}
-              title={`Active skill: ${activeSkill.name}`}
-              className="gia-pill flex items-center gap-1 px-2.5 py-1 rounded-lg shrink-0 tap-feedback transition-all"
-              style={{
-                background: 'rgba(168,85,247,0.12)',
-                color: '#c4b5fd',
-                border: '1px solid rgba(168,85,247,0.3)',
-              }}
-            >
-              <Sparkles size={11} />
-              <span className="text-[9px] font-semibold max-w-[70px] truncate">{activeSkill.name}</span>
-            </button>
-          )}
           <button
             onClick={() => setShowModelSwitcher(true)}
             className="gia-pill flex items-center gap-1.5 flex-1 min-w-0 max-w-[180px] tap-feedback transition-all"
@@ -287,10 +274,8 @@ const ChatModule: React.FC = () => {
           </button>
           <button onClick={() => setShowFileManager(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="File Manager" title="File Manager"><Upload size={13} /></button>
           <button onClick={() => setShowKnowledge(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Knowledge" title="Knowledge"><Brain size={13} /></button>
-          <button onClick={() => setShowToolsCatalog(true)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Tools catalog" title="Browse all tools"><Wrench size={13} /></button>
           <SearchActivityButton />
           <button onClick={exportChat} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Export chat" title="Export chat"><Download size={13} /></button>
-          <button onClick={() => activeSessionId && clearSession(activeSessionId)} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="Clear chat" title="Clear chat"><Trash2 size={13} /></button>
           <button onClick={createSession} className="p-1.5 rounded-lg tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} aria-label="New chat" title="New chat"><Plus size={13} /></button>
         </div>
       </div>
@@ -438,6 +423,11 @@ const ChatModule: React.FC = () => {
 
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
         <RecentToolExecutions loading={loading} />
+
+        {/* Build mode — live preview rendered inline as part of the response */}
+        {buildMode && buildPreviewUrl && !showPreviewSheet && (
+          <BuildInlinePreview url={buildPreviewUrl} onOpenFull={() => setShowPreviewSheet(true)} />
+        )}
 
         {clarification && (
           <ClarificationBottomSheet
@@ -609,11 +599,54 @@ const ChatModule: React.FC = () => {
               {activeToolCount} active
             </span>
           )}
+          {activeSkill && (
+            <button
+              onClick={() => setShowSkillPicker(true)}
+              title={`Active skill: ${activeSkill.name}`}
+              className="flex items-center gap-1 text-[10px] shrink-0 px-2 py-1 rounded-full tap-feedback transition-all"
+              style={{ background: 'rgba(168,85,247,0.12)', color: '#c4b5fd', border: '1px solid rgba(168,85,247,0.3)' }}
+            >
+              <Sparkles size={10} />
+              <span className="font-semibold max-w-[80px] truncate">{activeSkill.name}</span>
+            </button>
+          )}
           <ComposerToolsSheet
             open={showTools}
             onClose={() => setShowTools(false)}
             items={toolItems}
             onToggle={(key) => toggleFeature(key as 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate')}
+            footer={
+              <>
+                {activeSkill && (
+                  <button
+                    onClick={() => { setShowTools(false); setShowSkillPicker(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-3 text-left text-[13px] tap-feedback transition-colors active:bg-white/5"
+                    style={{ color: 'var(--gia-text)' }}
+                  >
+                    <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.15)', color: '#c4b5fd' }}>
+                      <Sparkles size={15} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block">Skill: <span className="font-semibold">{activeSkill.name}</span></span>
+                      <span className="block text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>Tap to switch skills</span>
+                    </span>
+                    <ChevronRight size={14} style={{ color: 'var(--gia-muted-2)' }} />
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowTools(false); setShowToolsCatalog(true); }}
+                  className="w-full flex items-center gap-3 px-3 py-3 text-left text-[13px] tap-feedback transition-colors active:bg-white/5"
+                  style={{ color: 'var(--gia-text)' }}
+                >
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.15)', color: '#c4b5fd' }}>
+                    <Wrench size={15} />
+                  </span>
+                  <span className="flex-1">All Tools</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>{giaTools.getAllTools().length}</span>
+                  <ChevronRight size={14} style={{ color: 'var(--gia-muted-2)' }} />
+                </button>
+              </>
+            }
           />
         </div>
 
@@ -664,16 +697,53 @@ const SearchActivityButton: React.FC = () => {
       onClick={() => setPanelOpen(!panelOpen)}
       className="p-1.5 rounded-lg tap-feedback shrink-0 relative"
       style={{ color: panelOpen ? '#a855f7' : 'var(--gia-muted)' }}
-      title="Search Activity"
+      title={`Search Activity (${total})`}
     >
       <Globe size={13} />
       <span
-        className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold text-white"
+        className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full"
         style={{ background: '#a855f7' }}
-      >
-        {total > 9 ? '9+' : total}
-      </span>
+      />
     </button>
+  );
+};
+
+const BuildInlinePreview: React.FC<{ url: string; onOpenFull: () => void }> = ({ url, onOpenFull }) => {
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  return (
+    <div className="mx-1 rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(249,115,22,0.3)', background: '#0a0a0a', boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
+      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid rgba(249,115,22,0.2)' }}>
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
+        <span className="text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ color: '#f97316' }}>Live preview</span>
+        <span className="text-[10px] truncate flex-1 min-w-0" style={{ color: 'var(--gia-muted)' }}>{url}</span>
+        <button
+          onClick={() => setRefreshKey((k) => k + 1)}
+          className="p-1.5 rounded-lg transition-colors hover:bg-white/10 active:bg-white/15 shrink-0"
+          style={{ color: 'var(--gia-muted-2)' }}
+          aria-label="Refresh preview"
+          title="Refresh preview"
+        >
+          <RotateCcw size={12} />
+        </button>
+        <button
+          onClick={onOpenFull}
+          className="p-1.5 rounded-lg transition-colors hover:bg-white/10 active:bg-white/15 shrink-0"
+          style={{ color: '#f97316' }}
+          aria-label="Open full preview"
+          title="Open full preview"
+        >
+          <Maximize2 size={12} />
+        </button>
+      </div>
+      <iframe
+        key={refreshKey}
+        src={url}
+        title="GIA build preview"
+        className="w-full"
+        style={{ height: 240, border: 'none', background: '#fff', display: 'block' }}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-pointer-lock"
+      />
+    </div>
   );
 };
 

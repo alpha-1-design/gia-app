@@ -23,7 +23,7 @@ const BACKGROUND_NOTIF_ID = 42;
 // ── Follow-up suggestions ───────────────────────────────────────────────────
 // Fired in the BACKGROUND after a message completes, so it never delays the
 // answer. Failures are silent — suggestions are a nicety, not a contract.
-const SUGGESTION_MIN_LEN = 120;
+const SUGGESTION_MIN_LEN = 80;
 
 async function generateFollowUpSuggestions(sessionId: string, asstId: string, content: string): Promise<void> {
   try {

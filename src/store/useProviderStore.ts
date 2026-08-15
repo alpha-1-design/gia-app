@@ -330,14 +330,20 @@ export const useProviderStore = create<GiaProviderState>()(
               };
             });
 
-          const result = formatted.length > 0 ? formatted : fallbackModels;
-          result.sort((a, b) => {
-            if (a.free !== b.free) return a.free ? -1 : 1;
-            if ((a.vision || false) !== (b.vision || false)) return a.vision ? -1 : 1;
-            return 0;
-          });
-
-          return markLive(result);
+          // Only claim a LIVE list when the API actually returned models. An
+          // empty response (or a provider that returns [] for unknown keys)
+          // must fall back to the curated catalog instead of showing a blank
+          // model pane with a misleading "Live" badge.
+          if (formatted.length > 0) {
+            const result = formatted;
+            result.sort((a, b) => {
+              if (a.free !== b.free) return a.free ? -1 : 1;
+              if ((a.vision || false) !== (b.vision || false)) return a.vision ? -1 : 1;
+              return 0;
+            });
+            return markLive(result);
+          }
+          return markCatalog(fallbackModels);
         } catch (e) {
           logger.warn(`Fetch models failed for ${p}:`, e);
           return markCatalog(providerRegistry.getModels(p));

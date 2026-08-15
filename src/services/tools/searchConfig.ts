@@ -1,5 +1,6 @@
 import type { Tool } from './types';
 import ToolRegistry from '../ToolRegistry';
+import { useSearchStore } from '../../store/useSearchStore';
 
 export const searchConfigTools: Tool[] = [
   {
@@ -22,8 +23,15 @@ export const searchConfigTools: Tool[] = [
       }
       if (!apiKey) return { success: false, content: '', error: 'Provide an "apiKey".' };
       try {
-        localStorage.setItem(`gia-search-${provider}`, apiKey);
-        return { success: true, content: `${provider === 'exa' ? 'Exa Search' : 'Browserless.io'} API key configured.` };
+        // Persist into the SAME store the Settings → Search screen uses, so a
+        // key configured by the AI is visible in Settings and vice-versa.
+        const search = useSearchStore.getState();
+        search.setSearchProviderKey(provider as 'exa' | 'browserless', apiKey);
+        search.setSearchProviderEnabled(provider as 'exa' | 'browserless', true);
+        search.setActiveSearchProvider(provider as 'exa' | 'browserless');
+        // Legacy mirror for anything still reading the old localStorage key.
+        try { localStorage.setItem(`gia-search-${provider}`, apiKey); } catch { /* ignore */ }
+        return { success: true, content: `${provider === 'exa' ? 'Exa Search' : 'Browserless.io'} API key configured and activated.` };
       } catch {
         return { success: false, content: '', error: 'Failed to save configuration.' };
       }
@@ -34,9 +42,14 @@ export const searchConfigTools: Tool[] = [
     name: 'search_provider_status',
     description: 'Check which search providers are configured and active.',
     execute: async () => {
-      const exaKey = (() => { try { return localStorage.getItem('gia-search-exa'); } catch { return null; } })();
-      const browserlessKey = (() => { try { return localStorage.getItem('gia-search-browserless'); } catch { return null; } })();
-      return { success: true, content: `## Search Providers\n\n**Exa:** ${exaKey ? 'configured' : 'not configured'}\n**Browserless:** ${browserlessKey ? 'configured' : 'not configured'}\n**Active fallback:** DuckDuckGo/Google (no API key required)` };
+      const store = useSearchStore.getState();
+      const exa = store.providers.exa;
+      const browserless = store.providers.browserless;
+      const configured = (p: typeof exa) => (p.enabled && p.apiKey ? 'configured & active' : p.apiKey ? 'key saved, not enabled' : 'not configured');
+      return {
+        success: true,
+        content: `## Search Providers\n\n**Exa:** ${configured(exa)}\n**Browserless:** ${configured(browserless)}\n**Active provider:** ${store.activeSearchProvider === 'none' ? 'fallback (DuckDuckGo/Google, no API key)' : store.activeSearchProvider}\n\nBoth providers are used automatically by web_search and read_url when configured.`,
+      };
     }
   },
 ];

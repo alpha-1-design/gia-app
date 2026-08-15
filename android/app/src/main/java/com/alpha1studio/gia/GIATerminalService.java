@@ -23,12 +23,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
@@ -54,6 +56,15 @@ public class GIATerminalService extends Service {
     private static final ConcurrentHashMap<String, TerminalSession> sessions = new ConcurrentHashMap<>();
 
     private boolean isExtracted = false;
+
+    /**
+     * Rootfs extraction gate. Sessions started before extraction finishes would
+     * run proot against an empty/missing rootfs and fail with "'/usr/bin/env'
+     * not found". exec() now blocks on this latch so the very first command on
+     * a fresh install waits for the (few-second) extraction to complete.
+     */
+    private static final CountDownLatch extractionLatch = new CountDownLatch(1);
+    private static volatile boolean extractionFailed = false;
 
     // -------------------------------------------------------------------------
     // Inner class representing a single terminal session
@@ -204,10 +215,16 @@ public class GIATerminalService extends Service {
                     extractAssets();
                     isExtracted = true;
                     Log.i(TAG, "Terminal assets extracted successfully");
-                } catch (IOException e) {
+                } catch (Exception e) {
                     Log.e(TAG, "Failed to extract terminal assets", e);
+                    extractionFailed = true;
+                } finally {
+                    extractionLatch.countDown();
                 }
             }, "term-extract").start();
+        } else {
+            // Already extracted in this process — make sure nobody is still waiting.
+            extractionLatch.countDown();
         }
 
         // Update notification with session count
@@ -271,7 +288,13 @@ public class GIATerminalService extends Service {
         // fall back to Alpine minirootfs when Ubuntu isn't bundled.
         File rootfsDir = new File(terminalDir, ROOTFS_DIR);
         File marker = new File(rootfsDir, ".gia-rootfs-ok");
-        if (!marker.exists()) {
+
+        // The marker alone is not proof of a usable rootfs: older builds wrote it
+        // after extracting bin/etc dirs even when every busybox symlink
+        // (/bin/sh, /usr/bin/env) silently failed to materialize. Re-extract
+        // whenever the critical first-executable is missing.
+        boolean markerValid = marker.exists() && rootfsHasCriticalBinaries(rootfsDir);
+        if (!markerValid) {
             if (rootfsDir.exists()) {
                 // Previous extraction was partial/failed — retry clean
                 deleteRecursive(rootfsDir);
@@ -297,20 +320,87 @@ public class GIATerminalService extends Service {
                 Log.i(TAG, "Extracted " + distroLabel + " archive to " + archive.getAbsolutePath());
 
                 // Extract tar.gz into rootfs
-                untar(archive, rootfsDir);
+                List<String[]> failedSymlinks = new ArrayList<>();
+                untar(archive, rootfsDir, failedSymlinks);
                 archive.delete();
 
+                // Alpine minirootfs ships nearly every binary as a busybox
+                // symlink. Android routinely blocks symlink creation in app
+                // data, so materialize any link we could not create as a real
+                // copy of busybox — otherwise /bin/sh and /usr/bin/env are
+                // missing and proot dies with "'/usr/bin/env' not found".
+                materializeSymlinks(rootfsDir, failedSymlinks);
+
+                // Hardening: executable bits the tar may not have survived
+                // with, a HOME dir, and DNS so apk/ping work out of the box.
+                File busybox = new File(rootfsDir, "bin/busybox");
+                if (busybox.exists()) {
+                    busybox.setExecutable(true, false);
+                }
+                File homeDir = new File(rootfsDir, "root");
+                if (!homeDir.exists()) {
+                    homeDir.mkdirs();
+                }
+                File resolv = new File(rootfsDir, "etc/resolv.conf");
+                if (!resolv.exists()) {
+                    resolv.getParentFile().mkdirs();
+                    try (FileOutputStream out = new FileOutputStream(resolv)) {
+                        out.write("nameserver 8.8.8.8\nnameserver 1.1.1.1\n".getBytes());
+                    }
+                }
+
                 // Sentinel so a partial/failed extraction is retried next launch
-                if (new File(rootfsDir, "bin").exists() && new File(rootfsDir, "etc").exists()) {
+                if (rootfsHasCriticalBinaries(rootfsDir)) {
                     marker.createNewFile();
                     Log.i(TAG, "Unpacked " + distroLabel + " rootfs to " + rootfsDir.getAbsolutePath());
                 } else {
-                    throw new IOException(distroLabel + " rootfs extraction incomplete — bin/etc missing");
+                    throw new IOException(distroLabel + " rootfs extraction incomplete — /bin/sh or /usr/bin/env missing");
                 }
             } else {
                 throw new IOException("No rootfs archive found in assets (expected terminal/ubuntu-rootfs.tar.gz or terminal/alpine-minirootfs.tar.gz)");
             }
         }
+    }
+
+    /**
+     * True when the rootfs actually contains the binaries proot needs to boot
+     * the guest: /bin/busybox (the real binary) plus /bin/sh and /usr/bin/env
+     * (busybox applet links that extraction must materialize).
+     */
+    private static boolean rootfsHasCriticalBinaries(File rootfsDir) {
+        File busybox = new File(rootfsDir, "bin/busybox");
+        File sh = new File(rootfsDir, "bin/sh");
+        File env = new File(rootfsDir, "usr/bin/env");
+        return busybox.exists() && sh.exists() && env.exists();
+    }
+
+    /**
+     * Replace every symlink entry that failed to materialize with a real file:
+     * copy the busybox binary for applet paths (bin/, sbin/, usr/bin/,
+     * usr/sbin/), or mkdir for anything that looks like a directory link.
+     */
+    private static void materializeSymlinks(File rootfsDir, List<String[]> failedSymlinks) throws IOException {
+        if (failedSymlinks.isEmpty()) return;
+        File busybox = new File(rootfsDir, "bin/busybox");
+        for (String[] entry : failedSymlinks) {
+            File link = new File(rootfsDir, entry[0]);
+            if (link.exists()) continue; // created successfully after all
+            link.getParentFile().mkdirs();
+            if (busybox.exists() && isAppletPath(entry[0])) {
+                copyFile(busybox, link);
+                link.setExecutable(true, false);
+            } else {
+                link.mkdirs();
+            }
+        }
+    }
+
+    private static boolean isAppletPath(String name) {
+        // Tar entries are usually stored as "./bin/sh" — strip the leading
+        // "./" before matching applet directories.
+        String n = name != null && name.startsWith("./") ? name.substring(2) : name;
+        return n.startsWith("bin/") || n.startsWith("sbin/")
+                || n.startsWith("usr/bin/") || n.startsWith("usr/sbin/");
     }
 
     private static boolean assetExists(AssetManager am, String path) {
@@ -388,6 +478,25 @@ public class GIATerminalService extends Service {
         GIATerminalService service = null;
         if (context instanceof GIATerminalService) {
             service = (GIATerminalService) context;
+        }
+
+        // Never run proot against an empty/missing rootfs: block until the
+        // (few-second) first-run extraction finishes, and fail with a clear
+        // message instead of proot's cryptic "'/usr/bin/env' not found".
+        try {
+            if (!extractionLatch.await(60, TimeUnit.SECONDS)) {
+                throw new IOException("Terminal rootfs extraction timed out — try again in a few seconds.");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for terminal rootfs extraction", e);
+        }
+        if (extractionFailed) {
+            throw new IOException("Terminal rootfs failed to extract — check the terminal setup in Settings and tap Set Up Environment.");
+        }
+        File rootfsDir = new File(new File(context.getFilesDir(), TERMINAL_DIR), ROOTFS_DIR);
+        if (!rootfsHasCriticalBinaries(rootfsDir)) {
+            throw new IOException("Terminal rootfs is missing critical binaries (/bin/sh, /usr/bin/env). Restart the app to re-extract, or tap Set Up Environment.");
         }
 
         String prootPath = resolveProotPath(context);
@@ -581,24 +690,15 @@ public class GIATerminalService extends Service {
         out.flush();
     }
 
-    private static void untar(File archive, File destDir) throws IOException {
+    private static void untar(File archive, File destDir, List<String[]> failedSymlinks) throws IOException {
         // We handle .tar.gz: decompress gzip then untar
         try (InputStream fis = new FileInputStream(archive);
              InputStream gzIn = new GZIPInputStream(fis)) {
-            // Simple tar extraction
-            byte[] buf = new byte[8192];
-            java.io.SequenceInputStream sis = new java.io.SequenceInputStream(
-                    gzIn, new java.io.SequenceInputStream(
-                            new java.io.ByteArrayInputStream(new byte[0]),
-                            new java.io.ByteArrayInputStream(new byte[0])
-                    )
-            );
-            // Actually do proper tar extraction
-            extractTar(gzIn, destDir);
+            extractTar(gzIn, destDir, failedSymlinks);
         }
     }
 
-    private static void extractTar(InputStream in, File destDir) throws IOException {
+    private static void extractTar(InputStream in, File destDir, List<String[]> failedSymlinks) throws IOException {
         // Read tar format entries
         byte[] buf = new byte[8192];
         // Tar format: each entry is 512-byte header + data blocks
@@ -676,18 +776,47 @@ public class GIATerminalService extends Service {
                 // Directory
                 entryFile.mkdirs();
             } else if (fileType == '2') {
-                // Symlink — create the link
+                // Symlink. Android commonly refuses to create symlinks in app
+                // data (Operation not permitted), and silently skipping them
+                // leaves /bin/sh, /usr/bin/env etc. missing — which is exactly
+                // proot's "'/usr/bin/env' not found" fatal error. Best effort:
+                // create the link, and when that fails materialize it as a
+                // content copy (targets are usually busybox, already extracted)
+                // or record it for the post-extraction pass.
                 int linkEnd = 0;
                 while (linkEnd < 100 && header[157 + linkEnd] != 0) linkEnd++;
                 String linkTarget = new String(header, 157, linkEnd, "UTF-8");
                 if (linkEnd > 0) {
                     entryFile.getParentFile().mkdirs();
-                    try {
-                        entryFile.delete();
-                        java.nio.file.Files.createSymbolicLink(
-                                entryFile.toPath(), new File(linkTarget).toPath());
-                    } catch (Exception e) {
-                        Log.w(TAG, "Skipping symlink " + name + " -> " + linkTarget + ": " + e.getMessage());
+                    boolean materialized = false;
+                    // Resolve the target inside the extracted rootfs so far.
+                    String targetRel = linkTarget.startsWith("/")
+                            ? linkTarget.substring(1)
+                            : linkTarget;
+                    File targetFile = new File(destDir, targetRel);
+                    if (targetFile.exists()) {
+                        if (targetFile.isDirectory()) {
+                            entryFile.mkdirs();
+                            materialized = true;
+                        } else {
+                            // Copy target content (e.g. busybox) as a regular
+                            // file, preserving executable-ness.
+                            copyFile(targetFile, entryFile);
+                            if (targetFile.canExecute() || isAppletPath(name)) {
+                                entryFile.setExecutable(true, false);
+                            }
+                            materialized = true;
+                        }
+                    }
+                    if (!materialized) {
+                        try {
+                            entryFile.delete();
+                            Files.createSymbolicLink(
+                                    entryFile.toPath(), new File(linkTarget).toPath());
+                        } catch (Exception e) {
+                            Log.w(TAG, "Symlink " + name + " -> " + linkTarget + " blocked (" + e.getMessage() + ") — will materialize");
+                            failedSymlinks.add(new String[]{ name, linkTarget });
+                        }
                     }
                 }
             } else {
@@ -705,10 +834,36 @@ public class GIATerminalService extends Service {
                 }
                 entryFile.setLastModified(
                         parseTarTimestamp(header, 136) * 1000L);
+                // Tar stores the mode as octal in bytes 100-107. Without it,
+                // executables (busybox!) come out non-executable and proot
+                // reports "Permission denied" on every command.
+                long mode = parseOctal(header, 100);
+                if (mode > 0) {
+                    entryFile.setExecutable((mode & 0111) != 0, false);
+                    entryFile.setWritable((mode & 0222) != 0, false);
+                    entryFile.setReadable((mode & 0444) != 0, false);
+                }
             }
 
             // Skip padding to next 512-byte boundary
             skipPadding(in, size);
+        }
+    }
+
+    private static long parseOctal(byte[] header, int offset) {
+        long value = 0;
+        for (int i = offset; i < offset + 8 && i < header.length && header[i] != 0 && header[i] != ' '; i++) {
+            char c = (char) header[i];
+            if (c < '0' || c > '7') break;
+            value = value * 8 + (c - '0');
+        }
+        return value;
+    }
+
+    private static void copyFile(File src, File dst) throws IOException {
+        try (InputStream in = new FileInputStream(src);
+             OutputStream out = new FileOutputStream(dst)) {
+            copyStream(in, out);
         }
     }
 

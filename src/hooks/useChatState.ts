@@ -117,6 +117,9 @@ export function useChatState() {
     setExpandedMsgs(new Set());
     setShowThoughts(new Set());
     msgOps.setUndoMsg(null);
+    // Tool execution logs are session-scoped — never leak the previous
+    // session's tool cards into a fresh chat.
+    useProtocolStore.getState().clearConsoleProtocols();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId]);
 

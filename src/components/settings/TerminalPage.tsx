@@ -565,7 +565,7 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                             isOk ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
                           }`}
                         >
-                          {pkgInfo?.version || 'checking...'}
+                          {pkgInfo ? (pkgInfo.version || 'unavailable') : 'checking...'}
                         </span>
                       </div>
                       <p className="text-[11px] mt-1" style={{ color: 'var(--gia-muted)' }}>
