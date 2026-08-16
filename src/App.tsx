@@ -123,13 +123,14 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
+  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, reduceMotion, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
       setModule: s.setModule,
       showTerminal: s.showTerminal, setShowTerminal: s.setShowTerminal,
       notifications: s.notifications, clearNotification: s.clearNotification,
       showConsole: s.showConsole, consoleLogs: s.consoleLogs, setShowConsole: s.setShowConsole,
       showProtocols: s.showProtocols, setShowProtocols: s.setShowProtocols,
       theme: s.theme,
+      reduceMotion: s.reduceMotion,
       addNotification: s.addNotification,
       autoStartWakeWord: s.autoStartWakeWord,
       fullScreenMode: s.fullScreenMode,
@@ -345,6 +346,12 @@ const App: React.FC = () => {
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [theme]);
+
+  // Reduce motion — apply on mount and whenever the setting changes so it
+  // takes effect immediately, not just after the setter that flips it runs.
+  useEffect(() => {
+    document.documentElement.classList.toggle('gia-reduce-motion', reduceMotion);
+  }, [reduceMotion]);
 
   useEffect(() => {
     // Load provider definitions dynamically

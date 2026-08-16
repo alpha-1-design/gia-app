@@ -310,6 +310,8 @@ interface GiaState {
   customInstructions: string;
   pinnedMemories: string[];
   theme: 'dark' | 'light' | 'system' | 'obsidian-aurora';
+  reduceMotion: boolean;
+  setReduceMotion: (v: boolean) => void;
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
@@ -539,6 +541,7 @@ export const useGiaStore = create<GiaState>()(
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
       theme: 'dark',
+      reduceMotion: (() => { try { return localStorage.getItem('gia-reduce-motion') === 'true'; } catch { return false; } })(),
       connectionStatus: navigator.onLine ? 'online' : 'offline',
       providerConnected: false,
       currentTool: null,
@@ -993,6 +996,13 @@ export const useGiaStore = create<GiaState>()(
       clearConsole: () => set({ consoleLogs: [] }),
       setShowProtocols: (show) => set({ showProtocols: show }),
       setTheme: (theme) => set({ theme }),
+      setReduceMotion: (v) => {
+        try { localStorage.setItem('gia-reduce-motion', String(v)); } catch { /* ignore */ }
+        if (typeof document !== 'undefined') {
+          document.documentElement.classList.toggle('gia-reduce-motion', v);
+        }
+        set({ reduceMotion: v });
+      },
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setProviderConnected: (connected) => set({ providerConnected: connected }),
       toggleFullScreenMode: () => set((s) => ({ fullScreenMode: !s.fullScreenMode })),
@@ -1061,6 +1071,7 @@ export const useGiaStore = create<GiaState>()(
         hapticFeedback: s.hapticFeedback,
         customInstructions: s.customInstructions,
         theme: s.theme,
+        reduceMotion: s.reduceMotion,
         wakeWord: s.wakeWord,
         keepListening: s.keepListening,
         autoStartWakeWord: s.autoStartWakeWord,
