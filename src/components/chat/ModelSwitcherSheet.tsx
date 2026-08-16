@@ -195,9 +195,16 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
                 })}
               </div>
 
-              {/* Model column */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-1 min-w-0">
-                {!selectedConnected && selectedNeedsKey ? (
+              {/* Model column — list + its footer controls share one vertical
+                  flex column so they stack, instead of competing for width
+                  as siblings in the outer row. That competition was the bug:
+                  the refresh bar and image-model input have unshrinkable
+                  content, so the model list (the only child with min-w-0)
+                  was getting squeezed to ~0 width and effectively vanishing
+                  even though models had fetched successfully. */}
+              <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
+                  {!selectedConnected && selectedNeedsKey ? (
                   <div className="p-3 flex flex-col gap-3">
                     <p className="text-[11px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
                       Connect a <span className="font-semibold" style={{ color: 'var(--gia-text)' }}>{providerRegistry.getLabel(selected)}</span> API key to use its models.
@@ -306,6 +313,7 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
                   </div>
                 </div>
               )}
+            </div>
             </div>
           </motion.div>
         </>
