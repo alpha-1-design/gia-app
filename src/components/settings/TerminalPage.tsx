@@ -20,7 +20,7 @@ interface TerminalLine {
 }
 
 const PRESET_COMMANDS = [
-  { label: 'System Info', cmd: 'uname -a && cat /etc/os-release 2>/dev/null || echo "Ubuntu/Debian Root Environment"' },
+  { label: 'System Info', cmd: 'uname -a && cat /etc/os-release 2>/dev/null || echo "Alpine Linux Root Environment"' },
   { label: 'Check Python & Node', cmd: 'python3 --version && node -v && npm -v' },
   { label: 'Check Package Managers', cmd: 'which apt dpkg apk pip npm git 2>/dev/null' },
   { label: 'Memory & Storage', cmd: 'free -h 2>/dev/null || free -m; echo "---"; df -h .' },
@@ -46,13 +46,13 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     {
       id: 'init-2',
       type: 'success',
-      text: '   root@gia-ubuntu-terminal:~# Fresh Debian/Ubuntu Root Shell Loaded',
+      text: '   root@gia-alpine-terminal:~# Fresh Alpine Linux Root Shell Loaded',
       timestamp: new Date().toLocaleTimeString(),
     },
     {
       id: 'init-3',
       type: 'info',
-      text: '   Pre-installed stack: Python 3, Node.js, npm, Git, GCC/G++, Curl, Bash',
+      text: '   Base: Alpine Linux (bash, curl, wget). Tap Set Up Environment for Python/Node/Git/GCC.',
       timestamp: new Date().toLocaleTimeString(),
     },
     {
@@ -293,14 +293,14 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // Provision environment action
   const handleProvision = async () => {
     setProvisioning(true);
-    setProvisionLog('Starting Debian/Ubuntu root package installation...\n');
+    setProvisionLog('Starting Alpine root package installation...\n');
     try {
       const res = await SandboxEnvService.provision((msg) => {
         setProvisionLog((prev) => prev + `• ${msg}\n`);
       });
       setProvisionLog((prev) => prev + `\n${res.output}\nFinished.`);
       await refreshStatus();
-      addNotification(res.success ? 'Debian/Ubuntu environment provisioned successfully!' : 'Environment setup completed with notices.');
+      addNotification(res.success ? 'Alpine build environment provisioned successfully!' : 'Environment setup completed with notices.');
     } catch (e) {
       setProvisionLog((prev) => prev + `\n[Error]: ${e instanceof Error ? e.message : String(e)}`);
       addNotification('Environment setup encountered an error');
@@ -335,7 +335,7 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold" style={{ color: 'var(--gia-text)' }}>
-                  {isNative ? 'Ubuntu / Debian Root Environment' : 'Linux Container Root Shell'}
+                  {isNative ? 'Alpine Linux Root Environment' : 'Linux Container Root Shell'}
                 </h2>
                 <span
                   className="px-2 py-0.5 rounded-full text-[10px] font-bold"

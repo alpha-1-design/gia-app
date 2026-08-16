@@ -18,8 +18,10 @@ OUT_DIR="$ROOT_DIR/prebuilt-rootfs"
 ASSET_DIR="$(pwd)/android/app/src/main/assets/terminal"
 mkdir -p "$OUT_DIR" "$ASSET_DIR"
 
-# Build Ubuntu rootfs too? Default OFF: keeps the APK small (~190MB vs ~505MB).
-# Set BUILD_UBUNTU=1 to re-enable. Alpine is always built.
+# Build Ubuntu rootfs too? Default OFF: Ubuntu is not shipped at all — the
+# in-app package manager (Settings > Set Up Environment) installs whatever a
+# session needs on top of the bare Alpine base, so there is no reason to ship
+# a second preinstalled distro. Set BUILD_UBUNTU=1 only for local experiments.
 BUILD_UBUNTU="${BUILD_UBUNTU:-0}"
 
 PLATFORM_ARG=""
@@ -33,8 +35,19 @@ fi
 # Packages to preinstall (adjust as needed).
 # NOTE: Alpine's apk repos do NOT ship a `proot` package — proot is bundled
 # separately as assets/terminal/proot (or libproot.so on Android).
-ALPINE_PKGS="bash curl wget python3 nodejs npm build-base git openssh sudo vim sqlite ca-certificates jq zip unzip rsync openssl"
-UBUNTU_PKGS="bash curl wget python3 python3-pip nodejs npm build-essential git proot openssh-client sudo vim ca-certificates jq zip unzip rsync openssl"
+#
+# INTENTIONALLY BARE: this used to preinstall nodejs/npm/build-base/gcc/git/
+# python3/py3-pip/openssh/vim/sqlite/jq/zip/unzip/rsync/openssl directly into
+# the bundled rootfs, which is what pushed the APK to ~190MB. Every one of
+# those packages is already installable on-device, over the network, in a few
+# seconds via Settings > Alpine Sandbox > "Set Up Environment" (see
+# SandboxEnvService.provision / BUILD_PACKAGES). Baking them into the APK
+# duplicated that flow for no benefit and made every install pay the cost
+# whether or not the user ever opens a terminal. Ship only the minimal base
+# needed for the shell + downloader to work; everything else installs on
+# demand, same as the reference app's "tap to install" package flow.
+ALPINE_PKGS="bash curl wget ca-certificates"
+UBUNTU_PKGS="bash curl wget proot ca-certificates"
 
 # Helper to build and export container filesystem as a gzipped rootfs tarball
 build_and_export() {
@@ -67,7 +80,7 @@ build_and_export() {
   fi
 
   echo ">>> Exporting filesystem for $name"
-  docker export "$cid" | gzip -1 > "$OUT_DIR/${name}-rootfs.tar.gz"
+  docker export "$cid" | gzip -9 > "$OUT_DIR/${name}-rootfs.tar.gz"
 
   # Verify the gzip is valid
   if gzip -t "$OUT_DIR/${name}-rootfs.tar.gz" 2>/dev/null; then

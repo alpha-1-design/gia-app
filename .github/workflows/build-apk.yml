@@ -37,7 +37,10 @@ jobs:
           USE_ARM64=1 bash scripts/create-rootfs-ci.sh
         env:
           DOCKER_BUILDKIT: 1
-          # Alpine-only by default → small APK (~190MB). Set to 1 for Ubuntu too.
+          # Bare Alpine base only, no preinstalled dev toolchain (see
+          # create-rootfs-ci.sh) — keeps this a few MB instead of ~190MB.
+          # Node/npm/git/gcc/python3 install on-device via Settings >
+          # "Set Up Environment" the first time a session needs them.
           BUILD_UBUNTU: 0
 
       - name: Verify terminal rootfs assets exist
