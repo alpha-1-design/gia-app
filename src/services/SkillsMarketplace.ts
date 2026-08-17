@@ -648,7 +648,25 @@ description: Use when asked to generate art—SVG, canvas, or p5.js generative p
 const EXTERNAL_REGISTRIES = [
   {
     name: 'SkillsMP',
-    url: 'https://skillsmp.com/api/v1/skills?limit=50&sort=trending',
+    // SkillsMP's real API (verified against https://skillsmp.com/docs/api) only
+    // exposes GET /api/v1/skills/search, and `q` is a required parameter with
+    // no wildcard support -- there is no bare "browse everything" endpoint.
+    // The previous URL here (`/api/v1/skills?limit=50&sort=trending`) doesn't
+    // exist on their API at all: wrong path, and `sort=trending` isn't a real
+    // param (only `sortBy=stars|recent`). It was silently failing on every
+    // load and swallowed by the catch below, so this registry contributed
+    // zero results forever with no visible error.
+    // Fixed by querying their real search endpoint with a handful of broad
+    // terms (sorted by stars) and merging + deduping the results client-side,
+    // which is the only way to approximate "browse popular skills" within
+    // what the documented API actually supports.
+    urls: [
+      'automation',
+      'coding',
+      'writing',
+      'research',
+      'productivity',
+    ].map(q => `https://skillsmp.com/api/v1/skills/search?q=${encodeURIComponent(q)}&sortBy=stars&limit=15`),
     source: 'skillsmp' as const,
     transform: async (data: unknown): Promise<RegistryEntry[]> => {
       const items = data as { skills?: Array<{ slug: string; name: string; description: string; author: string; version: string; category: string; tags: string[]; downloads: number; rating: number; content?: string }> };
@@ -843,17 +861,24 @@ class SkillsMarketplace {
     // 2. Fetch from external registries (parallel, best-effort)
     const externalResults = await Promise.allSettled(
       EXTERNAL_REGISTRIES.map(async (reg) => {
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 8000);
-          const res = await fetch(reg.url, { signal: controller.signal });
-          clearTimeout(timeout);
-          if (!res.ok) return [];
-          const data = await res.json();
-          return await reg.transform(data);
-        } catch {
-          return [];
+        // Registries may expose either a single `url` or multiple `urls`
+        // (SkillsMP needs several queries since its API has no bare browse
+        // endpoint). Fetch whichever set applies, dedupe by id.
+        const urls = 'urls' in reg && reg.urls ? reg.urls : [(reg as { url: string }).url];
+        const seen = new Map<string, RegistryEntry>();
+        for (const url of urls) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!res.ok) continue;
+            const data = await res.json();
+            const entries = await reg.transform(data);
+            for (const entry of entries) seen.set(entry.id, entry);
+          } catch { /* best-effort per URL; other queries in this registry may still succeed */ }
         }
+        return Array.from(seen.values());
       })
     );
 
