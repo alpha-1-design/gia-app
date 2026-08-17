@@ -6,7 +6,7 @@ import {
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
   Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench,
-  Maximize2, ChevronRight,
+  Maximize2, ChevronRight, Settings as SettingsIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -643,6 +643,17 @@ const ChatModule: React.FC = () => {
                   </span>
                   <span className="flex-1">All Tools</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>{giaTools.getAllTools().length}</span>
+                  <ChevronRight size={14} style={{ color: 'var(--gia-muted-2)' }} />
+                </button>
+                <button
+                  onClick={() => { setShowTools(false); useGiaStore.getState().setModule('settings'); }}
+                  className="w-full flex items-center gap-3 px-3 py-3 text-left text-[13px] tap-feedback transition-colors active:bg-white/5"
+                  style={{ color: 'var(--gia-text)' }}
+                >
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(148,163,184,0.15)', color: 'var(--gia-muted)' }}>
+                    <SettingsIcon size={15} />
+                  </span>
+                  <span className="flex-1">Settings</span>
                   <ChevronRight size={14} style={{ color: 'var(--gia-muted-2)' }} />
                 </button>
               </>
