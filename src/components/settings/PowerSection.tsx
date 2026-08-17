@@ -1,17 +1,19 @@
 import React from 'react';
-import { Battery, BatteryCharging, Cpu, Moon, Vibrate } from 'lucide-react';
+import { Battery, BatteryCharging, Cpu, Moon, Vibrate, Wind } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Switch } from '../ui/Switch';
 
 export const PowerSection: React.FC = () => {
-  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback } = useGiaStore(useShallow(s => ({
+  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback, reduceMotion, setReduceMotion } = useGiaStore(useShallow(s => ({
     longRunningMode: s.longRunningMode,
     setLongRunningMode: s.setLongRunningMode,
     autoModelUnload: s.autoModelUnload,
     setAutoModelUnload: s.setAutoModelUnload,
     hapticFeedback: s.hapticFeedback,
     setHapticFeedback: s.setHapticFeedback,
+    reduceMotion: s.reduceMotion,
+    setReduceMotion: s.setReduceMotion,
   })));
 
   return (
@@ -62,6 +64,17 @@ export const PowerSection: React.FC = () => {
           label="Haptic Feedback"
           description="Vibrate briefly when AI finishes responding."
           icon={<Vibrate size={13} />}
+          accentColor="#a855f7"
+        />
+      </div>
+
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>
+        <Switch
+          checked={reduceMotion}
+          onChange={setReduceMotion}
+          label="Reduce Motion"
+          description="Turns off transition and orbiting-particle animations app-wide. Chat responses still stream in normally, just without the extra motion."
+          icon={<Wind size={13} />}
           accentColor="#a855f7"
         />
       </div>

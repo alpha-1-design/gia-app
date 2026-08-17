@@ -1199,3 +1199,31 @@ body {
   pointer-events: none;
   animation: cosmic-ray var(--duration, 8s) ease-in-out var(--delay, 0s) infinite;
 }
+
+/* Reduce Motion — toggled from Settings (useGiaStore.reduceMotion).
+ * Same technique the OS-level prefers-reduced-motion media query uses:
+ * collapse every animation/transition to effectively instant rather than
+ * trying to hunt down and special-case each animated component (motion/
+ * framer-motion components, CSS keyframe loops like the ones above, tap
+ * feedback, etc). Also honor the OS setting directly so people who already
+ * have it on system-wide get it in GIA without visiting Settings first.
+ */
+.gia-reduce-motion *,
+.gia-reduce-motion *::before,
+.gia-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion-override='on']) *,
+  html:not([data-motion-override='on']) *::before,
+  html:not([data-motion-override='on']) *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

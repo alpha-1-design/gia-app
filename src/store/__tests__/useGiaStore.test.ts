@@ -106,6 +106,18 @@ describe('useGiaStore', () => {
       useGiaStore.getState().setIntentState('thinking');
       expect(useGiaStore.getState().intentState).toBe('thinking');
     });
+
+    it('setReduceMotion toggles state, persists to localStorage, and toggles the html class', () => {
+      useGiaStore.getState().setReduceMotion(true);
+      expect(useGiaStore.getState().reduceMotion).toBe(true);
+      expect(localStorage.getItem('gia-reduce-motion')).toBe('true');
+      expect(document.documentElement.classList.contains('gia-reduce-motion')).toBe(true);
+
+      useGiaStore.getState().setReduceMotion(false);
+      expect(useGiaStore.getState().reduceMotion).toBe(false);
+      expect(localStorage.getItem('gia-reduce-motion')).toBe('false');
+      expect(document.documentElement.classList.contains('gia-reduce-motion')).toBe(false);
+    });
   });
 
   describe('setClarification', () => {
