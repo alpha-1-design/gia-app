@@ -10,7 +10,7 @@ interface AppNavigationProps {
 }
 
 const AppNavigation: React.FC<AppNavigationProps> = () => {
-  const { currentModule, setModule, userProfile, connectionStatus, providerConnected, showProtocols, setShowProtocols, fullScreenMode, toggleFullScreenMode } = useGiaStore(useShallow(s => ({
+  const { currentModule, setModule, userProfile, connectionStatus, providerConnected, showProtocols, setShowProtocols, fullScreenMode, toggleFullScreenMode, hiddenModules } = useGiaStore(useShallow(s => ({
     currentModule: s.currentModule,
     setModule: s.setModule,
     userProfile: s.userProfile,
@@ -20,7 +20,9 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
     setShowProtocols: s.setShowProtocols,
     fullScreenMode: s.fullScreenMode,
     toggleFullScreenMode: s.toggleFullScreenMode,
+    hiddenModules: s.hiddenModules,
   })));
+  const visibleModules = MODULES.filter(m => !hiddenModules.includes(m.id));
   const [moduleOpen, setModuleOpen] = useState(false);
   const moduleRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +58,7 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
                 </button>
                 {moduleOpen && (
                   <motion.div initial={{ opacity: 0, y: -4, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.96 }} transition={{ duration: 0.12 }} className="absolute top-full left-0 mt-1 min-w-[160px] rounded-xl overflow-hidden shadow-2xl border z-[110]" style={{ background: 'rgba(20, 20, 28, 0.98)', borderColor: 'var(--gia-border)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}>
-                    {MODULES.map((mod) => {
+                    {visibleModules.map((mod) => {
                       const active = currentModule === mod.id;
                       return (
                         <button key={mod.id} onClick={() => { setModule(mod.id); setModuleOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-[12px] font-medium transition-all tap-feedback" style={{ color: active ? 'white' : 'var(--gia-muted)', background: active ? 'rgba(168,85,247,0.1)' : 'transparent' }}>

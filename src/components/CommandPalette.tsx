@@ -4,7 +4,7 @@ import {
   FolderOpen, Download, Upload, Eraser, Terminal, Settings,
   MessageCircle, PenLine, BarChart3, ClipboardList, Wifi, StickyNote
 } from 'lucide-react';
-import { useGiaStore } from '../store/useGiaStore';
+import { useGiaStore, type Module } from '../store/useGiaStore';
 
 interface Action {
   id: string;
@@ -26,8 +26,19 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const hiddenModules = useGiaStore((s) => s.hiddenModules);
 
   const iconStyle = { width: 15, height: 15 };
+
+  // Maps a command's id to the module it switches to, so hidden modules
+  // (Settings > Modules) drop out of the palette the same way they drop
+  // out of the nav dropdown -- otherwise hiding a module there would be
+  // pointless, since Cmd+K would still get you to it.
+  const MODULE_COMMAND_IDS: Partial<Record<string, Module>> = {
+    'module-writer': 'writer',
+    'module-analyst': 'analyst',
+    'module-planner': 'planner',
+  };
 
   const actions: Action[] = [
     { id: 'new-chat', label: 'New Chat', description: 'Start a fresh conversation', icon: <MessageSquare {...iconStyle} />, category: 'Chat', execute: () => { useGiaStore.getState().createSession(); onClose(); } },
@@ -62,12 +73,17 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
     { id: 'notes-panel', label: 'Open Notes', description: 'View and manage your notes', icon: <StickyNote {...iconStyle} />, category: 'Co-Work', execute: () => { void onNavigate?.('notes-panel'); onClose(); } },
   ];
 
+  const visibleActions = actions.filter(a => {
+    const mod = MODULE_COMMAND_IDS[a.id];
+    return !mod || !hiddenModules.includes(mod);
+  });
+
   const filtered = query.trim()
-    ? actions.filter(a => {
+    ? visibleActions.filter(a => {
         const q = query.toLowerCase();
         return a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.category.toLowerCase().includes(q) || a.id.toLowerCase().includes(q);
       })
-    : actions;
+    : visibleActions;
 
   useEffect(() => {
     if (isOpen) {

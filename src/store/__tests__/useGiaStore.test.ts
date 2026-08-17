@@ -120,6 +120,42 @@ describe('useGiaStore', () => {
     });
   });
 
+  describe('setModuleHidden', () => {
+    beforeEach(() => {
+      useGiaStore.setState({ hiddenModules: [], currentModule: 'chat' });
+    });
+
+    it('hides and unhides a regular module', () => {
+      useGiaStore.getState().setModuleHidden('writer', true);
+      expect(useGiaStore.getState().hiddenModules).toContain('writer');
+
+      useGiaStore.getState().setModuleHidden('writer', false);
+      expect(useGiaStore.getState().hiddenModules).not.toContain('writer');
+    });
+
+    it('refuses to hide settings', () => {
+      useGiaStore.getState().setModuleHidden('settings', true);
+      expect(useGiaStore.getState().hiddenModules).not.toContain('settings');
+    });
+
+    it('refuses to hide chat', () => {
+      useGiaStore.getState().setModuleHidden('chat', true);
+      expect(useGiaStore.getState().hiddenModules).not.toContain('chat');
+    });
+
+    it('bounces back to chat if the currently-open module gets hidden', () => {
+      useGiaStore.setState({ currentModule: 'writer' });
+      useGiaStore.getState().setModuleHidden('writer', true);
+      expect(useGiaStore.getState().currentModule).toBe('chat');
+    });
+
+    it('does not change currentModule when hiding a module that is not currently open', () => {
+      useGiaStore.setState({ currentModule: 'analyst' });
+      useGiaStore.getState().setModuleHidden('writer', true);
+      expect(useGiaStore.getState().currentModule).toBe('analyst');
+    });
+  });
+
   describe('setClarification', () => {
     it('sets and clears clarification', () => {
       const c = { question: 'Which?', options: ['A', 'B'], sessionId: 's1', assistantMsgId: 'a1' };

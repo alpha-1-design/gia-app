@@ -312,6 +312,8 @@ interface GiaState {
   theme: 'dark' | 'light' | 'system' | 'obsidian-aurora';
   reduceMotion: boolean;
   setReduceMotion: (v: boolean) => void;
+  hiddenModules: Module[];
+  setModuleHidden: (id: Module, hidden: boolean) => void;
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
@@ -542,6 +544,7 @@ export const useGiaStore = create<GiaState>()(
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
       theme: 'dark',
       reduceMotion: (() => { try { return localStorage.getItem('gia-reduce-motion') === 'true'; } catch { return false; } })(),
+      hiddenModules: [],
       connectionStatus: navigator.onLine ? 'online' : 'offline',
       providerConnected: false,
       currentTool: null,
@@ -1003,6 +1006,25 @@ export const useGiaStore = create<GiaState>()(
         }
         set({ reduceMotion: v });
       },
+      setModuleHidden: (id, hidden) => {
+        // Settings and Chat are never hideable: Settings is the only way
+        // back to this toggle, and Chat is the app's primary surface and
+        // default landing module -- hiding either would let someone lock
+        // themselves out of the app with no way back in through the UI.
+        if (id === 'settings' || id === 'chat') return;
+        set((s) => {
+          const next = new Set(s.hiddenModules);
+          if (hidden) next.add(id); else next.delete(id);
+          const hiddenModules = Array.from(next);
+          // If the module being hidden is the one currently open, bounce
+          // back to Chat rather than leaving the user stranded on a module
+          // whose entry in the nav dropdown just disappeared.
+          if (hidden && s.currentModule === id) {
+            return { hiddenModules, currentModule: 'chat' as Module };
+          }
+          return { hiddenModules };
+        });
+      },
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setProviderConnected: (connected) => set({ providerConnected: connected }),
       toggleFullScreenMode: () => set((s) => ({ fullScreenMode: !s.fullScreenMode })),
@@ -1072,6 +1094,7 @@ export const useGiaStore = create<GiaState>()(
         customInstructions: s.customInstructions,
         theme: s.theme,
         reduceMotion: s.reduceMotion,
+        hiddenModules: s.hiddenModules,
         wakeWord: s.wakeWord,
         keepListening: s.keepListening,
         autoStartWakeWord: s.autoStartWakeWord,
