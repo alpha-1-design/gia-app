@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   X, Cpu, Brain, CheckCircle, AlertCircle, AlertTriangle,
   ChevronDown, ChevronRight, Clock,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import GiaIcon from '../GiaIcon';
+import BottomSheet from '../ui/BottomSheet';
 
 type LogType = 'thought' | 'tool' | 'result' | 'error';
 
@@ -143,42 +144,20 @@ export const EngineSheet: React.FC<EngineSheetProps> = ({ open, onClose }) => {
   const hasContent = consoleLogs.length > 0;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end"
-          onClick={onClose}
-          role="dialog"
-          aria-modal="true"
-        >
-          <motion.div
-            className="w-full"
-            onClick={(e) => e.stopPropagation()}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          >
-            <div
-              className="relative rounded-t-2xl overflow-hidden"
-              style={{
-                background: 'var(--gia-surface-2)',
-                border: '1px solid var(--gia-border)',
-                borderBottom: 'none',
-                boxShadow: '0 -4px 24px rgba(0,0,0,0.3)',
-                maxHeight: '75vh',
-              }}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--gia-border)' }}>
-                <div className="flex items-center gap-2.5">
-                  <GiaIcon size={18} animate color="#a855f7" speed={1.2} />
-                  <div>
+    <BottomSheet open={open} onClose={onClose} maxHeight="75vh" zIndex={50}>
+      <div
+        className="relative overflow-hidden"
+        style={{
+          background: 'var(--gia-surface-2)',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--gia-border)' }}>
+          <div className="flex items-center gap-2.5">
+            <GiaIcon size={18} animate color="#a855f7" speed={1.2} />
+            <div>
                     <span className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>
-                      Engine Room
+                      Agent Activity
                     </span>
                     {hasContent && (
                       <span className="text-[10px] ml-2 px-1.5 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>
@@ -310,10 +289,7 @@ export const EngineSheet: React.FC<EngineSheetProps> = ({ open, onClose }) => {
                 )}
               </div>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </BottomSheet>
   );
 };
 

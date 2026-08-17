@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw } from 'lucide-react';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../../services/ProviderRegistry';
 import { useShallow } from 'zustand/react/shallow';
 import ProviderIcon from '../ProviderIcon';
+import BottomSheet from '../ui/BottomSheet';
 
 interface ModelSwitcherSheetProps {
   open: boolean;
@@ -110,26 +110,9 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            className="fixed inset-x-0 bottom-0 z-[121] rounded-t-3xl overflow-hidden flex flex-col"
-            style={{ background: 'var(--gia-surface)', borderTop: '1px solid var(--gia-border)', maxHeight: '78vh' }}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-          >
-            {/* Grabber + header */}
-            <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
+    <BottomSheet open={open} onClose={onClose} maxHeight="78vh" zIndex={120}>
+      {/* Grabber + header */}
+      <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.15)' }}>
                   <Cpu size={16} style={{ color: '#a855f7' }} />
@@ -145,9 +128,9 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
                     onClick={() => { onClose(); onOpenEngine(); }}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all"
                     style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
-                    title="Advanced connection settings"
+                    title="View live agent thinking, tool calls, and results"
                   >
-                    <Settings2 size={12} /> Engine
+                    <Settings2 size={12} /> Activity
                   </button>
                 )}
                 <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
@@ -315,10 +298,7 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
               )}
             </div>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    </BottomSheet>
   );
 };
 
