@@ -144,9 +144,36 @@ export class MCPClient {
 
     const { SSEClientTransport } = await import(
       '@modelcontextprotocol/sdk/client/sse'
-    ) as unknown as { SSEClientTransport: new (url: URL) => unknown };
+    ) as unknown as {
+      SSEClientTransport: new (
+        url: URL,
+        opts?: { eventSourceInit?: { fetch?: typeof fetch }; requestInit?: RequestInit }
+      ) => unknown;
+    };
 
-    return new SSEClientTransport(new URL(url));
+    // BUG FIX: this used to be `new SSEClientTransport(new URL(url))` with no
+    // second argument at all, so a server's accessToken -- fetched and
+    // stored by the OAuth flow in MCPManager -- was never actually attached
+    // to the connection. OAuth "succeeded" (token stored) but every server
+    // that requires auth (GitHub's remote MCP, most OAuth-gated servers)
+    // would then fail to authenticate on the real connection, silently.
+    // Fixed by threading the Authorization header through both the SSE
+    // stream request (via a custom fetch, since eventSourceInit doesn't
+    // support headers on all platforms) and the recurring POST requests.
+    if (!this._config.accessToken) {
+      return new SSEClientTransport(new URL(url));
+    }
+
+    const authFetch: typeof fetch = (input, init) => {
+      const headers = new Headers(init?.headers);
+      headers.set('Authorization', `Bearer ${this._config.accessToken}`);
+      return fetch(input, { ...init, headers });
+    };
+
+    return new SSEClientTransport(new URL(url), {
+      eventSourceInit: { fetch: authFetch },
+      requestInit: { headers: { Authorization: `Bearer ${this._config.accessToken}` } },
+    });
   }
 
   private async _createStdioTransport(): Promise<unknown> {

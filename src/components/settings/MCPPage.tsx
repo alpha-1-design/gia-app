@@ -19,6 +19,7 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [newOAuthClientId, setNewOAuthClientId] = useState('');
   const [newOAuthRedirectUri, setNewOAuthRedirectUri] = useState('gia://mcp-oauth-callback');
   const [newOAuthScopes, setNewOAuthScopes] = useState('openid profile email');
+  const [newApiKey, setNewApiKey] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,19 +38,34 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     await MCPManager.disconnect(id);
   };
 
-  const addQuickServer = (preset: { name: string; transport: 'stdio' | 'sse'; command: string; args: string[]; env?: string; desc: string }) => {
+  const addQuickServer = (preset: { name: string; transport: 'stdio' | 'sse'; command?: string; args?: string[]; url?: string; env?: string; desc: string; needsToken?: boolean }) => {
     const name = `MCP ${preset.name}`;
-    const transport = preset.transport;
-    const command = preset.command;
-    const args = preset.args;
-    const url = '';
-    const oauthUrl = '';
-    const oauthClientId = '';
-    const oauthRedirectUri = '';
-    const oauthScopes = '';
-    const enabled = false;
-    const autoConnect = false;
-    addServer({ name, transport, url, command, args, oauthUrl, oauthClientId, oauthRedirectUri, oauthScopes, enabled, autoConnect });
+    if (preset.needsToken) {
+      // This server requires a token before it can connect (e.g. a GitHub
+      // PAT). There's no "paste a token onto an already-added server" UI
+      // yet, so rather than add a server that will just fail to connect,
+      // pre-fill the manual form and let the user finish it in one step.
+      setNewName(name);
+      setNewTransport(preset.transport);
+      setNewUrl(preset.url || '');
+      setNewCommand(preset.command || '');
+      setNewArgs((preset.args || []).join(' '));
+      setShowAdd(true);
+      return;
+    }
+    addServer({
+      name,
+      transport: preset.transport,
+      url: preset.url || '',
+      command: preset.command || '',
+      args: preset.args || [],
+      oauthUrl: '',
+      oauthClientId: '',
+      oauthRedirectUri: '',
+      oauthScopes: '',
+      enabled: false,
+      autoConnect: false,
+    });
   };
 
   const handleAdd = () => {
@@ -68,6 +84,11 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       oauthClientId: newOAuthClientId.trim() || undefined,
       oauthRedirectUri: newOAuthRedirectUri.trim() || undefined,
       oauthScopes: newOAuthScopes.trim() || undefined,
+      // Static bearer token, for servers like GitHub's hosted remote MCP that
+      // accept a plain PAT and don't require registering a full OAuth app.
+      // MCPClient attaches this as `Authorization: Bearer <token>` on every
+      // SSE/POST request (see MCPClient._createSSETransport).
+      accessToken: newApiKey.trim() || undefined,
     });
     setNewName('');
     setNewUrl('');
@@ -77,6 +98,7 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setNewOAuthClientId('');
     setNewOAuthRedirectUri('gia://mcp-oauth-callback');
     setNewOAuthScopes('openid profile email');
+    setNewApiKey('');
     setShowAdd(false);
   };
 
@@ -89,18 +111,24 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <div className="px-3 py-3 rounded-xl text-xs leading-relaxed" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)', color: 'var(--gia-muted)' }}>
         <p className="font-semibold mb-2" style={{ color: '#a855f7' }}>About MCP Servers</p>
         <p className="mb-2">MCP (Model Context Protocol) servers extend GIA's capabilities by connecting to external tools, data sources, and services. Each server supports SSE (HTTP) or stdio (local process) transports.</p>
-        <p className="mb-2">Open-source MCP servers to try: <strong style={{ color: '#a855f7' }}>Filesystem</strong> (local file access), <strong style={{ color: '#a855f7' }}>GitHub</strong> (repos + issues), <strong style={{ color: '#a855f7' }}>Slack</strong> (messaging), <strong style={{ color: '#a855f7' }}>PostgreSQL</strong> (databases), <strong style={{ color: '#a855f7' }}>Fetch</strong> (web fetching).</p>
+        <p className="mb-2">Open-source MCP servers to try: <strong style={{ color: '#a855f7' }}>Filesystem</strong> (local file access), <strong style={{ color: '#a855f7' }}>GitHub</strong> (repos + issues, hosted by GitHub — needs a personal access token), <strong style={{ color: '#a855f7' }}>Memory</strong> (knowledge graph memory).</p>
         <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>OAuth-enabled servers support authentication flows. Click "Auth" on any OAuth-configured server to connect via your browser.</p>
       </div>
 
-      {/* Popular Open-Source MCP Servers - Quick Add */}
+      {/* Popular Open-Source MCP Servers - Quick Add.
+          Verified against npm/registry.npmjs.org before shipping this list
+          (2026-08-17): @modelcontextprotocol/server-github, -slack, and
+          -postgres are all officially deprecated ("Package no longer
+          supported"), and @modelcontextprotocol/server-fetch doesn't exist
+          as an npm package at all -- tapping any of those four used to
+          silently fail. GitHub now points at their actual current setup
+          (a hosted remote endpoint + bearer token), and the three
+          unmaintained/nonexistent ones were dropped rather than guessed at
+          with unverified replacements. */}
       <div className="flex flex-wrap gap-2 mb-4">
         {[
           { name: 'Filesystem', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/home/user/gia'], desc: 'Local file access' },
-          { name: 'GitHub', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], env: 'GITHUB_PERSONAL_ACCESS_TOKEN', desc: 'GitHub repos & issues' },
-          { name: 'Fetch', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-fetch'], desc: 'Web fetching' },
-          { name: 'PostgreSQL', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'], env: 'POSTGRES_CONNECTION_STRING', desc: 'PostgreSQL databases' },
-          { name: 'Slack', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-slack'], env: 'SLACK_BOT_TOKEN', desc: 'Slack messaging' },
+          { name: 'GitHub', transport: 'sse' as const, url: 'https://api.githubcopilot.com/mcp/', desc: 'GitHub repos & issues (hosted, needs a PAT)', needsToken: true },
           { name: 'Memory', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'], desc: 'Knowledge graph memory' },
         ].map((preset, i) => (
           <button key={i} onClick={() => addQuickServer(preset)}
@@ -233,6 +261,14 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </div>
               </>
             )}
+
+            <div className="border-t pt-3" style={{ borderColor: 'var(--gia-border)' }}>
+              <label className="flex items-center gap-2 text-xs font-semibold mb-2" style={{ color: '#22c55e' }}>
+                <Lock size={12} /> API Key / Bearer Token (optional)
+              </label>
+              <input value={newApiKey} onChange={e => setNewApiKey(e.target.value)} placeholder="Paste a PAT or API key, e.g. ghp_..." type="password" className="w-full rounded-lg px-3 py-1.5 text-xs" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)', outline: 'none' }} />
+              <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted)' }}>Sent as an Authorization: Bearer header. Use this for servers (like GitHub's hosted MCP) that accept a plain token instead of a full OAuth flow.</p>
+            </div>
 
             <div className="border-t pt-3" style={{ borderColor: 'var(--gia-border)' }}>
               <label className="flex items-center gap-2 text-xs font-semibold mb-2" style={{ color: '#3b82f6' }}>
