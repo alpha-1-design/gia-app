@@ -12,10 +12,11 @@ import { MODULES } from '../config/appModules';
 // entries can be added here later without it turning into another
 // "everything crammed into one screen" situation.
 const ProfileDrawer: React.FC = () => {
-  const { showLeftDrawer, setShowLeftDrawer, userProfile, setModule, hiddenModules } = useGiaStore(useShallow((s) => ({
+  const { showLeftDrawer, setShowLeftDrawer, userProfile, currentModule, setModule, hiddenModules } = useGiaStore(useShallow((s) => ({
     showLeftDrawer: s.showLeftDrawer,
     setShowLeftDrawer: s.setShowLeftDrawer,
     userProfile: s.userProfile,
+    currentModule: s.currentModule,
     setModule: s.setModule,
     hiddenModules: s.hiddenModules,
   })));
@@ -30,7 +31,11 @@ const ProfileDrawer: React.FC = () => {
     void page;
   };
 
-  const visibleModules = MODULES.filter((m) => m.id !== 'chat' && m.id !== 'settings' && !hiddenModules.includes(m.id));
+  // 'chat' is deliberately included and always listed (never hideable, see
+  // setModuleHidden) -- this drawer is now the *only* place to switch
+  // modules since the top-bar dropdown was removed, so leaving Chat out
+  // would strand anyone who navigated away from it with no way back.
+  const visibleModules = MODULES.filter((m) => m.id !== 'settings' && !hiddenModules.includes(m.id));
 
   return (
     <LeftDrawer open={showLeftDrawer} onClose={() => setShowLeftDrawer(false)}>
@@ -69,20 +74,27 @@ const ProfileDrawer: React.FC = () => {
         <ChevronRight size={16} style={{ color: 'var(--gia-muted-2)' }} />
       </button>
 
-      {/* Module shortcuts -- respects the same hidden-modules list as the
-          top nav dropdown and command palette. */}
+      {/* Module switcher -- the only place to switch modules now that the
+          top-bar dropdown is gone (freeing that space for chat). Respects
+          the same hidden-modules list as the command palette. */}
       {visibleModules.length > 0 && (
         <div className="mt-2 pt-2 overflow-y-auto" style={{ borderTop: '1px solid var(--gia-border)' }}>
-          {visibleModules.map((mod) => (
-            <button
-              key={mod.id}
-              onClick={() => { setShowLeftDrawer(false); setModule(mod.id); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-left tap-feedback transition-colors active:bg-white/5"
-            >
-              <span style={{ color: mod.color }}>{mod.icon}</span>
-              <span className="flex-1 text-[13px] font-medium" style={{ color: 'var(--gia-text)' }}>{mod.label}</span>
-            </button>
-          ))}
+          <p className="text-[9px] font-semibold uppercase tracking-wider px-4 pb-1" style={{ color: 'var(--gia-muted)' }}>Modules</p>
+          {visibleModules.map((mod) => {
+            const active = currentModule === mod.id;
+            return (
+              <button
+                key={mod.id}
+                onClick={() => { setShowLeftDrawer(false); setModule(mod.id); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left tap-feedback transition-colors active:bg-white/5"
+                style={{ background: active ? 'rgba(168,85,247,0.1)' : 'transparent' }}
+              >
+                <span style={{ color: mod.color }}>{mod.icon}</span>
+                <span className="flex-1 text-[13px] font-medium" style={{ color: active ? 'var(--gia-text)' : 'var(--gia-muted)' }}>{mod.label}</span>
+                {active && <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a855f7' }} />}
+              </button>
+            );
+          })}
         </div>
       )}
     </LeftDrawer>

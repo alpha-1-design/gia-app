@@ -20,7 +20,7 @@
       "@/*": ["./src/*"]
     },
     "downlevelIteration": true,
-    "types": []
+    "types": ["@testing-library/jest-dom"]
   },
   "include": ["src"],
   "exclude": ["src/test"]
