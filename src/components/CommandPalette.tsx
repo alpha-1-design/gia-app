@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  MessageSquare, Search, Globe, Brain, Hand, Eye,
+  MessageSquare, Search, Globe, Brain, Hand,
   FolderOpen, Download, Upload, Eraser, Terminal, Settings,
   MessageCircle, PenLine, BarChart3, ClipboardList, Wifi, StickyNote
 } from 'lucide-react';
@@ -50,7 +50,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
     { id: 'toggle-websearch', label: 'Toggle Web Search', description: 'Enable or disable web search capability', icon: <Globe {...iconStyle} />, category: 'Tools', execute: () => { const s = useGiaStore.getState(); s.setWebSearch(!s.webSearch); s.addNotification(`Web search ${s.webSearch ? 'disabled' : 'enabled'}`); onClose(); } },
     { id: 'toggle-thinking', label: 'Toggle Extended Thinking', description: 'Show GIA\'s internal reasoning process', icon: <Brain {...iconStyle} />, category: 'Tools', execute: () => { const s = useGiaStore.getState(); s.setExtThinking(!s.extThinking); s.addNotification(`Extended thinking ${s.extThinking ? 'disabled' : 'enabled'}`); onClose(); } },
     { id: 'toggle-hands-off', label: 'Toggle Hands-Off Mode', description: 'Let GIA execute tools without asking', icon: <Hand {...iconStyle} />, category: 'Tools', execute: () => { const s = useGiaStore.getState(); s.setHandsOff(!s.handsOff); s.addNotification(`Hands-off ${s.handsOff ? 'disabled' : 'enabled'}`); onClose(); } },
-    { id: 'toggle-tools', label: 'Toggle Tools Panel', description: 'Show or hide the tools observation panel', icon: <Eye {...iconStyle} />, category: 'Tools', execute: () => { useGiaStore.getState().setShowProtocols(!useGiaStore.getState().showProtocols); onClose(); } },
     { id: 'terminal', label: 'Open Engine Room', description: 'Access the provider management terminal', icon: <Terminal {...iconStyle} />, category: 'System', execute: () => { useGiaStore.getState().setShowTerminal(true); onClose(); } },
     { id: 'pick-folder', label: 'Pick Project Folder', description: 'Select a local folder for file access', icon: <FolderOpen {...iconStyle} />, category: 'Files', execute: () => { import('../services/DesktopFS').then(m => m.default.pickDirectory().then(r => { if (r) useGiaStore.getState().addNotification(`Project folder: ${r.name}`); })); onClose(); } },
     { id: 'export-brain', label: 'Export Brain', description: 'Download GIA memories as JSON', icon: <Download {...iconStyle} />, category: 'Files', execute: () => { import('../services/BrainExport').then(m => { m.exportBrainToFile(); useGiaStore.getState().addNotification('Brain exported'); }).catch(() => useGiaStore.getState().addNotification('Export failed')); onClose(); } },

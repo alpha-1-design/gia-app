@@ -15,8 +15,10 @@ import { ChatSkeleton } from './feedback';
 import { resolveAgentColor, resolveAgentIcon } from '../utils/agentIcons';
 import ToolTray from './ToolTray';
 import InlineToolCalls from './InlineToolCalls';
+import ProtocolApprovalCard from './ProtocolCard';
 import { useProtocolStore } from '../store/useProtocolStore';
-import type { Message, ThinkingPhase } from '../store/useGiaStore';
+import InlineClarificationForm from './chat/InlineClarificationForm';
+import type { Message, ThinkingPhase, Clarification } from '../store/useGiaStore';
 
 const AgentBadge: React.FC<{ agentName?: string; agentIcon?: string; agentTask?: string }> = ({ agentName, agentIcon, agentTask }) => {
   const color = resolveAgentColor(agentIcon || 'Bot');
@@ -53,6 +55,8 @@ interface MessageListProps {
   onRetry: (id: string) => Promise<void>;
   onEditResend: (msgId: string) => void;
   onRewrite: (id: string, instruction: string) => void;
+  clarification?: Clarification | null;
+  onClarificationFormAnswer?: (answer: string) => void;
 }
 
 const formatTimeAgo = (ts: number) => {
@@ -133,6 +137,7 @@ const MessageList: React.FC<MessageListProps> = ({
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
   onFork, onRetry, onEditResend, onRewrite,
   onSuggestionClick,
+  clarification, onClarificationFormAnswer,
 }) => {
   const extThinking = useGiaStore(s => s.extThinking);
   const showTokenUsage = useShowTokenUsage();
@@ -341,6 +346,27 @@ const MessageList: React.FC<MessageListProps> = ({
                     )}
                     {msg.artifacts && msg.artifacts.length > 0 && (
                       <ArtifactsPanel artifacts={msg.artifacts} />
+                    )}
+                    {msg.role === 'assistant' && clarification?.fields && clarification.fields.length > 0 && clarification.assistantMsgId === msg.id && (
+                      <InlineClarificationForm
+                        question={clarification.question}
+                        fields={clarification.fields}
+                        loading={loading}
+                        onSubmit={(answer) => onClarificationFormAnswer?.(answer)}
+                      />
+                    )}
+                    {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id && p.state === 'proposed').length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[9px] font-semibold uppercase tracking-wider px-1 mb-1" style={{ color: 'var(--gia-muted)' }}>
+                          Waiting for your approval
+                        </p>
+                        {consoleProtocols
+                          .filter(p => p.messageId === msg.id && p.state === 'proposed')
+                          .sort((a, b) => a.createdAt - b.createdAt)
+                          .map(p => (
+                            <ProtocolApprovalCard key={p.id} protocol={p} />
+                          ))}
+                      </div>
                     )}
                     {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id).length > 0 && (
                       <>

@@ -10,17 +10,16 @@ interface AppNavigationProps {
 }
 
 const AppNavigation: React.FC<AppNavigationProps> = () => {
-  const { currentModule, setModule, userProfile, connectionStatus, providerConnected, showProtocols, setShowProtocols, fullScreenMode, toggleFullScreenMode, hiddenModules } = useGiaStore(useShallow(s => ({
+  const { currentModule, setModule, userProfile, connectionStatus, providerConnected, fullScreenMode, toggleFullScreenMode, hiddenModules, setShowLeftDrawer } = useGiaStore(useShallow(s => ({
     currentModule: s.currentModule,
     setModule: s.setModule,
     userProfile: s.userProfile,
     connectionStatus: s.connectionStatus,
     providerConnected: s.providerConnected,
-    showProtocols: s.showProtocols,
-    setShowProtocols: s.setShowProtocols,
     fullScreenMode: s.fullScreenMode,
     toggleFullScreenMode: s.toggleFullScreenMode,
     hiddenModules: s.hiddenModules,
+    setShowLeftDrawer: s.setShowLeftDrawer,
   })));
   const visibleModules = MODULES.filter(m => !hiddenModules.includes(m.id));
   const [moduleOpen, setModuleOpen] = useState(false);
@@ -77,11 +76,14 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: statusColor, boxShadow: statusGlow }} title={statusTitle} />
-        <button onClick={() => setShowProtocols(!showProtocols)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all text-[10px] font-bold" style={{ background: showProtocols ? 'rgba(168,85,247,0.15)' : 'var(--gia-surface-2)', border: `1px solid ${showProtocols ? 'rgba(168,85,247,0.3)' : 'var(--gia-border)'}`, color: showProtocols ? '#a855f7' : 'var(--gia-muted)' }} title="Protocols">⚡</button>
+        {/* Lightning-bolt Protocols panel removed: tool-call approvals now
+            render inline under GIA's own message (see MessageList.tsx /
+            ProtocolCard's confirm+reject buttons), not behind a toggle the
+            user had to remember to open. */}
         <button onClick={toggleFullScreenMode} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: fullScreenMode ? 'rgba(168,85,247,0.15)' : 'var(--gia-surface-2)', border: `1px solid ${fullScreenMode ? 'rgba(168,85,247,0.3)' : 'var(--gia-border)'}`, color: fullScreenMode ? '#a855f7' : 'var(--gia-muted)' }} title={fullScreenMode ? 'Exit full screen' : 'Enter full screen'}>
           <Maximize2 size={14} />
         </button>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold" style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)', boxShadow: '0 0 12px rgba(168,85,247,0.4)' }}>{userProfile.name ? userProfile.name[0].toUpperCase() : 'G'}</div>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 tap-feedback" onClick={() => setShowLeftDrawer(true)} style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)', boxShadow: '0 0 12px rgba(168,85,247,0.4)', cursor: 'pointer' }} title="Profile & Settings">{userProfile.name ? userProfile.name[0].toUpperCase() : 'G'}</div>
       </div>
     </header>
   );

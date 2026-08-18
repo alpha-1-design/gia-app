@@ -25,14 +25,15 @@ import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
 import { useAutomationBridge } from './hooks/useAutomationBridge';
 import type { UpdateInfo } from './services/UpdateService';
+import { beginEdgeSwipe, shouldOpenFromEdgeSwipe, type EdgeSwipeState } from './utils/edgeSwipe';
 import './styles/globals.css';
 
 const EngineRoom = lazy(() => import('./components/EngineRoom'));
 const GiaConsole = lazy(() => import('./components/GiaConsole'));
-const ProtocolPanel = lazy(() => import('./components/ProtocolPanel'));
 const TaskBoard = lazy(() => import('./components/TaskBoard').then(m => ({ default: m.TaskBoard })));
 const NotesPanel = lazy(() => import('./components/NotesPanel').then(m => ({ default: m.NotesPanel })));
 const RegionSelectorOverlay = lazy(() => import('./components/RegionSelectorOverlay').then(m => ({ default: m.RegionSelectorOverlay })));
+const ProfileDrawer = lazy(() => import('./components/ProfileDrawer'));
 const SetupWizard = lazy(() => import('./components/SetupWizard'));
 
 // Surface persistence failures (e.g. storage quota exceeded) to the user
@@ -123,19 +124,44 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, showProtocols, setShowProtocols, theme, reduceMotion, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
+  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, theme, reduceMotion, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
       setModule: s.setModule,
       showTerminal: s.showTerminal, setShowTerminal: s.setShowTerminal,
       notifications: s.notifications, clearNotification: s.clearNotification,
       showConsole: s.showConsole, consoleLogs: s.consoleLogs, setShowConsole: s.setShowConsole,
-      showProtocols: s.showProtocols, setShowProtocols: s.setShowProtocols,
       theme: s.theme,
       reduceMotion: s.reduceMotion,
       addNotification: s.addNotification,
       autoStartWakeWord: s.autoStartWakeWord,
       fullScreenMode: s.fullScreenMode,
     })));
+  const setShowLeftDrawer = useGiaStore((s) => s.setShowLeftDrawer);
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
+  const edgeSwipeRef = useRef<EdgeSwipeState | null>(null);
+
+  // Left-edge swipe-to-open, mirroring the gesture in most AI apps' side
+  // menu. Detection logic lives in utils/edgeSwipe.ts so it's unit
+  // testable without needing jsdom to simulate real touch gestures.
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    edgeSwipeRef.current = beginEdgeSwipe(t.clientX, t.clientY);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const state = edgeSwipeRef.current;
+    if (!state) return;
+    const t = e.touches[0];
+    if (!t) return;
+    if (shouldOpenFromEdgeSwipe(state, t.clientX, t.clientY)) {
+      setShowLeftDrawer(true);
+      edgeSwipeRef.current = null;
+    }
+  }, [setShowLeftDrawer]);
+
+  const handleTouchEnd = useCallback(() => {
+    edgeSwipeRef.current = null;
+  }, []);
 
   // Hardware Back button (Android): close top overlay → back through module
   // history → "press again to exit" at root. A ref keeps the native listener
@@ -147,7 +173,7 @@ const App: React.FC = () => {
     const st = useGiaStore.getState();
     if (st.showModelSwitcher) { st.setShowModelSwitcher(false); return; }
     if (st.showEngine) { st.setShowEngine(false); return; }
-    if (st.showProtocols) { st.setShowProtocols(false); return; }
+    if (st.showLeftDrawer) { st.setShowLeftDrawer(false); return; }
     if (showTerminal) { setShowTerminal(false); return; }
     if (st.currentModule !== 'chat') { st.goBack(); return; }
     const now = Date.now();
@@ -697,7 +723,14 @@ const App: React.FC = () => {
     <div
       className="flex flex-col h-full overflow-hidden relative"
       style={{ background: 'var(--gia-bg)' }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
+      <Suspense fallback={null}>
+        <ProfileDrawer />
+      </Suspense>
       {/* Global Notifications */}
       <div className="fixed top-16 left-0 right-0 z-[60] px-4 pointer-events-none space-y-2">
         <AnimatePresence>
@@ -866,14 +899,11 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showProtocols && (
-          <ProtocolPanel
-            isVisible={showProtocols}
-            onClose={() => setShowProtocols(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* ProtocolPanel (the lightning-bolt panel) removed from primary UI:
+          tool-call approvals now render inline under GIA's message instead
+          of behind a toggle. showProtocols/setShowProtocols kept in the
+          store since ProtocolsApprovalsSection doesn't depend on removing
+          them and nothing else references this mount anymore. */}
 
       {showTaskBoard && (
         <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTaskBoard(false)}>

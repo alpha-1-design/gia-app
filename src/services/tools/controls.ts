@@ -54,13 +54,48 @@ export const controlTools: Tool[] = [
   },
   {
     id: 'request_clarification', name: 'request_clarification',
-    description: 'Ask the user a clarifying question when you need more information.',
-    execute: async ({ question, options }) => {
+    description: 'Ask the user for information before continuing. For a single quick question, pass `question` and optionally `options` (rendered as tappable buttons, plus a free-text fallback). For several pieces of information at once (e.g. a setup form), pass `fields` instead: an array of { id, label, type, options?, placeholder? } where type is "radio", "select", or "text". Fields render together with one "Send answers" button.',
+    schema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'The question or form intro text shown to the user' },
+        options: { type: 'array', items: { type: 'string' }, description: 'Quick-tap answer options for a single question (ignored if fields is provided)' },
+        fields: {
+          type: 'array',
+          description: 'Multiple fields to collect together in one form',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Stable identifier for this field' },
+              label: { type: 'string', description: 'The question/label shown for this field' },
+              type: { type: 'string', enum: ['radio', 'select', 'text'] },
+              options: { type: 'array', items: { type: 'string' }, description: 'Required for radio and select' },
+              placeholder: { type: 'string', description: 'Placeholder text, for type "text"' },
+            },
+            required: ['id', 'label', 'type'],
+          },
+        },
+      },
+      required: ['question'],
+    },
+    execute: async ({ question, options, fields }) => {
+      const rawFields = Array.isArray(fields) ? fields as Record<string, unknown>[] : [];
+      const parsedFields = rawFields
+        .filter((f) => typeof f.id === 'string' && typeof f.label === 'string' && (f.type === 'radio' || f.type === 'select' || f.type === 'text'))
+        .map((f) => ({
+          id: f.id as string,
+          label: f.label as string,
+          type: f.type as 'radio' | 'select' | 'text',
+          options: Array.isArray(f.options) ? f.options as string[] : undefined,
+          placeholder: typeof f.placeholder === 'string' ? f.placeholder : undefined,
+        }));
+
       useGiaStore.getState().setClarification({
         question: (question as string) || 'Could you clarify?',
         options: Array.isArray(options) && options.length >= 2 ? options : ['Yes', 'No'],
         sessionId: useGiaStore.getState().activeSessionId || '',
         assistantMsgId: '',
+        fields: parsedFields.length > 0 ? parsedFields : undefined,
       });
       return { success: true, content: '__CLARIFICATION__' };
     }

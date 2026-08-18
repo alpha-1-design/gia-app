@@ -249,11 +249,28 @@ export interface UserProfile {
   profilePictureUri?: string;
 }
 
+export interface ClarificationField {
+  id: string;
+  label: string;
+  type: 'radio' | 'select' | 'text';
+  /** Required for 'radio' and 'select'. */
+  options?: string[];
+  placeholder?: string;
+}
+
 export interface Clarification {
   question: string;
   options: string[];
   sessionId: string;
   assistantMsgId: string;
+  /**
+   * Optional multi-field form (radio groups / dropdowns / text inputs
+   * collected together behind one "Send answers" button), for when GIA
+   * needs more than one piece of information at once instead of a single
+   * question. When present, the UI renders this instead of the flat
+   * question+options+text layout.
+   */
+  fields?: ClarificationField[];
 }
 
 interface GiaState {
@@ -262,6 +279,8 @@ interface GiaState {
   showTerminal: boolean;
   showModelSwitcher: boolean;
   showEngine: boolean;
+  showLeftDrawer: boolean;
+  setShowLeftDrawer: (show: boolean) => void;
   moduleHistory: Module[];
   sharedData: Record<string, unknown>;
   sessions: ChatSession[];
@@ -450,6 +469,7 @@ export const useGiaStore = create<GiaState>()(
       showTerminal: false,
       showModelSwitcher: false,
       showEngine: false,
+      showLeftDrawer: false,
       moduleHistory: [],
       sharedData: {},
       sessions: [],
@@ -630,6 +650,7 @@ export const useGiaStore = create<GiaState>()(
       setIntentState: (state) => set({ intentState: state }),
       setShowTerminal: (show) => set({ showTerminal: show }),
       setShowModelSwitcher: (show) => set({ showModelSwitcher: show }),
+      setShowLeftDrawer: (show) => set({ showLeftDrawer: show }),
       setWebSearch: (enabled) => set({ webSearch: enabled }),
       setDeepSearch: (enabled) => set({ deepSearch: enabled }),
       setReaction: (msgId, value, snippet) => set(s => {

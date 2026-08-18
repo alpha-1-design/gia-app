@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { BottomSheet, shouldDismissFromDrag } from '../BottomSheet';
+import { BottomSheet } from '../BottomSheet';
+import { shouldDismissFromDrag } from '../dragDismiss';
 
 describe('shouldDismissFromDrag', () => {
   it('dismisses when dragged down past the distance threshold', () => {

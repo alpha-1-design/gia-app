@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence, type PanInfo } from 'motion/react';
+import { shouldDismissFromDrag } from './dragDismiss';
 
 interface BottomSheetProps {
   open: boolean;
@@ -21,14 +22,9 @@ interface BottomSheetProps {
 // wiring; existing ones (ModelSwitcherSheet, EngineSheet) have been migrated,
 // the rest (BuildPreviewSheet, ComposerToolsSheet, MessageActionSheet,
 // ClarificationBottomSheet, ToolsCatalogSheet) still need the same migration.
-// Extracted as a pure function so the actual dismiss threshold is unit
-// testable without needing jsdom to simulate real framer-motion drag
-// physics (which it can't do reliably).
-export function shouldDismissFromDrag(info: Pick<PanInfo, 'offset' | 'velocity'>): boolean {
-  const draggedFarEnough = info.offset.y > 120;
-  const flickedDownFast = info.velocity.y > 500;
-  return draggedFarEnough || flickedDownFast;
-}
+// Extracted as a pure function (dragDismiss.ts) so the actual dismiss
+// threshold is unit testable without needing jsdom to simulate real
+// framer-motion drag physics (which it can't do reliably).
 
 export const BottomSheet: React.FC<BottomSheetProps> = ({
   open,

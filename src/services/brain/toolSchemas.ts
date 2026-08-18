@@ -252,11 +252,15 @@ export const toolSchemas: Record<string, { description: string; required: string
     }
   },
   request_clarification: {
-    description: 'Ask the user a clarifying question when you need more information.',
+    description: 'Ask the user for information before continuing. For a single quick question, pass question and optionally options (tappable buttons + free-text fallback). For several pieces of information at once (e.g. a short setup form), pass fields instead: an array of {id, label, type, options?, placeholder?} where type is "radio", "select", or "text". Fields render together with one "Send answers" button, which is friendlier than asking one question per turn when you need 2+ answers.',
     required: ['question'],
     properties: {
-      question: { type: 'string', description: 'Clarifying question' },
-      options: { type: 'array', description: 'Answer options array' }
+      question: { type: 'string', description: 'Clarifying question, or the intro text shown above a multi-field form' },
+      options: { type: 'array', description: 'Answer options array for a single question (ignored if fields is provided)' },
+      fields: {
+        type: 'array',
+        description: 'Multiple fields to collect together in one form: [{id, label, type: "radio"|"select"|"text", options?: string[], placeholder?: string}]'
+      }
     }
   },
   get_environment_info: {

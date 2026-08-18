@@ -419,6 +419,8 @@ const ChatModule: React.FC = () => {
           onEditResend={handleEditResend}
           onRewrite={handleRewrite}
           onSuggestionClick={handleSuggestionClick}
+          clarification={clarification}
+          onClarificationFormAnswer={handleClarificationAnswer}
         />
 
         {/* Inline tool execution cards — show recent tools inline in the chat flow */}
@@ -429,7 +431,7 @@ const ChatModule: React.FC = () => {
           <BuildInlinePreview url={buildPreviewUrl} onOpenFull={() => setShowPreviewSheet(true)} />
         )}
 
-        {clarification && (
+        {clarification && !clarification.fields && (
           <ClarificationBottomSheet
             clarification={clarification}
             clarAnswer={clarAnswer}
