@@ -73,10 +73,21 @@ interface GiaTerminalPlugin {
 }
 
 export function getSmartTimeout(command: string, requestedTimeout?: number): number {
+  const cmd = command.toLowerCase();
+  // Dev servers / long-running foreground processes that never exit on
+  // their own (npm run dev, npm start, vite, next dev, flask run, python
+  // -m http.server, etc). Checked first and unconditionally -- even if an
+  // explicit requestedTimeout was passed, a foreground long-running server
+  // is structurally wrong regardless of how long you wait for it (it will
+  // never return control on its own), so no requested timeout value should
+  // be allowed to bypass the fast-fail here. These should always be run
+  // backgrounded instead (see BUILD mode's system prompt).
+  if (/(npm\s+(run\s+dev|start)|yarn\s+(dev|start)|pnpm\s+(dev|start)|^vite(\s|$)|next\s+dev|flask\s+run|python3?\s+-m\s+http\.server|uvicorn|gunicorn|rails\s+server|php\s+-S)/.test(cmd)) {
+    return 10000; // 10 seconds
+  }
   if (requestedTimeout && requestedTimeout > 30000 && requestedTimeout !== 60000) {
     return requestedTimeout;
   }
-  const cmd = command.toLowerCase();
   // Package installation / dependency downloads
   if (/(npm\s+(install|ci|i|add)|yarn\s+(install|add)|pnpm\s+(install|add)|pip3?\s+install|apt-get\s+install|apk\s+add|cargo\s+(install|build)|go\s+get|composer\s+install)/.test(cmd)) {
     return 300000; // 5 minutes
