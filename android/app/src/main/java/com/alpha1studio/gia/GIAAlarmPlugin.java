@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 
 import androidx.core.content.ContextCompat;
@@ -144,11 +145,39 @@ public class GIAAlarmPlugin extends Plugin {
 
             persistAlarm(getContext(), requestCode, hour, minute, label);
 
+            // Battery optimization / Doze is the single most common
+            // real-world reason Android alarms silently fail to fire,
+            // across virtually all apps -- setExactAndAllowWhileIdle above
+            // is *designed* to survive Doze, but aggressive OEM battery
+            // managers (Samsung, Xiaomi/MIUI, Huawei, OnePlus, etc.) can
+            // still kill the process before the broadcast is delivered
+            // unless the app is explicitly exempted, and that exemption can
+            // only be granted through a system dialog -- no way to silently
+            // grant it from code. Surface it in the response (rather than
+            // failing the alarm request over it) so the JS side can tell
+            // the user, and open the exemption dialog once so it's a single
+            // tap rather than a manual hunt through system settings.
+            boolean batteryOptimized = false;
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(getContext().getPackageName())) {
+                batteryOptimized = true;
+                try {
+                    Intent batteryIntent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    batteryIntent.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));
+                    batteryIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(batteryIntent);
+                } catch (Exception ignored) {
+                    // Some OEM ROMs don't implement this action; the alarm
+                    // is still scheduled either way, just flagged below.
+                }
+            }
+
             JSObject ret = new JSObject();
             ret.put("success", true);
             ret.put("method", "alarm_manager");
             ret.put("alarmId", requestCode);
             ret.put("time", calendar.getTimeInMillis());
+            ret.put("batteryOptimized", batteryOptimized);
             call.resolve(ret);
         } catch (SecurityException e) {
             call.reject("Alarm permission denied: " + e.getMessage());

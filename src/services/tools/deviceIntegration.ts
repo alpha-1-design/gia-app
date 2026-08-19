@@ -435,16 +435,30 @@ const setAlarmTool: Tool = {
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
     try {
       const di = (await import('../DeviceIntegration')).default;
-      await di.setAlarm(parsed.data.hour, parsed.data.minute, parsed.data.label, parsed.data.days);
+      const result = await di.setAlarm(parsed.data.hour, parsed.data.minute, parsed.data.label, parsed.data.days);
       const h = parsed.data.hour.toString().padStart(2, '0');
       const m = parsed.data.minute.toString().padStart(2, '0');
       const dayNames = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const daysStr = parsed.data.days ? parsed.data.days.map(d => dayNames[d] || '').filter(Boolean).join(', ') : '';
       const labelStr = parsed.data.label ? `\n**Label:** ${parsed.data.label}` : '';
       const repeatStr = daysStr ? `\n**Repeat:** ${daysStr}` : '';
+      // BUG FIX: this used to unconditionally say "Clock app opened with
+      // alarm pre-filled" no matter which path actually ran -- including
+      // when the native AlarmManager path succeeded directly, where no
+      // Clock app was ever opened at all. Now reflects what actually
+      // happened, sourced from the real result instead of a hardcoded
+      // guess.
+      const methodStr = result.method === 'alarm_manager'
+        ? 'Scheduled directly via Android AlarmManager — will fire even if the app is closed.'
+        : result.method === 'android_intent'
+        ? 'Clock app opened with alarm pre-filled — please check and confirm it there.'
+        : 'Alarm set.';
+      const batteryWarning = result.batteryOptimized
+        ? '\n\n⚠️ *This device has battery optimization enabled for GIA, which can prevent alarms from firing reliably. A permission screen should have opened — please allow GIA to run unrestricted in the background.*'
+        : '';
       return {
         success: true,
-        content: `## ⏰ Alarm Set\n\n**Time:** ${h}:${m}${labelStr}${repeatStr}\n\n*Clock app opened with alarm pre-filled. Check and confirm.*`,
+        content: `## ⏰ Alarm Set\n\n**Time:** ${h}:${m}${labelStr}${repeatStr}\n\n*${methodStr}*${batteryWarning}`,
       };
     } catch (e: unknown) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };

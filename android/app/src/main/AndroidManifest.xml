@@ -21,6 +21,19 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- Required on Android 14+ (API 34) for GIAAlarmReceiver's
+         setFullScreenIntent() to actually launch a full-screen wake UI when
+         an alarm fires. Without it, the platform silently degrades the
+         call to a normal heads-up notification -- which can be easy to
+         miss if the screen is off/locked, defeating the point of an alarm.
+         See: https://developer.android.com/about/versions/14/behavior-changes-14#fgs-types -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Requested (not silently granted -- this always requires a system
+         dialog) from GIAAlarmPlugin so a scheduled alarm can ask to be
+         exempted from OEM battery/Doze restrictions. This is the single
+         most common real-world reason Android alarms silently fail across
+         virtually all apps, independent of anything else in this file. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

@@ -421,7 +421,7 @@ class DeviceIntegration {
     return { method: 'window_open' };
   }
 
-  async setAlarm(hour: number, minute: number, label?: string, days?: number[]): Promise<{ method: string }> {
+  async setAlarm(hour: number, minute: number, label?: string, days?: number[]): Promise<{ method: string; batteryOptimized?: boolean }> {
     if (typeof hour !== 'number' || typeof minute !== 'number' ||
         isNaN(hour) || isNaN(minute) ||
         hour < 0 || hour > 23 || minute < 0 || minute > 59) {
@@ -432,7 +432,7 @@ class DeviceIntegration {
       if (this.isCapacitor()) {
         const { GIAAlarm } = await import('./GIAAlarm');
         const result = await GIAAlarm.setAlarm({ hour, minute, label });
-        if (result.success) return { method: 'alarm_manager' };
+        if (result.success) return { method: 'alarm_manager', batteryOptimized: result.batteryOptimized };
       }
     } catch (e) {
       logger.warn('[DeviceIntegration] Native alarm failed:', e);
