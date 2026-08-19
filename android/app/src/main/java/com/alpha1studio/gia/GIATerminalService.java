@@ -529,6 +529,19 @@ public class GIATerminalService extends Service {
         }
         pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
         pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
+        // PROOT_NO_SECCOMP=1 is read by proot itself at startup (this must be
+        // in the HOST process's env, not the "env -i ..." guest env inside
+        // buildProotCommand -- that only reaches the guest shell after proot
+        // has already initialized). Without it, proot's ptrace-based syscall
+        // interception crashes or silently misbehaves on many Android
+        // kernels' seccomp-bpf filters -- this is *the* most common
+        // documented failure mode for proot on Android (same fix Termux
+        // ships). Trivial commands like "echo ok" tend to survive fine,
+        // which is exactly why this went unnoticed: isExecutable()'s probe
+        // passes, but real work like "apk update && apk add ..." -- which
+        // exercises far more syscalls -- fails or hangs partway through.
+        // This is almost certainly why "Set Up Environment" never worked.
+        pb.environment().put("PROOT_NO_SECCOMP", "1");
 
         Process process;
         try {
@@ -663,6 +676,17 @@ public class GIATerminalService extends Service {
     private static String buildProotCommand(String prootPath, String rootfsPath, String command) {
         return prootPath
                 + " -r " + rootfsPath
+                + " -0" // fake root UID/GID (0/0). Without this, the guest
+                        // shell shows "root@..." in its own prompt string
+                        // (that's just HOME=/root + a hardcoded banner) but
+                        // is NOT actually running as UID 0 inside the
+                        // sandbox -- it's still the app's real unprivileged
+                        // Android UID. apk's package installs do real
+                        // chown/chmod-to-root operations while unpacking
+                        // packages; those silently fail (or apk aborts) 
+                        // without proot's fake-root UID mapping, regardless
+                        // of PROOT_NO_SECCOMP. This is very likely the other
+                        // half of why "Set Up Environment" never worked.
                 + " -b /proc"
                 + " -b /sys"
                 + " -b /dev"

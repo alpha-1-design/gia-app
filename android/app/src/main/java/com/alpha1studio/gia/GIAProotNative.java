@@ -88,6 +88,15 @@ public class GIAProotNative {
         String[] argv = {
             "proot",
             "-r", rootfsPath,
+            "-0", // fake root UID/GID -- see the identical comment in
+                  // GIATerminalService.buildProotCommand(). Note: this file
+                  // (GIAProotNative) is currently dead code -- nothing in
+                  // the app calls execute()/prootMain(), and libproot.so
+                  // isn't actually built/bundled (see the class doc comment
+                  // above). PROOT_NO_SECCOMP can't be set here at all since
+                  // there's no ProcessBuilder for an in-process JNI call;
+                  // that would need setenv() added to the native C JNI
+                  // wrapper itself, which doesn't exist in this repo.
             "-b", "/proc",
             "-b", "/sys",
             "-b", "/dev",

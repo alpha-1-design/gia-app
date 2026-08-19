@@ -76,6 +76,18 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [fullscreen, setFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Readiness gate: isAvailable() only checks whether the Capacitor plugin
+  // bridge is registered, NOT whether the on-device rootfs has finished
+  // extracting. Without this, the terminal looked fully ready (green
+  // "root@gia-terminal" badge, an interactive-looking prompt) from the
+  // instant this page opened, even during the first-run extraction window
+  // -- typing a command in that window just silently blocked for up to 60
+  // seconds with zero feedback, since that's the native extraction-wait
+  // timeout. This runs one harmless probe command on mount and gates the
+  // input until it resolves, showing what's actually happening instead.
+  const [terminalReady, setTerminalReady] = useState<'checking' | 'ready' | 'error'>('checking');
+  const [terminalReadyError, setTerminalReadyError] = useState('');
+
   // Environment & Package status
   const [sandboxStatus, setSandboxStatus] = useState<SandboxStatus | null>(null);
   const [provisioning, setProvisioning] = useState(false);
@@ -104,6 +116,38 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   useEffect(() => {
     refreshStatus();
   }, [refreshStatus]);
+
+  // Probe on mount so the UI reflects reality instead of always looking
+  // ready. Native (proot/Alpine) can genuinely take a few seconds on first
+  // run while the rootfs extracts; web/container backend is effectively
+  // instant. Timeout intentionally shorter than the native extraction-wait
+  // (60s) so a real failure surfaces as a clear message instead of the page
+  // just spinning for a full minute.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (terminalService.isAvailable()) {
+          const res = await terminalService.exec('echo ready', undefined, undefined, 45000);
+          if (cancelled) return;
+          if (res.exitCode === 0 && /ready/.test(res.output || '')) {
+            setTerminalReady('ready');
+          } else {
+            setTerminalReady('error');
+            setTerminalReadyError(res.output?.trim() || 'Terminal did not respond as expected.');
+          }
+        } else {
+          // Web/container fallback (SandboxService) doesn't need extraction.
+          setTerminalReady('ready');
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setTerminalReady('error');
+        setTerminalReadyError(e instanceof Error ? e.message : 'Could not reach the terminal.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Auto-scroll terminal
   useEffect(() => {
@@ -338,14 +382,25 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   {isNative ? 'Alpine Linux Root Environment' : 'Linux Container Root Shell'}
                 </h2>
                 <span
-                  className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                  style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"
+                  style={
+                    terminalReady === 'ready'
+                      ? { background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }
+                      : terminalReady === 'error'
+                      ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                      : { background: 'rgba(148,163,184,0.15)', color: 'var(--gia-muted)', border: '1px solid var(--gia-border)' }
+                  }
                 >
-                  root@gia-terminal
+                  {terminalReady === 'checking' && <Loader2 size={9} className="animate-spin" />}
+                  {terminalReady === 'ready' ? 'root@gia-terminal' : terminalReady === 'error' ? 'not ready' : 'starting…'}
                 </span>
               </div>
               <p className="text-xs mt-0.5" style={{ color: 'var(--gia-muted)' }}>
-                Full interactive shell with pre-installed Python, Node.js, Git, GCC/G++ & direct AI access
+                {terminalReady === 'checking'
+                  ? 'Preparing your terminal — this happens once and is usually a few seconds.'
+                  : terminalReady === 'error'
+                  ? (terminalReadyError || 'Terminal is not responding. Try Set Up Environment below, or restart the app.')
+                  : 'Base Alpine Linux shell. Tap Set Up Environment below to install Python, Node.js, Git & build tools.'}
               </p>
             </div>
           </div>
@@ -489,8 +544,8 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 value={inputCommand}
                 onChange={(e) => setInputCommand(e.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={executing}
-                placeholder="type bash command (e.g., python3 script.py, apt update)..."
+                disabled={executing || terminalReady !== 'ready'}
+                placeholder={terminalReady === 'checking' ? 'Preparing terminal…' : terminalReady === 'error' ? 'Terminal not ready — see message above' : 'type bash command (e.g., python3 script.py, apt update)...'}
                 className="flex-1 bg-transparent border-none outline-none text-emerald-300 placeholder-zinc-600 font-mono text-xs"
               />
               <button
