@@ -17,6 +17,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.util.Calendar;
 import java.util.HashSet;
@@ -48,10 +49,52 @@ public class GIAAlarmPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionForAlias("notifications", call, "9004");
+                // BUG FIX: this used to call requestPermissionForAlias(...,
+                // call, "9004") -- but Capacitor resolves that fourth
+                // argument by looking for a method literally named "9004"
+                // annotated @PermissionCallback, which never existed here.
+                // Verified against Capacitor's own source (vendored in
+                // node_modules): when no matching callback method is found,
+                // it calls call.reject("There is no PermissionCallback
+                // method registered for the name: 9004..."). So this
+                // wasn't a silent hang -- any user who hit this path (i.e.
+                // POST_NOTIFICATIONS not already granted from elsewhere in
+                // the app) would have seen setAlarm() fail outright with
+                // that internal error message instead of a real one. Fixed
+                // by adding a properly-named, properly-annotated callback
+                // below and threading the alarm args through it so the
+                // request can actually resume after the permission prompt.
+                call.getData().put("_gia_hour", hour);
+                call.getData().put("_gia_minute", minute);
+                call.getData().put("_gia_label", label);
+                requestPermissionForAlias("notifications", call, "onNotificationPermissionResult");
                 return;
             }
         }
+
+        scheduleAlarm(call, hour, minute, label);
+    }
+
+    @PermissionCallback
+    private void onNotificationPermissionResult(PluginCall call) {
+        if (call == null) return;
+        int hour = call.getInt("_gia_hour", -1);
+        int minute = call.getInt("_gia_minute", -1);
+        String label = call.getString("_gia_label", "Alarm");
+        if (hour < 0 || minute < 0) {
+            call.reject("Alarm request lost after permission prompt -- please try again.");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            call.reject("Notification permission is required for alarms to alert you -- without it, the alarm can be scheduled but won't be able to show or sound.");
+            return;
+        }
+        scheduleAlarm(call, hour, minute, label);
+    }
+
+    private void scheduleAlarm(PluginCall call, int hour, int minute, String label) {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             AlarmManager am = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
