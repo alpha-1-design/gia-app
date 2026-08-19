@@ -188,7 +188,7 @@ const MessageList: React.FC<MessageListProps> = ({
                     <WorkLog
                       thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
                       isLive={!!liveThoughts[msg.id]}
-                      isExpanded={showThoughts.has(msg.id) || !!liveThoughts[msg.id]}
+                      isExpanded={showThoughts.has(msg.id)}
                       onToggle={() => setShowThoughts(prev => {
                           const next = new Set(prev);
                           if (next.has(msg.id)) next.delete(msg.id);
