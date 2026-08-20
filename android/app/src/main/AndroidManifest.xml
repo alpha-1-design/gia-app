@@ -24,11 +24,11 @@
     <!-- Required on Android 14+ (API 34) for GIAAlarmReceiver's
          setFullScreenIntent() to actually launch a full-screen wake UI when
          an alarm fires. Without it, the platform silently degrades the
-         call to a normal heads-up notification -- which can be easy to
+         call to a normal heads-up notification — which can be easy to
          miss if the screen is off/locked, defeating the point of an alarm.
          See: https://developer.android.com/about/versions/14/behavior-changes-14#fgs-types -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-    <!-- Requested (not silently granted -- this always requires a system
+    <!-- Requested (not silently granted — this always requires a system
          dialog) from GIAAlarmPlugin so a scheduled alarm can ask to be
          exempted from OEM battery/Doze restrictions. This is the single
          most common real-world reason Android alarms silently fail across
