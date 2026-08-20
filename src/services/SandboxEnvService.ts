@@ -127,24 +127,82 @@ export const SandboxEnvService = {
     return cached;
   },
 
-  async provision(onProgress?: (msg: string) => void): Promise<{ success: boolean; output: string }> {
+  /**
+   * Per-package provisioning with live progress.
+   * Installs each package group individually so the UI can show a real
+   * progress bar and per-step log — Kai-style.
+   */
+  async provision(
+    onProgress?: (msg: string, stepIndex?: number, totalSteps?: number) => void,
+  ): Promise<{ success: boolean; output: string }> {
     if (!(await this.isExecutable())) {
       return { success: false, output: 'On-device sandbox terminal is not available on this device.' };
     }
+
+    // Each step: [label, apk-packages, check-command]
+    const STEPS: [string, string, string][] = [
+      ['DNS resolution', 'resolvconf', 'test -f /etc/resolv.conf'],
+      ['Package index', '', ''],
+      ['Node.js runtime', 'nodejs', 'node --version'],
+      ['npm package manager', 'npm', 'npm --version'],
+      ['Git version control', 'git', 'git --version'],
+      ['Python 3 runtime', 'python3', 'python3 --version'],
+      ['Python pip', 'py3-pip', 'pip3 --version'],
+      ['C/C++ toolchain (gcc, g++, make)', 'build-base gcc g++ make', 'gcc --version'],
+      ['Utilities (curl, wget, bash)', 'curl wget bash', 'curl --version'],
+    ];
+
+    const totalSteps = STEPS.length;
+    const logs: string[] = [];
+
     try {
-      onProgress?.('Ensuring DNS (resolv.conf)…');
-      await run(
-        "test -f /etc/resolv.conf || (echo nameserver 8.8.8.8 > /etc/resolv.conf && echo nameserver 1.1.1.1 >> /etc/resolv.conf)",
-        20000,
-      );
-      onProgress?.('Updating package index (apk update)…');
-      const upd = await run('apk update', 120000);
-      onProgress?.('Installing Node.js, npm, git, build tools…');
-      const inst = await run(`apk add ${BUILD_PACKAGES}`, 300000);
+      for (let i = 0; i < STEPS.length; i++) {
+        const [label, pkgs, checkCmd] = STEPS[i];
+        onProgress?.(`[${i + 1}/${totalSteps}] ${label}`, i + 1, totalSteps);
+
+        // Step 0: DNS
+        if (i === 0) {
+          await run(
+            "test -f /etc/resolv.conf || (echo nameserver 8.8.8.8 > /etc/resolv.conf && echo nameserver 1.1.1.1 >> /etc/resolv.conf)",
+            15000,
+          );
+          logs.push(`✓ DNS configured`);
+          continue;
+        }
+
+        // Step 1: Package index
+        if (i === 1) {
+          const upd = await run('apk update', 120000);
+          logs.push(`✓ Package index updated`);
+          if (upd.output) logs.push(`  ${upd.output.split('\n').slice(-2).join('\n  ')}`);
+          continue;
+        }
+
+        // Check if already installed
+        if (checkCmd) {
+          const check = await run(checkCmd, 10000);
+          if (check.exitCode === 0 && check.output && !isProotFailure(check.output)) {
+            logs.push(`✓ ${label} — already installed`);
+            continue;
+          }
+        }
+
+        // Install
+        onProgress?.(`[${i + 1}/${totalSteps}] Installing ${label}…`, i + 1, totalSteps);
+        const inst = await run(`apk add ${pkgs}`, 180000);
+        if (inst.exitCode === 0) {
+          logs.push(`✓ ${label} installed`);
+        } else {
+          logs.push(`⚠ ${label} — installed with warnings`);
+          if (inst.output) logs.push(`  ${inst.output.split('\n').slice(-2).join('\n  ')}`);
+        }
+      }
+
+      onProgress?.('Verifying environment…', totalSteps, totalSteps);
       const s = await this.status();
-      return { success: s.ready, output: `${upd.output}\n${inst.output}` };
+      return { success: s.ready, output: logs.join('\n') };
     } catch (e) {
-      return { success: false, output: e instanceof Error ? e.message : String(e) };
+      return { success: false, output: logs.join('\n') + '\n' + (e instanceof Error ? e.message : String(e)) };
     }
   },
 

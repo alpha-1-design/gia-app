@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, Wrench } from 'lucide-react';
+import { ChevronDown, Wrench, ShieldAlert } from 'lucide-react';
 import InlineToolExecution from './InlineToolExecution';
 import { TOOL_LABELS } from '../utils/toolLabels';
 import type { ProtocolProposal } from '../types/protocol';
@@ -18,25 +18,36 @@ const labelFor = (p: ProtocolProposal): string =>
 const ToolTray: React.FC<ToolTrayProps> = ({ protocols }) => {
   const [expanded, setExpanded] = useState(false);
 
-  if (protocols.length === 0) return null;
-
   const sorted = [...protocols].sort((a, b) => a.createdAt - b.createdAt);
   const executing = sorted.some((p) => p.state === 'executing' || p.state === 'proposed' || p.state === 'confirmed');
+  const needsApproval = sorted.some((p) => p.state === 'proposed');
   const anyFailed = sorted.some((p) => p.state === 'failed');
   const doneCount = sorted.filter((p) => p.state === 'completed').length;
+
+  // Auto-expand when tools need user approval so the approve/reject
+  // buttons are immediately visible instead of hidden behind a tap.
+  useEffect(() => {
+    if (needsApproval) setExpanded(true);
+  }, [needsApproval]);
+
+  if (protocols.length === 0) return null;
 
   const names = sorted.slice(0, 2).map(labelFor);
   const extra = Math.max(0, sorted.length - names.length);
   const summary = names.join(' · ') + (extra > 0 ? ` +${extra}` : '');
 
-  const dotColor = anyFailed ? '#ef4444' : executing ? '#a855f7' : '#22c55e';
+  const dotColor = anyFailed ? '#ef4444' : needsApproval ? '#eab308' : executing ? '#a855f7' : '#22c55e';
 
   return (
     <div
       className="mt-3 rounded-2xl overflow-hidden"
       style={{
-        border: '1px solid rgba(168,85,247,0.14)',
-        background: 'linear-gradient(135deg, rgba(168,85,247,0.05), rgba(168,85,247,0.01))',
+        border: needsApproval
+          ? '1px solid rgba(234,179,8,0.25)'
+          : '1px solid rgba(168,85,247,0.14)',
+        background: needsApproval
+          ? 'linear-gradient(135deg, rgba(234,179,8,0.08), rgba(234,179,8,0.02))'
+          : 'linear-gradient(135deg, rgba(168,85,247,0.05), rgba(168,85,247,0.01))',
       }}
     >
       <motion.button
@@ -61,19 +72,19 @@ const ToolTray: React.FC<ToolTrayProps> = ({ protocols }) => {
           />
         </span>
 
-        <Wrench size={13} style={{ color: '#a855f766' }} />
+        {needsApproval ? <ShieldAlert size={13} style={{ color: '#eab308' }} /> : <Wrench size={13} style={{ color: '#a855f766' }} />}
 
-        <span className="flex-1 min-w-0 text-[12px] font-medium truncate" style={{ color: '#d8c8f0' }}>
-          {executing ? 'Working' : doneCount > 0 ? `Used ${sorted.length} tool${sorted.length > 1 ? 's' : ''}` : 'Tools'}
+        <span className="flex-1 min-w-0 text-[12px] font-medium truncate" style={{ color: needsApproval ? '#fde68a' : '#d8c8f0' }}>
+          {needsApproval ? 'Approval needed' : executing ? 'Working' : doneCount > 0 ? `Used ${sorted.length} tool${sorted.length > 1 ? 's' : ''}` : 'Tools'}
           <span className="opacity-60 font-normal"> — {summary}</span>
         </span>
 
-        <span className="text-[10px] tabular-nums" style={{ color: '#a855f799' }}>
+        <span className="text-[10px] tabular-nums" style={{ color: needsApproval ? '#eab308' : '#a855f799' }}>
           {doneCount}/{sorted.length}
         </span>
 
         <motion.span animate={{ rotate: expanded ? 180 : 0 }} transition={{ type: 'spring', stiffness: 300, damping: 24 }}>
-          <ChevronDown size={14} style={{ color: '#a855f7' }} />
+          <ChevronDown size={14} style={{ color: needsApproval ? '#eab308' : '#a855f7' }} />
         </motion.span>
       </motion.button>
 

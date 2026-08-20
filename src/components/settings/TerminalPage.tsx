@@ -92,6 +92,7 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [sandboxStatus, setSandboxStatus] = useState<SandboxStatus | null>(null);
   const [provisioning, setProvisioning] = useState(false);
   const [provisionLog, setProvisionLog] = useState('');
+  const [provisionProgress, setProvisionProgress] = useState({ step: 0, total: 0, label: '' });
 
   // AI Access settings
   const [aiAccessEnabled, setAiAccessEnabled] = useState(true);
@@ -334,19 +335,23 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     addNotification('Terminal output copied to clipboard');
   };
 
-  // Provision environment action
+  // Provision environment action — Kai-style with per-package progress
   const handleProvision = async () => {
     setProvisioning(true);
-    setProvisionLog('Starting Alpine root package installation...\n');
+    setProvisionLog('');
+    setProvisionProgress({ step: 0, total: 0, label: '' });
     try {
-      const res = await SandboxEnvService.provision((msg) => {
-        setProvisionLog((prev) => prev + `• ${msg}\n`);
+      const res = await SandboxEnvService.provision((msg, step, total) => {
+        setProvisionLog((prev) => prev + `${msg}\n`);
+        if (step !== undefined && total !== undefined) {
+          setProvisionProgress({ step, total, label: msg });
+        }
       });
-      setProvisionLog((prev) => prev + `\n${res.output}\nFinished.`);
+      setProvisionLog((prev) => prev + `\n${res.output}\n\n${res.success ? '✅ Environment ready!' : '⚠ Setup completed with notices.'}`);
       await refreshStatus();
       addNotification(res.success ? 'Alpine build environment provisioned successfully!' : 'Environment setup completed with notices.');
     } catch (e) {
-      setProvisionLog((prev) => prev + `\n[Error]: ${e instanceof Error ? e.message : String(e)}`);
+      setProvisionLog((prev) => prev + `\n❌ Error: ${e instanceof Error ? e.message : String(e)}`);
       addNotification('Environment setup encountered an error');
     } finally {
       setProvisioning(false);
@@ -638,7 +643,7 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   Provision / Upgrade Environment
                 </p>
                 <p className="text-[11px]" style={{ color: 'var(--gia-muted)' }}>
-                  Runs apt/apk package updates and installs missing tools.
+                  Installs each tool one-by-one with live progress.
                 </p>
               </div>
 
@@ -648,13 +653,52 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 flex items-center gap-2 transition-colors disabled:opacity-50"
               >
                 {provisioning ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-                {provisioning ? 'Installing Packages...' : 'Provision / Update All'}
+                {provisioning ? 'Installing...' : 'Provision / Update All'}
               </button>
             </div>
 
+            {/* Live progress bar — Kai-style */}
+            {provisioning && provisionProgress.total > 0 && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium" style={{ color: 'var(--gia-text)' }}>
+                    {provisionProgress.label}
+                  </span>
+                  <span className="text-[10px] font-mono" style={{ color: '#34d399' }}>
+                    {provisionProgress.step}/{provisionProgress.total}
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'rgba(16,185,129,0.12)' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${(provisionProgress.step / provisionProgress.total) * 100}%`,
+                      background: 'linear-gradient(90deg, #34d399, #10b981)',
+                    }}
+                  />
+                </div>
+                <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
+                  Step {provisionProgress.step} of {provisionProgress.total} — {provisionProgress.step === provisionProgress.total ? 'Verifying…' : 'Installing…'}
+                </p>
+              </div>
+            )}
+
+            {/* Live log output — scrollable terminal style */}
             {provisionLog && (
-              <div className="mt-3 p-3 rounded-xl bg-black/60 border border-white/10 font-mono text-xs text-zinc-300 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                {provisionLog}
+              <div className="mt-3 rounded-xl overflow-hidden" style={{ border: '1px solid var(--gia-border)' }}>
+                <div className="flex items-center gap-2 px-3 py-1.5" style={{ background: 'rgba(16,185,129,0.08)' }}>
+                  <div className="w-2 h-2 rounded-full" style={{ background: provisioning ? '#34d399' : 'var(--gia-muted)' }} />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#34d399' }}>
+                    {provisioning ? 'Live output' : 'Output'}
+                  </span>
+                </div>
+                <pre
+                  ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+                  className="p-3 font-mono text-[11px] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap"
+                  style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--gia-muted)' }}
+                >
+                  {provisionLog}
+                </pre>
               </div>
             )}
           </div>

@@ -160,12 +160,15 @@ export const useProtocolStore = create<ProtocolStore>()(
           const existing = get().pendingConfirm;
           if (existing?.timeout) clearTimeout(existing.timeout);
 
-          const timeout = timeoutMs
-            ? setTimeout(() => {
-                get().reject(protocolId);
-                resolve({ type: 'reject', protocolId, timestamp: Date.now() });
-              }, timeoutMs)
-            : undefined;
+          // Default to 120s (not 30s) so the user has time to review and
+          // approve/reject.  A short 30 s timeout made tools silently
+          // auto-reject on mobile where the approval card wasn't in view.
+          const effectiveTimeout = timeoutMs ?? 120_000;
+
+          const timeout = setTimeout(() => {
+            get().reject(protocolId);
+            resolve({ type: 'reject', protocolId, timestamp: Date.now() });
+          }, effectiveTimeout);
 
           set({ pendingConfirm: { protocolId, resolve, timeout } });
         });

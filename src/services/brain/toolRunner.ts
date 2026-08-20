@@ -177,7 +177,7 @@ async function executeSingleTool(
 
   const needsConfirm = !useProtocolStore.getState().isAutoConfirmed(protocol.type);
   if (needsConfirm) {
-    const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 30_000);
+    const action = await useProtocolStore.getState().waitForConfirmation(protocolId, 120_000);
     if (action.type === 'reject') {
       observations.push(`User rejected tool execution: ${toolCall.id}`);
       useProtocolStore.getState().setFailed(protocolId, 'Rejected by user');
@@ -192,11 +192,12 @@ async function executeSingleTool(
   onThought?.(`⚡ Executing: ${tool.name}...`);
   useGiaStore.getState().setCurrentTool(toolCall.id);
 
-  // Emit live search activity event before execution starts
+  // Emit live search activity event before execution starts.
+  // Do NOT auto-open the slide-up panel — the user controls that via
+  // the globe button.  Tracking events so the badge count is accurate.
   const isWebTool = ['web_search', 'read_url', 'browser_navigate'].includes(toolCall.id);
   if (isWebTool) {
     const sa = useSearchActivity.getState();
-    sa.setPanelOpen(true);
     if (toolCall.id === 'web_search') {
       sa.addEvent({ type: 'query', message: (toolCall.args.query as string) || '', done: false });
     } else {
