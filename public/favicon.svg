@@ -4,32 +4,20 @@
       <stop offset="0" stop-color="#101b27"/>
       <stop offset="1" stop-color="#1c2e3a"/>
     </linearGradient>
-    <linearGradient id="glyph" x1="180" y1="180" x2="844" y2="844" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2dd4bf"/>
-      <stop offset="0.5" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#2563eb"/>
+    <linearGradient id="sparkGrad" x1="284" y1="246" x2="740" y2="778" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="0.5" stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#7c3aed"/>
     </linearGradient>
-    <linearGradient id="glyph-soft" x1="180" y1="180" x2="844" y2="844" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#5eead4"/>
-      <stop offset="1" stop-color="#60a5fa"/>
+    <linearGradient id="ringGrad" x1="246" y1="512" x2="778" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a855f7" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#c4b5fd" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#a855f7" stop-opacity="0"/>
     </linearGradient>
   </defs>
 
-  <!-- background -->
   <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230" fill="url(#bg)"/>
 
-  <!-- flowing G glyph: ring with a gap (the G's mouth) -->
-  <path
-    d="M 772.5 293.5 A 340 340 0 1 0 772.5 730.5 L 661.4 637.3 A 195 195 0 1 1 661.4 386.7 Z"
-    fill="url(#glyph)"
-  />
-
-  <!-- G crossbar -->
-  <rect x="552" y="467" width="270" height="90" rx="45" ry="45" fill="url(#glyph)"/>
-
-  <!-- thin inner highlight for a layered ribbon feel -->
-  <path
-    d="M 748 320 A 300 300 0 1 0 748 704"
-    fill="none" stroke="url(#glyph-soft)" stroke-width="10" stroke-linecap="round" opacity="0.55"
-  />
+  <ellipse cx="512" cy="512" rx="246" ry="171" fill="none" stroke="url(#ringGrad)" stroke-width="28" stroke-linecap="round" transform="rotate(-18 512 512)"/>
+  <path d="M512 246 C521.5 365.7 542.8 425.3 587.1 466.7 C631.4 508 690.6 529.7 806 538 C690.6 546.3 631.4 568 587.1 609.3 C542.8 650.7 521.5 710.3 512 830 C502.5 710.3 481.2 650.7 436.9 609.3 C392.6 568 333.4 546.3 218 538 C333.4 529.7 392.6 508 436.9 466.7 C481.2 425.3 502.5 365.7 512 246 Z" fill="url(#sparkGrad)"/>
 </svg>
