@@ -391,6 +391,11 @@ public class GIATerminalPlugin extends Plugin {
 
         try {
             ProcessBuilder pb = new ProcessBuilder("sh", "-c", prootCmd);
+            // Without a working directory proot fails its own init with
+            // "can't chdir /root/." before it ever reaches the guest --
+            // the sibling exec path in GIATerminalService sets this for
+            // the same reason; this call site was missing it.
+            pb.directory(rootfsDir);
             pb.redirectErrorStream(true);
             File prootTmpDir = new File(ctx.getCacheDir(), "proot-tmp");
             prootTmpDir.mkdirs();
@@ -398,7 +403,9 @@ public class GIATerminalPlugin extends Plugin {
             pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
             pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
             Process proc = pb.start();
-            // Stream output as progress
+            // Stream output as progress, and keep the last few lines so a
+            // failure can report *why* instead of a generic message.
+            final java.util.List<String> tailLines = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
             Thread outputThread = new Thread(() -> {
                 try (InputStream procOut = proc.getInputStream()) {
                     byte[] buf = new byte[4096];
@@ -407,14 +414,22 @@ public class GIATerminalPlugin extends Plugin {
                         String line = new String(buf, 0, n).trim();
                         if (!line.isEmpty()) {
                             emitProgress("installing", 85, "apk: " + line);
+                            tailLines.add(line);
+                            if (tailLines.size() > 5) tailLines.remove(0);
                         }
                     }
                 } catch (IOException ignored) {}
             });
             outputThread.start();
-            proc.waitFor();
+            int exitCode = proc.waitFor();
             outputThread.join(5000);
-            emitProgress("installing", 95, "Base packages installed");
+            if (exitCode == 0) {
+                emitProgress("installing", 95, "Base packages installed");
+            } else {
+                String tail = String.join(" | ", tailLines);
+                Log.w(TAG, "Package install step failed, proot exit=" + exitCode + ": " + tail);
+                emitProgress("installing", 95, "Package install failed (exit " + exitCode + ") — you can install packages manually: " + tail);
+            }
         } catch (Exception e) {
             Log.w(TAG, "Package install step failed (non-fatal): " + e.getMessage());
             emitProgress("installing", 95, "Package install skipped — you can install packages manually");
