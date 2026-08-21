@@ -245,7 +245,7 @@ public class GIATerminalPlugin extends Plugin {
     // -----------------------------------------------------------------------
 
     @PluginMethod
-    public void exec(PluginCall call) {
+    public void execCommand(PluginCall call) {
         String command = call.getString("command");
         if (command == null || command.isEmpty()) {
             call.reject("command is required");

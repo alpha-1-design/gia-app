@@ -42,7 +42,7 @@ export interface PackageCmdResult {
 
 interface GIASetupPlugin {
   downloadRootfs(opts: { arch?: string; archId?: number }): Promise<{ success: boolean; message: string }>;
-  exec(opts: { command: string; timeout?: number }): Promise<PackageCmdResult>;
+  execCommand(opts: { command: string; timeout?: number }): Promise<PackageCmdResult>;
   installPackage(opts: { packageName: string }): Promise<PackageCmdResult>;
   removePackage(opts: { packageName: string }): Promise<PackageCmdResult>;
   searchPackages(opts: { query: string }): Promise<PackageCmdResult>;
@@ -161,7 +161,7 @@ export function useSandboxSetup() {
   // Execute a raw shell command
   const execCommand = useCallback(async (command: string, timeout?: number): Promise<PackageCmdResult | null> => {
     if (!plugin.current) return null;
-    return plugin.current.exec({ command, timeout });
+    return plugin.current.execCommand({ command, timeout });
   }, []);
 
   // Search packages
