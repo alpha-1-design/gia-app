@@ -185,4 +185,110 @@ describe('useProviderStore', () => {
       expect(useProviderStore.getState().pendingTasks).toHaveLength(0);
     });
   });
+
+  // =========================================================================
+  // fetchModels — failure modes & fallback
+  // =========================================================================
+  describe('fetchModels', () => {
+    let corsProxyFetch: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      const mod = await import('../../services/CorsProxy');
+      corsProxyFetch = vi.mocked((mod as unknown as { corsProxy: { fetch: ReturnType<typeof vi.fn> } }).corsProxy.fetch);
+      corsProxyFetch.mockReset();
+      // Default: return empty data
+      corsProxyFetch.mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+
+    it('returns empty array for unknown provider', async () => {
+      const models = await useProviderStore.getState().fetchModels('nonexistent');
+      expect(models).toEqual([]);
+    });
+
+    it('falls back to catalog when API returns 401', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-bad');
+      corsProxyFetch.mockResolvedValue(new Response('Unauthorized', { status: 401 }));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      // Should fall back to catalog (the 2 mocked models)
+      expect(models.length).toBeGreaterThan(0);
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      // Status should be 'catalog', not 'live'
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('falls back to catalog when API returns 403', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-forbidden');
+      corsProxyFetch.mockResolvedValue(new Response('Forbidden', { status: 403 }));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('falls back to catalog when API returns 500', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-test');
+      corsProxyFetch.mockResolvedValue(new Response('Internal Server Error', { status: 500 }));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('falls back to catalog when fetch throws network error', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-test');
+      corsProxyFetch.mockRejectedValue(new Error('Network request failed'));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('falls back to catalog when API returns empty data array', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-test');
+      corsProxyFetch.mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      // Empty live response should NOT show 'Live' badge — must use catalog
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('falls back to catalog when API returns malformed JSON', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-test');
+      corsProxyFetch.mockResolvedValue(new Response('not json at all', { status: 200 }));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('returns catalog directly when no API key and provider needs one', async () => {
+      // openai needs API key, and we haven't set one
+      const models = await useProviderStore.getState().fetchModels('openai');
+      expect(models.some(m => m.id === 'gpt-4o')).toBe(true);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('catalog');
+    });
+
+    it('marks as live when API returns valid models', async () => {
+      useProviderStore.getState().setProviderKey('openai', 'sk-test');
+      corsProxyFetch.mockResolvedValue(new Response(
+        JSON.stringify({
+          data: [
+            { id: 'gpt-4o', name: 'GPT-4o', context_length: 128000 },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini', context_length: 128000, pricing: { prompt: '0' } },
+          ],
+        }),
+        { status: 200 },
+      ));
+      const models = await useProviderStore.getState().fetchModels('openai');
+      expect(models.length).toBe(2);
+      expect(useProviderStore.getState().modelListStatus?.openai).toBe('live');
+      // The free model should be detected from pricing
+      const mini = models.find(m => m.id === 'gpt-4o-mini');
+      expect(mini?.free).toBe(true);
+    });
+
+    it('handles providers without listingType gracefully', async () => {
+      useProviderStore.getState().setProviderKey('local-llm', '');
+      const models = await useProviderStore.getState().fetchModels('local-llm');
+      // local-llm has listingType 'openai' in the mock
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+    });
+  });
 });
