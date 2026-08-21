@@ -95,13 +95,14 @@ describe('ErrorHandlingService', () => {
   });
 
   it('throws after all retries fail', async () => {
-    // Use synchronous throw so the rejection is created inside the try/catch
-    // (avoids PromiseRejectionHandledWarning from eager mockRejectedValue)
     callProviderMock.mockImplementation(() => { throw new Error('rate limit exceeded'); });
 
     const p = ErrorHandlingService.handleErrors(
       new Error('rate limit exceeded'), baseReq, 'openai', 'gpt-4o', performance.now(), '', 1, [],
     );
+    // Register a no-op handler so Node doesn't flag an unhandled rejection
+    // during timer advancement — the real assertion still uses p below.
+    p.catch(() => {});
     await vi.advanceTimersByTimeAsync(5000);
     await expect(p).rejects.toThrow('openai failed: rate limit exceeded');
   }, 10000);
