@@ -442,6 +442,85 @@ public class GIATerminalService extends Service {
         return new File(getTerminalDir(), PROOT_BINARY).getAbsolutePath();
     }
 
+    /**
+     * Force-delete the rootfs and re-extract from assets.
+     * 
+     * This breaks the chicken-and-egg where a broken rootfs prevents
+     * provisioning but provisioning needs a working terminal. Called from
+     * GIATerminalPlugin.reinstallRootfs().
+     *
+     * @return true if re-extraction succeeded and rootfs has critical binaries
+     */
+    public static synchronized boolean forceReextractRootfs(Context context) {
+        try {
+            File terminalDir = new File(context.getFilesDir(), TERMINAL_DIR);
+            File rootfsDir = new File(terminalDir, ROOTFS_DIR);
+            File marker = new File(rootfsDir, ".gia-rootfs-ok");
+
+            // Delete marker and rootfs
+            if (marker.exists()) marker.delete();
+            if (rootfsDir.exists()) {
+                deleteRecursive(rootfsDir);
+            }
+            rootfsDir.mkdirs();
+            Log.i(TAG, "Rootfs cleared — re-extracting from assets");
+
+            // Extract assets (same logic as extractAssets but for rootfs only)
+            AssetManager am = context.getAssets();
+            String archiveName = null;
+            String distroLabel = null;
+            if (assetExists(am, "terminal/" + UBUNTU_ARCHIVE)) {
+                archiveName = UBUNTU_ARCHIVE;
+                distroLabel = "Ubuntu";
+            } else if (assetExists(am, "terminal/" + ALPINE_ARCHIVE)) {
+                archiveName = ALPINE_ARCHIVE;
+                distroLabel = "Alpine";
+            }
+
+            if (archiveName == null) {
+                Log.e(TAG, "No rootfs archive found in assets");
+                return false;
+            }
+
+            File archive = new File(terminalDir, archiveName);
+            try (InputStream in = am.open("terminal/" + archiveName);
+                 FileOutputStream out = new FileOutputStream(archive)) {
+                copyStream(in, out);
+            }
+
+            List<String[]> failedSymlinks = new ArrayList<>();
+            untar(archive, rootfsDir, failedSymlinks);
+            archive.delete();
+
+            materializeSymlinks(rootfsDir, failedSymlinks);
+
+            // Harden
+            File busybox = new File(rootfsDir, "bin/busybox");
+            if (busybox.exists()) busybox.setExecutable(true, false);
+            File homeDir = new File(rootfsDir, "root");
+            if (!homeDir.exists()) homeDir.mkdirs();
+            File resolv = new File(rootfsDir, "etc/resolv.conf");
+            if (!resolv.exists()) {
+                resolv.getParentFile().mkdirs();
+                try (FileOutputStream out = new FileOutputStream(resolv)) {
+                    out.write("nameserver 8.8.8.8\nnameserver 1.1.1.1\n".getBytes());
+                }
+            }
+
+            boolean ok = rootfsHasCriticalBinaries(rootfsDir);
+            if (ok) {
+                marker.createNewFile();
+                Log.i(TAG, "Re-extraction succeeded — " + distroLabel + " rootfs ready");
+            } else {
+                Log.e(TAG, "Re-extraction incomplete — critical binaries missing");
+            }
+            return ok;
+        } catch (Exception e) {
+            Log.e(TAG, "forceReextractRootfs failed", e);
+            return false;
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Session management
     // -------------------------------------------------------------------------

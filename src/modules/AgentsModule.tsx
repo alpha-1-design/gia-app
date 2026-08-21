@@ -654,6 +654,12 @@ function buildToolSection(tools: string[]): string {
   return lines.join('\n');
 }
 
+// Stable empty array — avoids creating a new reference every render when
+// chatSessions[agent.id] is undefined, which would cause Zustand to see
+// it as "changed" (Object.is fails on new refs), triggering an infinite
+// re-render loop → React error #185 "Maximum update depth exceeded".
+const EMPTY_MSGS: AgentMessage[] = [];
+
 const AgentChatView: React.FC<{
   agent: CustomAgent;
   onBack: () => void;
@@ -661,7 +667,7 @@ const AgentChatView: React.FC<{
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const messages = useAgentStore(s => s.chatSessions[agent.id] || []);
+  const messages = useAgentStore(s => s.chatSessions[agent.id] ?? EMPTY_MSGS);
   const addMsg = useAgentStore(s => s.addMessage);
   const clear = useAgentStore(s => s.clearChat);
 

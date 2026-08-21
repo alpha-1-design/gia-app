@@ -36,38 +36,9 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<'terminal' | 'packages' | 'ai-access'>('terminal');
 
   // Terminal state
-  const [lines, setLines] = useState<TerminalLine[]>([
-    {
-      id: 'init-1',
-      type: 'info',
-      text: '══════════════════════════════════════════════════════════════════════',
-      timestamp: new Date().toLocaleTimeString(),
-    },
-    {
-      id: 'init-2',
-      type: 'success',
-      text: '   root@gia-alpine-terminal:~# Fresh Alpine Linux Root Shell Loaded',
-      timestamp: new Date().toLocaleTimeString(),
-    },
-    {
-      id: 'init-3',
-      type: 'info',
-      text: '   Base: Alpine Linux (bash, curl, wget). Tap Set Up Environment for Python/Node/Git/GCC.',
-      timestamp: new Date().toLocaleTimeString(),
-    },
-    {
-      id: 'init-4',
-      type: 'info',
-      text: '   AI Agent Bridge: Active & Connected (terminal_run, code_execution)',
-      timestamp: new Date().toLocaleTimeString(),
-    },
-    {
-      id: 'init-5',
-      type: 'info',
-      text: '══════════════════════════════════════════════════════════════════════\nType any bash command below or select a quick preset.',
-      timestamp: new Date().toLocaleTimeString(),
-    },
-  ]);
+  // Start with empty lines -- welcome messages are added dynamically
+  // after the probe determines whether the terminal actually works.
+  const [lines, setLines] = useState<TerminalLine[]>([]);
 
   const [inputCommand, setInputCommand] = useState('');
   const [history, setHistory] = useState<string[]>([]);
@@ -126,6 +97,7 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // just spinning for a full minute.
   useEffect(() => {
     let cancelled = false;
+    const timeStr = new Date().toLocaleTimeString();
     (async () => {
       try {
         if (terminalService.isAvailable()) {
@@ -133,18 +105,38 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           if (cancelled) return;
           if (res.exitCode === 0 && /ready/.test(res.output || '')) {
             setTerminalReady('ready');
+            setLines([
+              { id: 'init-1', type: 'info', text: '\u2550'.repeat(68), timestamp: timeStr },
+              { id: 'init-2', type: 'success', text: '   root@gia-alpine-terminal:~# Alpine Linux Root Shell Loaded', timestamp: timeStr },
+              { id: 'init-3', type: 'info', text: '   Base: Alpine Linux (bash, curl, wget). Tap Set Up Environment for Python/Node/Git/GCC.', timestamp: timeStr },
+              { id: 'init-4', type: 'info', text: '   AI Agent Bridge: Active & Connected (terminal_run, code_execution)', timestamp: timeStr },
+              { id: 'init-5', type: 'info', text: '\u2550'.repeat(68) + '\nType any bash command below or select a quick preset.', timestamp: timeStr },
+            ]);
           } else {
             setTerminalReady('error');
             setTerminalReadyError(res.output?.trim() || 'Terminal did not respond as expected.');
+            setLines([
+              { id: 'init-err-1', type: 'error', text: 'Terminal probe failed -- rootfs may need reinstallation.', timestamp: timeStr },
+              { id: 'init-err-2', type: 'info', text: 'Tap "Set Up Environment" below to reinstall the root filesystem and install packages.', timestamp: timeStr },
+              { id: 'init-err-3', type: 'info', text: `Probe output: ${res.output?.trim() || '(empty)'}`, timestamp: timeStr },
+            ]);
           }
         } else {
-          // Web/container fallback (SandboxService) doesn't need extraction.
           setTerminalReady('ready');
+          setLines([
+            { id: 'web-1', type: 'info', text: 'Web sandbox mode -- using server-side execution.', timestamp: timeStr },
+            { id: 'web-2', type: 'info', text: 'Type any command below or select a quick preset.', timestamp: timeStr },
+          ]);
         }
       } catch (e) {
         if (cancelled) return;
         setTerminalReady('error');
-        setTerminalReadyError(e instanceof Error ? e.message : 'Could not reach the terminal.');
+        const errMsg = e instanceof Error ? e.message : 'Could not reach the terminal.';
+        setTerminalReadyError(errMsg);
+        setLines([
+          { id: 'init-err-1', type: 'error', text: `Terminal probe failed: ${errMsg}`, timestamp: timeStr },
+          { id: 'init-err-2', type: 'info', text: 'Tap "Set Up Environment" below to reinstall the root filesystem.', timestamp: timeStr },
+        ]);
       }
     })();
     return () => { cancelled = true; };
@@ -335,23 +327,33 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     addNotification('Terminal output copied to clipboard');
   };
 
-  // Provision environment action — Kai-style with per-package progress
-  const handleProvision = async () => {
+  // Set Up Environment action -- reinstalls rootfs THEN provisions packages.
+  // This is the main entry point that breaks the chicken-and-egg.
+  const handleSetEnvironment = async () => {
     setProvisioning(true);
-    setProvisionLog('');
-    setProvisionProgress({ step: 0, total: 0, label: '' });
+    setProvisionLog('Starting full environment setup...\n');
+    setProvisionProgress({ step: 0, total: 10, label: '' });
     try {
-      const res = await SandboxEnvService.provision((msg, step, total) => {
+      const res = await SandboxEnvService.installEnvironment((msg, step, total) => {
         setProvisionLog((prev) => prev + `${msg}\n`);
         if (step !== undefined && total !== undefined) {
           setProvisionProgress({ step, total, label: msg });
         }
       });
-      setProvisionLog((prev) => prev + `\n${res.output}\n\n${res.success ? '✅ Environment ready!' : '⚠ Setup completed with notices.'}`);
+      setProvisionLog((prev) => prev + `\n${res.output}\n\n${res.success ? 'Environment ready!' : 'Setup completed with notices.'}`);
       await refreshStatus();
-      addNotification(res.success ? 'Alpine build environment provisioned successfully!' : 'Environment setup completed with notices.');
+      // Re-probe terminal readiness
+      if (res.success) {
+        setTerminalReady('ready');
+        const timeStr = new Date().toLocaleTimeString();
+        setLines([
+          { id: 'post-setup-1', type: 'success', text: 'Environment installed successfully!', timestamp: timeStr },
+          { id: 'post-setup-2', type: 'info', text: 'Type any bash command below or select a quick preset.', timestamp: timeStr },
+        ]);
+      }
+      addNotification(res.success ? 'Alpine build environment installed successfully!' : 'Environment setup completed with notices.');
     } catch (e) {
-      setProvisionLog((prev) => prev + `\n❌ Error: ${e instanceof Error ? e.message : String(e)}`);
+      setProvisionLog((prev) => prev + `\nError: ${e instanceof Error ? e.message : String(e)}`);
       addNotification('Environment setup encountered an error');
     } finally {
       setProvisioning(false);
@@ -640,20 +642,20 @@ export const TerminalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <div className="mt-5 pt-4 border-t flex flex-wrap gap-3 items-center justify-between" style={{ borderColor: 'var(--gia-border)' }}>
               <div>
                 <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>
-                  Provision / Upgrade Environment
+                  Install Build Environment
                 </p>
                 <p className="text-[11px]" style={{ color: 'var(--gia-muted)' }}>
-                  Installs each tool one-by-one with live progress.
+                  Reinstalls root filesystem and installs packages one-by-one.
                 </p>
               </div>
 
               <button
-                onClick={handleProvision}
+                onClick={handleSetEnvironment}
                 disabled={provisioning}
                 className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 flex items-center gap-2 transition-colors disabled:opacity-50"
               >
                 {provisioning ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-                {provisioning ? 'Installing...' : 'Provision / Update All'}
+                {provisioning ? 'Installing...' : 'Set Up Environment'}
               </button>
             </div>
 

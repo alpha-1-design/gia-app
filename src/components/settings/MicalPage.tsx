@@ -435,9 +435,9 @@ const MicalPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             disabled={sandboxBusy !== null}
             onClick={async () => {
               setSandboxBusy('setup');
-              setSandboxProgress('Starting...');
+              setSandboxProgress('Starting full environment setup...');
               setSandboxOutput('');
-              const res = await SandboxEnvService.provision(m => setSandboxProgress(m));
+              const res = await SandboxEnvService.installEnvironment(m => setSandboxProgress(m));
               setSandboxOutput(res.output || '');
               setSandboxBusy(null);
               refreshSandboxStatus();

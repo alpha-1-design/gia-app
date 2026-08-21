@@ -70,6 +70,7 @@ interface GiaTerminalPlugin {
   listSessions(): Promise<{ sessions: SessionInfo[] }>;
   getFSInfo(): Promise<{ totalBytes: number; freeBytes: number; usedBytes: number }>;
   getStatus(): Promise<{ running: boolean; sessionCount: number }>;
+  reinstallRootfs(): Promise<{ success: boolean; message: string }>;
 }
 
 export function getSmartTimeout(command: string, requestedTimeout?: number): number {
@@ -253,6 +254,26 @@ class TerminalService {
     } catch (error) {
       console.error('[TerminalService] getStatus() failed:', error);
       throw new Error(`Terminal getStatus failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Force-delete the rootfs and re-extract from APK assets.
+   *
+   * This is the escape hatch for when the rootfs is broken (e.g. old
+   * extraction created non-functional symlinks). After this, the next
+   * exec() call will wait for extraction and use the fresh rootfs.
+   */
+  async reinstallRootfs(): Promise<{ success: boolean; message: string }> {
+    if (!this.plugin) {
+      throw new Error('Terminal plugin not available — cannot reinstall rootfs');
+    }
+    try {
+      const result = await (this.p as GiaTerminalPlugin).reinstallRootfs();
+      return { success: result.success, message: result.message };
+    } catch (error) {
+      console.error('[TerminalService] reinstallRootfs() failed:', error);
+      throw new Error(`Rootfs reinstall failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

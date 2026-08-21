@@ -207,6 +207,33 @@ public class GIATerminalPlugin extends Plugin {
         }
     }
 
+    /**
+     * Force-delete the rootfs and re-extract from assets on a background thread.
+     * 
+     * This breaks the chicken-and-egg where a broken rootfs prevents
+     * provisioning (which needs a working terminal) but a working terminal
+     * needs a good rootfs.
+     */
+    @PluginMethod
+    public void reinstallRootfs(PluginCall call) {
+        new Thread(() -> {
+            try {
+                boolean ok = GIATerminalService.forceReextractRootfs(getContext());
+                if (ok) {
+                    JSObject result = new JSObject();
+                    result.put("success", true);
+                    result.put("message", "Rootfs re-extracted successfully");
+                    call.resolve(result);
+                } else {
+                    call.reject("Rootfs re-extraction completed but critical binaries are missing");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to reinstall rootfs", e);
+                call.reject("Failed to reinstall rootfs: " + e.getMessage(), e);
+            }
+        }, "rootfs-reinstall").start();
+    }
+
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
