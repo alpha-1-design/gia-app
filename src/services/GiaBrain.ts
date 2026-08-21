@@ -77,11 +77,29 @@ class GiaBrain {
         }
       }
 
+      // Emit tool execution status so the user sees what GIA is doing
+      if (req.onThought) {
+        const toolNameRegex = /```tool\s*\n?\s*"?id"?\s*:\s*"([^"]+)"/g;
+        const toolNames = new Set<string>();
+        let tnMatch;
+        while ((tnMatch = toolNameRegex.exec(text)) !== null) {
+          toolNames.add(tnMatch[1]);
+        }
+        for (const toolName of toolNames) {
+          req.onThought(`⚙️ Executing ${toolName}...`);
+        }
+      }
+
       const toolState = { history, currentPrompt, clarificationAttempts };
       const toolResult = await ToolExecutionService.execute(text, toolState, req.onThought, req.signal, sourcesAcc, req.messageId);
 
       currentPrompt = toolState.currentPrompt;
       clarificationAttempts = toolState.clarificationAttempts;
+
+      // Emit tool completion status
+      if (req.onThought && toolResult.didExecute) {
+        req.onThought(`✅ Tools completed — generating response...`);
+      }
 
       if (!toolResult.didExecute) {
         extractMemories(req.prompt, text).catch((e) => logger.error('[GiaBrain] Memory extraction failed:', e));

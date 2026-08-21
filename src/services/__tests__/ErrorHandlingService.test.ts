@@ -95,15 +95,16 @@ describe('ErrorHandlingService', () => {
   });
 
   it('throws after all retries fail', async () => {
-    callProviderMock.mockRejectedValue(new Error('rate limit exceeded'));
+    // Use synchronous throw so the rejection is created inside the try/catch
+    // (avoids PromiseRejectionHandledWarning from eager mockRejectedValue)
+    callProviderMock.mockImplementation(() => { throw new Error('rate limit exceeded'); });
 
-    const promise = ErrorHandlingService.handleErrors(
+    const p = ErrorHandlingService.handleErrors(
       new Error('rate limit exceeded'), baseReq, 'openai', 'gpt-4o', performance.now(), '', 1, [],
-    ).catch(e => { throw e; });
-
-    await vi.advanceTimersByTimeAsync(10000);
-    await expect(promise).rejects.toThrow();
-  }, 15000);
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    await expect(p).rejects.toThrow('openai failed: rate limit exceeded');
+  }, 10000);
 
   it('does not retry non-rate-limit errors', async () => {
     callProviderMock.mockRejectedValue(new Error('invalid api key'));

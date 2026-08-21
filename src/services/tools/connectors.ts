@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import connectorManager from '../connectors/ConnectorManager';
+import { useSearchStore } from '../../store/useSearchStore';
 import type { Tool } from './types';
 
 function formatZodError(issues: z.ZodIssue[]): string {
@@ -34,6 +35,17 @@ const connectorList: Tool = {
       for (const c of items) {
         const statusIcon = c.status === 'connected' ? '✅' : c.status === 'error' ? '❌' : '⏹️';
         content += `${statusIcon} **${c.name}** \`${c.id}\`\n   ${c.description}\n   Status: ${c.status}${c.errorMessage ? ` — ${c.errorMessage}` : ''}\n\n`;
+      }
+    }
+    // Also show search providers from the search store
+    const searchStore = useSearchStore.getState();
+    const searchProviders: string[] = [];
+    if (searchStore.providers.exa.enabled && searchStore.providers.exa.apiKey) searchProviders.push('Exa Search');
+    if (searchStore.providers.browserless.enabled && searchStore.providers.browserless.apiKey) searchProviders.push('Browserless.io');
+    if (searchProviders.length > 0) {
+      content += `## 🔍 Search Providers\n`;
+      for (const name of searchProviders) {
+        content += `✅ **${name}** — Active and connected\n\n`;
       }
     }
     content += 'Use `connector_configure` to set up a connector with your API key.';

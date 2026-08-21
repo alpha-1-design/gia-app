@@ -367,7 +367,7 @@ public class GIATerminalService extends Service {
      * the guest: /bin/busybox (the real binary) plus /bin/sh and /usr/bin/env
      * (busybox applet links that extraction must materialize).
      */
-    private static boolean rootfsHasCriticalBinaries(File rootfsDir) {
+    static boolean rootfsHasCriticalBinaries(File rootfsDir) {
         File busybox = new File(rootfsDir, "bin/busybox");
         File sh = new File(rootfsDir, "bin/sh");
         File env = new File(rootfsDir, "usr/bin/env");
@@ -379,7 +379,7 @@ public class GIATerminalService extends Service {
      * copy the busybox binary for applet paths (bin/, sbin/, usr/bin/,
      * usr/sbin/), or mkdir for anything that looks like a directory link.
      */
-    private static void materializeSymlinks(File rootfsDir, List<String[]> failedSymlinks) throws IOException {
+    static void materializeSymlinks(File rootfsDir, List<String[]> failedSymlinks) throws IOException {
         if (failedSymlinks.isEmpty()) return;
         File busybox = new File(rootfsDir, "bin/busybox");
         for (String[] entry : failedSymlinks) {
@@ -412,7 +412,7 @@ public class GIATerminalService extends Service {
         }
     }
 
-    private static void deleteRecursive(File f) {
+    static void deleteRecursive(File f) {
         if (f == null || !f.exists()) return;
         File[] children = f.listFiles();
         if (children != null) {
@@ -530,7 +530,7 @@ public class GIATerminalService extends Service {
      * (avoids Android 10+ W^X policy on app-private directories), then falling
      * back to asset extraction.
      */
-    private static String resolveProotPath(Context context) {
+    static String resolveProotPath(Context context) {
         // Native library directory is always executable on all Android versions
         String nativeLibPath = context.getApplicationInfo().nativeLibraryDir
                 + File.separator + "libproot.so";
@@ -793,7 +793,7 @@ public class GIATerminalService extends Service {
         out.flush();
     }
 
-    private static void untar(File archive, File destDir, List<String[]> failedSymlinks) throws IOException {
+    static void untar(File archive, File destDir, List<String[]> failedSymlinks) throws IOException {
         // We handle .tar.gz: decompress gzip then untar
         try (InputStream fis = new FileInputStream(archive);
              InputStream gzIn = new GZIPInputStream(fis)) {

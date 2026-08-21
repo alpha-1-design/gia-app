@@ -9,6 +9,7 @@ import AnalyticsService from '../services/AnalyticsService';
 import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
 import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock, flushToolBlock } from '../utils/streamParser';
+import { generateSuggestions } from '../utils/suggestionEngine';
 import { streamPush, streamCancel } from '../utils/streamThrottle';
 import OutputValidator from '../services/OutputValidator';
 import InputGuardrails from '../services/InputGuardrails';
@@ -16,7 +17,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { giaCoreServices } from '../services/GIACoreServices';
 import HapticService from '../services/HapticService';
 import type { Message } from '../store/useGiaStore';
-import { extractJSON, isNativePlatform } from '../utils/helpers';
+import { isNativePlatform } from '../utils/helpers';
 
 const BACKGROUND_NOTIF_ID = 42;
 
@@ -25,27 +26,17 @@ const BACKGROUND_NOTIF_ID = 42;
 // answer. Failures are silent — suggestions are a nicety, not a contract.
 const SUGGESTION_MIN_LEN = 80;
 
-async function generateFollowUpSuggestions(sessionId: string, asstId: string, content: string): Promise<void> {
+function applyFollowUpSuggestions(sessionId: string, asstId: string, content: string): void {
   try {
-    const res = await GiaBrain.generate({
-      prompt: `Based on the assistant's answer below, suggest 3 short follow-up questions a user would naturally tap next.\n\nAnswer: ${content.slice(0, 2000)}`,
-      systemPrompt: 'Return ONLY a JSON array of exactly 3 short strings (4-9 words each). No markdown, no commentary. Example: ["Explain the key point more simply", "What are the main downsides?", "Give me a practical example"]',
-      systemPromptMode: 'replace',
-      forceJson: true,
-      maxTokens: 160,
-    });
-    const parsed = extractJSON<string[]>(res.text);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      const suggestions = parsed.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 3);
-      if (suggestions.length > 0) {
-        useGiaStore.setState({
-          sessions: useGiaStore.getState().sessions.map(s =>
-            s.id === sessionId
-              ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, suggestions } } : m) }
-              : s
-          ),
-        });
-      }
+    const suggestions = generateSuggestions(content);
+    if (suggestions.length > 0) {
+      useGiaStore.setState({
+        sessions: useGiaStore.getState().sessions.map(s =>
+          s.id === sessionId
+            ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, suggestions } } : m) }
+            : s
+        ),
+      });
     }
   } catch {
     // Suggestions are a nicety — never surface failures.
@@ -402,8 +393,14 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               temperature: extThinking ? undefined : 0.7,
               onStream: (chunk) => {
                 if (ctrl.signal.aborted) return;
+                const prevThoughts = parserState.thoughtsAccumulated;
                 const newDisplay = sharedProcessStreamChunk(chunk, parserState);
                 if (newDisplay) displayAccumulated += newDisplay;
+                // Emit thinking incrementally as tokens arrive (like Claude/OpenAI)
+                if (parserState.thoughtsAccumulated !== prevThoughts) {
+                  setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                  useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                }
                 streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
                 if (parserState.artifacts.length > lastFlushedArtifactCount) {
                   lastFlushedArtifactCount = parserState.artifacts.length;
@@ -444,8 +441,14 @@ onThought: (thought) => {
             temperature: extThinking ? undefined : 0.7,
             onStream: (chunk) => {
               if (ctrl.signal.aborted) return;
+              const prevThoughts = parserState.thoughtsAccumulated;
               const newDisplay = sharedProcessStreamChunk(chunk, parserState);
               if (newDisplay) displayAccumulated += newDisplay;
+              // Emit thinking incrementally as tokens arrive (like Claude/OpenAI)
+              if (parserState.thoughtsAccumulated !== prevThoughts) {
+                setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+              }
               streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
               if (parserState.artifacts.length > lastFlushedArtifactCount) {
                 lastFlushedArtifactCount = parserState.artifacts.length;
@@ -564,7 +567,7 @@ onThought: (thought) => {
         });
       } else if (finalText.length >= SUGGESTION_MIN_LEN && !finalText.startsWith('🤖 _Taking action..._')) {
         // Non-blocking tappable follow-ups for completed answers.
-        generateFollowUpSuggestions(sessionId, asstId, finalText);
+        applyFollowUpSuggestions(sessionId, asstId, finalText);
       }
       notifyIfBackground('chat', sessionId, asstId);
     } catch (err: unknown) {
@@ -584,8 +587,9 @@ onThought: (thought) => {
       streamCancel(streamKey);
       unregisterGenerationController(genKey);
       allGenKeysRef.current.delete(genKey);
-      setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
-      useGiaStore.getState().setLiveThoughts(prev => { const n = {...prev}; delete n[asstId]; return n; });
+      // Keep liveThoughts visible so the user can review thinking after generation ends.
+      // They are only cleared when a NEW generation starts for this message (see top of generate function),
+      // or when the session is switched/cleared.
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
