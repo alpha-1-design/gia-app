@@ -11,7 +11,7 @@ import {
   CheckCircle2, Loader2, FolderOpen, HardDrive, Cpu,
   ChevronDown, ChevronRight, Zap, Settings, Box,
 } from 'lucide-react';
-import { useSandboxSetup, type PackageCmdResult } from '../hooks/useSandboxSetup';
+import { useSandboxSetup } from '../hooks/useSandboxSetup';
 
 type Tab = 'system' | 'packages' | 'workspace' | 'mcp';
 
@@ -124,7 +124,7 @@ export default function SandboxSetupPanel() {
     isNative, setupStatus, phase, progress, log,
     isInstalling, pkgInstalling,
     startSetup, execCommand, installPackage, removePackage, searchPackages,
-    listInstalledPackages, updatePackageIndex, clearLog,
+    listInstalledPackages, updatePackageIndex,
   } = useSandboxSetup();
 
   const [tab, setTab] = useState<Tab>('system');
@@ -134,7 +134,7 @@ export default function SandboxSetupPanel() {
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   const [fullInstalling, setFullInstalling] = useState(false);
   const [fullInstallProgress, setFullInstallProgress] = useState('');
-  const [workspaceReady, setWorkspaceReady] = useState(false);
+
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -173,10 +173,9 @@ export default function SandboxSetupPanel() {
     await execCommand('mkdir -p /workspace/{projects,downloads,scripts,documents,data,tools}', 10000).catch(() => {});
 
     setFullInstallProgress('Done!');
-    setWorkspaceReady(true);
     await refreshInstalled();
     setFullInstalling(false);
-  }, [installPackage, updatePackageIndex, refreshInstalled]);
+  }, [execCommand, installPackage, updatePackageIndex, refreshInstalled]);
 
   // Single package install
   const handleInstall = useCallback(async (pkg: string) => {

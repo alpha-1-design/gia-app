@@ -9,7 +9,7 @@ const CODE_MARKERS = /(?:```|function |const |class |import |def |print\(|return
 const COMPARISON_MARKERS = /(?:versus|vs\.?|compared to|difference between|better than|worse than|pros and cons|alternatives)/i;
 const LIST_MARKERS = /(?:top \d|list of|examples of|types of|best |worst |should I )/i;
 const TUTORIAL_MARKERS = /(?:step|step-by-step|guide|tutorial|how to|instructions)/i;
-const QUESTION_MARKERS = /\?/;
+
 
 const ALL_SUGGESTIONS = {
   explainMore: [
@@ -63,19 +63,8 @@ function pickRandom<T>(arr: T[], count: number): T[] {
   return shuffled.slice(0, count);
 }
 
-function extractTopic(content: string): string | null {
-  // Try to extract a topic from the content
-  const sentences = content.split(/[.!?\n]+/).filter(s => s.trim().length > 10);
-  if (sentences.length === 0) return null;
-  const firstSentence = sentences[0].trim();
-  // If it mentions a specific topic, return it
-  const topicMatch = firstSentence.match(/(?:about|regarding|concerning|on)\s+(?:the\s+)?(.+?)(?:\s+(?:in|of|for|and|that|which|is|are|was|were)\b|$)/i);
-  if (topicMatch) return topicMatch[1].trim().slice(0, 40);
-  return firstSentence.slice(0, 40);
-}
 
 export function generateSuggestions(content: string, userQuestion?: string): string[] {
-  const suggestions: string[] = [];
   const pool = [...ALL_SUGGESTIONS.general];
 
   if (EXPLANATION_MARKERS.test(content) || EXPLANATION_MARKERS.test(userQuestion || '')) {
