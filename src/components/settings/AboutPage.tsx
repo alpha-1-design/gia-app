@@ -125,7 +125,7 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Version */}
       <p className="text-center text-[10px] pb-4" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.3.3.0-beta.1 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        GIA v2.4.0.0 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
 
       <ConfirmDialog

@@ -35,7 +35,7 @@ export function Hero() {
                 <span className="rounded-full bg-violet-500/20 border border-violet-500/25 px-2 py-0.5 text-[10px] font-bold text-violet-300">
                   BETA
                 </span>
-                v2.3.3-beta.1 — Latest Release
+                v2.4.0.0 — Latest Release
               </div>
             </motion.div>
 
