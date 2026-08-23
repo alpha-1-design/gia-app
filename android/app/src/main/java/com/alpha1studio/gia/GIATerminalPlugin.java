@@ -260,7 +260,16 @@ public class GIATerminalPlugin extends Plugin {
     // On-device rootfs download with progress (Kai 9000 style)
     // -----------------------------------------------------------------------
 
-    private static final String ALPINE_MIRROR_BASE = "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases";
+    /** CDN mirror list — primary + fallbacks for mobile networks that block certain domains */
+    private static final String[] ALPINE_MIRRORS = {
+        "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases",
+        "https://dl-3.alpinelinux.org/alpine/v3.21/releases",
+        "https://dl-4.alpinelinux.org/alpine/v3.21/releases",
+        "https://cdn-mirror.getalpine.org/alpine/v3.21/releases",
+        "https://mirror.math.princeton.edu/pub/alpine/v3.21/releases",
+    };
+    private static final int MAX_RETRIES = 3;
+    private static final int RETRY_DELAY_MS = 2000;
     private final AtomicBoolean downloadInProgress = new AtomicBoolean(false);
 
     /**
@@ -288,6 +297,7 @@ public class GIATerminalPlugin extends Plugin {
                 call.resolve(result);
             } catch (Exception e) {
                 downloadInProgress.set(false);
+                Log.e(TAG, "Rootfs download failed: " + e.getMessage(), e);
                 emitProgress("error", 0, "Error: " + e.getMessage());
                 call.reject("Download failed: " + e.getMessage(), e);
             }
@@ -303,42 +313,72 @@ public class GIATerminalPlugin extends Plugin {
         terminalDir.mkdirs();
         rootfsDir.mkdirs();
 
-        // Step 1: Download rootfs tarball from CDN
-        String downloadUrl = ALPINE_MIRROR_BASE + "/" + arch + "/alpine-minirootfs-3.21.0-" + arch + ".tar.gz";
-        emitProgress("downloading", 0, "Downloading Alpine rootfs from CDN...");
-        Log.i(TAG, "Downloading rootfs from: " + downloadUrl);
+        // Step 1: Download rootfs tarball from CDN with mirror fallback
+        String filename = "alpine-minirootfs-3.21.0-" + arch + ".tar.gz";
+        boolean downloaded = false;
+        Exception lastError = null;
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(downloadUrl).openConnection();
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(30000);
-        conn.setRequestProperty("User-Agent", "GIA/2.4.0.0");
+        for (String mirror : ALPINE_MIRRORS) {
+            String downloadUrl = mirror + "/" + arch + "/" + filename;
+            emitProgress("downloading", 0, "Trying " + mirror.replace("https://", "") + "...");
+            Log.i(TAG, "Downloading rootfs from: " + downloadUrl);
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode != 200) {
-            throw new IOException("HTTP " + responseCode + " fetching rootfs");
-        }
+            for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(downloadUrl).openConnection();
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(30000);
+                    conn.setRequestProperty("User-Agent", "GIA/2.4.0");
 
-        long totalBytes = conn.getContentLengthLong();
-        if (totalBytes <= 0) totalBytes = 2_000_000; // fallback estimate
+                    int responseCode = conn.getResponseCode();
+                    if (responseCode != 200) {
+                        conn.disconnect();
+                        throw new IOException("HTTP " + responseCode);
+                    }
 
-        try (InputStream in = conn.getInputStream();
-             FileOutputStream out = new FileOutputStream(archiveFile)) {
-            byte[] buf = new byte[8192];
-            long downloaded = 0;
-            int n;
-            int lastProgress = -1;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-                downloaded += n;
-                int pct = (int) (downloaded * 40 / totalBytes); // 0-40% for download
-                if (pct != lastProgress) {
-                    lastProgress = pct;
-                    emitProgress("downloading", pct,
-                        "Downloading... " + (downloaded / 1024) + "KB / " + (totalBytes / 1024) + "KB");
+                    long totalBytes = conn.getContentLengthLong();
+                    if (totalBytes <= 0) totalBytes = 2_000_000; // fallback estimate
+
+                    // Clear any partial file from previous attempt
+                    if (archiveFile.exists()) archiveFile.delete();
+
+                    try (InputStream in = conn.getInputStream();
+                         FileOutputStream out = new FileOutputStream(archiveFile)) {
+                        byte[] buf = new byte[8192];
+                        long bytesSoFar = 0;
+                        int n;
+                        int lastProgress = -1;
+                        while ((n = in.read(buf)) != -1) {
+                            out.write(buf, 0, n);
+                            bytesSoFar += n;
+                            int pct = (int) (bytesSoFar * 40 / totalBytes); // 0-40% for download
+                            if (pct != lastProgress) {
+                                lastProgress = pct;
+                                emitProgress("downloading", pct,
+                                    "Downloading... " + (bytesSoFar / 1024) + "KB / " + (totalBytes / 1024) + "KB");
+                            }
+                        }
+                    }
+                    conn.disconnect();
+                    downloaded = true;
+                    break;
+                } catch (Exception e) {
+                    lastError = e;
+                    Log.w(TAG, "Attempt " + attempt + "/" + MAX_RETRIES + " failed for " + mirror + ": " + e.getMessage());
+                    if (attempt < MAX_RETRIES) {
+                        emitProgress("downloading", 0, "Retry " + attempt + "/" + MAX_RETRIES + "...");
+                        try { Thread.sleep(RETRY_DELAY_MS); } catch (InterruptedException ignored) {}
+                    }
                 }
             }
+            if (downloaded) break;
         }
-        conn.disconnect();
+
+        if (!downloaded) {
+            String errMsg = lastError != null ? lastError.getMessage() : "unknown error";
+            throw new IOException("Could not download rootfs from any mirror: " + errMsg);
+        }
+
         emitProgress("downloading", 40, "Download complete — " + (archiveFile.length() / 1024) + "KB");
         Log.i(TAG, "Rootfs downloaded: " + archiveFile.length() + " bytes");
 
@@ -374,78 +414,73 @@ public class GIATerminalPlugin extends Plugin {
         }
         emitProgress("materializing", 80, "Hardening rootfs...");
 
-        // Step 5: Install base packages via proot
-        emitProgress("installing", 81, "Installing base packages (this may take a few minutes)...");
-        String prootPath = GIATerminalService.resolveProotPath(ctx);
-        String prootCmd = prootPath
-            + " -r " + rootfsDir.getAbsolutePath()
-            + " -0"
-            + " -b /proc -b /sys -b /dev -b /dev/pts"
-            + " -b /system -b /data -b /mnt -b /storage"
-            + " -w /root"
-            + " /usr/bin/env -i"
-            + " TERM=xterm-256color HOME=/root"
-            + " PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            + " SHELL=/bin/sh"
-            + " /bin/sh -c 'apk update && apk add --no-cache bash git curl wget python3 nodejs npm openssh build-base sudo vim jq ripgrep fd tree zip unzip 2>&1'";
-
-        try {
-            ProcessBuilder pb = new ProcessBuilder("sh", "-c", prootCmd);
-            // Without a working directory proot fails its own init with
-            // "can't chdir /root/." before it ever reaches the guest --
-            // the sibling exec path in GIATerminalService sets this for
-            // the same reason; this call site was missing it.
-            pb.directory(rootfsDir);
-            pb.redirectErrorStream(true);
-            File prootTmpDir = new File(ctx.getCacheDir(), "proot-tmp");
-            prootTmpDir.mkdirs();
-            pb.environment().put("PROOT_NO_SECCOMP", "1");
-            pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
-            pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
-            Process proc = pb.start();
-            // Stream output as progress, and keep the last few lines so a
-            // failure can report *why* instead of a generic message.
-            final java.util.List<String> tailLines = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-            Thread outputThread = new Thread(() -> {
-                try (InputStream procOut = proc.getInputStream()) {
-                    byte[] buf = new byte[4096];
-                    int n;
-                    while ((n = procOut.read(buf)) != -1) {
-                        String line = new String(buf, 0, n).trim();
-                        if (!line.isEmpty()) {
-                            emitProgress("installing", 85, "apk: " + line);
-                            tailLines.add(line);
-                            if (tailLines.size() > 5) tailLines.remove(0);
-                        }
-                    }
-                } catch (IOException ignored) {}
-            });
-            outputThread.start();
-            int exitCode = proc.waitFor();
-            outputThread.join(5000);
-            if (exitCode == 0) {
-                emitProgress("installing", 95, "Base packages installed");
-            } else {
-                String tail = String.join(" | ", tailLines);
-                Log.w(TAG, "Package install step failed, proot exit=" + exitCode + ": " + tail);
-                emitProgress("installing", 95, "Package install failed (exit " + exitCode + ") — you can install packages manually: " + tail);
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Package install step failed (non-fatal): " + e.getMessage());
-            emitProgress("installing", 95, "Package install skipped — you can install packages manually");
+        // Step 5: Verify rootfs has critical binaries (skip proot package install —
+        // do that from the Packages tab instead, since proot during setup is fragile)
+        emitProgress("installing", 81, "Verifying rootfs integrity...");
+        
+        // Debug: log what's actually in the rootfs
+        File busyboxCheck = new File(rootfsDir, "bin/busybox");
+        File shCheck = new File(rootfsDir, "bin/sh");
+        File envCheck = new File(rootfsDir, "usr/bin/env");
+        File binDir = new File(rootfsDir, "bin");
+        Log.i(TAG, "Rootfs verification: busybox=" + busyboxCheck.exists()
+            + " sh=" + shCheck.exists() + " env=" + envCheck.exists());
+        if (binDir.exists() && binDir.listFiles() != null) {
+            Log.i(TAG, "bin/ contents: " + java.util.Arrays.toString(binDir.list()));
         }
 
-        // Step 6: Verify
+        // If symlinks weren't materialized during extraction, do it now
+        boolean hasBusybox = busyboxCheck.exists();
+        boolean hasSh = shCheck.exists();
+        boolean hasEnv = envCheck.exists();
+        
+        if (hasBusybox && (!hasSh || !hasEnv)) {
+            emitProgress("installing", 85, "Fixing missing symlinks...");
+            // Manually create busybox applet copies for missing critical binaries
+            if (!hasSh) {
+                shCheck.getParentFile().mkdirs();
+                try {
+                    GIATerminalService.copyFile(busyboxCheck, shCheck);
+                    shCheck.setExecutable(true, false);
+                    hasSh = true;
+                    Log.i(TAG, "Manually created /bin/sh from busybox");
+                } catch (IOException e) {
+                    Log.e(TAG, "Failed to create /bin/sh: " + e.getMessage());
+                }
+            }
+            if (!hasEnv) {
+                File usrBin = envCheck.getParentFile();
+                if (usrBin != null) usrBin.mkdirs();
+                try {
+                    GIATerminalService.copyFile(busyboxCheck, envCheck);
+                    envCheck.setExecutable(true, false);
+                    hasEnv = true;
+                    Log.i(TAG, "Manually created /usr/bin/env from busybox");
+                } catch (IOException e) {
+                    Log.e(TAG, "Failed to create /usr/bin/env: " + e.getMessage());
+                }
+            }
+        }
+
+        emitProgress("installing", 95, "Rootfs verified");
+
+        // Step 6: Final verification
         emitProgress("verifying", 96, "Verifying installation...");
         boolean ok = GIATerminalService.rootfsHasCriticalBinaries(rootfsDir);
         if (ok) {
             File marker = new File(rootfsDir, ".gia-rootfs-ok");
             marker.createNewFile();
-            emitProgress("ready", 100, "Terminal installed and ready!");
+            emitProgress("ready", 100, "Terminal installed and ready! Use the Packages tab to install tools.");
             Log.i(TAG, "On-device rootfs setup complete");
         } else {
-            emitProgress("error", 0, "Installation incomplete — critical binaries missing");
-            throw new IOException("Rootfs extraction incomplete — /bin/sh or /usr/bin/env missing");
+            // List what we DO have for debugging
+            String missing = "";
+            if (!busyboxCheck.exists()) missing += "busybox ";
+            if (!shCheck.exists()) missing += "/bin/sh ";
+            if (!envCheck.exists()) missing += "/usr/bin/env ";
+            Log.e(TAG, "Rootfs verification failed — missing: " + missing);
+            emitProgress("error", 0, "Rootfs extraction incomplete — missing: " + missing.trim());
+            throw new IOException("Rootfs extraction incomplete — missing: " + missing.trim());
         }
     }
 

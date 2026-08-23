@@ -963,7 +963,7 @@ public class GIATerminalService extends Service {
         return value;
     }
 
-    private static void copyFile(File src, File dst) throws IOException {
+    static void copyFile(File src, File dst) throws IOException {
         try (InputStream in = new FileInputStream(src);
              OutputStream out = new FileOutputStream(dst)) {
             copyStream(in, out);
