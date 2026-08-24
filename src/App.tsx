@@ -19,6 +19,7 @@ import { SourcesPanel } from './components/SourcesPanel';
 import AppNavigation from './components/AppNavigation';
 import BiometricService from './services/BiometricService';
 import { useProviderStore } from './store/useProviderStore';
+import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
@@ -411,6 +412,20 @@ const App: React.FC = () => {
     });
 
     import('./services/GIACoreServices').then(m => m.giaCoreServices.onAppStart());
+
+    // Unimind — cross-device spine. Auto-connect if a relay is configured
+    // (set in Settings → Unimind), surface desktop chat as notifications.
+    import('./services/unimindClient').then(async ({ unimindClient }) => {
+      if (unimindClient.getRelayUrl()) void unimindClient.connect();
+      unimindClient.onChat = (peer, text) => {
+        try {
+          useNotificationStore.getState().addNotification({ app: 'Unimind', title: `💻 ${peer.name || 'Desktop'}`, body: text.slice(0, 120), source: 'whatsapp', category: 'message' });
+          void import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+            LocalNotifications.schedule({ notifications: [{ id: Date.now() % 100000, title: `💻 ${peer.name || 'Desktop'}`, body: text.slice(0, 200) }] }).catch(() => {});
+          });
+        } catch { /* best-effort */ }
+      };
+    });
 
     // Track user activity for autonomy engine + idle manager
     const trackActivity = () => {

@@ -1,4 +1,6 @@
 import { logger } from '../utils/logger';
+import { Capacitor } from '@capacitor/core';
+import { GIADeviceInfo } from './GIADeviceInfo';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -15,7 +17,7 @@ export interface DeviceCapabilities {
   hasGPU: boolean;
   /** Whether the device reports itself as low-powered / mobile. */
   isMobile: boolean;
-  /** True if actual measurements (storage estimate) were obtained. */
+  /** True if RAM/storage came from a real measurement, not a guess. */
   measured: boolean;
   /** Human-readable notes about detection confidence. */
   notes: string[];
@@ -72,55 +74,85 @@ function detectMobile(): boolean {
   return /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua) || (typeof window !== 'undefined' && window.innerWidth < 768 && /Mobi/i.test(ua));
 }
 
+const GB = 1024 ** 3;
+
 /**
- * Best-effort device capability detection.
- * Combines navigator.deviceMemory, hardwareConcurrency, and the
- * StorageManager estimate API to give a real picture of whether a
- * local model can be downloaded and run without crashing.
+ * Best-effort device capability detection, native-first:
+ *
+ *  1. GIADeviceInfo Capacitor plugin — real total/available RAM, real
+ *     storage, real CPU cores from Android (ActivityManager + StatFs).
+ *  2. Browser APIs (navigator.deviceMemory / StorageManager) — Chrome
+ *     web fallback.
+ *  3. Conservative estimate from device class — never presented as real.
+ *
+ * Before, on a real phone the WebView usually lacked deviceMemory and the
+ * code silently guessed "4 GB". Now a real Android build gets the truth.
  */
 export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   if (cachedCaps) return cachedCaps;
 
   const notes: string[] = [];
   const isMobile = detectMobile();
+  const hasGPU = detectGPU();
 
-  // ── RAM ───────────────────────────────────────────────────────
+  // ── 1. Native (Capacitor / Android) ────────────────────────────
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const info = await GIADeviceInfo.getDeviceInfo();
+      const totalRAM = info.totalRAM;
+      const availRAM = info.availableRAM;
+      const storageFree = info.storageFree || info.externalStorageFree;
+      const storageTotal = info.storageTotal;
+
+      if (totalRAM > 0) {
+        const totalRAMGB = totalRAM / GB;
+        // Reserve the OS + app baseline; if the native plugin gave us
+        // real available RAM, prefer it directly.
+        const reserve = isMobile ? 1.5 : 2.5;
+        const availableRAMGB = availRAM > 0 ? Math.max(0, availRAM / GB) : Math.max(0, totalRAMGB - reserve);
+        const availableStorageGB = storageFree > 0 ? storageFree / GB : 8;
+        const cpuCores = info.cpuCores > 0 ? info.cpuCores : navigator.hardwareConcurrency || (isMobile ? 4 : 8);
+        notes.push(`Native: ${info.manufacturer || ''} ${info.model || ''} (Android ${info.androidVersion || '?'}, API ${info.apiLevel || '?'})`);
+        notes.push(`Native RAM: ${totalRAMGB.toFixed(1)} GB total, ${availableRAMGB.toFixed(1)} GB available`);
+        if (info.isLowRamDevice) notes.push('Device classed as low-RAM by Android');
+        if (storageFree > 0) notes.push(`Native free storage: ${availableStorageGB.toFixed(1)} GB`);
+
+        cachedCaps = {
+          totalRAMGB,
+          availableRAMGB,
+          availableStorageGB,
+          cpuCores,
+          hasGPU,
+          isMobile,
+          measured: true,
+          notes,
+        };
+        return cachedCaps;
+      }
+      notes.push('Native plugin returned no RAM — falling back to browser APIs');
+    } catch (e) {
+      notes.push('Native device info unavailable — falling back to browser APIs');
+      logger.warn('[deviceCaps] native detection failed', e);
+    }
+  }
+
+  // ── 2. Browser APIs (Chrome web fallback) ──────────────────────
   const rawMem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
-  let totalRAMGB: number;
+  let totalRAMGB: number | null = null;
   if (typeof rawMem === 'number' && rawMem > 0) {
     totalRAMGB = rawMem;
     notes.push(`Reported device memory: ${rawMem} GB`);
-  } else {
-    // No deviceMemory API (Firefox/Safari): estimate from platform.
-    totalRAMGB = isMobile ? 4 : 8;
-    notes.push('deviceMemory API unavailable — estimated from device class');
   }
 
-  // Chrome-only JS heap as a sanity hint.
-  const perfMem = (performance as unknown as { memory?: { jsHeapSizeLimit: number; usedJSHeapSize: number } }).memory;
-  if (perfMem?.jsHeapSizeLimit) {
-    const heapGB = perfMem.jsHeapSizeLimit / (1024 ** 3);
-    notes.push(`JS heap limit: ${heapGB.toFixed(1)} GB`);
-    // Heap limit is a fraction of total RAM on Chrome; never exceed it for model load.
-  }
-
-  // Reserve baseline RAM for the OS + app + browser.
-  const reserve = isMobile ? 1.5 : 2.5;
-  const availableRAMGB = Math.max(0, totalRAMGB - reserve);
-
-  // ── CPU ───────────────────────────────────────────────────────
-  const cpuCores = navigator.hardwareConcurrency || (isMobile ? 4 : 8);
-
-  // ── Storage ───────────────────────────────────────────────────
-  let availableStorageGB = isMobile ? 8 : 32; // conservative default if we can't measure
-  let measured = false;
+  let availableStorageGB = 8;
+  let storageMeasured = false;
   try {
     if (navigator.storage?.estimate) {
       const est = await navigator.storage.estimate();
       if (est.usage !== undefined && est.quota !== undefined && est.quota > 0) {
         const freeBytes = Math.max(0, (est.quota || 0) - (est.usage || 0));
-        availableStorageGB = freeBytes / (1024 ** 3);
-        measured = true;
+        availableStorageGB = freeBytes / GB;
+        storageMeasured = true;
         notes.push(`Measured free storage: ${availableStorageGB.toFixed(1)} GB`);
       }
     }
@@ -129,16 +161,32 @@ export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
     logger.warn('[deviceCaps] storage estimate failed', e);
   }
 
-  const hasGPU = detectGPU();
+  if (totalRAMGB !== null) {
+    const reserve = isMobile ? 1.5 : 2.5;
+    cachedCaps = {
+      totalRAMGB,
+      availableRAMGB: Math.max(0, totalRAMGB - reserve),
+      availableStorageGB,
+      cpuCores: navigator.hardwareConcurrency || (isMobile ? 4 : 8),
+      hasGPU,
+      isMobile,
+      measured: storageMeasured,
+      notes,
+    };
+    return cachedCaps;
+  }
 
+  // ── 3. Honest estimate (never presented as measured) ───────────
+  const estimatedRAM = isMobile ? 4 : 8;
+  notes.push('No real RAM source available — using conservative estimate; treat compatibility as approximate');
   cachedCaps = {
-    totalRAMGB,
-    availableRAMGB,
+    totalRAMGB: estimatedRAM,
+    availableRAMGB: Math.max(0, estimatedRAM - (isMobile ? 1.5 : 2.5)),
     availableStorageGB,
-    cpuCores,
+    cpuCores: navigator.hardwareConcurrency || (isMobile ? 4 : 8),
     hasGPU,
     isMobile,
-    measured,
+    measured: storageMeasured,
     notes,
   };
   return cachedCaps;

@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 
-export type NotificationSource = 'android' | 'web' | 'bridge' | 'system';
+export type NotificationSource = 'android' | 'web' | 'bridge' | 'system' | 'whatsapp' | 'unimind';
 
 export interface CapturedNotification {
   id: string;
