@@ -33,6 +33,7 @@ import { neuraTools } from './neura';
 import { noteTools } from './notes';
 import { notificationTools } from './notifications';
 import { personalTools } from './personal';
+import { pluginTools } from './plugin';
 import { powerTools } from './powerTools';
 import { ragTools } from './rag';
 import { pdfTools } from './readPdf';
@@ -83,6 +84,7 @@ export function registerAllTools(): void {
     noteTools,
     notificationTools,
     personalTools,
+    pluginTools,
     powerTools,
     ragTools,
     pdfTools,

@@ -13,6 +13,7 @@ describe('createStreamParser', () => {
     expect(state).toEqual({
       accumulated: '',
       thoughtsAccumulated: '',
+      segments: [],
       inThinkBlock: false,
       inToolBlock: false,
       inXmlToolBlock: false,

@@ -10,6 +10,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import ChatModule from './modules/ChatModule';
+import BuildModule from './modules/BuildModule';
 import WriterModule from './modules/WriterModule';
 import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
@@ -25,6 +26,9 @@ import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
 import { useAutomationBridge } from './hooks/useAutomationBridge';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useFirstLaunch } from './hooks/useFirstLaunch';
+import CommandPalette from './components/CommandPalette';
 import type { UpdateInfo } from './services/UpdateService';
 import { beginEdgeSwipe, shouldOpenFromEdgeSwipe, type EdgeSwipeState } from './utils/edgeSwipe';
 import './styles/globals.css';
@@ -100,6 +104,7 @@ const ModuleView: React.FC = () => {
 
   const components: Record<Module, React.ReactNode> = {
     chat:      <ErrorBoundary name="Chat"><ChatModule /></ErrorBoundary>,
+    build:     <ErrorBoundary name="Build"><BuildModule /></ErrorBoundary>,
     exam:      <Suspense fallback={<Fallback />}><ErrorBoundary name="Exam"><ExamModule /></ErrorBoundary></Suspense>,
     analyst:   <Suspense fallback={<Fallback />}><ErrorBoundary name="Analyst"><AnalystModule /></ErrorBoundary></Suspense>,
     writer:    <ErrorBoundary name="Writer"><WriterModule /></ErrorBoundary>,
@@ -139,6 +144,35 @@ const App: React.FC = () => {
   const setShowLeftDrawer = useGiaStore((s) => s.setShowLeftDrawer);
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
   const edgeSwipeRef = useRef<EdgeSwipeState | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Hardware-keyboard command palette — Ctrl/Cmd+K from anywhere.
+  useKeyboardShortcuts([
+    { key: 'k', ctrl: true, handler: () => setPaletteOpen(o => !o), preventDefault: true },
+    { key: 'k', meta: true, handler: () => setPaletteOpen(o => !o), preventDefault: true },
+  ]);
+
+  // First launch — run a quick system self-check and surface the summary so
+  // new users immediately see that GIA is healthy and what's available.
+  const { shouldRunDiagnostics, runDiagnostics } = useFirstLaunch();
+  useEffect(() => {
+    if (!shouldRunDiagnostics) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const report = await runDiagnostics();
+        if (cancelled || !report) return;
+        const { batteryLevel, storageFree, networkStatus } = report.system;
+        const { connected, name } = report.provider;
+        const capCount = Object.values(report.capabilities).filter(Boolean).length;
+        addNotification(`⚙️ First-run check: battery ${batteryLevel}%, storage ${storageFree}, ${networkStatus}, provider ${connected ? `ready (${name})` : 'not configured'}, ${capCount} capabilities, ${report.tools.total} tools`);
+        logger.log('[FirstLaunch] Diagnostics complete', report);
+      } catch (e) {
+        logger.warn('[FirstLaunch] Diagnostics failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shouldRunDiagnostics, runDiagnostics, addNotification]);
 
   // Left-edge swipe-to-open, mirroring the gesture in most AI apps' side
   // menu. Detection logic lives in utils/edgeSwipe.ts so it's unit
@@ -308,10 +342,13 @@ const App: React.FC = () => {
         }
       }
 
-      // Configure status bar for proper safe-area rendering
+      // Edge-to-edge: draw the app behind the system bars (status + navigation)
+      // so content runs full-bleed on the phone. Safe-area insets via
+      // env(safe-area-inset-*) + viewport-fit=cover keep content clear of the
+      // bars. The theme effect below keeps the bar tint/icon color in sync.
       try {
         const { StatusBar } = await import('@capacitor/status-bar');
-        await StatusBar.setOverlaysWebView({ overlay: false });
+        await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setBackgroundColor({ color: '#0a0a0f' });
       } catch { /* StatusBar plugin may not be available on web */ }
 
@@ -365,7 +402,14 @@ const App: React.FC = () => {
     const applyTheme = (mode: string) => {
       const effective = mode === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : mode;
       document.documentElement.setAttribute('data-theme', effective);
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'light' ? '#f2f2f7' : effective === 'obsidian-aurora' ? '#000000' : '#0a0a0f');
+      const barColor = effective === 'light' ? '#e8e8ef' : effective === 'obsidian-aurora' ? '#000000' : '#0a0a0f';
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', barColor);
+      // Edge-to-edge: tint the native status bar to match the theme and pick
+      // readable icons (light icons on dark bars, dark icons on the light bar).
+      import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+        StatusBar.setBackgroundColor({ color: barColor });
+        StatusBar.setStyle({ style: effective === 'light' ? Style.Dark : Style.Light });
+      }).catch(() => { /* StatusBar plugin may not be available on web */ });
     };
     applyTheme(theme);
     const mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -431,11 +475,24 @@ const App: React.FC = () => {
     const trackActivity = () => {
       useAutonomyStore.getState().setLastUserActivity();
       if (svc) svc.idleManager.ping();
+      // Feed the activity-learning engines (adaptive scheduler + fusion engine)
+      import('./services/AdaptiveScheduler').then(a => a.default.recordActivity('interaction')).catch(() => {});
+      import('./services/ContextFusionEngine').then(c => c.contextFusionEngine.recordActivity('interaction')).catch(() => {});
     };
     window.addEventListener('mousedown', trackActivity);
     window.addEventListener('keydown', trackActivity);
     window.addEventListener('touchstart', trackActivity);
     import('./services/PluginManager').then(m => m.default.initialize());
+
+    // Intelligence spine — cross-store event bridge → activity learning
+    import('./services/EventBridge').then(({ EventBridge }) => {
+      const bridge = new EventBridge();
+      bridge.on('*', (ev) => {
+        import('./services/AdaptiveScheduler').then(a => a.default.recordActivity(ev.type)).catch(() => {});
+        import('./services/ContextFusionEngine').then(c => c.contextFusionEngine.recordActivity(ev.type)).catch(() => {});
+      });
+      bridge.start();
+    });
 
     // Deep system embedding — monitor battery, network, and feed into GIA context
     servicesReady.then(({ SystemService, setSystemContext }) => {
@@ -456,6 +513,26 @@ const App: React.FC = () => {
     window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
     useGiaStore.getState().setConnectionStatus(navigator.onLine ? 'online' : 'offline');
+
+    // SmartNotification digest — deliver batched (non-urgent) notifications as
+    // a summary every 5 minutes and whenever connectivity returns.
+    const flushOnOnline = () => useNotificationStore.getState().flushDigests();
+    const digestTimer = setInterval(flushOnOnline, 5 * 60 * 1000);
+    window.addEventListener('online', flushOnOnline);
+
+    // Offline queue — when connectivity returns, replay any tool calls that
+    // were queued while offline (web lookups etc.) and log their results.
+    import('./services/OfflineQueue').then(({ attachAutoFlush }) => {
+      attachAutoFlush(async (toolId, args) => {
+        const { default: GiaTools } = await import('./services/GiaTools');
+        const tool = GiaTools.getTool(toolId);
+        if (!tool) throw new Error(`Unknown tool: ${toolId}`);
+        const res = await tool.execute(args as Record<string, unknown>);
+        if (!res?.success) throw new Error((res as { error?: string })?.error || 'Tool replay failed');
+        useGiaStore.getState().addConsoleLog({ type: 'tool', content: `[OfflineQueue] Replayed ${toolId} — ${res.content.slice(0, 300)}` });
+        return res;
+      });
+    });
 
     // Provider health check — ping the active provider to verify connectivity
     const checkProvider = async () => {
@@ -687,8 +764,10 @@ const App: React.FC = () => {
     }
     return () => {
       clearTimeout(t1); clearTimeout(t2);
+      clearInterval(digestTimer);
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', flushOnOnline);
       window.removeEventListener('mousedown', trackActivity);
       window.removeEventListener('keydown', trackActivity);
       window.removeEventListener('touchstart', trackActivity);
@@ -976,6 +1055,14 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
+      <CommandPalette
+        isOpen={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={(action) => {
+          if (action === 'task-board') setShowTaskBoard(true);
+          if (action === 'notes-panel') setShowNotesPanel(true);
+        }}
+      />
       <SourcesPanel />
       <ApiKeyInputPanel />
     </div>

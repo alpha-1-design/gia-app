@@ -197,7 +197,7 @@ class ConnectorManager {
     try {
       const apiKey = cfg.apiKey || connector.apiKey || '';
       const testUrl = `${connector.baseUrl.replace(/\/+$/, '')}/`;
-      const headers: Record<string, string> = { 'User-Agent': 'GIA/2.3.2.0' };
+      const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.0' };
       if (id === 'github') headers['Authorization'] = `Bearer ${apiKey}`;
       else if (id === 'twilio') headers['Authorization'] = 'Basic ' + btoa(`${cfg.accountSid || apiKey}:${cfg.authToken || ''}`);
       else headers['x-api-key'] = apiKey;
@@ -227,7 +227,7 @@ class ConnectorManager {
     const start = performance.now();
 
     let urlStr: string;
-    const headers: Record<string, string> = { 'User-Agent': 'GIA/2.3.2.0', ...request.headers };
+    const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.0', ...request.headers };
 
     if (id === 'supabase') {
       const base = cfg.projectUrl || connector.baseUrl || '';
@@ -290,7 +290,7 @@ class ConnectorManager {
     const start = performance.now();
     const res = await fetch(url, {
       method,
-      headers: { 'User-Agent': 'GIA/2.3.2.0', ...headers },
+      headers: { 'User-Agent': 'GIA/2.4.0.0', ...headers },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000),
     });

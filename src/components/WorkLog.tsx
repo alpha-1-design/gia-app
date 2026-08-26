@@ -21,7 +21,10 @@ interface WorkLogStep {
   subSteps?: string[];
 }
 
-const TOOL_META: Record<string, { label: string; color: string; icon: React.ReactNode; category: string }> = {
+// Shared with SegmentedReasoning (tool metadata is a module-level constant,
+// not a component — safe to export).
+// eslint-disable-next-line react-refresh/only-export-components
+export const TOOL_META: Record<string, { label: string; color: string; icon: React.ReactNode; category: string }> = {
   web_search:        { label: 'Searching the web',   color: '#14b8a6', icon: <Search size={12} />,       category: 'research' },
   read_url:          { label: 'Reading page',        color: '#14b8a6', icon: <Globe size={12} />,       category: 'research' },
   browser_navigate:  { label: 'Navigating browser',  color: '#14b8a6', icon: <Globe size={12} />,       category: 'research' },

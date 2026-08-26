@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger';
+import SandboxService from '../SandboxService';
 import type { Tool, ToolResult } from './types';
 
 interface DBConnection {
@@ -22,15 +23,11 @@ function saveConnections(conns: DBConnection[]) {
 }
 
 async function execViaSandbox(cmd: string): Promise<string> {
-  const resp = await fetch('http://localhost:3081/exec', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command: cmd }),
-    signal: AbortSignal.timeout(60000),
-  });
-  if (!resp.ok) throw new Error(`Sandbox error: ${resp.status}`);
-  const data = await resp.json();
-  return data.stdout + (data.stderr ? '\n' + data.stderr : '');
+  // Route through SandboxService so the native proot terminal on Android is
+  // used as the fallback when the desktop sandbox server (port 3081) isn't
+  // reachable — otherwise db_query only worked on desktop.
+  const result = await SandboxService.exec(cmd, { timeout: 60000 });
+  return result.stdout + (result.stderr ? '\n' + result.stderr : '');
 }
 
 async function ensureDBClient(dbType: string): Promise<void> {
@@ -41,8 +38,20 @@ async function ensureDBClient(dbType: string): Promise<void> {
   };
   const pkg = pkgs[dbType];
   if (!pkg) throw new Error(`Unsupported database type: ${dbType}`);
-  const check = await execViaSandbox(`which ${dbType === 'postgresql' ? 'psql' : dbType === 'mysql' ? 'mysql' : 'sqlite3'} 2>/dev/null || apk add --no-cache ${pkg} 2>&1`);
-  if (!check.includes('/')) throw new Error(`Failed to install ${pkg}: ${check}`);
+  const client = dbType === 'postgresql' ? 'psql' : dbType === 'mysql' ? 'mysql' : 'sqlite3';
+  // Use the already-installed client; install it via apk if missing (works in
+  // the native proot terminal on Android and the sandbox on desktop).
+  try {
+    const present = await execViaSandbox(`command -v ${client} >/dev/null 2>&1 && echo yes`);
+    if (present.trim() === 'yes') return;
+    const install = await execViaSandbox(`apk add --no-cache ${pkg} 2>&1`);
+    const nowPresent = await execViaSandbox(`command -v ${client} >/dev/null 2>&1 && echo yes`);
+    if (nowPresent.trim() !== 'yes') {
+      throw new Error(`Failed to install ${pkg}: ${install.slice(0, 300)}`);
+    }
+  } catch (e) {
+    throw new Error(`Failed to prepare ${client}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 const databaseTools: Tool[] = [

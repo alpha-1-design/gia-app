@@ -3,10 +3,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 import { useMemoryStore } from './useMemoryStore';
+import type { MessageSegment } from '../utils/streamParser';
+
+export type { MessageSegment };
 
 const FEEDBACK_KEYS = { up: 'feedback:liked', down: 'feedback:disliked' } as const;
 
-export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy' | 'agents';
+export type Module = 'chat' | 'writer' | 'analyst' | 'planner' | 'settings' | 'exam' | 'autonomy' | 'agents' | 'build';
 export type IntentState = 'idle' | 'typing' | 'analyst' | 'writer' | 'planner' | 'thinking' | 'responding';
 export type ThinkingPhase = 'gathering' | 'analyzing' | 'coding' | 'writing' | 'searching' | 'planning' | 'reasoning' | 'processing' | 'idle';
 
@@ -47,6 +50,12 @@ export interface Message {
   model?: string;
   thinking?: boolean;
   thoughts?: string;
+  /** Ordered think/tool/text segments for the interleaved "think, work,
+   * think again" rendering. Optional -- older stored messages and any
+   * path that doesn't go through the shared stream parser simply won't
+   * have this, and the UI falls back to the flat `thoughts` rendering
+   * for those. */
+  segments?: MessageSegment[];
   tokenUsage?: { input: number; output: number; total: number };
   parentId?: string;
   branchId?: string;
@@ -107,6 +116,19 @@ function updateMessageInTree(nodes: MessageNode[], msgId: string, content: strin
     }
     if (Array.isArray(node.children) && node.children.length > 0) {
       return { ...node, children: updateMessageInTree(node.children, msgId, content, thoughts) };
+    }
+    return node;
+  });
+}
+
+function updateSegmentsInTree(nodes: MessageNode[], msgId: string, segments: MessageSegment[]): MessageNode[] {
+  if (!Array.isArray(nodes)) return [];
+  return nodes.map(node => {
+    if (node.message.id === msgId) {
+      return { ...node, message: { ...node.message, segments } };
+    }
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      return { ...node, children: updateSegmentsInTree(node.children, msgId, segments) };
     }
     return node;
   });
@@ -315,6 +337,7 @@ interface GiaState {
   toggleFullScreenMode: () => void;
   thinkingPhase: ThinkingPhase;
   liveThoughts: Record<string, string>;
+  liveSegments: Record<string, MessageSegment[]>;
   showThoughts: string[];
   clarification: Clarification | null;
   wakeWord: string;
@@ -386,6 +409,7 @@ interface GiaState {
   setHapticFeedback: (enabled: boolean) => void;
   setThinkingPhase: (phase: ThinkingPhase) => void;
   setLiveThoughts: (thoughts: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
+  setLiveSegments: (segments: Record<string, MessageSegment[]> | ((prev: Record<string, MessageSegment[]>) => Record<string, MessageSegment[]>)) => void;
   setShowThoughts: (thoughts: string[]) => void;
   setWakeWord: (word: string) => void;
   setKeepListening: (on: boolean) => void;
@@ -400,6 +424,7 @@ interface GiaState {
   setActiveSession: (id: string) => void;
   addMessage: (sessionId: string, msg: Message) => void;
   updateMessage: (sessionId: string, msgId: string, content: string, thoughts?: string) => void;
+  updateMessageSegments: (sessionId: string, msgId: string, segments: MessageSegment[]) => void;
   updateMessageArtifacts: (sessionId: string, msgId: string, artifacts: Artifact[]) => void;
   updateMessageTasks: (sessionId: string, msgId: string, tasks: TaskItem[]) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
@@ -550,6 +575,7 @@ export const useGiaStore = create<GiaState>()(
       hapticFeedback: true,
       thinkingPhase: 'idle',
       liveThoughts: {},
+      liveSegments: {},
       showThoughts: [],
       clarification: null,
       wakeWord: (() => { try { return localStorage.getItem('gia-wake-word') || 'hey gia'; } catch { return 'hey gia'; } })(),
@@ -694,6 +720,9 @@ export const useGiaStore = create<GiaState>()(
       setLiveThoughts: (thoughts) => set((state) => ({
         liveThoughts: typeof thoughts === 'function' ? thoughts(state.liveThoughts) : thoughts
       })),
+      setLiveSegments: (segments) => set((state) => ({
+        liveSegments: typeof segments === 'function' ? segments(state.liveSegments) : segments
+      })),
       setShowThoughts: (thoughts: string[]) => set({ showThoughts: thoughts }),
       setWakeWord: (word) => {
         localStorage.setItem('gia-wake-word', word);
@@ -783,6 +812,15 @@ export const useGiaStore = create<GiaState>()(
           sessions: s.sessions.map((sess) =>
             sess.id === sessionId
               ? { ...sess, messages: updateMessageInTree(sess.messages, msgId, content, thoughts) }
+              : sess
+          ),
+        })),
+
+      updateMessageSegments: (sessionId, msgId, segments) =>
+        set((s) => ({
+          sessions: s.sessions.map((sess) =>
+            sess.id === sessionId
+              ? { ...sess, messages: updateSegmentsInTree(sess.messages, msgId, segments) }
               : sess
           ),
         })),

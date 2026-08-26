@@ -132,8 +132,12 @@ async function executeSingleTool(
   }
 
   if (toolCall.id === 'request_clarification') {
-    if (state.clarificationAttempts >= 1) {
-      observations.push('OBSERVATION: Clarification already asked. Respond directly without asking again.');
+    // Allow several rounds of clarifying questions (each round can bundle up
+    // to ~6 fields in one form) so GIA can get what it actually needs before
+    // answering. Each call ends the turn with a question form, so a new round
+    // only starts after the user answers.
+    if (state.clarificationAttempts >= 4) {
+      observations.push('OBSERVATION: You have already asked 4 rounds of clarifying questions. Respond as best you can with the information you already have — do not ask again.');
       return { result: 'skip', observations };
     }
     state.clarificationAttempts++;
@@ -210,6 +214,21 @@ async function executeSingleTool(
   let result: ToolResult;
   let toolAttempts = 0;
   const maxToolAttempts = 3;
+
+  // Offline handling — for safe read-only web tools, queue the call instead of
+  // burning retries: it replays automatically when connectivity returns.
+  const OFFLINE_QUEUE_SAFE_TOOLS = new Set([
+    'web_search', 'read_url', 'browser_navigate', 'page_info',
+    'wikipedia', 'weather', 'define', 'github', 'search_places', 'get_directions',
+  ]);
+  if (typeof navigator !== 'undefined' && !navigator.onLine && OFFLINE_QUEUE_SAFE_TOOLS.has(toolCall.id)) {
+    import('../OfflineQueue').then(({ enqueue }) => enqueue(toolCall.id, toolCall.args));
+    useProtocolStore.getState().setFailed(protocolId, 'Queued offline — will replay on reconnect');
+    useGiaStore.getState().setCurrentTool(null);
+    onThought?.(`📡 ${tool.name} queued for offline replay`);
+    observations.push(`TOOL QUEUED OFFLINE: ${toolCall.id} — you're offline. It will replay automatically when connection returns.`);
+    return { observations };
+  }
 
   const toolContext = {
     signal,

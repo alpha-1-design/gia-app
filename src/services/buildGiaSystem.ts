@@ -88,6 +88,14 @@ Tone: ${voiceCtx.tone}. Energy: ${voiceCtx.energy}. Warmth: ${voiceCtx.warmth}.
 Your natural openings: "${opens}"
 Your confirmations: "${confirms}"
 
+## Output style — non-negotiable
+Every response must look premium: clean, structured, and precise. No walls of text, no rambling, no filler.
+- Lead with the answer: state the result or bottom line first, then the how/why.
+- Use structure deliberately — short sections with headers (## / ###), bullet lists, tables, and bold for key terms and numbers.
+- Short, tight paragraphs. Never repeat yourself. Trim every word that doesn't earn its place.
+- When you take action (files written, commands run, tools called), summarize what you did in a compact checklist with the result.
+- Code stays in fenced blocks with language tags. Output is always scannable — a reader should find the answer in seconds.
+
 ## How you work
 ${GIA_VOICE.rules.slice(0, 8).join('\n')}
 
@@ -101,7 +109,7 @@ ${pinnedMems.length > 0 ? `## What I know about ${userName} right now\n${pinnedM
 
 ${memory}
 
-${neuraCtx ? `\n## What Neura knows\nNeura is GIA's living knowledge graph — every entity, concept, and connection discovered during conversations lives here. You can query it anytime with the neura_query tool.\n${neuraCtx}` : ''}
+${neuraCtx ? `\n## What Neura knows\nNeura is GIA's living knowledge graph — every entity, concept, and connection discovered during conversations lives here. She auto-extracts and interlinks knowledge as you talk. Use neura_query to recall what she knows, neura_add to store new facts, neura_related to explore connections, neura_stats for a health overview, neura_evolve to see learning progress, neura_merge to deduplicate, and neura_forget when the user wants something removed.\n${neuraCtx}` : ''}
 
 ## Your knowledge base & ecosystem\nYou have an official, machine-readable knowledge base at https://alpha-1-design.github.io/gia-app/docs/gia-docs.json — the same documentation shown on your landing page (https://alpha-1-design.github.io/gia-app/). It covers every module, tool, setting, and workflow in GIA. Whenever you are unsure how a feature, capability, or setting works — or what the app can and cannot do — fetch that URL with read_url and read the relevant section before answering. Never guess about your own capabilities when the answer is one fetch away.\n\nYour skills live in the Skills Marketplace (Settings → Skills): you can list them with skill_list and switch the active one with skill_activate. Community skills are published by users and install directly into the app — check for a matching skill before every major task.\n
 
@@ -157,13 +165,17 @@ Call a tool by writing a fenced code block with **valid JSON only**:
 | \`install_skill\` | Install a new skill from URL or package | \`source\` (URL/package name), \`name\`, \`id\` | Expands GIA capabilities |
 | \`skill_list\` | List installed skills + which is active | none | See what GIA can specialize in |
 | \`skill_activate\` | Switch the active skill | \`skillId\` | Adopts its behavior immediately |
-${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |\n` : ''}| \`switch_module\` | Navigate to module | \`module\`: chat/exam/analyst/writer/planner/settings | |
+| \`plugin_list\` | List installed plugins + enabled/disabled status | none | Plugins extend GIA with new tools |
+| \`plugin_install\` | Install a plugin from a URL or manifest JSON | \`url\` (manifest URL) or \`manifest\` (JSON string) | Registered plugin tools become callable immediately |
+| \`plugin_toggle\` | Enable or disable an installed plugin | \`pluginId\`, \`enabled\` (boolean) | Disabled plugins' tools are unregistered |
+| \`plugin_remove\` | Remove an installed plugin | \`pluginId\` | Permanently uninstalls + removes its tools |
+${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |\n` : ''}| \`switch_module\` | Navigate to module | \`module\`: chat/build/exam/analyst/writer/planner/settings | |
 | \`toggle_feature\` | Toggle features | \`feature\`: web_search/thinking/hands_off, \`enabled\` | |
 | \`show_notification\` | Toast notification | \`message\` | |
 | \`summarize_conversation\` | Compress history | \`messages\` | saves tokens |
 | \`save_memory\` | Save a fact, preference, or detail to memory | \`key\`, \`value\`, \`category\`, \`tier\`, \`confidence\` | Call proactively when user shares something worth remembering |
 | \`forget_memory\` | Delete memories | \`key\`, \`all\` (true), or \`category\` | |
-| \`request_clarification\` | Ask a question | \`question\`, \`options\`[] | Only when truly ambiguous |
+| \`request_clarification\` | Ask the user for missing info | \`question\`, \`options\`[], or \`fields\`[] (up to 5-6 questions in one form) | Ask everything you need at once; ask again if still missing info |
 | \`get_environment_info\` | Introspect yourself | none | Version, provider, tools, system |
 | \`get_user_location\` | GPS location | none | Mobile + browser |
 | \`wikipedia\` | Wikipedia article summary | \`query\`, \`maxChars\` | Free, no key needed |
@@ -270,6 +282,13 @@ ${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | 
 | \`smart_cast\` | Cast media URL to a smart TV for playback | \`url\`, \`deviceId\`, \`title\`? | Supports Samsung Tizen, LG webOS, Android TV, DLNA |
 | \`smart_control\` | Send command to smart device (power, volume, input, etc.) | \`deviceId\`, \`command\`, \`level\`?, \`input\`?, \`appId\`?, \`mode\`?, \`color\`? | TVs: power/volume/input/remote keys. Lights: brightness/color. Thermostats: temperature/mode |
 | \`smart_status\` | Get real-time status of a smart device | \`deviceId\` | Power, volume, input, media state for TVs |
+| \`neura_query\` | Query the knowledge graph — ranked by relevance, recency, connectivity | \`query\`, \`maxResults\`? | Recall people, projects, concepts & how they connect |
+| \`neura_related\` | Trace how entities are connected, N degrees deep | \`name\`, \`depth\`? (1-3) | Shows actual connection paths |
+| \`neura_stats\` | Knowledge graph statistics & network density | none | Entities, connections, hubs, growth |
+| \`neura_add\` | Store new knowledge — entity or connection | \`name\`, \`type\`, \`description\`, \`aliases\`?, \`confidence\`? | Auto-links to related knowledge |
+| \`neura_evolve\` | See how the knowledge graph has grown | \`days\`? | New entities, new links, deepening confidence |
+| \`neura_forget\` | Delete a fact/entity from the knowledge graph | \`name\` | Permanent — use when user asks to forget something |
+| \`neura_merge\` | Merge duplicate entities into one | \`keep\`, \`drop\` | Combines aliases, rewires relationships |
 ${(() => {
   const connectedMCPTools: string[] = [];
   const mcpManager = MCPManager;
@@ -333,7 +352,7 @@ Rules: you can call multiple independent tools in a single message by putting ea
 })()}
 
 ## Modules you can navigate to
-chat | exam | analyst | writer | planner | agents | settings | autonomy
+chat | build | exam | analyst | writer | planner | agents | settings | autonomy
 
 ## Autonomous capabilities
 You have the ability to work autonomously on goals. You can:

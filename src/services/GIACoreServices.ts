@@ -29,12 +29,30 @@ export class GIAFeatureFlags {
     ['offlineSTT', false],
   ]);
 
+  private static STORAGE_KEY = 'gia-feature-flags';
+
+  constructor() {
+    // Restore user overrides from a previous session so toggles survive restarts.
+    try {
+      const raw = localStorage.getItem(GIAFeatureFlags.STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Record<string, boolean>;
+        for (const [key, value] of Object.entries(saved)) {
+          if (typeof value === 'boolean') this.features.set(key, value);
+        }
+      }
+    } catch { /* noop */ }
+  }
+
   isEnabled(feature: string): boolean {
     return this.features.get(feature) ?? false;
   }
 
   setEnabled(feature: string, enabled: boolean): void {
     this.features.set(feature, enabled);
+    try {
+      localStorage.setItem(GIAFeatureFlags.STORAGE_KEY, JSON.stringify(Object.fromEntries(this.features)));
+    } catch { /* noop */ }
     logger.info(`[FeatureFlags] ${feature}: ${enabled ? 'enabled' : 'disabled'}`);
   }
 

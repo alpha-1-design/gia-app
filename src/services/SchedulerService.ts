@@ -74,6 +74,14 @@ class SchedulerService {
 
       addNotification(`✅ ${task.title.slice(0, 30)}`);
 
+      // On desktop (window may be closed to tray) surface an OS notification
+      // so background-task results reach the user even when the app is hidden.
+      if (!isNativePlatform()) {
+        import('./DesktopNotifications').then(({ default: desktopNotifs }) =>
+          desktopNotifs.notify(`✅ ${task.title.slice(0, 40)}`, { body: res.text.slice(0, 200), tag: 'gia-task' })
+        ).catch(() => {});
+      }
+
       // Send result via messaging if channel configured
       if (task.channel && messagingBridge.isConnected(task.channel)) {
         messagingBridge.sendMessage({

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { ReasoningChain } from './ReasoningChain';
 import { WorkLog } from './WorkLog';
+import { SegmentedReasoning } from './SegmentedReasoning';
 import TaskProgress from './TaskProgress';
 import GiaIcon from './GiaIcon';
 import OrbAvatar from './OrbAvatar';
@@ -44,6 +45,7 @@ interface MessageListProps {
   showThoughts: Set<string>;
   setShowThoughts: React.Dispatch<React.SetStateAction<Set<string>>>;
   liveThoughts: Record<string, string>;
+  liveSegments?: Record<string, import('../store/useGiaStore').MessageSegment[]>;
   thinkingPhase: ThinkingPhase;
   currentTool: string | null;
   responseTimesRef: React.MutableRefObject<Record<string, number>>;
@@ -132,7 +134,7 @@ const MessageList: React.FC<MessageListProps> = ({
   messages, loading, streamingMsgId, streamingMsgIds,
   expandedMsgs, setExpandedMsgs,
   showThoughts, setShowThoughts,
-  liveThoughts, thinkingPhase, currentTool,
+  liveThoughts, liveSegments = {}, thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
   onFork, onRetry, onEditResend, onRewrite,
@@ -264,7 +266,19 @@ const MessageList: React.FC<MessageListProps> = ({
                         />
                       </div>
                     )}
-                    {(liveThoughts[msg.id] || msg.thoughts) && (
+                    {(() => {
+                      const segs = liveSegments[msg.id] || msg.segments;
+                      if (segs && segs.length > 0) {
+                        // New path: render the real think -> tool -> think
+                        // sequence as discrete blocks, always visible (not
+                        // hidden behind a single toggle) since each step
+                        // is already collapsed on its own.
+                        return <SegmentedReasoning segments={segs} isLive={!!liveSegments[msg.id]} />;
+                      }
+                      // Fallback for messages generated before this existed
+                      // (or any path that doesn't populate segments) --
+                      // same single collapsible blob as before.
+                      return (liveThoughts[msg.id] || msg.thoughts) ? (
                       <div className="mb-3 rounded-xl overflow-hidden transition-all duration-300" style={{
                         border: '1px solid rgba(251,191,36,0.12)',
                         background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
@@ -298,7 +312,8 @@ const MessageList: React.FC<MessageListProps> = ({
                           })}
                         />
                       </div>
-                    )}
+                      ) : null;
+                    })()}
                     {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
                       <>
                         <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} />

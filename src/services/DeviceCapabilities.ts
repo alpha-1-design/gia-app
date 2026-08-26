@@ -102,7 +102,6 @@ export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
       const totalRAM = info.totalRAM;
       const availRAM = info.availableRAM;
       const storageFree = info.storageFree || info.externalStorageFree;
-      const storageTotal = info.storageTotal;
 
       if (totalRAM > 0) {
         const totalRAMGB = totalRAM / GB;

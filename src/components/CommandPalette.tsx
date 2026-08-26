@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MessageSquare, Search, Globe, Brain, Hand,
   FolderOpen, Download, Upload, Eraser, Terminal, Settings,
-  MessageCircle, PenLine, BarChart3, ClipboardList, Wifi, StickyNote
+  MessageCircle, PenLine, BarChart3, ClipboardList, Wifi, StickyNote, Hammer
 } from 'lucide-react';
 import { useGiaStore, type Module } from '../store/useGiaStore';
 
@@ -38,11 +38,13 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
     'module-writer': 'writer',
     'module-analyst': 'analyst',
     'module-planner': 'planner',
+    'module-build': 'build',
   };
 
   const actions: Action[] = [
     { id: 'new-chat', label: 'New Chat', description: 'Start a fresh conversation', icon: <MessageSquare {...iconStyle} />, category: 'Chat', execute: () => { useGiaStore.getState().createSession(); onClose(); } },
     { id: 'module-chat', label: 'Switch to Chat', description: 'Go to Chat module', icon: <MessageCircle {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('chat'); onClose(); } },
+    { id: 'module-build', label: 'Switch to Build', description: 'Go to Build module — scaffold apps with live preview', icon: <Hammer {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('build'); onClose(); } },
     { id: 'module-writer', label: 'Switch to Writer', description: 'Go to Writer module', icon: <PenLine {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('writer'); onClose(); } },
     { id: 'module-analyst', label: 'Switch to Analyst', description: 'Go to Analyst module', icon: <BarChart3 {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('analyst'); onClose(); } },
     { id: 'module-planner', label: 'Switch to Planner', description: 'Go to Planner module', icon: <ClipboardList {...iconStyle} />, category: 'Navigation', execute: () => { useGiaStore.getState().setModule('planner'); onClose(); } },

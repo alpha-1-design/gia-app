@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence, type PanInfo } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion, type PanInfo } from 'motion/react';
 import { shouldDismissFromLeftDrag } from './dragDismiss';
 
 interface LeftDrawerProps {
@@ -26,6 +26,8 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
     }
   };
 
+  const reduceMotion = useReducedMotion();
+
   return (
     <AnimatePresence>
       {open && (
@@ -47,14 +49,18 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
               background: 'var(--gia-surface)',
               borderRight: '1px solid var(--gia-border)',
             }}
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-            drag="x"
+            initial={{ x: reduceMotion ? 0 : '-100%', opacity: reduceMotion ? 0 : 1 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: reduceMotion ? 0 : '-100%', opacity: reduceMotion ? 0 : 1 }}
+            // Softer spring: less overshoot and no rubber-band wobble while
+            // dragging, so the drawer glides instead of snapping.
+            transition={reduceMotion
+              ? { duration: 0.15, ease: 'easeOut' }
+              : { type: 'spring', stiffness: 240, damping: 30, mass: 0.9 }}
+            drag={reduceMotion ? false : 'x'}
             dragDirectionLock
             dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={{ left: 0.5, right: 0 }}
+            dragElastic={{ left: 0.12, right: 0 }}
             onDragEnd={handleDragEnd}
           >
             {children}

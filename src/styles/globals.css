@@ -33,6 +33,7 @@
   --mod-exam:     245, 158, 11;   /* amber */
   --mod-autonomy: 52, 211, 153;   /* emerald */
   --mod-agents:   168, 85, 247;   /* violet */
+  --mod-build:    249, 115, 22;   /* orange — build mode */
 
   /* Ambient glow system */
   --glow-color:   var(--mod-chat);
@@ -48,21 +49,24 @@
 }
 
 [data-theme="light"] {
-  --gia-bg:          #f2f2f7;
-  --gia-surface:     #ffffff;
-  --gia-surface-2:   #e8e8ee;
-  --gia-surface-3:   #dcdce4;
-  --gia-border:      rgba(0,0,0,0.08);
-  --gia-border-2:    rgba(0,0,0,0.14);
-  --gia-text:        #1c1c2e;
-  --gia-muted:       #6b6b82;
-  --gia-muted-2:     #9a9aae;
+  /* Soft, low-glare light palette — surfaces stay off-white instead of pure
+   * white and the background is a muted grey so the screen doesn't feel
+   * blindingly bright (strain complaint). Contrast is kept comfortably high. */
+  --gia-bg:          #e8e8ef;
+  --gia-surface:     #f5f5f9;
+  --gia-surface-2:   #e0e0e8;
+  --gia-surface-3:   #d4d4dd;
+  --gia-border:      rgba(0,0,0,0.10);
+  --gia-border-2:    rgba(0,0,0,0.16);
+  --gia-text:        #1b1b2a;
+  --gia-muted:       #5a5a70;
+  --gia-muted-2:     #87879b;
 
   /* Accent */
   --gia-accent:      #a855f7;
   --gia-accent-rgb:  168, 85, 247;
   --gia-accent-dim:  rgba(168, 85, 247, 0.10);
-  --gia-accent-glow: rgba(168, 85, 247, 0.2);
+  --gia-accent-glow: rgba(168, 85, 247, 0.18);
 
   /* Module — same but dimmed for light bg */
   --mod-chat:     147, 51, 234;
@@ -73,8 +77,20 @@
   --mod-exam:     217, 119, 6;
   --mod-autonomy: 4, 120, 87;
   --mod-agents:   147, 51, 234;
+  --mod-build:    234, 88, 12;
 
-  --glow-opacity: 0.12;
+  --glow-opacity: 0.10;
+}
+
+/* Light-mode readability — the base markdown styles assume a dark background
+ * (white bold text, pale violet inline code). On the light theme those are
+ * invisible / low-contrast, so override them to themed colors. */
+[data-theme="light"] .gia-markdown strong {
+  color: var(--gia-text);
+}
+[data-theme="light"] .gia-markdown code {
+  background: rgba(168, 85, 247, 0.10);
+  color: #7c3aed;
 }
 
 /* ============================================================

@@ -16,7 +16,9 @@ import { useNotificationStore } from '../useNotificationStore';
 
 describe('useNotificationStore', () => {
   beforeEach(() => {
-    useNotificationStore.setState({ notifications: [], enabled: true });
+    // Base store mechanics are tested with intelligent filtering OFF — the
+    // filtering behaviour itself gets its own suite below.
+    useNotificationStore.setState({ notifications: [], enabled: true, intelligentFiltering: false });
   });
 
   it('starts with empty notifications', () => {
@@ -101,5 +103,45 @@ describe('useNotificationStore', () => {
     expect(useNotificationStore.getState().enabled).toBe(false);
     useNotificationStore.getState().setEnabled(true);
     expect(useNotificationStore.getState().enabled).toBe(true);
+  });
+});
+
+describe('intelligent filtering (SmartNotificationEngine wired in)', () => {
+  beforeEach(() => {
+    useNotificationStore.setState({ notifications: [], intelligentFiltering: true });
+  });
+
+  it('passes security-critical notifications through immediately', () => {
+    useNotificationStore.getState().addNotification({
+      app: 'Bank', title: 'Security alert', body: 'Suspicious login attempt detected', source: 'android', category: 'alert',
+    });
+    expect(useNotificationStore.getState().notifications).toHaveLength(1);
+  });
+
+  it('silences promotional notifications', () => {
+    useNotificationStore.getState().addNotification({
+      app: 'Store', title: '50% off sale', body: 'Limited time offer — subscribe now', source: 'android', category: 'other',
+    });
+    expect(useNotificationStore.getState().notifications).toHaveLength(0);
+  });
+
+  it('holds low-priority email in a digest and flushes it as a summary', () => {
+    vi.useFakeTimers();
+    try {
+      useNotificationStore.getState().addNotification({
+        app: 'Mail', title: 'Newsletter', body: 'Weekly roundup', source: 'web', category: 'email',
+      });
+      expect(useNotificationStore.getState().notifications).toHaveLength(0);
+
+      vi.advanceTimersByTime(31 * 60 * 1000);
+      useNotificationStore.getState().flushDigests();
+
+      const notifs = useNotificationStore.getState().notifications;
+      expect(notifs.length).toBeGreaterThan(0);
+      expect(notifs[0].app).toBe('GIA Digest');
+      expect(notifs[0].body).toContain('Newsletter');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

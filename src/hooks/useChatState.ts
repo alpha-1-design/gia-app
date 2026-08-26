@@ -521,6 +521,7 @@ export function useChatState() {
     showSkillPicker, setShowSkillPicker,
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
     liveThoughts: gen.liveThoughts, setLiveThoughts: gen.setLiveThoughts,
+    liveSegments: gen.liveSegments, setLiveSegments: gen.setLiveSegments,
     showKnowledge, setShowKnowledge,
     clarAnswer, setClarAnswer, processingFiles, processingFileName, isDragging,
     showFileManager, setShowFileManager, showTools, setShowTools,

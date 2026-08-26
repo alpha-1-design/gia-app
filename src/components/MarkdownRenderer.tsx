@@ -1,9 +1,42 @@
 import { logger } from '../utils/logger';
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
 import CodeBlock from './CodeBlock';
 import VisualRenderer from './visual';
 import MermaidRenderer from './MermaidRenderer';
+
+/**
+ * SmartLink — renders a bare URL as a clean, tappable chip instead of a long
+ * raw string: "github.com/alpha-1-design ↗". The full URL stays as the href
+ * (tap → opens; long-press → copy), so nothing is lost.
+ */
+const SmartLink: React.FC<{ href: string }> = ({ href }) => {
+  const label = useMemo(() => {
+    try {
+      const u = new URL(href);
+      const host = u.hostname.replace(/^www\./, '');
+      const path = u.pathname.length > 1 ? u.pathname.split('/').filter(Boolean)[0] : '';
+      const short = host + (path ? `/${path}` : '');
+      return short.length > 42 ? short.slice(0, 42) + '…' : short;
+    } catch {
+      return href.length > 42 ? href.slice(0, 42) + '…' : href;
+    }
+  }, [href]);
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={href}
+      className="inline-flex items-center gap-1 align-baseline rounded-md px-1.5 py-0.5 transition-opacity hover:opacity-80"
+      style={{ color: '#60a5fa', background: 'rgba(96,165,250,0.12)', textDecoration: 'none', border: '1px solid rgba(96,165,250,0.25)', wordBreak: 'break-word' }}
+    >
+      <span className="truncate max-w-[38ch]">{label}</span>
+      <ExternalLink size={10} className="shrink-0 opacity-70" />
+    </a>
+  );
+};
 interface KaTeXStatic {
   renderToString(formula: string, options: Record<string, unknown>): string;
 }
@@ -85,7 +118,12 @@ const inlineRender = (text: string, footnotes: Map<string, string>, sources: { u
 
     const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link)
-      return <a key={i} href={link[2]} style={{ color: '#a855f7', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
+      return (
+        <a key={i} href={link[2]} style={{ color: '#a855f7', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-word' }} target="_blank" rel="noopener noreferrer" title={link[2]}>
+          {link[1]}
+          <ExternalLink size={10} className="inline ml-0.5 align-baseline opacity-70" />
+        </a>
+      );
 
     const img = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (img)
@@ -111,7 +149,7 @@ const inlineRender = (text: string, footnotes: Map<string, string>, sources: { u
 
     const autoUrl = part.match(/^https?:\/\/[^\s<]+$/);
     if (autoUrl)
-      return <a key={i} href={part} style={{ color: '#60a5fa', textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }} target="_blank" rel="noopener noreferrer">{part}</a>;
+      return <SmartLink key={i} href={part} />;
 
     return part;
   });

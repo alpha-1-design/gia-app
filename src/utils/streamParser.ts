@@ -14,9 +14,44 @@ export interface ArtifactData {
   content: string;
 }
 
+/**
+ * A single ordered unit of a message's generation: a stretch of thinking,
+ * a tool call (with its lifecycle), or a stretch of visible response text.
+ * Segments are appended in the exact order events actually happen, so
+ * rendering them in sequence gives the real think -> work -> think -> work
+ * flow instead of collapsing everything into one "thoughts" blob shown
+ * before the response.
+ */
+export interface MessageSegment {
+  id: string;
+  type: 'thinking' | 'tool' | 'text';
+  content: string;
+  toolName?: string;
+  toolStatus?: 'running' | 'done' | 'failed';
+  startedAt: number;
+}
+
+let segmentCounter = 0;
+const nextSegmentId = () => `seg-${Date.now()}-${segmentCounter++}`;
+
+/** Tool lifecycle lines from toolRunner.ts's onThought callback follow a
+ * fixed emoji-prefix convention. Parsing that convention here is what lets
+ * us recover discrete tool_call segments from what was previously just a
+ * flat log line, without changing toolRunner.ts's execution flow at all. */
+function classifyThoughtLine(line: string): { kind: 'tool_start' | 'tool_detail' | 'tool_done' | 'tool_failed' | 'plain'; toolName?: string } {
+  const startMatch = line.match(/^🧠\s+(.+?)\s+→/);
+  if (startMatch) return { kind: 'tool_start', toolName: startMatch[1] };
+  if (/^⚡\s+Executing:/.test(line)) return { kind: 'tool_detail' };
+  if (/^✅/.test(line)) return { kind: 'tool_done' };
+  if (/^⚠️/.test(line)) return { kind: 'tool_failed' };
+  if (/^ {2}·/.test(line)) return { kind: 'tool_detail' };
+  return { kind: 'plain' };
+}
+
 export interface StreamParserState {
   accumulated: string;
   thoughtsAccumulated: string;
+  segments: MessageSegment[];
   inThinkBlock: boolean;
   inToolBlock: boolean;
   inXmlToolBlock: boolean;
@@ -37,6 +72,7 @@ export interface StreamParserState {
 export const createStreamParser = (): StreamParserState => ({
   accumulated: '',
   thoughtsAccumulated: '',
+  segments: [],
   inThinkBlock: false,
   inToolBlock: false,
   inXmlToolBlock: false,
@@ -89,11 +125,11 @@ export const processStreamChunk = (
     if (state.inThinkBlock) {
       const endIdx = remaining.indexOf('</think>');
       if (endIdx >= 0) {
-        state.thoughtsAccumulated += remaining.slice(0, endIdx);
+        appendThinking(state, remaining.slice(0, endIdx));
         remaining = remaining.slice(endIdx + 8);
         state.inThinkBlock = false;
       } else {
-        state.thoughtsAccumulated += remaining;
+        appendThinking(state, remaining);
         remaining = '';
       }
     } else if (state.inXmlToolBlock) {
@@ -355,6 +391,7 @@ export const processStreamChunk = (
   }
 
   state.accumulated += displayChunk;
+  appendResponseText(state, displayChunk);
   return displayChunk;
 };
 
@@ -488,3 +525,91 @@ export const flushArtifactBlock = (state: StreamParserState): void => {
     state.inArtifactBlock = false;
   }
 };
+
+/**
+ * Append text streamed inside a <think>...</think> block. Keeps
+ * thoughtsAccumulated working exactly as before (nothing else changes
+ * behavior), while also extending or opening a 'thinking' segment so the
+ * ordered segments array reflects the same content.
+ */
+export function appendThinking(state: StreamParserState, text: string): void {
+  if (!text) return;
+  state.thoughtsAccumulated += text;
+  const last = state.segments[state.segments.length - 1];
+  if (last && last.type === 'thinking') {
+    last.content += text;
+  } else {
+    state.segments.push({ id: nextSegmentId(), type: 'thinking', content: text, startedAt: Date.now() });
+  }
+}
+
+/**
+ * Append a discrete tool-lifecycle line from toolRunner.ts's onThought
+ * callback (e.g. "🧠 web_search → query: ...", "⚡ Executing: web_search...",
+ * "✅ web_search completed successfully"). Parses the existing emoji-prefix
+ * convention to recover tool_call segment boundaries -- toolRunner.ts
+ * itself is unchanged, this just stops flattening its already-ordered
+ * events into one string.
+ */
+export function appendThought(state: StreamParserState, thought: string): void {
+  state.thoughtsAccumulated += (state.thoughtsAccumulated ? '\n' : '') + thought;
+
+  const { kind, toolName } = classifyThoughtLine(thought);
+  const last = state.segments[state.segments.length - 1];
+
+  if (kind === 'tool_start') {
+    state.segments.push({
+      id: nextSegmentId(),
+      type: 'tool',
+      content: thought,
+      toolName,
+      toolStatus: 'running',
+      startedAt: Date.now(),
+    });
+    return;
+  }
+  if (kind === 'tool_done' || kind === 'tool_failed') {
+    if (last && last.type === 'tool' && last.toolStatus === 'running') {
+      last.content += '\n' + thought;
+      last.toolStatus = kind === 'tool_done' ? 'done' : 'failed';
+      return;
+    }
+    // Result line arrived without a matching start (shouldn't normally
+    // happen given toolRunner.ts's call order, but don't drop the line).
+    state.segments.push({
+      id: nextSegmentId(), type: 'tool', content: thought,
+      toolStatus: kind === 'tool_done' ? 'done' : 'failed', startedAt: Date.now(),
+    });
+    return;
+  }
+  if (kind === 'tool_detail' && last && last.type === 'tool') {
+    last.content += '\n' + thought;
+    return;
+  }
+
+  // Plain reasoning line (or a detail line with no open tool segment) --
+  // treat like <think> text: extend a trailing thinking segment.
+  if (last && last.type === 'thinking') {
+    last.content += '\n' + thought;
+  } else {
+    state.segments.push({ id: nextSegmentId(), type: 'thinking', content: thought, startedAt: Date.now() });
+  }
+}
+
+/**
+ * Append visible response text (the actual answer, not thinking or tool
+ * activity) to a trailing 'text' segment. Called alongside the existing
+ * displayAccumulated += newDisplay pattern -- same content, now also
+ * tracked as an ordered segment so it renders in its real position after
+ * whatever thinking/tool segments preceded it, instead of always at the
+ * bottom.
+ */
+export function appendResponseText(state: StreamParserState, text: string): void {
+  if (!text) return;
+  const last = state.segments[state.segments.length - 1];
+  if (last && last.type === 'text') {
+    last.content += text;
+  } else {
+    state.segments.push({ id: nextSegmentId(), type: 'text', content: text, startedAt: Date.now() });
+  }
+}

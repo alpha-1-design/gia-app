@@ -548,17 +548,30 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const searchResults = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
-    const res: { id: string; label: string; sub: string; type: 'entity' | 'memory'; color: string }[] = [];
+    // Precompute connection counts so results can show how well-wired each entity is
+    const relCount = new Map<string, number>();
+    for (const r of relationships) {
+      relCount.set(r.sourceId, (relCount.get(r.sourceId) || 0) + 1);
+      relCount.set(r.targetId, (relCount.get(r.targetId) || 0) + 1);
+    }
+    const res: { id: string; label: string; sub: string; type: 'entity' | 'memory'; color: string; conns: number }[] = [];
     for (const e of entities) {
-      if (e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q) || e.aliases.some(a => a.toLowerCase().includes(q)))
-        res.push({ id: e.id, label: e.name, sub: e.type, type: 'entity', color: COLORS[e.type] || '#94a3b8' });
+      if (e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q) || e.aliases.some(a => a.toLowerCase().includes(q))) {
+        const desc = e.description ? e.description.slice(0, 60) : '';
+        res.push({
+          id: e.id, label: e.name,
+          sub: desc || e.type,
+          type: 'entity', color: COLORS[e.type] || '#94a3b8',
+          conns: relCount.get(e.id) || 0,
+        });
+      }
     }
     for (const m of memories) {
       if (m.key.toLowerCase().includes(q) || m.value.toLowerCase().includes(q))
-        res.push({ id: m.id, label: m.key, sub: m.value.slice(0, 60), type: 'memory', color: '#818cf8' });
+        res.push({ id: m.id, label: m.key, sub: m.value.slice(0, 60), type: 'memory', color: '#818cf8', conns: 0 });
     }
     return res.slice(0, 30);
-  }, [query, entities, memories]);
+  }, [query, entities, memories, relationships]);
 
   async function handleExport() {
     const kg = useKnowledgeGraphStore.getState();
@@ -742,6 +755,9 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-medium truncate" style={{ color: 'var(--gia-text)' }}>{r.label}</p>
                           <p className="text-[8px] truncate" style={{ color: 'rgba(148,163,184,0.5)' }}>{r.sub}</p>
+                          {r.type === 'entity' && r.conns > 0 && (
+                            <p className="text-[7px] truncate" style={{ color: 'rgba(168,85,247,0.6)' }}>⚡ {r.conns} connection{r.conns === 1 ? '' : 's'}</p>
+                          )}
                         </div>
                         <span className="text-[7px] uppercase tracking-wider shrink-0" style={{ color: r.color }}>{r.type}</span>
                       </button>

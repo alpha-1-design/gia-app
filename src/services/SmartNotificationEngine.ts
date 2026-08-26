@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { storageService } from './StorageService';
 
 export interface IncomingNotification {
   id: string;
@@ -116,6 +117,53 @@ const pendingBatches: NotificationBatch[] = [];
 let totalDecisions = 0;
 let correctDecisions = 0;
 
+// ── Learning persistence ─────────────────────────────────────────────────────
+// The dismissal-rate model (sourcePreferences) and feedback log are the
+// engine's memory — they make it better at triage over time. Persist them via
+// the IndexedDB StorageService (localStorage fallback) so the learned behavior
+// survives app restarts instead of resetting every launch.
+const LEARNING_KEY = 'gia-notification-learning';
+let learningLoaded = false;
+let learningPromise: Promise<void> | null = null;
+
+async function loadLearning(): Promise<void> {
+  let snapshot: { feedback?: UserFeedback[]; prefs?: Record<string, SourcePreference> } | undefined;
+  try {
+    snapshot = await storageService.get<{ feedback?: UserFeedback[]; prefs?: Record<string, SourcePreference> }>(LEARNING_KEY);
+  } catch {
+    snapshot = undefined;
+  }
+  if (!snapshot) {
+    try {
+      const raw = localStorage.getItem(LEARNING_KEY);
+      if (raw) snapshot = JSON.parse(raw) as typeof snapshot;
+    } catch { /* noop */ }
+  }
+  if (!snapshot) return;
+  if (snapshot.prefs) {
+    sourcePreferences.clear();
+    for (const [k, v] of Object.entries(snapshot.prefs)) sourcePreferences.set(k, v);
+  }
+  if (Array.isArray(snapshot.feedback)) userFeedbackLog.push(...snapshot.feedback);
+  logger.info(`[SmartNotification] Restored learning: ${sourcePreferences.size} sources, ${userFeedbackLog.length} feedback entries`);
+}
+
+function persistLearning(): void {
+  const snapshot = {
+    feedback: userFeedbackLog.slice(-500),
+    prefs: Object.fromEntries(sourcePreferences),
+  };
+  storageService.set(LEARNING_KEY, snapshot).catch(() => {
+    try { localStorage.setItem(LEARNING_KEY, JSON.stringify(snapshot)); } catch { /* noop */ }
+  });
+}
+
+function ensureLearningLoaded(): void {
+  if (learningLoaded) return;
+  learningLoaded = true;
+  learningPromise = loadLearning().catch(() => {});
+}
+
 function classifyCategory(notification: IncomingNotification): NotificationCategory {
   if (notification.category) return notification.category;
 
@@ -230,7 +278,14 @@ class SmartNotificationEngine {
     return SmartNotificationEngine.instance;
   }
 
+  /** Load persisted learning once at startup. Safe to call multiple times. */
+  init(): Promise<void> | null {
+    ensureLearningLoaded();
+    return learningPromise;
+  }
+
   process(notification: IncomingNotification): NotificationDecision {
+    ensureLearningLoaded();
     const decision = decide(notification);
 
     if (decision.action === 'batch' && decision.batchId) {
@@ -280,6 +335,7 @@ class SmartNotificationEngine {
 
     const wasDismissed = userAction === 'dismissed';
     updateSourcePreference(source, wasDismissed);
+    persistLearning();
     logger.debug(`[SmartNotification] Learned: ${source}/${category} → ${userAction}`);
   }
 

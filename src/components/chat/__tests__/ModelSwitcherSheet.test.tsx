@@ -1,8 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import ModelSwitcherSheet from '../ModelSwitcherSheet';
 import { useProviderStore } from '../../../store/useProviderStore';
 import { providerRegistry } from '../../../services/ProviderRegistry';
+
+// The registry tries to enrich its fallback data with a remote provider
+// config on first load. In tests that fetch hangs on slow CI / parallel runs
+// and makes this suite flaky — stub it out so the deterministic fallback
+// data (OpenAI provider, Gemma 3 27B model) is always used.
+vi.mock('../../../services/CorsProxy', () => ({
+  corsProxy: {
+    fetch: vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({}) })
+    ),
+  },
+}));
 
 describe('ModelSwitcherSheet', () => {
   beforeEach(async () => {

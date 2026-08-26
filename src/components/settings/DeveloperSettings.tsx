@@ -1,8 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Terminal, Bug, Wifi, Trash2, RefreshCw, Database, Eye, ShieldAlert, ScrollText, Cpu, Binary, HardDrive } from 'lucide-react';
+import { Terminal, Bug, Wifi, Trash2, RefreshCw, Database, Eye, ShieldAlert, ScrollText, Cpu, Binary, HardDrive, Flag } from 'lucide-react';
 import { Switch } from '../ui/Switch';
 import { useGiaStore } from '../../store/useGiaStore';
+import { featureFlags } from '../../services/GIACoreServices';
 import { logger } from '../../utils/logger';
+
+// Human-friendly labels for the internal feature-flag system. Toggling a flag
+// enables/disables that background service — persisted across restarts.
+const FEATURE_FLAG_LABELS: Record<string, { label: string; description: string }> = {
+  knowledgeGraph:      { label: 'Neura Knowledge Graph', description: 'Extract & interlink entities, concepts, and connections from conversations.' },
+  autoMemory:          { label: 'Auto Memory', description: 'Automatically store important facts, preferences, and habits from chats.' },
+  automationEngine:    { label: 'Automation Engine', description: 'Runs event-driven automations and scheduled rules.' },
+  giaTwin:             { label: 'GIA Twin', description: 'Builds a behavioral model of you from your interactions.' },
+  moodDetection:       { label: 'Mood Detection', description: 'Tracks emotional tone of messages for context-aware responses.' },
+  screenAgent:         { label: 'Screen Agent', description: 'Reads and analyzes on-screen content.' },
+  cloudSync:           { label: 'Cloud Sync', description: 'Syncs your brain across devices via configured sync.' },
+  crossDeviceMesh:     { label: 'Cross-Device Mesh', description: 'Local-network peer discovery between your devices.' },
+  skillsSDK:           { label: 'Skills SDK', description: 'Enables installable skill packages and lifecycle hooks.' },
+  notificationListener: { label: 'Notification Listener', description: 'Captures notifications from other apps for triage.' },
+  offlineSTT:          { label: 'Offline Speech-to-Text', description: 'On-device voice transcription without the cloud.' },
+};
 
 export const DeveloperSettings: React.FC = () => {
   const addNotification = useGiaStore(s => s.addNotification);
@@ -26,6 +43,11 @@ export const DeveloperSettings: React.FC = () => {
   // ── Network debugging ──────────────────────────────────────────
   const [networkLogs, setNetworkLogs] = useState<{ time: string; url: string; status: number; ms: number }[]>([]);
   const [capturingNetwork, setCapturingNetwork] = useState(false);
+
+  // ── Feature flags ──────────────────────────────────────────────
+  const [flags, setFlags] = useState<Record<string, boolean>>(() => {
+    try { return featureFlags.getAll(); } catch { return {}; }
+  });
 
   // ── Cache stats ────────────────────────────────────────────────
   const [cacheSize, setCacheSize] = useState('?');
@@ -154,6 +176,35 @@ export const DeveloperSettings: React.FC = () => {
           description="Display token counts after each response in the chat."
           accentColor="#f59e0b"
         />
+      </div>
+
+      {/* ── Feature Flags ─────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <p className="text-[10px] uppercase tracking-wider font-medium flex items-center gap-1.5" style={{ color: 'var(--gia-muted)' }}>
+          <Flag size={11} /> Feature Flags
+        </p>
+        {Object.entries(flags).map(([flag, enabled]) => {
+          const meta = FEATURE_FLAG_LABELS[flag];
+          if (!meta) return null;
+          return (
+            <Switch
+              key={flag}
+              checked={enabled}
+              onChange={(v) => {
+                featureFlags.setEnabled(flag, v);
+                setFlags((prev) => ({ ...prev, [flag]: v }));
+                addNotification(`${meta.label} ${v ? 'enabled' : 'disabled'}`);
+              }}
+              icon={<Flag size={11} />}
+              label={meta.label}
+              description={meta.description}
+              accentColor="#8b5cf6"
+            />
+          );
+        })}
+        <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+          Power features behind GIA's intelligence layer. Most are on by default; disabling one stops that background service until re-enabled.
+        </p>
       </div>
 
       {/* ── Log Level ──────────────────────────────────────────── */}

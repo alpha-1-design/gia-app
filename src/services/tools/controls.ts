@@ -4,17 +4,17 @@ import type { Tool } from './types';
 export const controlTools: Tool[] = [
   {
     id: 'switch_module', name: 'switch_module',
-    description: 'Switch the active GIA module (chat, exam, analyst, writer, planner, settings).',
+    description: 'Switch the active GIA module (chat, build, exam, analyst, writer, planner, settings).',
     schema: {
       type: 'object',
       properties: {
-        module: { type: 'string', description: 'Module to switch to', enum: ['chat', 'exam', 'analyst', 'writer', 'planner', 'settings'] }
+        module: { type: 'string', description: 'Module to switch to', enum: ['chat', 'build', 'exam', 'analyst', 'writer', 'planner', 'settings'] }
       },
       required: ['module']
     },
     execute: async ({ module }) => {
       const moduleSchema = z.object({
-        module: z.enum(['chat', 'exam', 'analyst', 'writer', 'planner', 'settings'])
+        module: z.enum(['chat', 'build', 'exam', 'analyst', 'writer', 'planner', 'settings'])
       });
       const validationResult = moduleSchema.safeParse({ module });
       if (!validationResult.success) {
@@ -54,7 +54,7 @@ export const controlTools: Tool[] = [
   },
   {
     id: 'request_clarification', name: 'request_clarification',
-    description: 'Ask the user for information before continuing. For a single quick question, pass `question` and optionally `options` (rendered as tappable buttons, plus a free-text fallback). For several pieces of information at once (e.g. a setup form), pass `fields` instead: an array of { id, label, type, options?, placeholder? } where type is "radio", "select", or "text". Fields render together with one "Send answers" button.',
+    description: 'Ask the user for information before continuing. For a single quick question, pass `question` and optionally `options` (rendered as tappable buttons, plus a free-text fallback). When you need several pieces of information, ask ALL of them at once by passing `fields` — 2 to 6 fields: an array of { id, label, type, options?, placeholder? } where type is "radio", "select", or "text". They render together with one "Send answers" button, so the user answers everything in one go. Ask everything you genuinely need (up to 5-6 questions) in one call instead of drip-feeding one question per turn. If you still need more information after the user answers, you may ask again.',
     schema: {
       type: 'object',
       properties: {

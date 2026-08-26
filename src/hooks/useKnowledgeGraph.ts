@@ -67,6 +67,7 @@ export function useKnowledgeGraph() {
     getEntity: store.getEntity,
     findEntity: store.findEntity,
     deleteEntity: store.deleteEntity,
+    mergeEntities: store.mergeEntities,
     compact: store.compact,
   };
 }
