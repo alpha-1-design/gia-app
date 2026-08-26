@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense, useState, useRef, useCallback } from 'react';
+import React, { useEffect, lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bell, X, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ClipboardIcon } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
@@ -147,14 +147,19 @@ const App: React.FC = () => {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Hardware-keyboard command palette — Ctrl/Cmd+K from anywhere.
-  useKeyboardShortcuts([
+  // Memoized: an inline array literal here was a fresh reference every App
+  // render, and useKeyboardShortcuts' effect depends on it — rebinding the
+  // keydown listener on every render. Not itself the #185 crash, but the
+  // same class of bug, and cheap to fix while in here.
+  const paletteShortcuts = useMemo(() => [
     { key: 'k', ctrl: true, handler: () => setPaletteOpen(o => !o), preventDefault: true },
     { key: 'k', meta: true, handler: () => setPaletteOpen(o => !o), preventDefault: true },
-  ]);
+  ], []);
+  useKeyboardShortcuts(paletteShortcuts);
 
   // First launch — run a quick system self-check and surface the summary so
   // new users immediately see that GIA is healthy and what's available.
-  const { shouldRunDiagnostics, runDiagnostics } = useFirstLaunch();
+  const { shouldRunDiagnostics, setShouldRunDiagnostics, runDiagnostics } = useFirstLaunch();
   useEffect(() => {
     if (!shouldRunDiagnostics) return;
     let cancelled = false;
@@ -169,10 +174,16 @@ const App: React.FC = () => {
         logger.log('[FirstLaunch] Diagnostics complete', report);
       } catch (e) {
         logger.warn('[FirstLaunch] Diagnostics failed:', e);
+      } finally {
+        // One-shot: this used to never reset, so once true it re-ran on
+        // every App re-render for as long as runDiagnostics' reference kept
+        // changing (see useFirstLaunch.ts). Explicitly flipping it off here
+        // is a second, independent guard against that loop.
+        if (!cancelled) setShouldRunDiagnostics(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [shouldRunDiagnostics, runDiagnostics, addNotification]);
+  }, [shouldRunDiagnostics, runDiagnostics, addNotification, setShouldRunDiagnostics]);
 
   // Left-edge swipe-to-open, mirroring the gesture in most AI apps' side
   // menu. Detection logic lives in utils/edgeSwipe.ts so it's unit
@@ -788,9 +799,18 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (notifications.length === 0) return;
-    const latest = notifications[0];
-    const timeout = setTimeout(() => clearNotification(latest.id), 5000);
-    return () => clearTimeout(timeout);
+    // Each notification needs its own expiry, independent of the others —
+    // this used to only start a timer for notifications[0] (the newest), so
+    // anything pushed further down the list by a newer arrival never got a
+    // timer of its own and just sat there forever, which is why they piled
+    // up in a growing column instead of clearing out.
+    const now = Date.now();
+    const timers = notifications.map((n) => {
+      const elapsed = now - n.ts;
+      const remaining = Math.max(0, 5000 - elapsed);
+      return setTimeout(() => clearNotification(n.id), remaining);
+    });
+    return () => timers.forEach(clearTimeout);
   }, [notifications, clearNotification]);
 
   if (locked) {
@@ -825,44 +845,54 @@ const App: React.FC = () => {
       <Suspense fallback={null}>
         <ProfileDrawer />
       </Suspense>
-      {/* Global Notifications */}
-      <div className="fixed top-16 left-0 right-0 z-[60] px-4 pointer-events-none space-y-2">
-        <AnimatePresence>
-          {notifications.map((n) => {
-            const msg = n.message;
-            const iconMap: [RegExp, React.ReactNode, string][] = [
-              [/model|switch|provider|connected/i, <Cpu size={14} />, '#a855f7'],
-              [/brain|memory|export|import/i, <Download size={14} />, '#8b5cf6'],
-              [/error|fail|blocked/i, <AlertCircle size={14} />, '#f87171'],
-              [/online|back online/i, <Wifi size={14} />, '#34d399'],
-              [/offline|no internet/i, <WifiOff size={14} />, '#71717a'],
-              [/notification|listen|voice/i, <Bell size={14} />, '#ec4899'],
-            ];
-            const match = iconMap.find(([re]) => re.test(msg));
-            const icon = match ? match[1] : <Bell size={14} />;
-            const color = match ? match[2] : '#34d399';
-            return (
-              <motion.div
-                key={n.id}
-                initial={{ opacity: 0, x: 20, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                className="gia-card p-3.5 flex items-start gap-3 pointer-events-auto shadow-2xl bg-zinc-900/95 backdrop-blur-xl border-zinc-800"
-              >
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}22` }}>
-                  <span style={{ color }}>{icon}</span>
-                </div>
-                <div className="flex-1 pt-0.5">
-                  <p className="text-[13px] font-medium text-zinc-100 leading-tight">{msg}</p>
-                  <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-wider" style={{ color }}>Just now</p>
-                </div>
-                <button onClick={() => clearNotification(n.id)} className="text-zinc-600 hover:text-zinc-400 p-1">
-                  <X size={14} />
-                </button>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+      {/* Global Notifications — capped to the 3 most recent. Stacked like a
+          card deck rather than a growing column: the oldest of the visible
+          set sits in front (fully visible), newer arrivals peek from behind
+          it and step forward as the one in front clears. */}
+      <div className="fixed left-0 right-0 z-[60] px-4 pointer-events-none" style={{ top: 'calc(4rem + env(safe-area-inset-top))' }}>
+        <div className="grid">
+          <AnimatePresence>
+            {notifications.slice(0, 3).map((n, i, visible) => {
+              const msg = n.message;
+              const iconMap: [RegExp, React.ReactNode, string][] = [
+                [/model|switch|provider|connected/i, <Cpu size={14} />, '#a855f7'],
+                [/brain|memory|export|import/i, <Download size={14} />, '#8b5cf6'],
+                [/error|fail|blocked/i, <AlertCircle size={14} />, '#f87171'],
+                [/online|back online/i, <Wifi size={14} />, '#34d399'],
+                [/offline|no internet/i, <WifiOff size={14} />, '#71717a'],
+                [/notification|listen|voice/i, <Bell size={14} />, '#ec4899'],
+              ];
+              const match = iconMap.find(([re]) => re.test(msg));
+              const icon = match ? match[1] : <Bell size={14} />;
+              const color = match ? match[2] : '#34d399';
+              // depth 0 = front (oldest of the visible three); higher depth
+              // = further back (newer, arrived more recently).
+              const depth = visible.length - 1 - i;
+              return (
+                <motion.div
+                  key={n.id}
+                  style={{ gridArea: '1 / 1', zIndex: 10 - depth }}
+                  initial={{ opacity: 0, y: -14, scale: 0.94 }}
+                  animate={{ opacity: depth === 0 ? 1 : depth === 1 ? 0.8 : 0.5, y: depth * 10, scale: 1 - depth * 0.045 }}
+                  exit={{ opacity: 0, x: -20, scale: 0.9 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                  className={`gia-card p-3.5 flex items-start gap-3 shadow-2xl bg-zinc-900/95 backdrop-blur-xl border-zinc-800 ${depth === 0 ? 'pointer-events-auto' : 'pointer-events-none'}`}
+                >
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}22` }}>
+                    <span style={{ color }}>{icon}</span>
+                  </div>
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-[13px] font-medium text-zinc-100 leading-tight">{msg}</p>
+                    <p className="text-[9px] text-zinc-500 mt-1 uppercase tracking-wider" style={{ color }}>Just now</p>
+                  </div>
+                  <button onClick={() => clearNotification(n.id)} className="text-zinc-600 hover:text-zinc-400 p-1">
+                    <X size={14} />
+                  </button>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
 
 {/* Header */}
@@ -1039,6 +1069,7 @@ const App: React.FC = () => {
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[200] w-full h-[100dvh] bg-[var(--gia-bg)] flex flex-col overflow-y-auto"
+            style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} />
           </motion.div>

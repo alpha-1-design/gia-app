@@ -502,7 +502,7 @@ const EngineRoom: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col font-mono text-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 shrink-0" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowTerminal(false)} className="flex items-center gap-2 text-zinc-400 hover:text-zinc-100 transition-colors">
             <ArrowLeft size={16} /><span className="text-xs">Back</span>

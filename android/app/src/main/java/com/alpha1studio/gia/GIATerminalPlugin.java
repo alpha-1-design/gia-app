@@ -396,16 +396,24 @@ public class GIATerminalPlugin extends Plugin {
         terminalDir.mkdirs();
         rootfsDir.mkdirs();
 
-        // Step 1: Download rootfs tarball from CDN with mirror fallback
         String filename = "alpine-minirootfs-3.21.0-" + arch + ".tar.gz";
-        boolean downloaded = false;
         Exception lastError = null;
 
+        // Previously: download success only meant "the socket didn't throw" —
+        // a truncated response (mobile network drop mid-transfer, a mirror
+        // serving a short/corrupt file) still set downloaded=true, and
+        // extraction+verification ran exactly once against whatever came
+        // through, with no path back to try another mirror. That silently
+        // produced a rootfs missing bin/busybox itself (not just its applet
+        // symlinks), which is the "missing: busybox /bin/sh /usr/bin/env"
+        // failure. Now each mirror gets a full download+extract+verify
+        // attempt, and a bad result on one mirror moves to the next.
         for (String mirror : ALPINE_MIRRORS) {
             String downloadUrl = mirror + "/" + arch + "/" + filename;
             emitProgress("downloading", 0, "Trying " + mirror.replace("https://", "") + "...");
             Log.i(TAG, "Downloading rootfs from: " + downloadUrl);
 
+            boolean downloadOk = false;
             for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
                     HttpURLConnection conn = (HttpURLConnection) new URL(downloadUrl).openConnection();
@@ -420,30 +428,45 @@ public class GIATerminalPlugin extends Plugin {
                     }
 
                     long totalBytes = conn.getContentLengthLong();
-                    if (totalBytes <= 0) totalBytes = 2_000_000; // fallback estimate
 
                     // Clear any partial file from previous attempt
                     if (archiveFile.exists()) archiveFile.delete();
 
+                    long bytesSoFar = 0;
                     try (InputStream in = conn.getInputStream();
                          FileOutputStream out = new FileOutputStream(archiveFile)) {
                         byte[] buf = new byte[8192];
-                        long bytesSoFar = 0;
                         int n;
                         int lastProgress = -1;
+                        long progressTotal = totalBytes > 0 ? totalBytes : 2_000_000; // fallback estimate for the bar only
                         while ((n = in.read(buf)) != -1) {
                             out.write(buf, 0, n);
                             bytesSoFar += n;
-                            int pct = (int) (bytesSoFar * 40 / totalBytes); // 0-40% for download
+                            int pct = (int) (bytesSoFar * 40 / progressTotal); // 0-40% for download
                             if (pct != lastProgress) {
                                 lastProgress = pct;
-                                emitProgress("downloading", pct,
-                                    "Downloading... " + (bytesSoFar / 1024) + "KB / " + (totalBytes / 1024) + "KB");
+                                emitProgress("downloading", Math.min(pct, 40),
+                                    "Downloading... " + (bytesSoFar / 1024) + "KB" + (totalBytes > 0 ? " / " + (totalBytes / 1024) + "KB" : ""));
                             }
                         }
                     }
                     conn.disconnect();
-                    downloaded = true;
+
+                    // Integrity check 1: the server told us how big the file
+                    // should be — hold it to that. A short read here used to
+                    // be treated as a clean success.
+                    if (totalBytes > 0 && bytesSoFar != totalBytes) {
+                        throw new IOException("Truncated download: got " + bytesSoFar + " of " + totalBytes + " bytes");
+                    }
+                    // Integrity check 2: a gzip stream starts with the magic
+                    // bytes 0x1f 0x8b. Cheap sanity check that catches mirrors
+                    // serving an HTML error page (still HTTP 200) or a
+                    // zero-length/corrupt file before we waste time untarring it.
+                    if (!looksLikeGzip(archiveFile)) {
+                        throw new IOException("Downloaded file is not a valid gzip archive (got " + archiveFile.length() + " bytes)");
+                    }
+
+                    downloadOk = true;
                     break;
                 } catch (Exception e) {
                     lastError = e;
@@ -454,17 +477,41 @@ public class GIATerminalPlugin extends Plugin {
                     }
                 }
             }
-            if (downloaded) break;
+            if (!downloadOk) continue; // exhausted retries on this mirror — try the next one
+
+            emitProgress("downloading", 40, "Download complete — " + (archiveFile.length() / 1024) + "KB");
+            Log.i(TAG, "Rootfs downloaded: " + archiveFile.length() + " bytes");
+
+            try {
+                extractAndVerify(archiveFile, rootfsDir);
+                return; // success
+            } catch (Exception e) {
+                lastError = e;
+                Log.w(TAG, "Extraction/verification failed for " + mirror + ": " + e.getMessage() + " — trying next mirror");
+                GIATerminalService.deleteRecursive(rootfsDir);
+                rootfsDir.mkdirs();
+                archiveFile.delete();
+            }
         }
 
-        if (!downloaded) {
-            String errMsg = lastError != null ? lastError.getMessage() : "unknown error";
-            throw new IOException("Could not download rootfs from any mirror: " + errMsg);
+        String errMsg = lastError != null ? lastError.getMessage() : "unknown error";
+        emitProgress("error", 0, "Error: " + errMsg);
+        throw new IOException("Could not install rootfs from any mirror: " + errMsg);
+    }
+
+    private static boolean looksLikeGzip(File f) {
+        if (f.length() < 2) return false;
+        try (InputStream in = new FileInputStream(f)) {
+            int b1 = in.read();
+            int b2 = in.read();
+            return b1 == 0x1f && b2 == 0x8b;
+        } catch (IOException e) {
+            return false;
         }
+    }
 
-        emitProgress("downloading", 40, "Download complete — " + (archiveFile.length() / 1024) + "KB");
-        Log.i(TAG, "Rootfs downloaded: " + archiveFile.length() + " bytes");
-
+    /** Extract archiveFile into rootfsDir and verify it produced a bootable rootfs. Throws on any failure. */
+    private void extractAndVerify(File archiveFile, File rootfsDir) throws IOException {
         // Step 2: Extract tar.gz
         emitProgress("extracting", 41, "Extracting rootfs...");
         if (rootfsDir.exists() && rootfsDir.listFiles() != null && rootfsDir.listFiles().length > 0) {
@@ -500,7 +547,7 @@ public class GIATerminalPlugin extends Plugin {
         // Step 5: Verify rootfs has critical binaries (skip proot package install —
         // do that from the Packages tab instead, since proot during setup is fragile)
         emitProgress("installing", 81, "Verifying rootfs integrity...");
-        
+
         // Debug: log what's actually in the rootfs
         File busyboxCheck = new File(rootfsDir, "bin/busybox");
         File shCheck = new File(rootfsDir, "bin/sh");
@@ -516,7 +563,7 @@ public class GIATerminalPlugin extends Plugin {
         boolean hasBusybox = busyboxCheck.exists();
         boolean hasSh = shCheck.exists();
         boolean hasEnv = envCheck.exists();
-        
+
         if (hasBusybox && (!hasSh || !hasEnv)) {
             emitProgress("installing", 85, "Fixing missing symlinks...");
             // Manually create busybox applet copies for missing critical binaries

@@ -48,6 +48,12 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
               maxWidth: '340px',
               background: 'var(--gia-surface)',
               borderRight: '1px solid var(--gia-border)',
+              // fixed positioning escapes #root's own safe-area padding (it's
+              // relative to the real viewport, not the padded box), so with
+              // edge-to-edge status bar overlay this drawer's content would
+              // otherwise start underneath/behind it. Pad it directly.
+              paddingTop: 'env(safe-area-inset-top)',
+              paddingBottom: 'env(safe-area-inset-bottom)',
             }}
             initial={{ x: reduceMotion ? 0 : '-100%', opacity: reduceMotion ? 0 : 1 }}
             animate={{ x: 0, opacity: 1 }}

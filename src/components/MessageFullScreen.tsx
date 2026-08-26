@@ -36,7 +36,7 @@ const MessageFullScreen: React.FC<Props> = ({ msg, reaction, onClose, onCopy, on
           className="fixed inset-0 z-[200] flex flex-col"
           style={{ background: 'var(--gia-bg)' }}
         >
-          <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)', background: 'var(--gia-surface)' }}>
+          <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)', background: 'var(--gia-surface)', paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}>
             <div className="flex items-center gap-2 min-w-0">
               <Maximize size={16} style={{ color: 'var(--gia-accent)' }} />
               <span className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>GIA</span>
