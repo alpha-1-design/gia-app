@@ -843,6 +843,29 @@ GIA is architected for **zero-trust, no-backend security**. Every protection is 
 </network-security-config>
 ```
 
+## ⌨️ Slash Commands
+
+GIA has a built-in command language — type `/` in the chat box and send. Commands work in **both GIA (Android) and GIA Cowork (desktop)**, and the same syntax is available in any chat module (Chat, Build, Analyst, Planner). Type `/help` in chat to see the full list inline.
+
+| Command | Aliases | What it does |
+|---------|---------|--------------|
+| `/help` | `/?` | List every available command inline |
+| `/clear` | `/cls` | Clear the current conversation |
+| `/compact` | `/summarize` | Summarize & compress the context window |
+| `/cost` | `/usage` | Show token usage and estimated cost for this session |
+| `/tokens` | `/ctx` | Display current context-window usage with a progress bar |
+| `/mode` | — | Switch mode: `/mode code`, `/mode plan`, `/mode ask`, `/mode build` |
+| `/session` | `/new`, `/reset` | Start a fresh session |
+| `/skills` | `/marketplace`, `/store` | Open the Skills Marketplace |
+| `/status` | `/info` | Show provider, model, active skill, features, and session stats |
+| `/export` | — | Copy the current chat as Markdown to the clipboard |
+| `/model` | — | Show the active model, or `/model <name>` to switch |
+
+**Tips:**
+- `/mode build` is the same as opening the dedicated **Build module** — GIA scaffolds, builds, and runs your project with live preview.
+- Commands are local — they run instantly without sending anything to the model.
+- On a hardware keyboard (tablet/laptop), **Ctrl/Cmd+K** opens the command palette anywhere in the app.
+
 ---
 
 ## 🧬 Additional Systems
