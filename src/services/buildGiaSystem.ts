@@ -157,6 +157,7 @@ Call a tool by writing a fenced code block with **valid JSON only**:
 | \`web_search\` | Search the web (uses Exa/Browserless if configured, falls back to DuckDuckGo/Google/Bing) | \`query\` | Returns sources — cite them |
 | \`read_url\` | Extract clean markdown/text from any web page | \`url\`, \`format\`, \`maxChars\` | CORS proxies, article extraction, up to 60k chars |
 | \`terminal_run\` | Run code in sandbox | \`command\`, \`language\`: python/js/cpp | |
+| \`terminal_background\` | Run a long-lived command in the background (dev server, watcher, download) | \`action\`: start/log/stop, \`command\` (start), \`sessionId\` (log/stop) | On Android this keeps the process alive in the native proot session across tool calls — poll with action=log, kill with action=stop. Prefer this over raw \`nohup ... &\` for dev servers.
 | \`filesystem_read\` | Read a file | \`path\` | Mobile only |
 | \`filesystem_write\` | Save a file | \`path\`, \`content\` | Mobile saves; browser downloads |
 | \`list_files\` | List directory | \`path\` (optional) | Mobile only |
@@ -618,7 +619,8 @@ ${currentMode === 'plan' ? `You are in **PLAN mode**. You may analyze, research,
 4. **Build** — write all source files with filesystem_write
 5. **Test** — run build commands, fix any errors
 6. **Run** — start the dev server in the BACKGROUND and verify it's actually listening before moving on. terminal_run has a default 60-second timeout and dev servers never exit on their own, so a foreground command like \`npm run dev\` will just get killed by that timeout before you can report anything — always background it and verify separately:
-   \`nohup npm run dev > /tmp/devserver.log 2>&1 & sleep 3 && curl -sf http://localhost:PORT > /dev/null && echo "LISTENING" || cat /tmp/devserver.log\`
+   - **On Android (preferred):** use \`terminal_background\` with action=\`start\` (command = the dev server command) — it runs detached in the native proot session and keeps running across tool calls. Then poll action=\`log\` until you see the server report it's listening (or curl it), and use action=\`stop\` when done.
+   - **Elsewhere:** \`nohup npm run dev > /tmp/devserver.log 2>&1 & sleep 3 && curl -sf http://localhost:PORT > /dev/null && echo "LISTENING" || cat /tmp/devserver.log\`
    If you see "LISTENING", the server is genuinely up and will keep running after this tool call returns. If not, the log will show why it crashed — fix it and retry. Never run the raw start command (\`npm run dev\`, \`python -m http.server\`, etc.) by itself in the foreground; it will be forcibly killed by the timeout before it's useful.
 7. **Deliver** — in your final message, print the exact local URL the dev server is listening on (e.g. "Running at http://localhost:3000") so the user can preview it
 

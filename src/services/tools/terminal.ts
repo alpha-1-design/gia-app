@@ -304,8 +304,171 @@ const terminalKill: Tool = {
   },
 };
 
+const terminalBackground: Tool = {
+  id: 'terminal_background',
+  name: 'terminal_background',
+  description: 'Run a long-lived command in the background and manage it. Actions: start (launch a dev server / watcher / download detached from the request so it keeps running after this tool returns), log (read the output a background session has produced so far — non-blocking), stop (kill a background session by its sessionId).',
+  schema: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['start', 'log', 'stop'],
+        description: 'start = launch in background, log = read buffered output, stop = kill the session',
+      },
+      command: { type: 'string', description: 'Command to run in the background (required for action=start)' },
+      sessionId: { type: 'string', description: 'Session id returned by start (required for action=log and action=stop)' },
+    },
+    required: ['action'],
+  },
+  execute: async (args) => {
+    const action = String(args.action || '');
+
+    if (action === 'start') {
+      const command = String(args.command || '').trim();
+      if (!command) {
+        return { success: false, content: '', error: 'command is required for action=start' };
+      }
+
+      // Backend 1: native on-device proot session (Android) — run-detached,
+      // stays alive in the service until killed or the process exits.
+      if (terminalService.isAvailable()) {
+        try {
+          const { sessionId, running } = await terminalService.spawn(command);
+          return {
+            success: true,
+            content: [
+              '## 🔄 Background started (on-device)',
+              '',
+              '```',
+              command.slice(0, 500),
+              '```',
+              '',
+              `**Session:** \`${sessionId}\``,
+              `**Status:** ${running ? 'running' : 'exited immediately'}`,
+              '',
+              `Poll output with \`terminal_background\` action=\`log\`, sessionId=\`${sessionId}\`.`,
+              `Stop it with action=\`stop\`.`,  
+            ].join('\n'),
+          };
+        } catch (e) {
+          return { success: false, content: '', error: `Background start failed: ${e instanceof Error ? e.message : String(e)}` };
+        }
+      }
+
+      // Backend 2: desktop/browser — detach via setsid+nohup through the
+      // sandbox so the process outlives this request. Best-effort: depends on
+      // the sandbox server not reaping process groups.
+      try {
+        const available = await SandboxService.ensureAvailable();
+        if (!available) {
+          return {
+            success: false,
+            content: '',
+            error: 'Background execution needs the on-device terminal (Android) or the sandbox server (desktop). Neither is available.',
+          };
+        }
+        const logPath = `/tmp/gia-bg-${Date.now()}.log`;
+        const pidPath = `/tmp/gia-bg-${Date.now()}.pid`;
+        const wrapped = [
+          `setsid nohup sh -c ${JSON.stringify(command)} > ${logPath} 2>&1 < /dev/null &`,
+          `echo $! > ${pidPath}`,
+          `sleep 0.5; cat ${pidPath}`,  
+        ].join(' ');
+        const res = await SandboxService.exec(wrapped, { timeout: 15000 });
+        const pid = res.stdout.trim().split('\n').pop()?.trim();
+        return {
+          success: true,
+          content: [
+            '## 🔄 Background started (sandbox)',
+            '',
+            `**PID:** ${pid || 'unknown'}`,
+            `**Log:** \`${logPath}\``,
+            '',
+            `Poll with action=\`log\`, sessionId=\`file://${pidPath}\`; stop with action=\`stop\`.`,
+          ].join('\n'),
+        };
+      } catch (e) {
+        return { success: false, content: '', error: `Background start failed: ${e instanceof Error ? e.message : String(e)}` };
+      }
+    }
+
+    if (action === 'log') {
+      const sessionId = String(args.sessionId || '').trim();
+      if (!sessionId) {
+        return { success: false, content: '', error: 'sessionId is required for action=log' };
+      }
+
+      // Sandbox fallback session — read the log file the process writes to.
+      if (sessionId.startsWith('file://')) {
+        const pidPath = sessionId.replace('file://', '');
+        const logPath = pidPath.replace(/\.pid$/, '.log');
+        try {
+          const available = await SandboxService.ensureAvailable();
+          if (!available) return { success: false, content: '', error: 'Sandbox not available' };
+          const res = await SandboxService.exec(
+            `if [ -f ${pidPath} ] && kill -0 $(cat ${pidPath}) 2>/dev/null; then echo "RUNNING"; else echo "STOPPED"; fi; echo "---"; cat ${logPath} 2>/dev/null || echo "(no output yet)"`,
+            { timeout: 15000 },
+          );
+          const stopped = res.stdout.includes('STOPPED');
+          const body = res.stdout.replace('RUNNING', '').replace('STOPPED', '').replace('---', '').trim();
+          return {
+            success: true,
+            content: `## 📡 Background log${stopped ? ' (stopped)' : ''}\n\n\`\`\`\n${(body || '(no output yet)').slice(0, 20000)}\n\`\`\``,
+          };
+        } catch (e) {
+          return { success: false, content: '', error: `Log read failed: ${e instanceof Error ? e.message : String(e)}` };
+        }
+      }
+
+      try {
+        const r = await terminalService.readOutput(sessionId);
+        const status = r.gone ? 'finished' : r.running ? 'running' : 'exited';
+        const header = r.gone
+          ? `finished (exit ${r.exitCode})`
+          : status === 'running' ? 'running' : 'exited';
+        return {
+          success: true,
+          content: `## 📡 Background log (\`${sessionId}\` — ${header})\n\n\`\`\`\n${(r.output || '(no output yet)').slice(0, 20000)}\n\`\`\``,
+        };
+      } catch (e) {
+        return { success: false, content: '', error: `Log read failed: ${e instanceof Error ? e.message : String(e)}` };
+      }
+    }
+
+    if (action === 'stop') {
+      const sessionId = String(args.sessionId || '').trim();
+      if (!sessionId) {
+        return { success: false, content: '', error: 'sessionId is required for action=stop' };
+      }
+
+      if (sessionId.startsWith('file://')) {
+        const pidPath = sessionId.replace('file://', '');
+        try {
+          const available = await SandboxService.ensureAvailable();
+          if (!available) return { success: false, content: '', error: 'Sandbox not available' };
+          await SandboxService.exec(`kill $(cat ${pidPath} 2>/dev/null) 2>/dev/null; rm -f ${pidPath}; echo stopped`, { timeout: 10000 });
+          return { success: true, content: `🔪 Background process stopped.` };
+        } catch (e) {
+          return { success: false, content: '', error: `Stop failed: ${e instanceof Error ? e.message : String(e)}` };
+        }
+      }
+
+      try {
+        await terminalService.kill(sessionId);
+        return { success: true, content: `🔪 Background session \`${sessionId}\` stopped.` };
+      } catch (e) {
+        return { success: false, content: '', error: `Stop failed: ${e instanceof Error ? e.message : String(e)}` };
+      }
+    }
+
+    return { success: false, content: '', error: `Unknown action: ${action} — use start, log, or stop.` };
+  },
+};
+
 export const terminalTools: Tool[] = [
   terminalRun,
   terminalStatus,
   terminalKill,
+  terminalBackground,
 ];

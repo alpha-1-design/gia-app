@@ -125,6 +125,89 @@ public class GIATerminalPlugin extends Plugin {
     }
 
     /**
+     * Start a command in the background and return immediately (run-detached).
+     *
+     * Unlike exec(), the session is NOT awaited and NOT killed when this call
+     * returns — it stays alive in the service's session map so long-running
+     * processes (dev servers, watchers, downloads) survive between calls. Poll
+     * its output with readOutput() and stop it with kill().
+     *
+     * @param call Expects: command (string, required), workdir (string, optional)
+     */
+    @PluginMethod
+    public void spawn(PluginCall call) {
+        String command = call.getString("command");
+        if (command == null || command.isEmpty()) {
+            call.reject("command is required");
+            return;
+        }
+
+        String sessionId = UUID.randomUUID().toString();
+        try {
+            GIATerminalService.TerminalSession session =
+                    GIATerminalService.startSession(getContext(), sessionId, command);
+
+            JSObject result = new JSObject();
+            result.put("sessionId", sessionId);
+            result.put("command", command);
+            result.put("running", session.isRunning());
+            call.resolve(result);
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to spawn background session", e);
+            GIATerminalService.killSession(sessionId);
+            call.reject("Failed to start background session: " + e.getMessage(), e);
+        } catch (Exception e) {
+            Log.e(TAG, "Unexpected error in spawn", e);
+            GIATerminalService.killSession(sessionId);
+            call.reject("Unexpected error: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Read (and drain) the output produced so far by a background session.
+     *
+     * Non-blocking — returns whatever the session has buffered since the last
+     * read. When the underlying process has exited, the session is removed
+     * from the map so it can't leak; subsequent reads report gone=true.
+     *
+     * @param call Expects: sessionId (string, required)
+     */
+    @PluginMethod
+    public void readOutput(PluginCall call) {
+        String sessionId = call.getString("sessionId");
+        if (sessionId == null || sessionId.isEmpty()) {
+            call.reject("sessionId is required");
+            return;
+        }
+
+        GIATerminalService.TerminalSession session = GIATerminalService.getSession(sessionId);
+        if (session == null) {
+            JSObject result = new JSObject();
+            result.put("output", "");
+            result.put("running", false);
+            result.put("gone", true);
+            result.put("exitCode", -1);
+            call.resolve(result);
+            return;
+        }
+
+        boolean running = session.isRunning();
+        String output = session.drainOutput();
+        int exitCode = session.exitCode();
+        if (!running) {
+            // Process finished — reap it from the map so the session doesn't leak.
+            GIATerminalService.killSession(sessionId);
+        }
+
+        JSObject result = new JSObject();
+        result.put("output", output);
+        result.put("running", running);
+        result.put("gone", false);
+        result.put("exitCode", exitCode);
+        call.resolve(result);
+    }
+
+    /**
      * Kill a terminal session by sessionId.
      *
      * @param call Expects: sessionId (string, required)

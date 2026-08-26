@@ -66,6 +66,8 @@ function getPlugin(): unknown {
 
 interface GiaTerminalPlugin {
   exec(opts: { command: string; workdir: string; env: Record<string, string>; timeout: number }): Promise<{ output: string; exitCode: number; sessionId: string }>;
+  spawn(opts: { command: string; workdir: string }): Promise<{ sessionId: string; command: string; running: boolean }>;
+  readOutput(opts: { sessionId: string }): Promise<{ output: string; running: boolean; gone: boolean; exitCode: number }>;
   kill(opts: { sessionId: string }): Promise<void>;
   listSessions(): Promise<{ sessions: SessionInfo[] }>;
   getFSInfo(): Promise<{ totalBytes: number; freeBytes: number; usedBytes: number }>;
@@ -168,6 +170,53 @@ class TerminalService {
     } catch (error) {
       console.error('[TerminalService] exec() failed:', error);
       throw new Error(`Terminal exec failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Start a command in the background (run-detached). The session stays alive
+   * in the native service until explicitly killed or the process exits —
+   * unlike exec(), which awaits completion and reaps the session. Poll with
+   * readOutput() and stop with kill().
+   *
+   * @param command  Shell command(s) to run in the background
+   * @param workdir  Optional working directory inside the proot environment
+   * @returns        Promise resolving to { sessionId, command, running }
+   */
+  async spawn(command: string, workdir?: string): Promise<{ sessionId: string; command: string; running: boolean }> {
+    if (!this.plugin) {
+      throw new Error('Terminal spawn requires the native GIATerminal plugin (Android only)');
+    }
+    try {
+      return await this.p.spawn({ command, workdir: workdir || '' });
+    } catch (error) {
+      console.error('[TerminalService] spawn() failed:', error);
+      throw new Error(`Terminal spawn failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Read (and drain) the output a background session has produced so far.
+   * Non-blocking — returns whatever is buffered since the last read.
+   *
+   * @param sessionId  ID of the background session
+   * @returns          { output, running, gone, exitCode }
+   */
+  async readOutput(sessionId: string): Promise<{ output: string; running: boolean; gone: boolean; exitCode: number }> {
+    if (!this.plugin) {
+      throw new Error('Terminal readOutput requires the native GIATerminal plugin (Android only)');
+    }
+    try {
+      const r = await this.p.readOutput({ sessionId });
+      return {
+        output: r.output ?? '',
+        running: r.running ?? false,
+        gone: r.gone ?? false,
+        exitCode: r.exitCode ?? -1,
+      };
+    } catch (error) {
+      console.error('[TerminalService] readOutput() failed:', error);
+      throw new Error(`Terminal readOutput failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
