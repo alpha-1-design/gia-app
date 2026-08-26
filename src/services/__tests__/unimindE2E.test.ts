@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { WebSocket as WsWebSocket } from 'ws';
 import { spawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { makeEnvelope, type Device, type UnimindMessage } from '../unimind/types';
@@ -27,6 +28,12 @@ const UNIMIND_ID = 'e2e-shared-id';
 const DESKTOP_DEVICE_ID = 'desktop-e2e-test';
 // vitest runs from the gia-app repo root; the relay lives in the sibling repo.
 const RELAY_PATH = path.resolve(process.cwd(), '../gia-cowork/relay/index.js');
+
+// The relay only exists when gia-cowork is checked out as a sibling of
+// gia-app (dev setup). In CI this repo is checked out standalone, so the
+// E2E suite can't run — skip it with a clear message instead of failing
+// with "relay exited early".
+const relayAvailable = fs.existsSync(RELAY_PATH);
 
 const desktopIdentity = {
   unimindId: UNIMIND_ID,
@@ -151,7 +158,7 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
-describe('Unimind spine (mobile client ↔ relay ↔ desktop)', () => {
+describe.skipIf(!relayAvailable)('Unimind spine (mobile client ↔ relay ↔ desktop)', () => {
   it('pairs both devices and shares presence', async () => {
     expect(await client.connect()).toBe(true);
 
