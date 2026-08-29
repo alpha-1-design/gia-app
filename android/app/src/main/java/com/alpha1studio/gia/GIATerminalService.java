@@ -801,16 +801,33 @@ public class GIATerminalService extends Service {
         }
     }
 
+    /**
+     * Read exactly {@code len} bytes from {@code in} into {@code buf}.
+     * Unlike {@link InputStream#read(byte[])}, this never returns fewer
+     * bytes than requested unless EOF is hit. Returns true if all bytes
+     * were read, false on premature EOF.
+     */
+    private static boolean readFully(InputStream in, byte[] buf, int len) throws IOException {
+        int off = 0;
+        while (off < len) {
+            int n = in.read(buf, off, len - off);
+            if (n == -1) return false;
+            off += n;
+        }
+        return true;
+    }
+
     private static void extractTar(InputStream in, File destDir, List<String[]> failedSymlinks) throws IOException {
         // Read tar format entries
         byte[] buf = new byte[8192];
         // Tar format: each entry is 512-byte header + data blocks
         byte[] header = new byte[512];
         String pendingLongName = null;
+        int entryCount = 0;
         while (true) {
-            int read = in.read(header);
-            if (read < 512) break;
-            if (header[0] == 0) break; // end of archive
+            if (!readFully(in, header, 512)) break; // EOF between entries — archive done
+            if (header[0] == 0) break; // end of archive (null block)
+            entryCount++;
 
             // Parse file name (first 100 bytes, null-terminated)
             int nameEnd = 0;
@@ -829,28 +846,23 @@ public class GIATerminalService extends Service {
 
             // GNU long name entry (././@LongLink): read the real name from payload
             if (name.equals("././@LongLink") && (fileType == 'L' || fileType == 'K')) {
-                byte[] nameBuf = new byte[(int) size];
-                int got = 0;
-                while (got < size) {
-                    int n = in.read(nameBuf, got, (int) size - got);
-                    if (n == -1) break;
-                    got += n;
+                byte[] nameBuf = new byte[(int) Math.min(size, 4096)]; // cap to avoid OOM on corrupt headers
+                if (!readFully(in, nameBuf, (int) Math.min(size, nameBuf.length))) {
+                    Log.w(TAG, "Premature EOF reading @LongLink payload"); break;
                 }
-                pendingLongName = new String(nameBuf, 0, got, "UTF-8").trim();
                 skipPadding(in, size);
+                pendingLongName = new String(nameBuf, 0, (int) Math.min(size, nameBuf.length), "UTF-8").trim();
                 continue;
             }
 
             // PAX extended header (x/g): parse key=value pairs, skip the payload
             if (fileType == 'x' || fileType == 'g') {
-                byte[] paxBuf = new byte[(int) size];
-                int got = 0;
-                while (got < size) {
-                    int n = in.read(paxBuf, got, (int) size - got);
-                    if (n == -1) break;
-                    got += n;
+                byte[] paxBuf = new byte[(int) Math.min(size, 65536)]; // cap to avoid OOM
+                if (!readFully(in, paxBuf, (int) Math.min(size, paxBuf.length))) {
+                    Log.w(TAG, "Premature EOF reading PAX header"); break;
                 }
-                String pax = new String(paxBuf, 0, got, "UTF-8");
+                skipPadding(in, size);
+                String pax = new String(paxBuf, 0, (int) Math.min(size, paxBuf.length), "UTF-8");
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("path=(.*)").matcher(pax);
                 if (m.find()) {
                     String paxPath = m.group(1).replaceAll("\\s+$", "").trim();
@@ -951,6 +963,7 @@ public class GIATerminalService extends Service {
             // Skip padding to next 512-byte boundary
             skipPadding(in, size);
         }
+        Log.i(TAG, "extractTar: processed " + entryCount + " entries into " + destDir.getAbsolutePath());
     }
 
     private static long parseOctal(byte[] header, int offset) {
@@ -970,12 +983,20 @@ public class GIATerminalService extends Service {
         }
     }
 
+    /**
+     * Skip padding bytes to align to the next 512-byte boundary.
+     * Uses read() instead of skip() because Android's GZIPInputStream
+     * can return 0 from skip(), causing an infinite loop.
+     */
     private static void skipPadding(InputStream in, long size) throws IOException {
         long padding = (512 - (size % 512)) % 512;
+        byte[] skipBuf = new byte[512];
         long remaining = padding;
         while (remaining > 0) {
-            long skipped = in.skip(Math.min(remaining, 8192));
-            remaining -= skipped;
+            int toRead = (int) Math.min(skipBuf.length, remaining);
+            int n = in.read(skipBuf, 0, toRead);
+            if (n == -1) break;
+            remaining -= n;
         }
     }
 
