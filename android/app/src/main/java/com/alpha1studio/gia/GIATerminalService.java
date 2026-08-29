@@ -382,15 +382,71 @@ public class GIATerminalService extends Service {
     static void materializeSymlinks(File rootfsDir, List<String[]> failedSymlinks) throws IOException {
         if (failedSymlinks.isEmpty()) return;
         File busybox = new File(rootfsDir, "bin/busybox");
+        int fixed = 0;
         for (String[] entry : failedSymlinks) {
             File link = new File(rootfsDir, entry[0]);
-            if (link.exists()) continue; // created successfully after all
+            if (link.exists() && link.length() > 0) continue; // already materialized
             link.getParentFile().mkdirs();
-            if (busybox.exists() && isAppletPath(entry[0])) {
+            // Resolve target: strip leading '/' for absolute paths
+            String targetRel = entry[1].startsWith("/") ? entry[1].substring(1) : entry[1];
+            File targetFile = new File(rootfsDir, targetRel);
+            if (targetFile.exists() && targetFile.isFile()) {
+                // Target was extracted — copy its content
+                copyFile(targetFile, link);
+                link.setExecutable(targetFile.canExecute() || isAppletPath(entry[0]), false);
+                fixed++;
+            } else if (busybox.exists() && isAppletPath(entry[0])) {
+                // Fallback for applet paths: copy busybox directly
                 copyFile(busybox, link);
                 link.setExecutable(true, false);
-            } else {
+                fixed++;
+            } else if (targetFile.exists() && targetFile.isDirectory()) {
                 link.mkdirs();
+                fixed++;
+            } else {
+                // Last resort: create empty placeholder so the path exists
+                link.getParentFile().mkdirs();
+                if (!link.exists()) {
+                    try (FileOutputStream fos = new FileOutputStream(link)) {
+                        // empty file — better than nothing
+                    }
+                }
+            }
+        }
+        Log.i(TAG, "materializeSymlinks: fixed " + fixed + "/" + failedSymlinks.size() + " symlinks");
+    }
+
+    /**
+     * Ensure critical binaries exist by copying busybox directly.
+     * Called after materializeSymlinks as a safety net — if the symlink
+     * resolution somehow missed /bin/sh or /usr/bin/env, this guarantees
+     * they exist before verification.
+     */
+    static void ensureCriticalBinaries(File rootfsDir) {
+        File busybox = new File(rootfsDir, "bin/busybox");
+        if (!busybox.exists()) return;
+        // /bin/sh
+        File sh = new File(rootfsDir, "bin/sh");
+        if (!sh.exists() || sh.length() == 0) {
+            sh.getParentFile().mkdirs();
+            try {
+                copyFile(busybox, sh);
+                sh.setExecutable(true, false);
+                Log.i(TAG, "ensureCriticalBinaries: created /bin/sh from busybox");
+            } catch (IOException e) {
+                Log.e(TAG, "ensureCriticalBinaries: failed to create /bin/sh: " + e.getMessage());
+            }
+        }
+        // /usr/bin/env
+        File env = new File(rootfsDir, "usr/bin/env");
+        if (!env.exists() || env.length() == 0) {
+            env.getParentFile().mkdirs();
+            try {
+                copyFile(busybox, env);
+                env.setExecutable(true, false);
+                Log.i(TAG, "ensureCriticalBinaries: created /usr/bin/env from busybox");
+            } catch (IOException e) {
+                Log.e(TAG, "ensureCriticalBinaries: failed to create /usr/bin/env: " + e.getMessage());
             }
         }
     }
@@ -861,7 +917,6 @@ public class GIATerminalService extends Service {
                 if (!readFully(in, paxBuf, (int) Math.min(size, paxBuf.length))) {
                     Log.w(TAG, "Premature EOF reading PAX header"); break;
                 }
-                skipPadding(in, size);
                 String pax = new String(paxBuf, 0, (int) Math.min(size, paxBuf.length), "UTF-8");
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("path=(.*)").matcher(pax);
                 if (m.find()) {
@@ -891,48 +946,18 @@ public class GIATerminalService extends Service {
                 // Directory
                 entryFile.mkdirs();
             } else if (fileType == '2') {
-                // Symlink. Android commonly refuses to create symlinks in app
-                // data (Operation not permitted), and silently skipping them
-                // leaves /bin/sh, /usr/bin/env etc. missing — which is exactly
-                // proot's "'/usr/bin/env' not found" fatal error. Best effort:
-                // create the link, and when that fails materialize it as a
-                // content copy (targets are usually busybox, already extracted)
-                // or record it for the post-extraction pass.
+                // Symlink — ALWAYS defer to post-extraction pass.
+                // Symlink targets (e.g. /bin/busybox) often appear LATER in
+                // the tar stream than the symlinks that reference them.
+                // Resolving during extraction fails because the target file
+                // hasn't been written yet. We collect ALL symlinks here and
+                // resolve them in one pass after every regular file is
+                // extracted, guaranteeing targets exist.
                 int linkEnd = 0;
                 while (linkEnd < 100 && header[157 + linkEnd] != 0) linkEnd++;
-                String linkTarget = new String(header, 157, linkEnd, "UTF-8");
                 if (linkEnd > 0) {
-                    entryFile.getParentFile().mkdirs();
-                    boolean materialized = false;
-                    // Resolve the target inside the extracted rootfs so far.
-                    String targetRel = linkTarget.startsWith("/")
-                            ? linkTarget.substring(1)
-                            : linkTarget;
-                    File targetFile = new File(destDir, targetRel);
-                    if (targetFile.exists()) {
-                        if (targetFile.isDirectory()) {
-                            entryFile.mkdirs();
-                            materialized = true;
-                        } else {
-                            // Copy target content (e.g. busybox) as a regular
-                            // file, preserving executable-ness.
-                            copyFile(targetFile, entryFile);
-                            if (targetFile.canExecute() || isAppletPath(name)) {
-                                entryFile.setExecutable(true, false);
-                            }
-                            materialized = true;
-                        }
-                    }
-                    if (!materialized) {
-                        try {
-                            entryFile.delete();
-                            Files.createSymbolicLink(
-                                    entryFile.toPath(), new File(linkTarget).toPath());
-                        } catch (Exception e) {
-                            Log.w(TAG, "Symlink " + name + " -> " + linkTarget + " blocked (" + e.getMessage() + ") — will materialize");
-                            failedSymlinks.add(new String[]{ name, linkTarget });
-                        }
-                    }
+                    String linkTarget = new String(header, 157, linkEnd, "UTF-8");
+                    failedSymlinks.add(new String[]{ name, linkTarget });
                 }
             } else {
                 // Regular file (or device/special — written as empty file)

@@ -529,6 +529,9 @@ public class GIATerminalPlugin extends Plugin {
         // Step 3: Materialize broken symlinks
         emitProgress("materializing", 61, "Fixing symlinks...");
         GIATerminalService.materializeSymlinks(rootfsDir, failedSymlinks);
+        // Safety net: guarantee /bin/sh and /usr/bin/env exist even if
+        // symlink resolution missed them for any reason
+        GIATerminalService.ensureCriticalBinaries(rootfsDir);
         emitProgress("materializing", 70, "Symlinks fixed");
 
         // Step 4: Post-extraction hardening
@@ -560,23 +563,25 @@ public class GIATerminalPlugin extends Plugin {
             Log.i(TAG, "bin/ contents: " + java.util.Arrays.toString(binDir.list()));
         }
 
-        // If symlinks weren't materialized during extraction, do it now
+        // Call ensureCriticalBinaries a second time as final safety net
+        // (in case the first pass had a timing issue)
+        GIATerminalService.ensureCriticalBinaries(rootfsDir);
         boolean hasBusybox = busyboxCheck.exists();
         boolean hasSh = shCheck.exists();
         boolean hasEnv = envCheck.exists();
 
         if (hasBusybox && (!hasSh || !hasEnv)) {
             emitProgress("installing", 85, "Fixing missing symlinks...");
-            // Manually create busybox applet copies for missing critical binaries
+            // Last-ditch manual fix with explicit error logging
             if (!hasSh) {
                 shCheck.getParentFile().mkdirs();
                 try {
                     GIATerminalService.copyFile(busyboxCheck, shCheck);
                     shCheck.setExecutable(true, false);
-                    hasSh = true;
-                    Log.i(TAG, "Manually created /bin/sh from busybox");
+                    hasSh = shCheck.exists();
+                    Log.i(TAG, "Manual /bin/sh fix: exists=" + shCheck.exists() + " len=" + shCheck.length());
                 } catch (IOException e) {
-                    Log.e(TAG, "Failed to create /bin/sh: " + e.getMessage());
+                    Log.e(TAG, "Failed to create /bin/sh: " + e.getMessage(), e);
                 }
             }
             if (!hasEnv) {
@@ -585,10 +590,10 @@ public class GIATerminalPlugin extends Plugin {
                 try {
                     GIATerminalService.copyFile(busyboxCheck, envCheck);
                     envCheck.setExecutable(true, false);
-                    hasEnv = true;
-                    Log.i(TAG, "Manually created /usr/bin/env from busybox");
+                    hasEnv = envCheck.exists();
+                    Log.i(TAG, "Manual /usr/bin/env fix: exists=" + envCheck.exists() + " len=" + envCheck.length());
                 } catch (IOException e) {
-                    Log.e(TAG, "Failed to create /usr/bin/env: " + e.getMessage());
+                    Log.e(TAG, "Failed to create /usr/bin/env: " + e.getMessage(), e);
                 }
             }
         }
