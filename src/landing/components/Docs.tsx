@@ -91,19 +91,28 @@ const fallbackSections: DocSection[] = [
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   start: Rocket,
+  modules: Target,
   chat: MessageSquare,
-  exam: GraduationCap,
-  analyst: BarChart3,
   writer: PenLine,
   planner: ListTodo,
+  exam: GraduationCap,
+  analyst: BarChart3,
   agents: Bot,
   autonomy: Target,
-  ondevice: Cpu,
-  privacy: ShieldCheck,
   tools: Wrench,
   skills: Sparkles,
   voice: AudioLines,
+  terminal: Wrench,
+  providers: Cpu,
+  memory: Sparkles,
+  shortcuts: MessageSquare,
+  settings: Target,
+  mcp: Wrench,
+  ondevice: Cpu,
+  privacy: ShieldCheck,
+  connectors: Target,
   troubleshooting: BookOpen,
+  advanced: Sparkles,
 }
 
 export function Docs() {

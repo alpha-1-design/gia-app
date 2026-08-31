@@ -1,32 +1,81 @@
 {
   "version": "2.4.0.0",
-  "updated": "2026-08-15",
+  "updated": "2026-08-31",
   "sections": [
     {
       "id": "start",
       "title": "Getting Started",
       "blocks": [
-        { "type": "p", "text": "GIA is a private AI workspace that runs on your Android device or in the browser. There is no account to create and no cloud backend." },
-        { "type": "p", "text": "To use cloud models, open Settings → Engine Room and connect a provider with your own API key. To go fully on-device, enable On-Device Mode and load a local model in Settings → Local LLM." },
+        { "type": "p", "text": "GIA is a private AI workspace that runs on your Android device or in the browser. There is no account to create, no cloud backend, and no telemetry. Your data stays on your device unless you explicitly choose a cloud model." },
+        { "type": "p", "text": "GIA connects to any AI provider (OpenAI, Anthropic, Google Gemini, OpenCode Zen, and 20+ others) via your own API keys — or runs fully on-device with no key at all using the local Qwen LLM." },
+        { "type": "p", "text": "First-time setup takes about 60 seconds:" },
         { "type": "ul", "items": [
-          "Download the APK from GitHub Releases (Android) or open the Web app.",
-          "Connect a provider, or enable On-Device Mode for zero-key use.",
-          "Start chatting — GIA remembers what you tell it across modules."
-        ] }
+          "Install: Download the APK from GitHub Releases (Android) or open the web app.",
+          "Connect a provider: Open Settings → Engine Room, pick a provider, paste your API key. OpenCode Zen and OpenRouter have free models that work without spending anything.",
+          "Start chatting: GIA remembers what you tell her across sessions and modules.",
+          "Or go on-device: Enable On-Device Mode in Settings → Reliability → no API key needed (uses local Qwen LLM)."
+        ]}
+      ]
+    },
+    {
+      "id": "modules",
+      "title": "Modules Overview",
+      "blocks": [
+        { "type": "p", "text": "GIA has 8 main modules, each focused on a different type of work. You can switch between them at any time — GIA keeps context across modules." },
+        { "type": "ul", "items": [
+          "Chat — The core workspace. Talk to GIA with tools, files, memory, and real-time streaming.",
+          "Writer — Long-form content: drafts, documents, slides, code, PDF/DOCX generation.",
+          "Planner — Break goals into actionable steps: study weeks, project plans, roadmaps.",
+          "Settings — Providers, models, terminal, voice, privacy, and advanced configuration.",
+          "Exam — Quizzes and study aids (WASSCE, BECE, custom topics).",
+          "Analyst — Data analysis, charts, reports, and on-device RAG over documents.",
+          "Autonomy — Set goals and let GIA plan and execute them independently.",
+          "Agents — Build custom agents with their own memory, tools, and RAG."
+        ]}
       ]
     },
     {
       "id": "chat",
       "title": "Chat",
       "blocks": [
-        { "type": "p", "text": "The core workspace. Talk to GIA with tools, files, memory, and real-time streaming." },
+        { "type": "p", "text": "The core workspace. Talk to GIA with tools, files, memory, and real-time streaming. GIA streams responses token-by-token and runs tools in a loop until the task is complete." },
         { "type": "ul", "items": [
-          "Attach files, images, or share from another app. Long pasted text is auto-wrapped as a .txt attachment.",
-          "GIA streams responses token-by-token and runs tools in a loop. Tool runs render as visual cards with live status.",
-          "Every response is tagged on-device or cloud so you always know where it ran.",
-          "Tap the provider pill in the chat header to switch model, thinking, and per-provider image model.",
-          "The 🔧 All Tools button opens the full tool catalog — tap any tool to copy its ID, then ask GIA to use it."
-        ] }
+          "Attachments: Attach files, images, or share from another app. Long pasted text is auto-wrapped as a .txt attachment.",
+          "Streaming: Responses appear token-by-token with a thinking panel showing GIA's reasoning.",
+          "Tool Calls: GIA can search the web, read/write files, run terminal commands, generate images, and more — all shown as live status cards.",
+          "Cloud vs On-Device: Every response is tagged so you always know where it ran.",
+          "Model Switching: Tap the provider pill in the chat header to switch model, provider, or per-provider image model — without leaving the chat.",
+          "Tool Catalog: The 🔧 All Tools button opens the full catalog of 200+ tools — tap any tool to copy its ID, then ask GIA to use it.",
+          "Follow-Up Suggestions: After each response, GIA suggests follow-up actions you can tap.",
+          "File Sharing: Share files from any app to GIA via Android's share sheet."
+        ]}
+      ]
+    },
+    {
+      "id": "writer",
+      "title": "Writer",
+      "blocks": [
+        { "type": "p", "text": "Long-form and visual content — drafts, documents, slides, and code — generated and rendered inline. Files can be exported as PDF, DOCX, PPTX, or ZIP and previewed in the app." },
+        { "type": "ul", "items": [
+          "Generate essays, articles, blog posts, reports, and creative writing.",
+          "Create PowerPoint slides with auto-generated layouts.",
+          "Write and preview code in any language with syntax highlighting.",
+          "Export to PDF, DOCX, PPTX, or ZIP for sharing.",
+          "Drafts are saved automatically so you never lose work."
+        ]}
+      ]
+    },
+    {
+      "id": "planner",
+      "title": "Planner",
+      "blocks": [
+        { "type": "p", "text": "Break big goals into calm, actionable steps — a study week, a project plan, or a personal roadmap." },
+        { "type": "ul", "items": [
+          "Describe a goal and GIA creates a structured plan with milestones.",
+          "Plans adapt as you complete steps — GIA adjusts priorities.",
+          "Link plans to Autonomy for autonomous execution.",
+          "Export plans as markdown or share them."
+        ]}
       ]
     },
     {
@@ -37,8 +86,9 @@
         { "type": "ul", "items": [
           "Create a practice quiz from a topic or past paper.",
           "Step-by-step solutions with hints before answers.",
-          "Track what you have and have not mastered."
-        ] }
+          "Track what you have and have not mastered.",
+          "Focus on weak areas with targeted practice."
+        ]}
       ]
     },
     {
@@ -47,24 +97,11 @@
       "blocks": [
         { "type": "p", "text": "Turn raw data into clear, structured insight with charts and JSON-ready analysis." },
         { "type": "ul", "items": [
-          "Upload documents and query them with on-device RAG.",
-          "Produce charts and reports rendered inline.",
-          "Persistent memory of your metrics and goals."
-        ] }
-      ]
-    },
-    {
-      "id": "writer",
-      "title": "Writer",
-      "blocks": [
-        { "type": "p", "text": "Long-form and visual content — drafts, documents, slides, and code — generated and rendered inline. Files can be exported as PDF, DOCX, PPTX, or ZIP and previewed in the app." }
-      ]
-    },
-    {
-      "id": "planner",
-      "title": "Planner",
-      "blocks": [
-        { "type": "p", "text": "Break big goals into calm, actionable steps — a study week, a project plan, or a personal roadmap." }
+          "Upload documents and query them with on-device RAG (vector search).",
+          "Produce charts, graphs, and reports rendered inline in chat.",
+          "Persistent memory of your metrics and goals across sessions.",
+          "Analyze CSV, JSON, Excel, and text data."
+        ]}
       ]
     },
     {
@@ -74,68 +111,178 @@
         { "type": "p", "text": "Build autonomous agents with their own memory and RAG. Delegate work and oversee the result." },
         { "type": "ul", "items": [
           "Define an agent with a name, role, instructions, and a per-agent tool grant (pick any of the 200+ registered tools).",
-          "Each agent gets per-agent retrieval over your files.",
-          "Mention agents inline with @Name to route a task.",
-          "GIA can delegate sub-tasks to agents via sub_agent_call and reads back their output."
-        ] }
+          "Each agent gets per-agent retrieval over your files (RAG).",
+          "Mention agents inline with @Name to route a task to them.",
+          "GIA can delegate sub-tasks to agents via sub_agent_call and reads back their output.",
+          "Monitor agent activity in the Activity tab."
+        ]}
       ]
     },
     {
       "id": "autonomy",
       "title": "Autonomy",
       "blocks": [
-        { "type": "p", "text": "Set a goal and let GIA drive toward it — planning, executing, and adapting without hand-holding." }
+        { "type": "p", "text": "Set a goal and let GIA drive toward it — planning, executing, and adapting without hand-holding." },
+        { "type": "ul", "items": [
+          "Define goals with priorities (low, medium, high, critical).",
+          "GIA breaks goals into plans and executes them step by step.",
+          "The proactive engine periodically checks progress and adapts.",
+          "Track goal status: active, paused, completed, or failed."
+        ]}
       ]
     },
     {
       "id": "tools",
-      "title": "Tools & Visual Blocks",
+      "title": "Tools (200+)",
       "blocks": [
-        { "type": "p", "text": "GIA has 200+ registered tools: web search & browsing, code execution, terminal, files, PDF/DOCX generation, tasks & to-dos, security scanning, SSH, databases, smart home, MCP servers, plugins, image generation, maps, and more." },
+        { "type": "p", "text": "GIA has 200+ registered tools across web, files, code, device, security, and integrations. She calls tools by emitting code blocks with a tool ID and JSON arguments, then runs them in a loop." },
         { "type": "ul", "items": [
-          "GIA calls tools by emitting ```tool blocks with a registered tool ID and JSON args.",
-          "Tool runs show live status cards with elapsed time, results, and errors.",
-          "Visual blocks render charts, maps (OpenStreetMap + live OSRM routing), 3D scenes, mind maps, and widgets inline in chat.",
-          "The full catalog is one tap away in chat (🔧 All Tools) and per-agent in Agents."
-        ] }
+          "Web: web_search, web_scrape, read_url, browser_navigate — search the internet and extract content.",
+          "Files: filesystem_read, filesystem_write, list_files, zip_project — read, write, and manage files.",
+          "Code: terminal_run, code_execution — run shell commands and code snippets.",
+          "Device: device_info, vibrate, screen_brightness, get_contacts — interact with your phone.",
+          "Security: security_scan, security_firewall, security_threat_intel — scan for vulnerabilities.",
+          "Generation: image_generation, pdf_generate, docx_generate — create visual content.",
+          "Messaging: send_whatsapp, send_email, send_sms, make_phone_call.",
+          "Data: github, wikipedia, weather, define, http_request.",
+          "Memory: save_memory, search_memory, forget_memory — persistent knowledge base.",
+          "Maps: show_map with live routing via OSRM."
+        ]}
       ]
     },
     {
       "id": "skills",
       "title": "Skills & Ecosystem",
       "blocks": [
-        { "type": "p", "text": "Skills are packaged instructions that shape how GIA handles a task. GIA ships with built-in skills and can install community skills from the Skills Marketplace (Settings → Skills)." },
+        { "type": "p", "text": "Skills are packaged instructions that shape how GIA handles a task. They change her behavior, tone, and tool usage for specific use cases." },
         { "type": "ul", "items": [
-          "GIA can list and switch skills itself via skill_list and skill_activate.",
+          "GIA ships with built-in skills and can install community skills from the Skills Marketplace.",
+          "GIA can list and switch skills herself via skill_list and skill_activate.",
           "The active skill shows as a chip in the chat header.",
-          "Community skills come from SkillsMP, Anthropic's official skill collection, and the davila7 Claude templates registry.",
-          "Users can publish skills to the community via the landing page or the marketplace sources."
-        ] }
+          "Install community skills from SkillsMP, Anthropic's official collection, or user-shared templates.",
+          "Create your own skills: write a markdown instruction file and add it to Settings → Skills."
+        ]}
       ]
     },
     {
       "id": "voice",
       "title": "Voice & Wake Word",
       "blocks": [
-        { "type": "p", "text": "GIA supports voice input, text-to-speech, and a wake word." },
+        { "type": "p", "text": "GIA supports voice input, text-to-speech, and a wake word so you can talk to her hands-free." },
         { "type": "ul", "items": [
-          "Without a key, GIA uses its built-in on-device recognizer — the wake word works while the app is open.",
-          "Adding a free Picovoice access key enables the always-on native wake word engine.",
-          "Model Voice: with OpenAI or Gemini connected, GIA can read answers in the model's own native voice (OpenAI audio/speech, Gemini TTS) instead of the device voice — toggle it in Settings → Voice.",
-          "Configure voice settings under Settings → Voice."
-        ] }
+          "Built-in Voice: Without any key, GIA uses the on-device speech recognizer.",
+          "Wake Word: Say 'Hey GIA' to activate (requires free Picovoice key for always-on, or use the in-app wake word without a key).",
+          "Model Voice: With OpenAI or Gemini connected, GIA can speak in the model's native voice (OpenAI audio, Gemini TTS) — toggle in Settings → Voice.",
+          "Text-to-Speech: Long-press any message to hear it read aloud.",
+          "Circle to Search: After wake word, GIA captures your screen region and analyzes it visually."
+        ]}
+      ]
+    },
+    {
+      "id": "terminal",
+      "title": "Terminal & Linux Shell",
+      "blocks": [
+        { "type": "p", "text": "GIA includes an on-device Linux terminal powered by Alpine Linux running in proot (no root required). Install it from Settings → Terminal and use it like Kai 9000." },
+        { "type": "ul", "items": [
+          "Install: Go to Settings → Terminal → System → tap 'Install Terminal'. Downloads ~3MB rootfs from Alpine CDN.",
+          "Full Install: After rootfs, tap 'Full Install' to add Python, Node.js, Git, build tools, and create workspace folders.",
+          "Packages: Browse and install packages from the Packages tab — Languages, Dev Tools, Networking, Data, Media.",
+          "Files: Manage workspace folders (projects, downloads, scripts, documents, data, tools).",
+          "MCPs: Browse available MCP servers for tool integrations.",
+          "Commands persist in the terminal session unless you clear them manually.",
+          "GIA can run terminal commands directly via the terminal_run tool."
+        ]}
+      ]
+    },
+    {
+      "id": "providers",
+      "title": "Providers & Models",
+      "blocks": [
+        { "type": "p", "text": "GIA connects to 20+ AI providers via their APIs. You bring your own keys — nothing is shared or stored on external servers." },
+        { "type": "ul", "items": [
+          "OpenAI: GPT-4o, GPT-5.x, o3, o4-mini — industry standard, tool calling, vision.",
+          "Anthropic: Claude Opus 4.x, Sonnet 4.x, Haiku 4.x — extended thinking, 200k context.",
+          "Google Gemini: Gemini 2.5 Flash/Pro — free tier, 1M context, multimodal.",
+          "OpenCode Zen: Curated models including DeepSeek V4 Flash Free — great free option.",
+          "OpenRouter: Gateway to hundreds of models, several free (Gemma, Llama, DeepSeek).",
+          "Groq: Ultra-fast inference, all models free, great for quick responses.",
+          "HuggingFace: Open-weight models via API.",
+          "DeepSeek, Mistral, xAI (Grok), Together AI, Cerebras, Cohere, and more.",
+          "Local: Ollama, LM Studio, or on-device Qwen LLM (zero API key).",
+          "Smart Fallback: If one provider is rate-limited, GIA automatically falls back to another connected provider."
+        ]}
+      ]
+    },
+    {
+      "id": "memory",
+      "title": "Memory & Knowledge",
+      "blocks": [
+        { "type": "p", "text": "GIA has persistent memory that lives on your device. She remembers conversations, preferences, people, projects, and facts across sessions." },
+        { "type": "ul", "items": [
+          "GIA automatically saves important facts from conversations.",
+          "Memory uses relevance scoring — older, less-used memories fade while important ones persist.",
+          "Search your memory with search_memory or ask GIA 'What do you remember about X?'",
+          "Export and import your entire memory as JSON for backup.",
+          "Knowledge Graph: GIA tracks entities (people, projects, concepts) and relationships between them."
+        ]}
+      ]
+    },
+    {
+      "id": "shortcuts",
+      "title": "Keyboard Shortcuts",
+      "blocks": [
+        { "type": "p", "text": "GIA supports keyboard shortcuts for power users on desktop and physical keyboard." },
+        { "type": "ul", "items": [
+          "Ctrl/Cmd + K: Open Command Palette (quick access to any module, tool, or action).",
+          "Ctrl/Cmd + /: Toggle the chat input focus.",
+          "Escape: Close any overlay (model switcher, engine room, terminal, drawers).",
+          "Back (Android): Close top overlay → navigate back through module history → press again to exit."
+        ]}
+      ]
+    },
+    {
+      "id": "settings",
+      "title": "Settings Reference",
+      "blocks": [
+        { "type": "p", "text": "Settings is the control center. Every aspect of GIA is configurable." },
+        { "type": "ul", "items": [
+          "Engine Room: Connect providers, manage API keys, switch models, view provider health.",
+          "Terminal: Install Alpine Linux, manage packages, browse workspace files.",
+          "Voice: Wake word, TTS, model voice, speech recognition language.",
+          "Connectors: Connect external APIs (weather, GitHub, Exa search, Browserless, etc.).",
+          "Social Media: Connect Telegram, WhatsApp for messaging integration.",
+          "MCP Servers: Add Model Context Protocol servers for additional tool integrations.",
+          "Privacy: Biometric lock, input guardrails, data retention settings.",
+          "Appearance: Theme (dark, light, obsidian-aurora), reduce motion, font size.",
+          "Developer: Local LLM, HuggingFace token, advanced debugging options."
+        ]}
+      ]
+    },
+    {
+      "id": "mcp",
+      "title": "MCP (Model Context Protocol)",
+      "blocks": [
+        { "type": "p", "text": "MCP servers extend GIA with external tool integrations — databases, APIs, file systems, and more. They follow an open standard for tool interoperability." },
+        { "type": "ul", "items": [
+          "Built-in MCP catalog: filesystem, GitHub, PostgreSQL, Brave Search, memory, Puppeteer, SQLite, fetch.",
+          "Add custom MCP servers in Settings → MCP Servers.",
+          "MCP servers run locally or connect to remote instances.",
+          "Each MCP server exposes tools that GIA can use like any built-in tool."
+        ]}
       ]
     },
     {
       "id": "ondevice",
       "title": "On-Device Mode",
       "blocks": [
-        { "type": "p", "text": "On-Device Mode prefers the local LLM for every response when a model is loaded. Memory, embeddings, and translation run locally — nothing leaves your device." },
+        { "type": "p", "text": "On-Device Mode runs the local Qwen LLM on your phone for completely private AI — no API key, no internet needed." },
         { "type": "ul", "items": [
           "Enable in Settings → Reliability → On-Device Mode.",
-          "Load a model in Settings → Local LLM (downloads via CDN).",
-          "If the local model is not ready, GIA falls back to your cloud provider and tags the response accordingly."
-        ] }
+          "Load a model in Settings → Local LLM (downloads via CDN, 0.5B–3B parameters).",
+          "Memory, embeddings, and translation also run locally.",
+          "If the local model is not ready, GIA falls back to your cloud provider and tags the response.",
+          "Performance depends on your device — newer phones handle 1.5B models well."
+        ]}
       ]
     },
     {
@@ -145,22 +292,62 @@
         { "type": "p", "text": "GIA has no cloud backend and no telemetry. Your data stays on your device unless you explicitly choose a cloud model." },
         { "type": "ul", "items": [
           "No account, no tracking, no server-side logs.",
-          "API keys are stored locally and never sent to GIA servers.",
-          "Input guardrails block prompt injection and dangerous commands.",
-          "Security tools (security_scan, security_firewall, security_threat_intel) are built in."
-        ] }
+          "API keys are stored locally (IndexedDB) and never sent to GIA servers.",
+          "Biometric lock: Enable fingerprint/face unlock in Settings → Privacy.",
+          "Input guardrails block prompt injection and dangerous commands automatically.",
+          "Security tools (security_scan, security_firewall, security_threat_intel) are built in.",
+          "All data persisted via IndexedDB with encrypted-at-rest support.",
+          "Long-running mode keeps sessions alive in the background with wake lock."
+        ]}
+      ]
+    },
+    {
+      "id": "connectors",
+      "title": "Connectors & Integrations",
+      "blocks": [
+        { "type": "p", "text": "GIA connects to external services via generic API connectors and social platform integrations." },
+        { "type": "ul", "items": [
+          "Connectors: OpenWeather, GitHub API, Exa search, Browserless, and custom API configs.",
+          "Social: Telegram and WhatsApp messaging — GIA can receive and reply to messages.",
+          "Notifications: Desktop/browser notifications for messages and alerts.",
+          "Deep Links: Use gia:// URLs to send tasks to GIA from other apps.",
+          "Share Target: Share files and text from any Android app directly to GIA.",
+          "PWA: Install the web app as a Progressive Web App on any device."
+        ]}
       ]
     },
     {
       "id": "troubleshooting",
       "title": "Troubleshooting",
       "blocks": [
+        { "type": "p", "text": "Common issues and how to fix them." },
         { "type": "ul", "items": [
-          "No provider connected? Connect one in Settings → Engine Room, or enable On-Device Mode with the local Qwen LLM (zero key).",
-          "Image generation needs a provider that supports an images endpoint — set the image model in the chat header's Model & Provider sheet.",
-          "Terminal commands hang? The Android build includes a fix for the process-exit race — rebuild the APK from GitHub Actions.",
-          "Agent file uploads index on-device; the first index after a failed model load falls back to fast keyword search automatically."
-        ] }
+          "No provider connected: Open Settings → Engine Room and connect a provider. OpenCode Zen has free models (no credit card needed). Or enable On-Device Mode for zero-key use.",
+          "App crashes on startup: Clear app data and re-open. If persistent, reinstall the latest APK from GitHub Releases.",
+          "Image generation fails: Not all providers support image generation. Set the image model in the chat header's Model & Provider sheet (needs a provider with images endpoint).",
+          "Terminal install fails: Check your network connection. GIA tries 5 CDN mirrors with retry. If all fail, try again on Wi-Fi.",
+          "Rate limited: GIA automatically retries and falls back to other connected providers if available. Connect multiple providers for best reliability.",
+          "Thinking panel disappears: Thinking tokens stream incrementally and persist after generation. If they seem to vanish, try refreshing the page.",
+          "Agent crash after creation: Usually a missing tool in the agent's tool grant. Edit the agent and ensure granted tools exist.",
+          "Web search popup persists: This was a known UI bug — update to v2.4.0.0 or later."
+        ]}
+      ]
+    },
+    {
+      "id": "advanced",
+      "title": "Advanced Features",
+      "blocks": [
+        { "type": "p", "text": "Power features for developers and advanced users." },
+        { "type": "ul", "items": [
+          "Command Palette: Ctrl/Cmd+K opens quick access to any module, tool, or action.",
+          "Plugin System: Write plugins with hooks (onInit, onBeforeGenerate, onAfterGenerate) to extend GIA's behavior.",
+          "Background Execution: Terminal commands can run detached in the background.",
+          "Smart Fallback: When a provider is rate-limited, GIA tries retries then falls back to other connected providers.",
+          "Response Cache: Duplicate requests are deduped automatically.",
+          "Offline Queue: Tool calls queued offline are replayed when connectivity returns.",
+          "Unimind: Cross-device pairing — link your phone to a desktop for unified AI coordination.",
+          "Edge-to-edge UI: Content runs full-bleed behind system bars on modern Android."
+        ]}
       ]
     }
   ]
