@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw } from 'lucide-react';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../../services/ProviderRegistry';
@@ -52,9 +52,18 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
   const [keyInput, setKeyInput] = useState('');
   const [imageModelInput, setImageModelInput] = useState('');
   const [loadingModels, setLoadingModels] = useState(false);
+  // Track whether we've already attempted a fetch for the current selection
+  // to prevent infinite re-fetch loops for catalog-only providers (e.g.
+  // HuggingFace, local-llm) whose listingType never produces a 'live' result.
+  const fetchAttemptedRef = useRef<string>('');
 
   // Keep the selected provider in sync when the sheet (re)opens.
-  useEffect(() => { if (open) setSelected(activeProvider); }, [open, activeProvider]);
+  useEffect(() => {
+    if (open) {
+      setSelected(activeProvider);
+      fetchAttemptedRef.current = ''; // reset on open so we fetch for the active provider
+    }
+  }, [open, activeProvider]);
 
   // Load the current image-model override whenever the selected provider changes.
   useEffect(() => {
@@ -68,21 +77,24 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
   const selectedNeedsKey = providerRegistry.getNeedsApiKey(selected);
   const currentModelId = selectedCfg?.model;
 
-  // Pull LIVE models for the selected provider whenever the current list is
-  // missing OR is just the curated fallback catalog — so opening the sheet with
-  // a stale/catalog list auto-refreshes instead of being stuck on fallback.
+  // Pull LIVE models for the selected provider once per selection. Avoids
+  // infinite re-fetch loops: catalog-only providers (huggingface, local)
+  // call markCatalog() which sets availableModels → effect re-fires →\  // infinite loop. The ref ensures we only attempt once per (open + selection).
   useEffect(() => {
-    let cancelled = false;
-    if (open && selectedConnected) {
-      const have = availableModels[selected]?.length ?? 0;
-      const isLive = modelListStatus[selected] === 'live';
-      if (have === 0 || !isLive) {
-        setLoadingModels(true);
-        fetchModels(selected).catch(() => {}).finally(() => { if (!cancelled) setLoadingModels(false); });
-      }
+    if (!open) return;
+    const fetchKey = `${selected}-${selectedConnected}`;
+    if (fetchAttemptedRef.current === fetchKey) return;
+    fetchAttemptedRef.current = fetchKey;
+    if (!selectedConnected) return;
+
+    const have = availableModels[selected]?.length ?? 0;
+    const isLive = modelListStatus[selected] === 'live';
+    if (have === 0 || !isLive) {
+      setLoadingModels(true);
+      fetchModels(selected).catch(() => {}).finally(() => setLoadingModels(false));
     }
-    return () => { cancelled = true; };
-  }, [open, selected, selectedConnected, availableModels, modelListStatus, fetchModels]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selected, selectedConnected]);
 
   const models = selectedConnected
     ? (availableModels[selected] ?? []).length > 0
