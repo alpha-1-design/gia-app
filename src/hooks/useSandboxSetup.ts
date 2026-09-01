@@ -41,7 +41,7 @@ export interface PackageCmdResult {
 // ---------------------------------------------------------------------------
 
 interface GIASetupPlugin {
-  downloadRootfs(opts: { arch?: string; archId?: number }): Promise<{ success: boolean; message: string }>;
+  downloadRootfs(opts: { arch?: string; archId?: number; os?: string }): Promise<{ success: boolean; message: string }>;
   execCommand(opts: { command: string; timeout?: number }): Promise<PackageCmdResult>;
   installPackage(opts: { packageName: string }): Promise<PackageCmdResult>;
   removePackage(opts: { packageName: string }): Promise<PackageCmdResult>;
@@ -112,7 +112,7 @@ export function useSandboxSetup() {
   const clearLog = useCallback(() => setLog([]), []);
 
   // Start the full on-device setup
-  const startSetup = useCallback(async (arch?: string) => {
+  const startSetup = useCallback(async (arch?: string, os?: string) => {
     if (!plugin.current) {
       logger.warn('[useSandboxSetup] Plugin not available (web)');
       return;
@@ -121,10 +121,11 @@ export function useSandboxSetup() {
     setIsInstalling(true);
     setPhase('downloading');
     setProgress(0);
-    setLog(['[setup] Starting on-device terminal installation...']);
+    const osLabel = os === 'ubuntu' ? 'Ubuntu 24.04' : 'Alpine Linux';
+    setLog([`[setup] Starting on-device ${osLabel} installation...`]);
 
     try {
-      const result = await plugin.current.downloadRootfs({ arch: arch || 'aarch64' });
+      const result = await plugin.current.downloadRootfs({ arch: arch || 'aarch64', os: os || 'alpine' });
       setPhase('ready');
       setProgress(100);
       setLog(prev => [...prev, `[ready] ${result.message}`]);

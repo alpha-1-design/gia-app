@@ -62,7 +62,7 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
             // dragging, so the drawer glides instead of snapping.
             transition={reduceMotion
               ? { duration: 0.15, ease: 'easeOut' }
-              : { type: 'spring', stiffness: 240, damping: 30, mass: 0.9 }}
+              : { type: 'spring', stiffness: 180, damping: 28, mass: 0.85 }}
             drag={reduceMotion ? false : 'x'}
             dragDirectionLock
             dragConstraints={{ left: 0, right: 0 }}

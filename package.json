@@ -1,7 +1,7 @@
 {
   "name": "gia-app",
   "private": true,
-  "version": "2.4.0.0",
+  "version": "2.4.0.1",
   "type": "module",
   "scripts": {
     "dev": "node server/sandbox-server.cjs & vite --port=3000 --host=0.0.0.0",

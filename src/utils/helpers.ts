@@ -79,6 +79,29 @@ export function extractJSON<T = unknown>(text: string): T {
       }
     } catch (e) { logger.error('[helpers] JSON parse failed (strategy 6):', e); }
 
+    // Strategy 7: aggressively strip all non-JSON text (markdown prose, code fences, etc.)
+    try {
+      const aggressive = jsonCandidate
+        .replace(/```[\s\S]*?```/g, '')           // remove all code fences
+        .replace(/^(?!.*[[{}]).*/gm, '')           // remove lines without JSON chars
+        .trim();
+      const aggFirstObj = aggressive.indexOf('{');
+      const aggLastObj = aggressive.lastIndexOf('}');
+      const aggFirstArr = aggressive.indexOf('[');
+      const aggLastArr = aggressive.lastIndexOf(']');
+      let aggStart = -1, aggEnd = -1;
+      if (aggFirstObj !== -1 && aggLastObj > aggFirstObj) { aggStart = aggFirstObj; aggEnd = aggLastObj + 1; }
+      else if (aggFirstArr !== -1 && aggLastArr > aggFirstArr) { aggStart = aggFirstArr; aggEnd = aggLastArr + 1; }
+      if (aggStart >= 0 && aggEnd > aggStart) {
+        const aggCandidate = aggressive.slice(aggStart, aggEnd);
+        try { return JSON.parse(aggCandidate); } catch {
+          // Try with truncated repair
+          const aggRepaired = repairTruncatedJSON(aggCandidate);
+          return JSON.parse(aggRepaired);
+        }
+      }
+    } catch (e) { logger.error('[helpers] JSON parse failed (strategy 7):', e); }
+
     throw e;
   }
 }
@@ -134,9 +157,22 @@ function repairTruncatedJSON(json: string): string {
   result = result.replace(/([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
 
   // Fix unclosed strings at the end
-  if (result.match(/[^\\]"$/)) {
+  if (result.match(/[^\\]"$/) && !result.endsWith('"')) {
     result += '"';
   }
+
+  // Fix truncated values: "key": "partial...  -> "key": "partial..."
+  if (result.match(/:\s*"[^"]*$/)) {
+    result += '"';
+  }
+
+  // Fix truncated array values: "key": ["a", "b
+  if (result.match(/:\s*\[[^\]]*$/)) {
+    result += ']';
+  }
+
+  // Final trailing comma cleanup after all repairs
+  result = result.replace(/,\s*([\]}])/g, '$1');
 
   return result;
 }

@@ -352,6 +352,11 @@ public class GIATerminalPlugin extends Plugin {
         "https://cdn-mirror.getalpine.org/alpine/v3.21/releases",
         "https://mirror.math.princeton.edu/pub/alpine/v3.21/releases",
     };
+    private static final String[] UBUNTU_MIRRORS = {
+        "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release",
+        "https://us.archive.ubuntu.com/ubuntu-base/releases/24.04/release",
+        "https://releases.ubuntu.com/24.04/",
+    };
     private static final int MAX_RETRIES = 3;
     private static final int RETRY_DELAY_MS = 2000;
     private final AtomicBoolean downloadInProgress = new AtomicBoolean(false);
@@ -370,10 +375,11 @@ public class GIATerminalPlugin extends Plugin {
 
         String arch = call.getString("arch", "aarch64");
         int archId = call.getInt("archId", 0);
+        String os = call.getString("os", "alpine");
 
         new Thread(() -> {
             try {
-                doDownloadRootfs(arch, archId);
+                doDownloadRootfs(arch, archId, os);
                 downloadInProgress.set(false);
                 JSObject result = new JSObject();
                 result.put("success", true);
@@ -388,16 +394,20 @@ public class GIATerminalPlugin extends Plugin {
         }, "rootfs-download").start();
     }
 
-    private void doDownloadRootfs(String arch, int archId) throws IOException {
+    private void doDownloadRootfs(String arch, int archId, String os) throws IOException {
         Context ctx = getContext();
         File terminalDir = new File(ctx.getFilesDir(), "terminal");
         File rootfsDir = new File(terminalDir, "rootfs");
-        File archiveFile = new File(terminalDir, "alpine-minirootfs.tar.gz");
+        boolean isUbuntu = "ubuntu".equalsIgnoreCase(os);
+        File archiveFile = new File(terminalDir, isUbuntu ? "ubuntu-base.tar.gz" : "alpine-minirootfs.tar.gz");
 
         terminalDir.mkdirs();
         rootfsDir.mkdirs();
 
-        String filename = "alpine-minirootfs-3.21.0-" + arch + ".tar.gz";
+        String[] mirrors = isUbuntu ? UBUNTU_MIRRORS : ALPINE_MIRRORS;
+        String filename = isUbuntu
+            ? "ubuntu-base-24.04.4-base-" + arch + ".tar.gz"
+            : "alpine-minirootfs-3.21.0-" + arch + ".tar.gz";
         Exception lastError = null;
 
         // Previously: download success only meant "the socket didn't throw" —
@@ -409,7 +419,7 @@ public class GIATerminalPlugin extends Plugin {
         // symlinks), which is the "missing: busybox /bin/sh /usr/bin/env"
         // failure. Now each mirror gets a full download+extract+verify
         // attempt, and a bad result on one mirror moves to the next.
-        for (String mirror : ALPINE_MIRRORS) {
+        for (String mirror : mirrors) {
             String downloadUrl = mirror + "/" + arch + "/" + filename;
             emitProgress("downloading", 0, "Trying " + mirror.replace("https://", "") + "...");
             Log.i(TAG, "Downloading rootfs from: " + downloadUrl);
@@ -553,6 +563,7 @@ public class GIATerminalPlugin extends Plugin {
         emitProgress("installing", 81, "Verifying rootfs integrity...");
 
         // Debug: log what's actually in the rootfs
+        // For Ubuntu, busybox doesn't exist — /bin/sh is dash/bash
         File busyboxCheck = new File(rootfsDir, "bin/busybox");
         File shCheck = new File(rootfsDir, "bin/sh");
         File envCheck = new File(rootfsDir, "usr/bin/env");
@@ -570,6 +581,8 @@ public class GIATerminalPlugin extends Plugin {
         boolean hasSh = shCheck.exists();
         boolean hasEnv = envCheck.exists();
 
+        // For Ubuntu: busybox doesn't exist, just need /bin/sh and /usr/bin/env
+        // For Alpine: busybox is required, sh and env are symlinks to it
         if (hasBusybox && (!hasSh || !hasEnv)) {
             emitProgress("installing", 85, "Fixing missing symlinks...");
             // Last-ditch manual fix with explicit error logging
@@ -596,22 +609,52 @@ public class GIATerminalPlugin extends Plugin {
                     Log.e(TAG, "Failed to create /usr/bin/env: " + e.getMessage(), e);
                 }
             }
+        } else if (!hasBusybox && !hasSh) {
+            // Ubuntu fallback: copy dash to /bin/sh if missing
+            File dash = new File(rootfsDir, "bin/dash");
+            File bash = new File(rootfsDir, "bin/bash");
+            File shellSrc = dash.exists() ? dash : (bash.exists() ? bash : null);
+            if (shellSrc != null) {
+                shCheck.getParentFile().mkdirs();
+                try {
+                    GIATerminalService.copyFile(shellSrc, shCheck);
+                    shCheck.setExecutable(true, false);
+                    Log.i(TAG, "Ubuntu fallback: copied " + shellSrc.getName() + " to /bin/sh");
+                } catch (IOException e) {
+                    Log.e(TAG, "Failed to create /bin/sh from dash/bash: " + e.getMessage(), e);
+                }
+            }
         }
 
         emitProgress("installing", 95, "Rootfs verified");
 
         // Step 6: Final verification
         emitProgress("verifying", 96, "Verifying installation...");
-        boolean ok = GIATerminalService.rootfsHasCriticalBinaries(rootfsDir);
+        // For Ubuntu: busybox doesn't exist — just need /bin/sh and /usr/bin/env
+        // For Alpine: need busybox, /bin/sh, /usr/bin/env
+        boolean ok;
+        if (isUbuntu) {
+            ok = shCheck.exists() || envCheck.exists(); // Ubuntu: at least one shell needed
+            if (!ok) {
+                // Try copying dash/bash to /bin/sh one more time
+                File dash = new File(rootfsDir, "bin/dash");
+                File bash = new File(rootfsDir, "bin/bash");
+                if (dash.exists()) { GIATerminalService.copyFile(dash, shCheck); ok = shCheck.exists(); }
+                else if (bash.exists()) { GIATerminalService.copyFile(bash, shCheck); ok = shCheck.exists(); }
+            }
+        } else {
+            ok = GIATerminalService.rootfsHasCriticalBinaries(rootfsDir);
+        }
         if (ok) {
             File marker = new File(rootfsDir, ".gia-rootfs-ok");
             marker.createNewFile();
-            emitProgress("ready", 100, "Terminal installed and ready! Use the Packages tab to install tools.");
-            Log.i(TAG, "On-device rootfs setup complete");
+            String osLabel = isUbuntu ? "Ubuntu" : "Alpine";
+            emitProgress("ready", 100, osLabel + " terminal installed and ready! Use the Packages tab to install tools.");
+            Log.i(TAG, "On-device " + osLabel + " rootfs setup complete");
         } else {
             // List what we DO have for debugging
             String missing = "";
-            if (!busyboxCheck.exists()) missing += "busybox ";
+            if (!isUbuntu && !busyboxCheck.exists()) missing += "busybox ";
             if (!shCheck.exists()) missing += "/bin/sh ";
             if (!envCheck.exists()) missing += "/usr/bin/env ";
             Log.e(TAG, "Rootfs verification failed — missing: " + missing);

@@ -387,7 +387,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           </div>
         )}
 
-        <div className="w-full px-1.5 space-y-2 sm:space-y-3">
+        <div className="w-full sm:px-1.5 space-y-2 sm:space-y-3">
         {!providerConnected && !loading && (
           <div onClick={() => setShowModelSwitcher(true)} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
