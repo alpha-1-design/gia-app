@@ -494,7 +494,7 @@ public class GIATerminalPlugin extends Plugin {
             Log.i(TAG, "Rootfs downloaded: " + archiveFile.length() + " bytes");
 
             try {
-                extractAndVerify(archiveFile, rootfsDir);
+                extractAndVerify(archiveFile, rootfsDir, isUbuntu);
                 return; // success
             } catch (Exception e) {
                 lastError = e;
@@ -522,7 +522,7 @@ public class GIATerminalPlugin extends Plugin {
     }
 
     /** Extract archiveFile into rootfsDir and verify it produced a bootable rootfs. Throws on any failure. */
-    private void extractAndVerify(File archiveFile, File rootfsDir) throws IOException {
+    private void extractAndVerify(File archiveFile, File rootfsDir, boolean isUbuntu) throws IOException {
         // Step 2: Extract tar.gz
         emitProgress("extracting", 41, "Extracting rootfs...");
         if (rootfsDir.exists() && rootfsDir.listFiles() != null && rootfsDir.listFiles().length > 0) {
