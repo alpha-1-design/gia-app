@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { GIAUpdate } from './GIAUpdate';
@@ -92,21 +93,13 @@ class UpdateService {
   ): Promise<void> {
     // On Android, use native HttpURLConnection download — avoids the
     // WebView blob→base64 OOM that crashes on low-end devices with 21MB APKs.
-    const isNative = !!(window as any).Capacitor?.isNativePlatform;
-    if (isNative) {
-      try {
-        const result = await GIAUpdate.downloadAndInstall({ url });
-        // downloadAndInstall handles both download + install trigger
-        // Emit a synthetic progress event so the UI knows it succeeded
-        if (onProgress) {
-          onProgress({ loaded: 100, total: 100, percent: 100 });
-        }
-        // The install intent was already fired by native side — we're done
-        return;
-      } catch (e) {
-        // If native download fails, don't retry with web method
-        throw e;
+    if (Capacitor.isNativePlatform()) {
+      await GIAUpdate.downloadAndInstall({ url });
+      // downloadAndInstall handles both download + install trigger
+      if (onProgress) {
+        onProgress({ loaded: 100, total: 100, percent: 100 });
       }
+      return;
     }
 
     // Web fallback: XHR blob→base64 pipeline (only runs in browser)
@@ -152,8 +145,7 @@ class UpdateService {
   async installUpdate(): Promise<void> {
     // On native, install is already triggered by downloadAndInstall.
     // This is only called for the web fallback path.
-    const isNative = !!(window as any).Capacitor?.isNativePlatform;
-    if (isNative) return; // Already handled by downloadAndInstall
+    if (Capacitor.isNativePlatform()) return; // Already handled by downloadAndInstall
 
     try {
       await GIAUpdate.installApk({ fileName: 'update.apk' });
