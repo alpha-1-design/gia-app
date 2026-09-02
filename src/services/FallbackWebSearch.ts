@@ -255,7 +255,7 @@ class FallbackWebSearch {
       if (parentAbort?.signal.aborted) return [];
       const res = await fetch(
         `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5`,
-        { headers: { 'User-Agent': 'GIA/2.4.0.0' }, signal: withTimeout(5000, parentAbort) },
+        { headers: { 'User-Agent': 'GIA/2.4.0.1' }, signal: withTimeout(5000, parentAbort) },
       );
       if (!res.ok) return [];
       const data = await res.json();
