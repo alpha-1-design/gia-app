@@ -90,6 +90,26 @@ class UpdateService {
     url: string,
     onProgress?: (p: DownloadProgress) => void
   ): Promise<void> {
+    // On Android, use native HttpURLConnection download — avoids the
+    // WebView blob→base64 OOM that crashes on low-end devices with 21MB APKs.
+    const isNative = !!(window as any).Capacitor?.isNativePlatform;
+    if (isNative) {
+      try {
+        const result = await GIAUpdate.downloadAndInstall({ url });
+        // downloadAndInstall handles both download + install trigger
+        // Emit a synthetic progress event so the UI knows it succeeded
+        if (onProgress) {
+          onProgress({ loaded: 100, total: 100, percent: 100 });
+        }
+        // The install intent was already fired by native side — we're done
+        return;
+      } catch (e) {
+        // If native download fails, don't retry with web method
+        throw e;
+      }
+    }
+
+    // Web fallback: XHR blob→base64 pipeline (only runs in browser)
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
@@ -130,6 +150,11 @@ class UpdateService {
   }
 
   async installUpdate(): Promise<void> {
+    // On native, install is already triggered by downloadAndInstall.
+    // This is only called for the web fallback path.
+    const isNative = !!(window as any).Capacitor?.isNativePlatform;
+    if (isNative) return; // Already handled by downloadAndInstall
+
     try {
       await GIAUpdate.installApk({ fileName: 'update.apk' });
     } catch (e) {
