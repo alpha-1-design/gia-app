@@ -31,8 +31,6 @@ export const VoiceSection: React.FC = () => {
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
   const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
   const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
-  const [accessKey, setAccessKey] = useState(() => localStorage.getItem('gia-wake-word-access-key') || '');
-
   const [useWhisper, setUseWhisper] = useState(() => localStorage.getItem('gia-use-whisper') === 'true');
   const [whisperStatus, setWhisperStatus] = useState(WhisperService.status);
   const [whisperLoading, setWhisperLoading] = useState(false);
@@ -143,11 +141,6 @@ export const VoiceSection: React.FC = () => {
     localStorage.setItem('gia-native-sensitivity', String(sensitivity));
     useGiaStore.getState().setNativeSensitivity(sensitivity);
   }, [sensitivity]);
-
-  useEffect(() => {
-    localStorage.setItem('gia-wake-word-access-key', accessKey);
-    useGiaStore.getState().setWakeWordAccessKey(accessKey);
-  }, [accessKey]);
 
   return (
     <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
