@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { useGiaStore, Module } from '../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -19,6 +19,15 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
     setShowLeftDrawer: s.setShowLeftDrawer,
   })));
 
+  // Track hydration so dynamic elements fade in smoothly instead of popping
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    // A single rAF + short delay ensures Zustand's IndexedDB rehydration has
+    // completed and the first paint with real data is ready.
+    const id = requestAnimationFrame(() => setTimeout(() => setHydrated(true), 50));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const statusColor = connectionStatus === 'offline' ? '#71717a' : !providerConnected ? '#f59e0b' : '#34d399';
   const statusTitle = connectionStatus === 'offline' ? 'Offline' : !providerConnected ? 'Online — connecting to provider…' : 'Connected';
   const statusGlow = connectionStatus === 'offline' ? 'none' : !providerConnected ? '0 0 6px rgba(245,158,11,0.5)' : '0 0 6px rgba(52,211,153,0.5)';
@@ -33,20 +42,28 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
   const cur = MODULES.find(m => m.id === currentModule) ?? MODULES[0];
 
   return (
-    <header className="flex items-center justify-between px-4 py-2 shrink-0 relative z-[100] h-14 overflow-visible">
+    <header
+      className="flex items-center justify-between px-4 py-2 shrink-0 relative z-[100] h-14 overflow-visible"
+      style={{ opacity: hydrated ? 1 : 0, transition: 'opacity 0.25s ease' }}
+    >
       <div className="flex items-center gap-2 min-w-0">
         <h1 className="text-lg font-bold tracking-tight leading-none shrink-0" style={{ color: 'var(--gia-text)' }}>GIA</h1>
-        {currentModule !== 'chat' && (
-          <button
-            onClick={() => setShowLeftDrawer(true)}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap tap-feedback"
-            style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: navColor(cur.id) }}
-            title="Switch module"
-          >
-            <span className="shrink-0">{cur.icon}</span>
-            <span>{cur.label}</span>
-          </button>
-        )}
+        {/* Module pill — always reserves ~72px so the header never shifts width
+            when switching between chat (no pill) and other modules (pill visible).
+            The pill fades in after hydration so the bar is stable from first paint. */}
+        <div className="w-[72px] shrink-0" aria-hidden>
+          {currentModule !== 'chat' && (
+            <button
+              onClick={() => setShowLeftDrawer(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap tap-feedback"
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: navColor(cur.id) }}
+              title="Switch module"
+            >
+              <span className="shrink-0">{cur.icon}</span>
+              <span>{cur.label}</span>
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: statusColor, boxShadow: statusGlow }} title={statusTitle} />
