@@ -70,24 +70,27 @@ export interface VoiceControlConfig {
 
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function mapWakeWordToBuiltin(wakeWord: string): string {
-  const w = wakeWord.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-  const known: Record<string, string> = {
-    'hey_google': 'HEY_GOOGLE',
-    'ok_google': 'OK_GOOGLE',
-    'hey_siri': 'HEY_SIRI',
-    'alexa': 'ALEXA',
-    'computer': 'COMPUTER',
-    'jarvis': 'JARVIS',
-    'picovoice': 'PICOVOICE',
-    'porcupine': 'PORCUPINE',
-    'hey_gia': 'JARVIS',
-    'gia': 'JARVIS',
-  };
-  return known[w] || 'JARVIS';
-}
+}  // Maps the user's configured phrase to the closest supported keyword for the
+  // on-device engine. The native service detects its bundled keyword set
+  // (HEY JARVIS / HEY GIA / ...) and reports back the readable label; this
+  // value is only used as a fallback label and for the web recognizer.
+  function mapWakeWordToBuiltin(wakeWord: string): string {
+    const w = wakeWord.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    const known: Record<string, string> = {
+      'hey_google': 'HEY_GOOGLE',
+      'ok_google': 'OK_GOOGLE',
+      'hey_siri': 'HEY_SIRI',
+      'alexa': 'ALEXA',
+      'computer': 'COMPUTER',
+      'jarvis': 'JARVIS',
+      'hey_jarvis': 'JARVIS',
+      'picovoice': 'PICOVOICE',
+      'porcupine': 'PORCUPINE',
+      'hey_gia': 'JARVIS',
+      'gia': 'JARVIS',
+    };
+    return known[w] || 'JARVIS';
+  }
 
 export function useVoiceControl(config: VoiceControlConfig = {}) {
   const {
@@ -507,12 +510,10 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     activeRef.current = true;
 
-    // Native Porcupine needs an access key. Without one the plugin starts but
-    // silently never detects — the old code sent the user into a dead end they
-    // couldn't see. Only take the native path when a key is actually set;
-    // otherwise use the keyless on-device recognizer (regex wake word over
-    // continuous transcription) which genuinely works in-app.
-    const canUseNative = isNative && nativeWakeWord && !!accessKeyRef.current;
+    // Native wake word uses the bundled sherpa-onnx engine (fully on-device,
+    // no API key needed). Only fall back to the browser recognizer when the
+    // native plugin is unavailable or disabled.
+    const canUseNative = isNative && nativeWakeWord;
     if (manual || !canUseNative) {
       if (isCapacitor) {
         setIsListening(true);

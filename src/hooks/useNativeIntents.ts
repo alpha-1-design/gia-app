@@ -129,6 +129,13 @@ export function handleWidgetAction(action: string) {
       useGiaStore.getState().setModule('chat');
       useGiaStore.getState().addNotification('🎤 Voice-from-widget isn\'t wired up yet');
       break;
+    case 'request_accessibility':
+      // Sent by the Screen Orb when the accessibility service is off (the orb
+      // needs it for silent screen capture). Surface clear instructions instead
+      // of silently doing nothing.
+      useGiaStore.getState().setModule('chat');
+      useGiaStore.getState().addNotification('⚠️ Enable GIA\'s accessibility service for the orb: Settings → Accessibility → GIA Circle-to-Search');
+      break;
     default:
       logger.warn('[NativeIntents] Unknown widget action:', action);
   }

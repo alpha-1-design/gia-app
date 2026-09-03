@@ -56,7 +56,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    implementation 'ai.picovoice:porcupine-android:4.0.0'
+    // Fully on-device wake word engine (sherpa-onnx KeywordSpotter) — no API key
+    // required. AAR ships from https://github.com/k2-fsa/sherpa-onnx/releases
+    implementation files('libs/sherpa-onnx-1.13.7.aar')
 
     // Jetpack Media for MediaSessionCompat
     implementation "androidx.media:media:1.7.0"

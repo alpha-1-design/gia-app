@@ -1,6 +1,8 @@
 package com.alpha1studio.gia;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityService.ScreenshotResult;
+import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback;
 import android.accessibilityservice.GestureDescription;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -33,6 +35,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class GIAAccessibilityService extends AccessibilityService {
 
@@ -75,13 +82,113 @@ public class GIAAccessibilityService extends AccessibilityService {
     /**
      * Capture the full screen and return the file path, or null on failure.
      * Must be called from the main thread (or posted to it).
+     *
+     * On Android 11+ (API 30) this uses AccessibilityService.takeScreenshot()
+     * which captures silently — no MediaProjection consent dialog, works from
+     * the orb / gesture flow instantly. Falls back to the legacy MediaProjection
+     * path (which needs a granted projection) on older devices or on failure.
      */
     @Nullable
     public static String captureScreen() {
-        if (instance == null || !mediaProjectionEnabled) {
+        if (instance == null) {
+            return null;
+        }
+        // API 30+: silent accessibility screenshot — no consent dialog needed.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            String path = instance.captureScreenViaAccessibility();
+            if (path != null) {
+                return path;
+            }
+            android.util.Log.w(TAG, "takeScreenshot unavailable, falling back to MediaProjection path");
+        }
+        if (!mediaProjectionEnabled) {
             return null;
         }
         return instance.captureScreenInternal();
+    }
+
+    /**
+     * Silent full-screen capture via AccessibilityService.takeScreenshot()
+     * (API 30+). Returns a PNG file path or null on any failure.
+     */
+    @Nullable
+    private String captureScreenViaAccessibility() {
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicReference<String> result = new AtomicReference<>(null);
+        final AtomicInteger failure = new AtomicInteger(Integer.MIN_VALUE);
+
+        mainHandler.post(() -> {
+            try {
+                takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    Executors.newSingleThreadExecutor(),
+                    new TakeScreenshotCallback() {
+                        @Override
+                        public void onSuccess(ScreenshotResult screenshot) {
+                            try {
+                                Bitmap bitmap = Bitmap.wrapHardwareBuffer(
+                                    screenshot.getHardwareBuffer(),
+                                    screenshot.getColorSpace()
+                                );
+                                if (bitmap != null) {
+                                    result.set(saveScreenshot(bitmap));
+                                }
+                            } catch (Exception e) {
+                                android.util.Log.e(TAG, "takeScreenshot bitmap conversion failed", e);
+                            } finally {
+                                if (screenshot.getHardwareBuffer() != null) {
+                                    screenshot.getHardwareBuffer().close();
+                                }
+                                latch.countDown();
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(int errorCode) {
+                            failure.set(errorCode);
+                            latch.countDown();
+                        }
+                    }
+                );
+            } catch (Exception e) {
+                android.util.Log.e(TAG, "takeScreenshot call failed", e);
+                latch.countDown();
+            }
+        });
+
+        try {
+            if (!latch.await(3, TimeUnit.SECONDS)) {
+                android.util.Log.w(TAG, "takeScreenshot timed out");
+                return null;
+            }
+        } catch (InterruptedException e) {
+            return null;
+        }
+        if (failure.get() != Integer.MIN_VALUE) {
+            android.util.Log.w(TAG, "takeScreenshot failed, code=" + failure.get());
+        }
+        return result.get();
+    }
+
+    /** Save a bitmap to cache and return the file path, or null on failure. */
+    @Nullable
+    private String saveScreenshot(Bitmap bitmap) {
+        try {
+            File cacheDir = getCacheDir();
+            File screenshotsDir = new File(cacheDir, "screenshots");
+            if (!screenshotsDir.exists()) {
+                screenshotsDir.mkdirs();
+            }
+            File outputFile = new File(screenshotsDir, "gia_capture_" + System.currentTimeMillis() + ".png");
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                fos.flush();
+            }
+            return outputFile.getAbsolutePath();
+        } catch (IOException e) {
+            android.util.Log.e(TAG, "saveScreenshot failed", e);
+            return null;
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -160,7 +267,7 @@ public class GIAAccessibilityService extends AccessibilityService {
      * Capture current screen and broadcast the result to MainActivity.
      */
     private void captureAndBroadcast() {
-        String path = captureScreenInternal();
+        String path = captureScreen();
         if (path != null) {
             Intent intent = new Intent(ACTION_SCREEN_CAPTURED);
             intent.putExtra(EXTRA_IMAGE_PATH, path);
@@ -212,14 +319,11 @@ public class GIAAccessibilityService extends AccessibilityService {
         }
 
         // Save to cache directory
-        File cacheDir = getCacheDir();
-        File screenshotsDir = new File(cacheDir, "screenshots");
+        File screenshotsDir = new File(getCacheDir(), "screenshots");
         if (!screenshotsDir.exists()) {
             screenshotsDir.mkdirs();
         }
-
-        String fileName = "gia_capture_" + System.currentTimeMillis() + ".png";
-        File outputFile = new File(screenshotsDir, fileName);
+        File outputFile = new File(screenshotsDir, "gia_capture_" + System.currentTimeMillis() + ".png");
 
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);

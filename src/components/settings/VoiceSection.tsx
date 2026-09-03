@@ -197,7 +197,7 @@ export const VoiceSection: React.FC = () => {
         onChange={setNativeWW}
         icon={<Radio size={11} />}
         label="Background Wake Word"
-        description="Uses native wake word engine (Porcupine). Works when app is in background."
+        description="Built-in on-device wake word engine — no account or API key needed. Works when app is in background."
         accentColor="#a855f7"
       />
 
@@ -221,30 +221,10 @@ export const VoiceSection: React.FC = () => {
               <span>More detections</span>
             </div>
           </div>
-          {!accessKey.trim() && (
-            <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
-              <AlertTriangle size={10} className="inline mr-1" />
-              No Porcupine access key set — GIA will use on-device speech recognition instead. That works while the app is open; always-on background detection needs the free key from console.picovoice.ai.
-            </div>
-          )}
-          <div>
-            <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
-              Porcupine Access Key
-            </label>
-            <input
-              className="gia-input"
-              type="text"
-              value={accessKey}
-              onChange={e => setAccessKey(e.target.value)}
-              placeholder="Enter your Picovoice AccessKey"
-              style={{ fontSize: '12px', width: '100%' }}
-            />
-            <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-              Required for Porcupine wake word engine. Get a free key at{' '}
-              <a href="https://console.picovoice.ai/" target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7' }}>
-                console.picovoice.ai
-              </a>
-            </p>
+          <div className="text-[9px] p-2 rounded" style={{ color: '#22c55e', background: 'rgba(34,197,94,0.08)' }}>
+            <span className="inline-block mr-1">✓</span>
+            On-device engine bundled with GIA — 100% offline, no key required.
+            Supported phrases: <b>Hey Jarvis</b> (default), Hey Gia, Hello World, Hi Google, Hey Siri, Alexa.
           </div>
         </>
       )}

@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GIAWidgetPlugin.class);
         registerPlugin(GIAIntentPlugin.class);
         registerPlugin(GIAOverlayPlugin.class);
+        registerPlugin(GIAScreenAgentPlugin.class);
         registerPlugin(GIASMSPlugin.class);
         registerPlugin(GIAAlarmPlugin.class);
         registerPlugin(GIATerminalPlugin.class);
