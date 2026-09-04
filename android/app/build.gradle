@@ -56,9 +56,10 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    // Fully on-device wake word engine (sherpa-onnx KeywordSpotter) — no API key
-    // required. AAR ships from https://github.com/k2-fsa/sherpa-onnx/releases
-    implementation files('libs/sherpa-onnx-1.13.7.aar')
+    // Wake word engine (sherpa-onnx KeywordSpotter) is deferred to a later
+    // release — see GIAWakeWordService.java for revival instructions.
+    // To re-enable: download the AAR from https://github.com/k2-fsa/sherpa-onnx/releases
+    // into libs/ and add: implementation files('libs/sherpa-onnx-<version>.aar')
 
     // Jetpack Media for MediaSessionCompat
     implementation "androidx.media:media:1.7.0"

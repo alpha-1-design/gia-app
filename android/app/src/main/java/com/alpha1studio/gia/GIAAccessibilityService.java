@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class GIAAccessibilityService extends AccessibilityService {
 
+    private static final String TAG = "GIAAccessibility";
     private static final String CHANNEL_ID = "GIAAccessibilityChannel";
     private static final int NOTIFICATION_ID = 1003;
 
