@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import AnalyticsService from '../services/AnalyticsService';
 import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
-import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock, flushToolBlock, appendThought } from '../utils/streamParser';
+import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock, flushToolBlock, appendThought, appendThinking } from '../utils/streamParser';
 import type { MessageSegment } from '../utils/streamParser';
 import { generateSuggestions } from '../utils/suggestionEngine';
 import { streamPush, streamCancel } from '../utils/streamThrottle';
@@ -429,6 +429,14 @@ onThought: (thought) => {
                 streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
                 useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
               },
+              onThinkingDelta: (text) => {
+                appendThinking(parserState, text);
+                setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+                setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+                useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+                streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+              },
             },
             (status) => {
               setProviderStatuses(prev => {
@@ -482,6 +490,14 @@ onThought: (thought) => {
               useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
               streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
               useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+            },
+            onThinkingDelta: (text) => {
+              appendThinking(parserState, text);
+              setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+              useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+              setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+              useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+              streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
             },
           });
 
@@ -716,6 +732,14 @@ onThought: (thought) => {
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         },
+        onThinkingDelta: (text) => {
+          appendThinking(contParserState, text);
+          setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
+          useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
+          setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
+          useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
+          streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+        },
       });
       if (!ctrl.signal.aborted) {
         streamCancel(streamKey);
@@ -862,6 +886,14 @@ onThought: (thought) => {
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
           useGiaStore.setState({ showConsole: true });
+        },
+        onThinkingDelta: (text) => {
+          appendThinking(clarParserState, text);
+          setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
+          useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
+          setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
+          useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
+          streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         }
       });
       if (!ctrl.signal.aborted) {

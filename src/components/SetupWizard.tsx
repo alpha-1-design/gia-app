@@ -3,7 +3,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { clsx } from 'clsx';
 import {
-  Activity,
   CheckCircle2,
   Loader2,
   X,
@@ -16,7 +15,15 @@ import {
   WifiOff,
   Plus,
   Cpu,
+  Terminal,
+  Shield,
+  Database,
+  Sparkles,
+  Bot,
+  Zap,
+  Waves,
 } from 'lucide-react';
+import { SpiritWaveBackdrop } from './SpiritWaveBackdrop';
 import { idbStorage } from '../store/idb-storage';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { useProviderStore, type ModelOption } from '../store/useProviderStore';
@@ -213,39 +220,229 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
     }
   }, [wizard.step, wizard.testResult, testing, runTest]);
 
+  const [spiritActive, setSpiritActive] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('gia:setup:spirit-waves');
+      return stored !== null ? stored === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleSpirit = useCallback(() => {
+    setSpiritActive((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('gia:setup:spirit-waves', String(next));
+      } catch {
+        // Ignore localStorage write error in sandboxed iframe
+      }
+      return next;
+    });
+  }, []);
+
   // ── Welcome Step ──────────────────────────────────────────────────
   if (wizard.step === 'welcome') {
     return (
-      <div className="flex-1 w-full max-w-lg mx-auto flex flex-col items-center justify-center text-center px-8 py-8">
-        <div className="mb-6 w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-          <Activity size={36} className="text-indigo-400" />
+      <div className="relative min-h-full w-full flex-1 flex flex-col items-center justify-center bg-black text-zinc-100 overflow-x-hidden overflow-y-auto select-none">
+        {/* Thick black spirit waves & being backdrop */}
+        {spiritActive ? (
+          <SpiritWaveBackdrop />
+        ) : (
+          <div className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-[460px] h-[320px] bg-gradient-to-b from-purple-600/15 via-indigo-600/10 to-transparent rounded-full blur-3xl" />
+        )}
+
+        {/* Floating Top Control Bar: Atmosphere toggle (Spirit Waves vs Minimal Revert) & Close button */}
+        <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
+          <div className="pointer-events-auto">
+            <button
+              onClick={handleToggleSpirit}
+              className={clsx(
+                "px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all backdrop-blur-md border shadow-lg cursor-pointer",
+                spiritActive
+                  ? "bg-purple-950/70 border-purple-500/40 text-purple-200 hover:bg-purple-900/80 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
+                  : "bg-zinc-900/80 border-zinc-700/60 text-zinc-400 hover:text-zinc-200"
+              )}
+              title="Toggle Spirit Waves background — click anytime to revert"
+            >
+              <Waves size={14} className={spiritActive ? "text-purple-400 animate-pulse" : "text-zinc-500"} />
+              <span>{spiritActive ? 'Spirit Waves (Active)' : 'Minimal Dark'}</span>
+            </button>
+          </div>
+
+          <div className="pointer-events-auto">
+            <button
+              onClick={handleClose}
+              className="p-2 rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/70 transition-all backdrop-blur-md bg-zinc-950/40 border border-zinc-800/50 cursor-pointer"
+              title="Dismiss Setup"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
-        <h1 className="text-2xl font-bold text-zinc-100 mb-2">Welcome to GIA</h1>
-        <p className="text-zinc-400 text-sm max-w-md mb-8">
-          Your intelligent AI assistant. Connect an AI provider below to begin chatting, coding, researching, and automating tasks.
-        </p>
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button
-            onClick={() => wizard.setStep('select-provider')}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-indigo-600/20"
-          >
-            Connect AI Provider <ArrowRight size={16} />
-          </button>
-          <button
-            onClick={() => {
-              setActiveProvider('local-llm');
-              handleClose();
-            }}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 border border-violet-500/30 text-violet-300 hover:bg-violet-500/10 rounded-xl font-medium transition-colors"
-          >
-            <Cpu size={16} /> Start Offline (Local AI)
-          </button>
-          <button
-            onClick={handleClose}
-            className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors py-2"
-          >
-            Skip for now
-          </button>
+
+        <div className="relative z-10 w-full max-w-2xl mx-auto flex flex-col items-center justify-center px-4 sm:px-8 py-12 sm:py-16 text-center">
+          {/* Animated SVG Neural Insignia */}
+          <div className="relative mb-6 flex items-center justify-center">
+            {/* Outer Rotating SVG Orbit */}
+            <svg
+              className="w-24 h-24 sm:w-28 sm:h-28 animate-[spin_18s_linear_infinite]"
+              viewBox="0 0 100 100"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                stroke="url(#orbit-gradient)"
+                strokeWidth="1.5"
+                strokeDasharray="4 6"
+                strokeOpacity="0.6"
+              />
+              <circle cx="50" cy="4" r="3.5" fill="#a855f7" />
+              <circle cx="96" cy="50" r="2.5" fill="#6366f1" />
+              <circle cx="4" cy="50" r="2" fill="#38bdf8" />
+              <defs>
+                <linearGradient id="orbit-gradient" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#a855f7" />
+                  <stop offset="0.5" stopColor="#6366f1" />
+                  <stop offset="1" stopColor="#38bdf8" />
+                </linearGradient>
+              </defs>
+            </svg>
+
+            {/* Inner Tonal Container */}
+            <div className="absolute inset-2 sm:inset-3 rounded-3xl bg-gradient-to-br from-purple-500/20 via-indigo-500/15 to-zinc-900/90 border border-purple-500/30 backdrop-blur-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+              <svg
+                className="w-10 h-10 sm:w-12 sm:h-12 text-purple-300 drop-shadow-[0_0_12px_rgba(168,85,247,0.5)]"
+                viewBox="0 0 32 32"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                {/* Central Intelligence Core Star & Nodes */}
+                <path
+                  d="M16 3L18.8 11.2L27 14L18.8 16.8L16 25L13.2 16.8L5 14L13.2 11.2L16 3Z"
+                  fill="url(#core-gradient)"
+                />
+                <circle cx="16" cy="14" r="2.5" fill="#ffffff" />
+                <path d="M7 26L25 26" stroke="#c084fc" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.7" />
+                <path d="M10 29L22 29" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5" />
+                <defs>
+                  <linearGradient id="core-gradient" x1="5" y1="3" x2="27" y2="25" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#e9d5ff" />
+                    <stop offset="0.6" stopColor="#c084fc" />
+                    <stop offset="1" stopColor="#7c3aed" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+
+          {/* M3 Eyebrow Pill */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-purple-500/15 border border-purple-500/30 text-purple-300 mb-3 shadow-sm backdrop-blur-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Autonomous Intelligence Workspace</span>
+          </div>
+
+          {/* Title & Subtitle */}
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-50 mb-1 drop-shadow-md">
+            GIA
+          </h1>
+          <p className="text-sm sm:text-base font-semibold text-purple-300/90 tracking-wide mb-3">
+            General Intelligence Agent
+          </p>
+          <p className="text-xs sm:text-sm text-zinc-300 max-w-md mx-auto leading-relaxed mb-6">
+            Your sovereign on-device intelligence. Engineered for agentic reasoning, sandboxed code execution, and persistent local memory with zero cloud telemetry.
+          </p>
+
+          {/* Material 3 Capabilities Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8 max-w-lg">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-zinc-900/80 backdrop-blur-md border border-zinc-700/60 text-zinc-300 shadow-sm">
+              <Terminal size={12} className="text-purple-400" /> Sandboxed Execution
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-zinc-900/80 backdrop-blur-md border border-zinc-700/60 text-zinc-300 shadow-sm">
+              <Database size={12} className="text-indigo-400" /> Encrypted Memory
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-zinc-900/80 backdrop-blur-md border border-zinc-700/60 text-zinc-300 shadow-sm">
+              <Sparkles size={12} className="text-amber-400" /> Multi-Tool Protocol
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-zinc-900/80 backdrop-blur-md border border-zinc-700/60 text-zinc-300 shadow-sm">
+              <Shield size={12} className="text-emerald-400" /> Zero Telemetry
+            </span>
+          </div>
+
+          {/* M3 Tonal Action Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-lg mb-6 text-left">
+            {/* Primary Action Card: Connect Provider */}
+            <button
+              onClick={() => wizard.setStep('select-provider')}
+              className="group relative p-5 rounded-3xl bg-zinc-950/75 hover:bg-zinc-900/80 backdrop-blur-xl border border-purple-500/30 hover:border-purple-400/60 transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-purple-500/20 flex flex-col justify-between cursor-pointer"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 group-hover:scale-105 transition-transform">
+                    <Bot size={20} />
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Full Power
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-zinc-100 mb-1 group-hover:text-purple-200 transition-colors">
+                  Connect AI Provider
+                </h3>
+                <p className="text-[11px] text-zinc-400 leading-relaxed mb-4">
+                  Claude, Gemini, OpenAI, OpenRouter, or your own custom API endpoint.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-300 group-hover:translate-x-0.5 transition-transform">
+                Configure Provider <ArrowRight size={14} />
+              </div>
+            </button>
+
+            {/* Secondary Action Card: Local AI */}
+            <button
+              onClick={() => {
+                setActiveProvider('local-llm');
+                handleClose();
+              }}
+              className="group relative p-5 rounded-3xl bg-zinc-950/75 hover:bg-zinc-900/80 backdrop-blur-xl border border-zinc-800 hover:border-emerald-500/40 transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-emerald-500/15 flex flex-col justify-between cursor-pointer"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
+                    <Cpu size={20} />
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                    Offline
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-zinc-100 mb-1 group-hover:text-emerald-200 transition-colors">
+                  Start Offline (Local AI)
+                </h3>
+                <p className="text-[11px] text-zinc-400 leading-relaxed mb-4">
+                  Instant on-device intelligence via WebGPU/WASM. No key required.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 group-hover:translate-x-0.5 transition-transform">
+                Launch Local AI <Zap size={14} />
+              </div>
+            </button>
+          </div>
+
+          {/* Direct Workspace Access Pill */}
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={handleClose}
+              className="px-6 py-2.5 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-950/70 hover:bg-zinc-900/80 backdrop-blur-md text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-all shadow-sm cursor-pointer"
+            >
+              Skip setup and enter workspace
+            </button>
+            <p className="text-[10px] text-zinc-500 tracking-wide">
+              All intelligence processes run client-side • Zero data telemetry
+            </p>
+          </div>
         </div>
       </div>
     );

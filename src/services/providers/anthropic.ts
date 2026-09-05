@@ -112,7 +112,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
                 const block = parsed.content_block;
                 if (block?.type === 'thinking') {
                   if (block.thinking) {
-                    req.onThought?.(block.thinking);
+                    req.onThinkingDelta?.(block.thinking);
                   }
                 }
                 if (block?.type === 'tool_use') {
@@ -131,7 +131,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
                   try { req.onStream!(text); } catch { /* ignore stream errors */ }
                 }
                 if (delta?.type === 'thinking_delta') {
-                  try { req.onThought?.(delta.thinking ?? ''); } catch { /* ignore */ }
+                  try { req.onThinkingDelta?.(delta.thinking ?? ''); } catch { /* ignore */ }
                 }
                 if (delta?.type === 'input_json_delta') {
                   const existing = toolUseBlocks.get(parsed.index);

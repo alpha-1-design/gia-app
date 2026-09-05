@@ -142,7 +142,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
 
                   const reasoningDelta = delta?.reasoning_content || delta?.reasoning || delta?.thought;
                   if (reasoningDelta) {
-                    try { req.onThought?.(reasoningDelta); } catch { /* ignore */ }
+                    try { req.onThinkingDelta?.(reasoningDelta); } catch { /* ignore */ }
                   }
 
                   const textDelta = delta?.content || '';

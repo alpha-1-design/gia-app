@@ -116,7 +116,7 @@ export const LiveFileEditor: React.FC<LiveFileEditorProps> = ({ edit, onClose })
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
       transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-      className="fixed bottom-4 right-4 z-50 w-[380px] max-w-[90vw] rounded-2xl overflow-hidden"
+      className="relative w-full mb-3 rounded-2xl overflow-hidden"
       style={{
         background: 'var(--gia-surface)',
         border: `1px solid ${accent}44`,

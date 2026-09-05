@@ -11,7 +11,16 @@ export interface BrainRequest {
   handsOff?: boolean;
   localVision?: boolean;
   onStream?: (chunk: string) => void;
+  /** Discrete, whole log lines about tool lifecycle (e.g. "🧠 web_search →
+   *  query: ...", "✅ Web search complete") — each call is its own line. */
   onThought?: (thought: string) => void;
+  /** Raw incremental fragments of a model's native reasoning/thinking
+   *  stream (Anthropic extended thinking, Gemini thoughts, OpenAI-style
+   *  reasoning_content). These arrive as small pieces of one continuous
+   *  block of text, NOT discrete lines — concatenate them directly with no
+   *  separator. Do not route these through onThought, which inserts a
+   *  newline before every call and would put each fragment on its own line. */
+  onThinkingDelta?: (text: string) => void;
   signal?: AbortSignal;
   _skipNativeSchemas?: boolean;
   forceJson?: boolean;

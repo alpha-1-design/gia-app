@@ -23,7 +23,7 @@ class CollaborativeGenerationService {
     const peerPromises = others.map(async (p) => {
       onProviderStatus?.({ provider: p.id, model: p.model, status: 'thinking' });
       try {
-        const peerReq: BrainRequest = { ...req, providerId: p.id, modelOverride: p.model, onStream: undefined, onThought: undefined };
+        const peerReq: BrainRequest = { ...req, providerId: p.id, modelOverride: p.model, onStream: undefined, onThought: undefined, onThinkingDelta: undefined };
         const res = await GiaBrain.generate(peerReq);
         onProviderStatus?.({ provider: p.id, model: p.model, status: 'done' });
         return { provider: p.id, model: p.model, text: res.text };
@@ -36,7 +36,7 @@ class CollaborativeGenerationService {
     const primaryPromise = (async () => {
       onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'responding' });
       try {
-        const res = await GiaBrain.generate({ ...req, providerId: primary.id, onStream: undefined, onThought: undefined });
+        const res = await GiaBrain.generate({ ...req, providerId: primary.id, onStream: undefined, onThought: undefined, onThinkingDelta: undefined });
         onProviderStatus?.({ provider: primary.id, model: primary.model, status: 'done' });
         return { provider: primary.id, model: primary.model, text: res.text };
       } catch {
@@ -66,6 +66,7 @@ class CollaborativeGenerationService {
       prompt: synthesisPrompt,
       onStream: req.onStream,
       onThought: (t) => req.onThought?.(`[Synthesis] ${t}`),
+      onThinkingDelta: (t) => req.onThinkingDelta?.(t),
     });
   }
 }

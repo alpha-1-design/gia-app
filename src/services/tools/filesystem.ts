@@ -2,7 +2,7 @@ import { logger } from '../../utils/logger';
 import { z } from 'zod';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '../../utils/helpers';
-import { isPathSafe, blobToBase64, triggerDownload, MAX_FILE_SIZE } from './helpers';
+import { isPathSafe, normalizePath, blobToBase64, triggerDownload, MAX_FILE_SIZE } from './helpers';
 import { useGiaStore } from '../../store/useGiaStore';
 import type { Tool, ToolContext } from './types';
 
@@ -11,11 +11,11 @@ const isNative = isNativePlatform;
 const filesystemRead: Tool = {
   id: 'filesystem_read',
   name: 'filesystem_read',
-  description: 'Read the content of a file from the local filesystem.',
+  description: 'Read the content of a file from the local filesystem. Paths are relative to the app Documents folder — do not prefix with a leading slash.',
   schema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path' }
+      path: { type: 'string', description: 'File path, relative to the Documents folder (e.g. "notes/todo.txt", not "/notes/todo.txt")' }
     },
     required: ['path']
   },
@@ -34,10 +34,11 @@ const filesystemRead: Tool = {
     }
 
     if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
-    const pathErr = isPathSafe(path as string);
+    const normalizedPath = normalizePath(path as string);
+    const pathErr = isPathSafe(normalizedPath);
     if (pathErr) return { success: false, content: '', error: pathErr };
     try {
-      const result = await Filesystem.readFile({ path: path as string, directory: Directory.Documents, encoding: Encoding.UTF8 });
+      const result = await Filesystem.readFile({ path: normalizedPath, directory: Directory.Documents, encoding: Encoding.UTF8 });
       const content = result.data as string;
       if (content.length > MAX_FILE_SIZE) return { success: false, content: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
       return { success: true, content };
@@ -50,11 +51,11 @@ const filesystemRead: Tool = {
 const filesystemWrite: Tool = {
   id: 'filesystem_write',
   name: 'filesystem_write',
-  description: 'Write or update a file on the local filesystem.',
+  description: 'Write or update a file on the local filesystem. Paths are relative to the app Documents folder — do not prefix with a leading slash.',
   schema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path' },
+      path: { type: 'string', description: 'File path, relative to the Documents folder (e.g. "notes/todo.txt", not "/notes/todo.txt")' },
       content: { type: 'string', description: 'File content' }
     },
     required: ['path', 'content']
@@ -74,9 +75,11 @@ const filesystemWrite: Tool = {
       };
     }
 
-    const pathErr = isPathSafe(path as string);
+    const normalizedPath = normalizePath(path as string);
+    const pathErr = isPathSafe(normalizedPath);
     if (pathErr) return { success: false, content: '', error: pathErr };
     if ((content as string) && (content as string).length > MAX_FILE_SIZE) return { success: false, content: '', error: `Content exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+    path = normalizedPath;
 
     const ext = (path as string).split('.').pop()?.toLowerCase() || 'txt';
     const isPdf = ext === 'pdf';
@@ -143,12 +146,13 @@ const listFiles: Tool = {
     const validatedPath = validationResult.data.path;
 
     if (!isNative()) return { success: false, content: '', error: 'Filesystem access requires the GIA mobile app (Android).' };
-    if (validatedPath) {
-      const pathErr = isPathSafe(validatedPath);
+    const normalizedListPath = normalizePath(validatedPath);
+    if (normalizedListPath) {
+      const pathErr = isPathSafe(normalizedListPath);
       if (pathErr) return { success: false, content: '', error: pathErr };
     }
     try {
-      const result = await Filesystem.readdir({ path: validatedPath, directory: Directory.Documents });
+      const result = await Filesystem.readdir({ path: normalizedListPath, directory: Directory.Documents });
       return { success: true, content: result.files.map(f => f.name).join('\n') };
     } catch (e: unknown) {
       return { success: false, content: '', error: (e instanceof Error ? e.message : String(e)) };
@@ -175,7 +179,8 @@ const zipProject: Tool = {
 
       if (paths && Array.isArray(paths)) {
         if (!isNative()) return { success: false, content: '', error: 'Reading files from device paths requires the GIA mobile app.' };
-        for (const p of paths) {
+        for (const rawPath of paths) {
+          const p = normalizePath(rawPath);
           const pathErr = isPathSafe(p);
           if (pathErr) continue;
           try {

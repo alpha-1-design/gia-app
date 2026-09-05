@@ -106,7 +106,7 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
                 if (part?.thought) {
                   const thoughtText = typeof part.thought === 'string' ? part.thought : (part.text || '');
                   if (thoughtText) {
-                    try { req.onThought?.(thoughtText); } catch { /* ignore */ }
+                    try { req.onThinkingDelta?.(thoughtText); } catch { /* ignore */ }
                   }
                   continue;
                 }

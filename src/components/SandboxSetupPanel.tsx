@@ -134,6 +134,7 @@ export default function SandboxSetupPanel() {
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   const [fullInstalling, setFullInstalling] = useState(false);
   const [fullInstallProgress, setFullInstallProgress] = useState('');
+  const [fullInstallFailures, setFullInstallFailures] = useState<string[]>([]);
   const [selectedOS, setSelectedOS] = useState<'alpine' | 'ubuntu'>('alpine');
 
   const logRef = useRef<HTMLDivElement>(null);
@@ -160,20 +161,39 @@ export default function SandboxSetupPanel() {
   // Full install handler
   const handleFullInstall = useCallback(async () => {
     setFullInstalling(true);
+    setFullInstallFailures([]);
     setFullInstallProgress('Updating package index...');
-    await updatePackageIndex();
+    const indexResult = await updatePackageIndex();
+    if (!indexResult || indexResult.exitCode !== 0) {
+      setFullInstallFailures(prev => [...prev, `package index update: ${indexResult?.output?.trim() || 'no response from terminal'}`]);
+    }
 
+    const failed: string[] = [];
     for (let i = 0; i < FULL_INSTALL_PACKAGES.length; i++) {
       const pkg = FULL_INSTALL_PACKAGES[i];
       setFullInstallProgress(`Installing ${pkg} (${i + 1}/${FULL_INSTALL_PACKAGES.length})...`);
-      await installPackage(pkg);
+      const result = await installPackage(pkg);
+      if (!result || result.exitCode !== 0) {
+        failed.push(pkg);
+      }
+    }
+    if (failed.length) {
+      setFullInstallFailures(prev => [...prev, `packages that failed to install: ${failed.join(', ')}`]);
     }
 
-    // Create workspace folders
+    // Create workspace folders. mkdir -p takes multiple directory arguments
+    // directly -- brace expansion like /workspace/{a,b,c} is a bash feature
+    // and silently no-ops (creates one literally-named directory) under the
+    // busybox ash shell this runs in, so folders never actually get made.
     setFullInstallProgress('Creating workspace folders...');
-    await execCommand('mkdir -p /workspace/{projects,downloads,scripts,documents,data,tools}', 10000).catch(() => {});
+    const workspaceDirs = ['projects', 'downloads', 'scripts', 'documents', 'data', 'tools']
+      .map(d => `/workspace/${d}`).join(' ');
+    const mkdirResult = await execCommand(`mkdir -p ${workspaceDirs}`, 10000).catch(() => null);
+    if (!mkdirResult || mkdirResult.exitCode !== 0) {
+      setFullInstallFailures(prev => [...prev, `workspace folders: ${mkdirResult?.output?.trim() || 'no response from terminal'}`]);
+    }
 
-    setFullInstallProgress('Done!');
+    setFullInstallProgress(failed.length ? 'Finished with errors — see below' : 'Done!');
     await refreshInstalled();
     setFullInstalling(false);
   }, [execCommand, installPackage, updatePackageIndex, refreshInstalled]);
@@ -336,6 +356,16 @@ export default function SandboxSetupPanel() {
                   <span className="text-sm font-medium text-violet-300">Installing packages...</span>
                 </div>
                 <p className="text-xs opacity-60 font-mono">{fullInstallProgress}</p>
+              </div>
+            )}
+
+            {/* Full install failures — surfaced instead of silently swallowed */}
+            {!fullInstalling && fullInstallFailures.length > 0 && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-1">
+                <span className="text-sm font-medium text-red-300">Full install finished with errors</span>
+                {fullInstallFailures.map((f, i) => (
+                  <p key={i} className="text-xs opacity-70 font-mono break-words">{f}</p>
+                ))}
               </div>
             )}
 

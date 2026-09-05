@@ -117,13 +117,30 @@ class TerminalService {
     this.plugin = getPlugin();
   }
 
+  /**
+   * TerminalService is a module-level singleton (see bottom of file), so its
+   * constructor can run during initial bundle evaluation — before Capacitor's
+   * native bridge has finished attaching. If getPlugin() returned null at
+   * that moment, `this.plugin` would stay null forever even though the
+   * plugin becomes available a beat later, permanently wedging every exec()
+   * call into the "not available" fallback despite Settings (which re-checks
+   * on every mount) correctly showing the terminal as installed. Re-attempt
+   * resolution lazily until it succeeds, then cache it.
+   */
+  private resolvePlugin(): unknown {
+    if (!this.plugin) {
+      this.plugin = getPlugin();
+    }
+    return this.plugin;
+  }
+
   private get p(): GiaTerminalPlugin {
-    return this.plugin as GiaTerminalPlugin;
+    return this.resolvePlugin() as GiaTerminalPlugin;
   }
 
   /** True when the native GIATerminal plugin (on-device Alpine sandbox) is reachable. */
   isAvailable(): boolean {
-    return !!this.plugin;
+    return !!this.resolvePlugin();
   }
 
   /**
@@ -141,7 +158,7 @@ class TerminalService {
     env?: Record<string, string>,
     timeout?: number,
   ): Promise<ExecResult> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       console.warn('[TerminalService] exec() called but plugin unavailable', {
         command,
         workdir,
@@ -184,7 +201,7 @@ class TerminalService {
    * @returns        Promise resolving to { sessionId, command, running }
    */
   async spawn(command: string, workdir?: string): Promise<{ sessionId: string; command: string; running: boolean }> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       throw new Error('Terminal spawn requires the native GIATerminal plugin (Android only)');
     }
     try {
@@ -203,7 +220,7 @@ class TerminalService {
    * @returns          { output, running, gone, exitCode }
    */
   async readOutput(sessionId: string): Promise<{ output: string; running: boolean; gone: boolean; exitCode: number }> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       throw new Error('Terminal readOutput requires the native GIATerminal plugin (Android only)');
     }
     try {
@@ -226,7 +243,7 @@ class TerminalService {
    * @param sessionId  ID of the session to kill
    */
   async kill(sessionId: string): Promise<void> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       console.warn('[TerminalService] kill() called but plugin unavailable');
       return;
     }
@@ -245,7 +262,7 @@ class TerminalService {
    * @returns Array of session info objects
    */
   async listSessions(): Promise<SessionInfo[]> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       console.warn('[TerminalService] listSessions() called but plugin unavailable');
       return [];
     }
@@ -265,7 +282,7 @@ class TerminalService {
    * @returns {totalBytes, freeBytes, usedBytes}
    */
   async getFSInfo(): Promise<FSInfo> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       console.warn('[TerminalService] getFSInfo() called but plugin unavailable');
       return { totalBytes: 0, freeBytes: 0, usedBytes: 0 };
     }
@@ -289,7 +306,7 @@ class TerminalService {
    * @returns {running, sessionCount}
    */
   async getStatus(): Promise<StatusInfo> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       console.warn('[TerminalService] getStatus() called but plugin unavailable');
       return { running: false, sessionCount: 0 };
     }
@@ -314,7 +331,7 @@ class TerminalService {
    * exec() call will wait for extraction and use the fresh rootfs.
    */
   async reinstallRootfs(): Promise<{ success: boolean; message: string }> {
-    if (!this.plugin) {
+    if (!this.resolvePlugin()) {
       throw new Error('Terminal plugin not available — cannot reinstall rootfs');
     }
     try {
