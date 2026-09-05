@@ -66,10 +66,16 @@ Working on `main` (confirmed the active branch: 15 commits ahead of `staging`,
     a hardcoded list, not read from the actual rootfs. Lower priority than
     the install-loop bugs above; will wire this up if time allows.
 
-6. 🔴 **Contradiction: Terminal tab says "Linux Installed", Security tab says
-   "Setup Required"** — two separate install-state flags for what should be
-   one Alpine sandbox, not kept in sync. Investigating `SandboxSubPage.tsx` /
-   `SecuritySection.tsx`.
+6. 🟢 **Contradiction: Terminal tab says "Linux Installed", Security tab says
+   "Setup Required"** — these track two genuinely different things (base
+   rootfs presence vs. dev-toolchain packages actually being installed in
+   it), so showing them separately isn't itself wrong. But the Security
+   tab's "Set Up Environment" (`SandboxEnvService.provision`) configures
+   `/etc/resolv.conf` before running `apk add`, while the Terminal tab's
+   "Full Install" never did — so its `apk add` calls had no DNS and failed
+   silently (same underlying cause as #4). Added the same DNS step to the
+   Terminal tab's full-install flow, so both paths can now actually
+   succeed and their status converges instead of permanently disagreeing.
 
 7. 🟢 **Thinking renders one word per line** — fixed. Root cause was:
    `src/services/providers/{anthropic,gemini,openai}.ts` route incremental
@@ -92,11 +98,10 @@ Working on `main` (confirmed the active branch: 15 commits ahead of `staging`,
    `segment.content.trim().split('\n')[0]` — with the newline-per-token bug,
    the first "line" was one word. Fixed by #7; no separate change needed.
 
-9. 🔴 **Per-item expand/collapse on the actions/thoughts trail** — code for
-   this already exists and looks correct (`SegmentedReasoning.tsx` gives each
-   `ThinkingBlock`/`ToolBlock` its own independent `open` state) — likely was
-   reading as "doesn't work" only because of #7/#8 making every header show
-   junk. Re-checking after the fix; will confirm independently.
+9. 🟢 **Per-item expand/collapse on the actions/thoughts trail** — confirmed
+   fixed: this was never broken code, `SegmentedReasoning.tsx` already gives
+   each block independent state. It only *looked* broken because #7/#8 made
+   every header show garbage. Nothing left to change here.
 
 10. 🟢 **File edit shows as a floating card instead of inline in chat** —
     fixed: `LiveFileEditor.tsx` was `position: fixed; bottom-4 right-4`,
@@ -105,13 +110,53 @@ Working on `main` (confirmed the active branch: 15 commits ahead of `staging`,
     after the tool-execution cards, at the point where the live-editing
     turn is happening).
 
-11. 🔴 **Floating orb says "not implemented"** — investigating.
+11. 🟢 **Floating orb says "not implemented"** — found a real bug, though not
+    literally that error message (that phrase turned up in a code comment
+    about an already-fixed, unrelated plugin-registration bug — worth
+    knowing your APK might be old enough to still hit that class of issue,
+    see #1). The actual bug: `showOrb()` (native) started the overlay
+    service unconditionally with no check for the "Draw over other apps"
+    permission (`SYSTEM_ALERT_WINDOW`), which Android requires the user to
+    grant explicitly in system settings — declaring it in the manifest
+    isn't enough. If it's not granted, the overlay's `addView()` call fails
+    inside a `catch (Exception ignored) {}` — service "starts" fine, nothing
+    ever appears, no error anywhere. Fixed: `showOrb()` now checks
+    `Settings.canDrawOverlays()` first and opens the permission screen if
+    it's missing, mirroring the exact pattern `GIAOverlayPlugin` already
+    uses correctly for the same permission. Also fixed the JS toggle
+    (`WidgetSection.tsx`) trusting `showOrb()` resolving as proof the orb
+    is visible — it now re-checks `isOrbShowing()` afterward before
+    reporting success.
 
-12. 🔴 **Assistant message bubble doesn't reach the left edge / alignment
-    looks off vs the right side** — investigating message bubble CSS.
+12. 🟢 **Assistant message bubble alignment** — found a real, concrete bug:
+    the main chat renderer (`MessageList.tsx`) never applied a max-width to
+    the message bubble at all (plain block div, no cap), so it always
+    stretched to fill the entire row regardless of message length — and
+    assistant bubbles additionally had zero background/border, so there was
+    nothing visible marking where they actually started or ended. The
+    correct pattern already exists and is used correctly elsewhere
+    (`AgentsModule.tsx`'s `max-w-[85%]` + `.msg-user`/`.msg-assistant`
+    classes) — `MessageList.tsx` just never got it. Added `max-w-[85%]` and
+    a visible background/border for assistant bubbles (matching the
+    existing `--gia-surface-2`/`--gia-border` tokens already used for the
+    avatar in this same file, not the bolder `.msg-assistant` gradient, to
+    avoid changing the established color language). If this still doesn't
+    match what you're seeing after rebuilding, send a screenshot of it
+    specifically — I was working from your description here, not a picture
+    of this exact issue.
 
-13. 🔴 **Visualization stuck on "Generating visualization..." forever** —
-    investigating `ThreeVisual.tsx` / visualization dispatch.
+13. 🟢 **Visualization stuck on "Generating visualization..." forever** —
+    root cause: ` ```visual ` code blocks get parsed as JSON as they stream
+    in; while parsing fails, the UI shows the loading spinner, which is
+    correct *while more tokens are still coming* (the closing fence hasn't
+    arrived yet). But `RenderVisualByType` had no way to know when the
+    message was actually finished — so if the model's output got cut off
+    mid-block (exactly what happened in your Bentley scene screenshot) and
+    the JSON never became valid, the spinner had no way to ever resolve.
+    Fixed: threaded an `isStreaming` flag down from `MessageList` through
+    `MarkdownRenderer` into the visual renderer — once the message is done
+    and parsing still fails, it now shows a real error explaining the
+    output was cut off, instead of spinning forever.
 
 14. 🟢 **Gia-look setup wizard** — ported the redesigned "Welcome to GIA" step
     from `alpha-1-design/Gia-look-` (only that step, not the rest of the

@@ -51,8 +51,14 @@ export const WidgetSection: React.FC = () => {
         addNotification('Screen Orb hidden');
       } else {
         await GIAScreenAgent.showOrb();
-        setOrbShowing(true);
-        addNotification('Screen Orb activated');
+        // showOrb() only confirms the service *started* — the overlay view
+        // attaches a moment later inside that service and can fail there
+        // (e.g. permission revoked mid-flight) without the start call ever
+        // knowing. Re-check real state instead of assuming success.
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const status = await GIAScreenAgent.isOrbShowing();
+        setOrbShowing(status.showing);
+        addNotification(status.showing ? 'Screen Orb activated' : 'Screen Orb did not appear — check the "Draw over other apps" permission in system settings');
       }
     } catch (e) {
       // Don't flip the toggle state on failure — the overlay didn't change.

@@ -162,6 +162,21 @@ export default function SandboxSetupPanel() {
   const handleFullInstall = useCallback(async () => {
     setFullInstalling(true);
     setFullInstallFailures([]);
+
+    // apk needs to resolve dl-cdn.alpinelinux.org to install anything.
+    // Nothing else in this flow configures DNS inside the sandbox, so every
+    // apk add here was silently failing on a fresh rootfs (this is the same
+    // step SandboxEnvService.provision() does on the Security/Sandbox page,
+    // which is why that path worked while this one didn't).
+    setFullInstallProgress('Configuring DNS...');
+    const dnsResult = await execCommand(
+      "test -f /etc/resolv.conf || (echo nameserver 8.8.8.8 > /etc/resolv.conf && echo nameserver 1.1.1.1 >> /etc/resolv.conf)",
+      15000,
+    ).catch(() => null);
+    if (!dnsResult || dnsResult.exitCode !== 0) {
+      setFullInstallFailures(prev => [...prev, `DNS setup: ${dnsResult?.output?.trim() || 'no response from terminal'}`]);
+    }
+
     setFullInstallProgress('Updating package index...');
     const indexResult = await updatePackageIndex();
     if (!indexResult || indexResult.exitCode !== 0) {

@@ -175,8 +175,10 @@ const MessageList: React.FC<MessageListProps> = ({
             </div>
             <>
               <div
-                className={`p-3 sm:p-4 md:p-5 rounded-2xl relative cursor-pointer ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}
+                className={`max-w-[85%] p-3 sm:p-4 md:p-5 rounded-2xl relative cursor-pointer ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : `border ${streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}`}
                 style={{
+                  background: msg.role === 'assistant' && !msg.error ? 'var(--gia-surface-2)' : undefined,
+                  borderColor: msg.role === 'assistant' && !msg.error ? 'var(--gia-border)' : undefined,
                   borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
                   borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
                 }}
@@ -316,14 +318,14 @@ const MessageList: React.FC<MessageListProps> = ({
                     })()}
                     {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
                       <>
-                        <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} />
+                        <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} isStreaming={!!(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id))} />
                         <button onClick={() => setExpandedMsgs(prev => new Set(prev).add(msg.id))} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
                           Show more ({Math.ceil((msg.content.length - LONG_MSG_CHARS) / 1000)}k+ chars)
                         </button>
                       </>
                     ) : (
                       <div className="token-reveal">
-                        <MarkdownRenderer content={msg.content} sources={msg.sources} />
+                        <MarkdownRenderer content={msg.content} sources={msg.sources} isStreaming={!!(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id))} />
                         {(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && loading && (
                           extThinking
                             ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />

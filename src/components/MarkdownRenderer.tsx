@@ -41,7 +41,7 @@ interface KaTeXStatic {
   renderToString(formula: string, options: Record<string, unknown>): string;
 }
 
-interface Props { content: string; className?: string; sources?: Array<string | { url: string; title?: string }> }
+interface Props { content: string; className?: string; sources?: Array<string | { url: string; title?: string }>; isStreaming?: boolean }
 
 const InlineCode: React.FC<{ code: string }> = ({ code }) => {
   const [copied, setCopied] = useState(false);
@@ -290,7 +290,7 @@ const stripArtifactBlocks = (text: string): string => {
   return text.replace(/```artifact[\s\S]*?```/g, '').trim();
 };
 
-const MarkdownRenderer: React.FC<Props> = ({ content, className = '', sources }) => {
+const MarkdownRenderer: React.FC<Props> = ({ content, className = '', sources, isStreaming }) => {
   const resolvedSources = useMemo(
     () => (sources || []).map(s => (typeof s === 'string' ? { url: s, title: s } : { url: s.url, title: s.title || s.url })),
     [sources],
@@ -351,7 +351,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '', sources })
       } else if (lang === 'svg' || lang === 'svg+xml') {
         nodes.push(<InlineSvg key={`svg-${i}`} svg={codeLines.join('\n')} />);
       } else if (lang === 'visual') {
-        nodes.push(<VisualRenderer key={`vis-${i}`} code={codeLines.join('\n')} />);
+        nodes.push(<VisualRenderer key={`vis-${i}`} code={codeLines.join('\n')} isStreaming={isStreaming} />);
       } else if (lang === 'suggestions') {
         const items = codeLines.join('\n').split('\n').filter(s => s.trim());
         nodes.push(

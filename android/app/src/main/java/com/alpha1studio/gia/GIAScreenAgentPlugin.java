@@ -5,6 +5,7 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.JsonWriter;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -559,6 +560,16 @@ public class GIAScreenAgentPlugin extends Plugin {
      */
     @PluginMethod
     public void showOrb(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(getContext())) {
+            Intent permIntent = new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:" + getContext().getPackageName())
+            );
+            permIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(permIntent);
+            call.reject("\"Draw over other apps\" permission is required for the Screen Orb. Opening system settings — enable it there, then try again.");
+            return;
+        }
         Intent intent = new Intent(getContext(), GIAScreenOrbService.class);
         getContext().startForegroundService(intent);
         call.resolve();

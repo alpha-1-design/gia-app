@@ -19,10 +19,21 @@ import ThreeVisual from './ThreeVisual';
 import GraphVisual from './GraphVisual';
 import { FileVisual } from './FileVisual';
 
-const RenderVisualByType: React.FC<{ code: string }> = ({ code }) => {
+const RenderVisualByType: React.FC<{ code: string; isStreaming?: boolean }> = ({ code, isStreaming }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
 
-    if ('error' in parsed) return <VisualLoading />;
+  if ('error' in parsed) {
+    // While the message is still streaming, an incomplete/malformed block is
+    // expected — more tokens (including the closing fence) are still coming,
+    // so keep showing the loading state. But once the message has finished
+    // streaming, a parse failure here is permanent: no more tokens are ever
+    // coming, so looping "Generating visualization..." forever is a lie.
+    // Show the real reason instead once we know nothing more will arrive.
+    if (isStreaming === false) {
+      return <ErrorVisual message={`This visualization didn't finish generating (the response was cut off before it could complete) — ${parsed.error}`} />;
+    }
+    return <VisualLoading />;
+  }
 
   const { type, data } = parsed;
 
@@ -93,9 +104,9 @@ const RenderVisualByType: React.FC<{ code: string }> = ({ code }) => {
   }
 };
 
-const VisualRenderer: React.FC<{ code: string }> = ({ code }) => (
+const VisualRenderer: React.FC<{ code: string; isStreaming?: boolean }> = ({ code, isStreaming }) => (
   <VisualErrorBoundary>
-    <RenderVisualByType code={code} />
+    <RenderVisualByType code={code} isStreaming={isStreaming} />
   </VisualErrorBoundary>
 );
 
