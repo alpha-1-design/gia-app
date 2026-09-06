@@ -340,12 +340,6 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
             </div>
           </div>
 
-          {/* M3 Eyebrow Pill */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-purple-500/15 border border-purple-500/30 text-purple-300 mb-3 shadow-sm backdrop-blur-md">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Autonomous Intelligence Workspace</span>
-          </div>
-
           {/* Title & Subtitle */}
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-50 mb-1 drop-shadow-md">
             GIA

@@ -37,6 +37,7 @@ import { useProviderStore } from '../store/useProviderStore';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { LiveFileEditor } from '../components/LiveFileEditor';
+import { HorseSpiritBackdrop } from '../components/HorseSpiritBackdrop';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -330,7 +331,8 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           </div>
         )}
         {messages.length === 0 && !buildMode && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
+          <div className="relative flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
+            {!providerConnected && <div className="absolute inset-0 -z-10"><HorseSpiritBackdrop /></div>}
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
               <GiaIcon size={30} animate={false} color="#a855f7" />
             </div>
