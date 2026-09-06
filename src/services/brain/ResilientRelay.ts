@@ -73,6 +73,52 @@ export function isRetryableServerError(msg: string): boolean {
     || m.includes('server error') || m.includes('service unavailable') || m.includes('overloaded');
 }
 
+/** Invalid/expired/revoked key, or account not authorized for this model. Another
+ * connected provider's key is unaffected, so this is a great fallback candidate. */
+export function isAuthError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes('401') || m.includes('403') || m.includes('unauthorized') || m.includes('forbidden')
+    || m.includes('invalid api key') || m.includes('invalid_api_key') || m.includes('incorrect api key')
+    || m.includes('authentication') || m.includes('permission denied');
+}
+
+/** Fetch/connection failures -- transient, worth trying a different provider
+ * immediately rather than assuming the whole device/network is offline. */
+export function isNetworkError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes('network') || m.includes('fetch failed') || m.includes('failed to fetch')
+    || m.includes('econnrefused') || m.includes('econnreset') || m.includes('timeout')
+    || m.includes('timed out') || m.includes('aborted') || m.includes('enotfound');
+}
+
+/** Model ID renamed, deprecated, or never existed on this provider. */
+export function isModelNotFoundError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes('404') || m.includes('model not found') || m.includes('does not exist')
+    || m.includes('unknown model') || m.includes('invalid model');
+}
+
+/** Prompt (or accumulated history) exceeds this model's context window --
+ * a different provider/model may have more headroom. */
+export function isContextLengthError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes('context length') || m.includes('context_length') || m.includes('maximum context')
+    || m.includes('too many tokens') || m.includes('context window');
+}
+
+/**
+ * Almost any transport/provider-side failure is worth trying elsewhere for --
+ * matching how OpenRouter treats "any error" as fallback-eligible (context
+ * length, moderation, rate limits, downtime). The one thing intentionally
+ * excluded is our own input guardrail rejections, which would fail identically
+ * on every provider since the content itself is what's being rejected, not
+ * the provider serving it.
+ */
+export function isRecoverableError(msg: string): boolean {
+  return isRateLimitOrQuotaError(msg) || isRetryableServerError(msg) || isAuthError(msg)
+    || isNetworkError(msg) || isModelNotFoundError(msg) || isContextLengthError(msg);
+}
+
 /** Picks the healthiest enabled, credentialed provider other than the ones already tried. */
 export function pickFallbackProvider(exclude: string[]): { provider: string; model: string } | null {
   const { providers } = useProviderStore.getState();

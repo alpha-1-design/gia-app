@@ -93,6 +93,14 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
 
   const buildModeStore = useGiaStore((s) => s.buildMode);
   const buildMode = forceBuild ?? buildModeStore;
+  const generationState = useGiaStore((s) => s.generationState);
+  // generationState tracks generation across module/session switches but
+  // previously had no reader anywhere in the UI -- so if you started a
+  // response in session A, then switched to session B (or another module),
+  // nothing anywhere told you A was still generating (and still spending
+  // tokens) in the background. Surface it on the History button, since
+  // that's exactly where you'd go to get back to that session.
+  const backgroundActivityElsewhere = generationState.active && generationState.sessionId !== null && generationState.sessionId !== activeSessionId;
   const setBuildMode = useGiaStore((s) => s.setBuildMode);
   const buildPreviewUrl = useGiaStore((s) => s.buildPreviewUrl);
   const setBuildPreview = useGiaStore((s) => s.setBuildPreview);
@@ -185,7 +193,12 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
                   return (
                     <div key={sess.id} className="gia-card p-3 flex items-center gap-3 cursor-pointer transition-all tap-feedback" style={sess.id === activeSessionId ? { borderColor: 'rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)' } : {}} onClick={() => { setActiveSession(sess.id); setShowHistory(false); }}>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: 'var(--gia-text)' }}>{sess.title}</p>
+                        <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: 'var(--gia-text)' }}>
+                          {sess.title}
+                          {generationState.active && generationState.sessionId === sess.id && sess.id !== activeSessionId && (
+                            <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ background: '#34d399' }} title="Still generating" />
+                          )}
+                        </p>
                         <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted)' }}>{sess.messages.length} msgs · {new Date(sess.updatedAt).toLocaleDateString()}{matchCount > 0 ? ` · ${matchCount} match${matchCount > 1 ? 'es' : ''}` : ''}</p>
                       </div>
                       <button onClick={(e) => { e.stopPropagation(); deleteSession(sess.id); }} className="p-1.5 rounded-lg transition-colors text-zinc-600 hover:text-rose-400">
@@ -244,8 +257,11 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
       )}
       <div className="flex items-center justify-between px-4 py-2.5 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <button onClick={() => setShowHistory(true)} className="p-1.5 rounded-lg transition-colors tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }}>
+          <button onClick={() => setShowHistory(true)} className="relative p-1.5 rounded-lg transition-colors tap-feedback shrink-0" style={{ color: 'var(--gia-muted)' }} title={backgroundActivityElsewhere ? 'Still generating in another chat' : undefined}>
             <History size={15} />
+            {backgroundActivityElsewhere && (
+              <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#34d399', boxShadow: '0 0 4px #34d399' }} />
+            )}
           </button>
           <span className="text-xs font-medium truncate" style={{ color: 'var(--gia-muted)' }}>{activeSession?.title ?? 'New Chat'}</span>
           {activeSession && activeSession.branches && Object.keys(activeSession.branches).length > 0 && (

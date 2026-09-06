@@ -588,7 +588,7 @@ export const useGiaStore = create<GiaState>()(
       useWhisper: localStorage.getItem('gia-use-whisper') === 'true',
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
-      theme: 'dark',
+      theme: 'obsidian-aurora',
       reduceMotion: (() => { try { return localStorage.getItem('gia-reduce-motion') === 'true'; } catch { return false; } })(),
       hiddenModules: [],
       connectionStatus: navigator.onLine ? 'online' : 'offline',

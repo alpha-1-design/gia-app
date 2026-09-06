@@ -136,12 +136,43 @@ export default function SandboxSetupPanel() {
   const [fullInstallProgress, setFullInstallProgress] = useState('');
   const [fullInstallFailures, setFullInstallFailures] = useState<string[]>([]);
   const [selectedOS, setSelectedOS] = useState<'alpine' | 'ubuntu'>('alpine');
+  const [workspaceInfo, setWorkspaceInfo] = useState<Record<string, { exists: boolean; count: number }>>({});
+  const [workspaceInfoLoading, setWorkspaceInfoLoading] = useState(false);
 
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
+
+  // The workspace folder tiles used to be static labels with no connection
+  // to what's actually on disk. Read real state instead: does each folder
+  // exist, and how many entries does it have.
+  const refreshWorkspaceInfo = useCallback(async () => {
+    if (!setupStatus?.installed) return;
+    setWorkspaceInfoLoading(true);
+    try {
+      const cmd = WORKSPACE_FOLDERS.map(f =>
+        `if [ -d /workspace/${f.path} ]; then echo "${f.path}:EXISTS:$(ls -1 /workspace/${f.path} 2>/dev/null | wc -l)"; else echo "${f.path}:MISSING:0"; fi`
+      ).join('; ');
+      const result = await execCommand(cmd, 10000);
+      const info: Record<string, { exists: boolean; count: number }> = {};
+      (result?.output || '').split('\n').forEach(line => {
+        const m = line.trim().match(/^([\w-]+):(EXISTS|MISSING):(\d+)$/);
+        if (m) info[m[1]] = { exists: m[2] === 'EXISTS', count: parseInt(m[3], 10) || 0 };
+      });
+      setWorkspaceInfo(info);
+    } catch {
+      // Leave workspaceInfo as-is (tiles fall back to "unknown" state) --
+      // this is read-only diagnostic info, not worth surfacing an error for.
+    } finally {
+      setWorkspaceInfoLoading(false);
+    }
+  }, [execCommand, setupStatus?.installed]);
+
+  useEffect(() => {
+    if (tab === 'workspace') refreshWorkspaceInfo();
+  }, [tab, refreshWorkspaceInfo]);
 
   const refreshInstalled = useCallback(async () => {
     const result = await listInstalledPackages();
@@ -210,8 +241,9 @@ export default function SandboxSetupPanel() {
 
     setFullInstallProgress(failed.length ? 'Finished with errors — see below' : 'Done!');
     await refreshInstalled();
+    await refreshWorkspaceInfo();
     setFullInstalling(false);
-  }, [execCommand, installPackage, updatePackageIndex, refreshInstalled]);
+  }, [execCommand, installPackage, updatePackageIndex, refreshInstalled, refreshWorkspaceInfo]);
 
   // Single package install
   const handleInstall = useCallback(async (pkg: string) => {
@@ -529,18 +561,29 @@ export default function SandboxSetupPanel() {
 
             {/* Folder grid */}
             <div className="grid grid-cols-2 gap-2">
-              {WORKSPACE_FOLDERS.map(folder => (
-                <div
-                  key={folder.path}
-                  className="bg-white/5 rounded-xl p-3 flex items-center gap-2.5"
-                >
-                  <FolderOpen size={18} className="text-yellow-400/70 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium truncate">~/{folder.path}</div>
-                    <div className="text-[10px] opacity-40">{folder.desc}</div>
+              {WORKSPACE_FOLDERS.map(folder => {
+                const info = workspaceInfo[folder.path];
+                return (
+                  <div
+                    key={folder.path}
+                    className="bg-white/5 rounded-xl p-3 flex items-center gap-2.5"
+                  >
+                    <FolderOpen size={18} className={info?.exists ? 'text-yellow-400/70 shrink-0' : 'text-white/20 shrink-0'} />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium truncate">~/{folder.path}</div>
+                      <div className="text-[10px] opacity-40">
+                        {workspaceInfoLoading && !info
+                          ? 'Checking...'
+                          : info === undefined
+                          ? folder.desc
+                          : info.exists
+                          ? `${info.count} item${info.count === 1 ? '' : 's'}`
+                          : 'Not created yet'}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Quick info */}
@@ -554,10 +597,10 @@ export default function SandboxSetupPanel() {
             </div>
 
             <button
-              onClick={refreshInstalled}
+              onClick={() => { refreshInstalled(); refreshWorkspaceInfo(); }}
               className="w-full text-center text-xs opacity-40 hover:opacity-70 py-2"
             >
-              <RefreshCw size={12} className="inline mr-1" /> Refresh
+              <RefreshCw size={12} className={`inline mr-1 ${workspaceInfoLoading ? 'animate-spin' : ''}`} /> Refresh
             </button>
           </>
         )}
