@@ -1,5 +1,5 @@
 {
-  "version": "2.4.0.1",
+  "version": "2.4.0.2",
   "updated": "2026-08-31",
   "sections": [
     {
@@ -329,7 +329,7 @@
           "Rate limited: GIA automatically retries and falls back to other connected providers if available. Connect multiple providers for best reliability.",
           "Thinking panel disappears: Thinking tokens stream incrementally and persist after generation. If they seem to vanish, try refreshing the page.",
           "Agent crash after creation: Usually a missing tool in the agent's tool grant. Edit the agent and ensure granted tools exist.",
-          "Web search popup persists: This was a known UI bug — update to v2.4.0.1 or later."
+          "Web search popup persists: This was a known UI bug — update to v2.4.0.2 or later."
         ]}
       ]
     },

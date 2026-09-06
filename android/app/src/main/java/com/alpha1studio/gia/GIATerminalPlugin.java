@@ -430,7 +430,7 @@ public class GIATerminalPlugin extends Plugin {
                     HttpURLConnection conn = (HttpURLConnection) new URL(downloadUrl).openConnection();
                     conn.setConnectTimeout(10000);
                     conn.setReadTimeout(30000);
-                    conn.setRequestProperty("User-Agent", "GIA/2.4.0.1");
+                    conn.setRequestProperty("User-Agent", "GIA/2.4.0.2");
 
                     int responseCode = conn.getResponseCode();
                     if (responseCode != 200) {
