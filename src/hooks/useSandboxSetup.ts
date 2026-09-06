@@ -29,6 +29,7 @@ export interface SetupStatus {
   rootfsSizeBytes: number;
   hasBusybox: boolean;
   hasShell: boolean;
+  os?: 'alpine' | 'ubuntu' | 'unknown';
 }
 
 export interface PackageCmdResult {

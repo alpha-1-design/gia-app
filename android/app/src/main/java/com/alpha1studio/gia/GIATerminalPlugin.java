@@ -495,6 +495,14 @@ public class GIATerminalPlugin extends Plugin {
 
             try {
                 extractAndVerify(archiveFile, rootfsDir, isUbuntu);
+                try {
+                    File osMarker = new File(terminalDir, "installed-os.txt");
+                    try (FileOutputStream fos = new FileOutputStream(osMarker)) {
+                        fos.write((isUbuntu ? "ubuntu" : "alpine").getBytes());
+                    }
+                } catch (Exception markerErr) {
+                    Log.w(TAG, "Failed to write installed-os marker (non-fatal): " + markerErr.getMessage());
+                }
                 return; // success
             } catch (Exception e) {
                 lastError = e;
@@ -780,12 +788,36 @@ public class GIATerminalPlugin extends Plugin {
     @PluginMethod
     public void getSetupStatus(PluginCall call) {
         Context ctx = getContext();
-        File rootfsDir = new File(new File(ctx.getFilesDir(), "terminal"), "rootfs");
+        File terminalDir = new File(ctx.getFilesDir(), "terminal");
+        File rootfsDir = new File(terminalDir, "rootfs");
         File marker = new File(rootfsDir, ".gia-rootfs-ok");
         File busybox = new File(rootfsDir, "bin/busybox");
         File sh = new File(rootfsDir, "bin/sh");
 
-        boolean installed = marker.exists() && busybox.exists() && sh.exists();
+        // .gia-rootfs-ok is only ever written by extractAndVerify() after it
+        // ran the correct distro-aware checks (busybox is required there
+        // only for Alpine -- Ubuntu's rootfs uses coreutils and never has
+        // it). Requiring busybox again here unconditionally meant a
+        // correctly-installed Ubuntu rootfs could never report as
+        // "installed" -- the UI would loop back to the install screen
+        // forever even though the terminal itself worked fine.
+        boolean installed = marker.exists() && sh.exists();
+
+        String installedOs = "unknown";
+        File osMarker = new File(terminalDir, "installed-os.txt");
+        if (osMarker.exists()) {
+            try {
+                byte[] bytes = java.nio.file.Files.readAllBytes(osMarker.toPath());
+                String val = new String(bytes).trim();
+                if (val.equals("ubuntu") || val.equals("alpine")) installedOs = val;
+            } catch (Exception ignored) { /* fall through to heuristic below */ }
+        }
+        if (installedOs.equals("unknown") && installed) {
+            // Marker predates this fix (installed by an older build) --
+            // infer from the one real structural difference between the two.
+            installedOs = busybox.exists() ? "alpine" : "ubuntu";
+        }
+
         long rootfsSize = getDirSize(rootfsDir);
 
         JSObject result = new JSObject();
@@ -794,6 +826,7 @@ public class GIATerminalPlugin extends Plugin {
         result.put("rootfsSizeBytes", rootfsSize);
         result.put("hasBusybox", busybox.exists());
         result.put("hasShell", sh.exists());
+        result.put("os", installedOs);
         call.resolve(result);
     }
 

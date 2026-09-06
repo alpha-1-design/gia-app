@@ -145,6 +145,17 @@ export default function SandboxSetupPanel() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
 
+  // selectedOS used to only ever start at 'alpine' and had no way to reflect
+  // reality once something was installed -- the OS picker was hidden entirely
+  // in the installed state (see JSX below), so if you'd installed Ubuntu,
+  // "Reinstall Rootfs" would silently reinstall Alpine instead (the unchanged
+  // default), and there was no way to see or switch which distro was active.
+  useEffect(() => {
+    if (setupStatus?.os && setupStatus.os !== 'unknown') {
+      setSelectedOS(setupStatus.os);
+    }
+  }, [setupStatus?.os]);
+
   // The workspace folder tiles used to be static labels with no connection
   // to what's actually on disk. Read real state instead: does each folder
   // exist, and how many entries does it have.
@@ -316,20 +327,54 @@ export default function SandboxSetupPanel() {
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="text-emerald-400" size={18} />
-                  <span className="font-semibold text-emerald-300 text-sm">Linux Installed</span>
+                  <span className="font-semibold text-emerald-300 text-sm">
+                    {setupStatus.os === 'ubuntu' ? '🐧 Ubuntu 24.04' : '🏔 Alpine Linux'} Installed
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs opacity-70">
                   <div>Rootfs: {(setupStatus.rootfsSizeBytes / 1024 / 1024).toFixed(1)} MB</div>
                   <div>Shell: {setupStatus.hasShell ? '✓' : '✗'}</div>
-                  <div>Busybox: {setupStatus.hasBusybox ? '✓' : '✗'}</div>
+                  <div>Busybox: {setupStatus.hasBusybox ? '✓' : '✗ (n/a on Ubuntu)'}</div>
                   <div>Path: ~/terminal/rootfs</div>
                 </div>
                 <button
                   onClick={() => startSetup('aarch64', selectedOS).catch(() => {})}
                   className="mt-1 text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
                 >
-                  <RefreshCw size={12} /> Reinstall Rootfs
+                  <RefreshCw size={12} /> Reinstall {selectedOS === 'ubuntu' ? 'Ubuntu' : 'Alpine'}
                 </button>
+
+                {/* Switch distro -- was previously impossible once installed:
+                    the whole picker below was hidden in this branch. */}
+                <div className="pt-2 border-t border-white/10 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wide opacity-40">Switch Linux distribution</div>
+                  <div className="flex rounded-xl overflow-hidden border border-white/10">
+                    <button
+                      onClick={() => setSelectedOS('alpine')}
+                      className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                        selectedOS === 'alpine' ? 'bg-purple-600 text-white' : 'bg-white/5 text-white/50 hover:text-white/70'
+                      }`}
+                    >
+                      🏔 Alpine
+                    </button>
+                    <button
+                      onClick={() => setSelectedOS('ubuntu')}
+                      className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                        selectedOS === 'ubuntu' ? 'bg-orange-600 text-white' : 'bg-white/5 text-white/50 hover:text-white/70'
+                      }`}
+                    >
+                      🐧 Ubuntu
+                    </button>
+                  </div>
+                  {selectedOS !== setupStatus.os && (
+                    <button
+                      onClick={() => startSetup('aarch64', selectedOS).catch(() => {})}
+                      className="w-full text-xs rounded-lg py-2 bg-white/10 hover:bg-white/15 transition-colors"
+                    >
+                      Install {selectedOS === 'ubuntu' ? 'Ubuntu' : 'Alpine'} instead (replaces current rootfs)
+                    </button>
+                  )}
+                </div>
               </div>
             ) : phase === 'idle' || phase === 'error' ? (
               <div className="space-y-3">
