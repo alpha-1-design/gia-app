@@ -149,6 +149,14 @@ CSS variables in `src/styles/globals.css`:
 | `generateWithRetry` | `utils/generateWithRetry.ts` | JSON + network retry (Analyst/Planner/Exam) |
 | `streamParser` | `utils/streamParser.ts` | `processStreamChunk`/`stripToolBlocks`/`flushThinkBlock` for streaming display |
 
+## Orb Assistant (floating Android orb)
+
+Background assistant that hits any capture/voice event while the app is closed (requires **Keep-alive** in Developer settings).
+
+- **Native:** `GIAScreenOrbService.java` (overlay, HUD, TTS, popup, MediaRecorder voice capture) + `GIAScreenAgentPlugin.java` (bridge: `orbResponse`/`setOrbSpeech`/`orbShowImage`/`performSwipe`/`openApp`/`goBack`, static emit for `orbitAnalyze`/`orbitVoice`). Signal source is `GIAAccessibilityService.captureScreen()` (writes cache-relative PNG). Voice clips go to `cache/voice/orb_capture_*.m4a` (AAC 16k), gated on `RECORD_AUDIO`.
+- **JS:** `src/services/OrbAssistant.ts` listens for `orbitAnalyze` / `orbitVoice`. Screen sessions stream the PNG (vision-capable models) + a11y text through `ProviderService.callProvider` directly (bypasses GiaBrain tool loop; per-request `handsOff` is NOT honored). Voice sessions transcribe on-device via `WhisperService` (must be downloaded: Settings → Voice) then run the same brain with `voicePrompt`. `[orb_act]{...}[/orb_act]` JSON blocks drive observe→act→verify (max 4 steps) via `executeOrbAction` (`src/services/OrbControlActions.ts`); `orb_act` is also a chat tool (`src/services/tools/orbControl.ts`).
+- HUD/state strings are plain text (no emoji); the Listen popup row uses the `ic_mic.xml` vector drawable.
+
 ## Server & Daemon
 
 - `server/` — Sandbox server (`sandbox-server.cjs` on port 3081), Python doc parser, browse_web, GIA Stdio Bridge.

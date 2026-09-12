@@ -6,6 +6,7 @@ import { browserAutomationTools } from './browserAutomation';
 import { buildTools } from './build';
 import { calendarTools } from './calendar';
 import { cameraTools } from './camera';
+import { capabilityTools } from './capabilities';
 import { clipboardTools } from './clipboard';
 import { connectorTools } from './connectors';
 import { controlTools } from './controls';
@@ -32,6 +33,7 @@ import { networkTools } from './network';
 import { neuraTools } from './neura';
 import { noteTools } from './notes';
 import { notificationTools } from './notifications';
+import { orbControlTools } from './orbControl';
 import { personalTools } from './personal';
 import { pluginTools } from './plugin';
 import { powerTools } from './powerTools';
@@ -57,6 +59,7 @@ export function registerAllTools(): void {
     buildTools,
     calendarTools,
     cameraTools,
+    capabilityTools,
     clipboardTools,
     connectorTools,
     controlTools,
@@ -83,6 +86,7 @@ export function registerAllTools(): void {
     neuraTools,
     noteTools,
     notificationTools,
+    orbControlTools,
     personalTools,
     pluginTools,
     powerTools,

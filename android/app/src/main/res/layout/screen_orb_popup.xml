@@ -11,8 +11,33 @@
         android:layout_height="48dp"
         android:gravity="center_vertical"
         android:paddingHorizontal="16dp"
-        android:text="Capture &amp; Analyze"
+        android:text="Analyze Screen"
         android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:background="@drawable/popup_item_bg" />
+
+    <TextView
+        android:id="@+id/option_listen"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:text="Listen"
+        android:textColor="#4ade80"
+        android:textSize="14sp"
+        android:drawableStart="@drawable/ic_mic"
+        android:drawableTint="#4ade80"
+        android:drawablePadding="10dp"
+        android:background="@drawable/popup_item_bg" />
+
+    <TextView
+        android:id="@+id/option_speech"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:text="Speech: ON"
+        android:textColor="#4ade80"
         android:textSize="14sp"
         android:background="@drawable/popup_item_bg" />
 
@@ -22,8 +47,8 @@
         android:layout_height="48dp"
         android:gravity="center_vertical"
         android:paddingHorizontal="16dp"
-        android:text="Settings"
-        android:textColor="#FFFFFF"
+        android:text="Resize"
+        android:textColor="#a855f7"
         android:textSize="14sp"
         android:background="@drawable/popup_item_bg" />
 

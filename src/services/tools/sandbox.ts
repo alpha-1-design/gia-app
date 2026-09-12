@@ -1,5 +1,7 @@
 import SandboxService from '../SandboxService';
 import terminalService from '../TerminalService';
+import CapabilityService from '../CapabilityService';
+import CapabilityPolicyService from '../CapabilityPolicyService';
 import type { Tool } from './types';
 
 const sandboxExec: Tool = {
@@ -47,7 +49,7 @@ const sandboxExec: Tool = {
 const sandboxInstall: Tool = {
   id: 'sandbox_install',
   name: 'sandbox_install',
-  description: 'Install Alpine Linux (APK) packages in the sandbox. Packages persist across sessions.',
+  description: 'Install Alpine Linux (APK) packages in the sandbox. Packages persist across sessions. MANDATORY: call capabilities_scan first to confirm the package is not already available, then present the user a choice and wait for their decision — never install unrequested software.',
   schema: {
     type: 'object',
     properties: {
@@ -59,17 +61,35 @@ const sandboxInstall: Tool = {
     required: ['packages'],
   },
   execute: async (args) => {
-    const packages = String(args.packages || '');
-    if (!packages) return { success: false, content: '', error: 'packages is required' };
+    const raw = String(args.packages || '');
+    const packages = raw.split(/\s+/).filter(Boolean);
+    if (packages.length === 0) return { success: false, content: '', error: 'packages is required' };
+
+    const denied = packages.filter(p => CapabilityPolicyService.decision(p) === 'deny');
+    if (denied.length > 0) {
+      return {
+        success: false,
+        content: '',
+        error: `Installs are blocked by policy (deny): ${denied.join(', ')}. Do not install these — explain to the user that they are policy-blocked and offer alternatives or ask if they want the policy changed.`,
+      };
+    }
+
+    const autoApproved = packages.every(p => CapabilityPolicyService.decision(p) === 'allow');
 
     // Prefer the on-device native proot terminal (so installs work in-app on mobile)
     if (terminalService.isAvailable()) {
       try {
-        const result = await terminalService.exec(`apk add ${packages}`, undefined, undefined, 300000);
+        const result = await terminalService.exec(`apk add ${packages.join(' ')}`, undefined, undefined, 300000);
         if (result.exitCode !== 0) {
           return { success: false, content: result.output, error: `Exit code ${result.exitCode}` };
         }
-        return { success: true, content: `Installed: ${packages}\n${result.output}` };
+        CapabilityService.invalidate();
+        CapabilityService.rescanAndBroadcast()
+          .catch((e) => { console.warn('[sandbox_install] rescan after install failed:', e); });
+        const note = autoApproved
+          ? ' (auto-approved by policy — no user prompt needed)'
+          : ' (install was confirmed with the user before running)';
+        return { success: true, content: `Installed: ${packages.join(' ')}${note}\n${result.output}` };
       } catch (e) {
         return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
       }
@@ -81,11 +101,17 @@ const sandboxInstall: Tool = {
     }
 
     try {
-      const result = await SandboxService.install(packages.split(/\s+/).filter(Boolean));
+      const result = await SandboxService.install(packages);
       if (result.exitCode !== 0) {
         return { success: false, content: result.stdout, error: result.stderr || `Exit code ${result.exitCode}` };
       }
-      return { success: true, content: `Installed: ${packages}\n${result.stdout}` };
+      CapabilityService.invalidate();
+      CapabilityService.rescanAndBroadcast()
+        .catch((e) => { console.warn('[sandbox_install] rescan after install failed:', e); });
+      const note = autoApproved
+        ? ' (auto-approved by policy — no user prompt needed)'
+        : ' (install was confirmed with the user before running)';
+      return { success: true, content: `Installed: ${packages.join(' ')}${note}\n${result.stdout}` };
     } catch (e) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
     }

@@ -468,7 +468,14 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
         {createPortal(<EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />, document.body)}
         {createPortal(<ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} onOpenEngine={() => setShowEngine(true)} />, document.body)}
-        {createPortal(<ToolsCatalogSheet open={showToolsCatalog} onClose={() => setShowToolsCatalog(false)} />, document.body)}
+        {createPortal(<ToolsCatalogSheet
+            open={showToolsCatalog}
+            onClose={() => setShowToolsCatalog(false)}
+            onUse={(id, description) => {
+              setShowToolsCatalog(false);
+              setInput(`Use the ${id} tool${description ? ` (${description.split('.')[0].trim().toLowerCase()})` : ''} to `);
+            }}
+          />, document.body)}
 
         <AnimatePresence>
           {liveFileEdit && (

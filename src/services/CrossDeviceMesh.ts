@@ -1,12 +1,39 @@
 import { logger } from '../utils/logger';
 
 interface MeshMessage {
-  type: 'state_sync' | 'command' | 'notification' | 'ping' | 'pong';
+  type: 'state_sync' | 'command' | 'notification' | 'ping' | 'pong' | 'capability_profile';
   sourceDevice: string;
   targetDevice?: string;
   payload: unknown;
   timestamp: number;
   id: string;
+}
+
+/**
+ * Compact per-device capability inventory. Built by CapabilityService after
+ * each scan and broadcast so every paired peer knows what the others can do
+ * (OpenClaw-style fleet awareness, borrowed from gia-cowork).
+ */
+export interface CapabilityMeshPayload {
+  platform: 'desktop' | 'mobile' | 'web';
+  os: string;
+  distroId: string;
+  packageManagers: string[];
+  binaryCount: number;
+  tools: string[];
+  missing: string[];
+  gpu: boolean;
+  webgpu: boolean;
+  ramFreeGB: number | null;
+  engines: {
+    localLLMModels: number;
+    localLLMReady: string[];
+    kokoro: string;
+    speech5: string;
+    whisper: string;
+  };
+  hash: string;
+  scannedAt: number;
 }
 
 interface MeshPeer {
@@ -21,6 +48,7 @@ type MessageHandler = (msg: MeshMessage) => void;
 
 export class CrossDeviceMesh {
   private peers: Map<string, MeshPeer> = new Map();
+  private peerCapabilities: Map<string, CapabilityMeshPayload> = new Map();
   private messageHandlers: Set<MessageHandler> = new Set();
   private broadcastChannel: BroadcastChannel | null = null;
   private ws: WebSocket | null = null;
@@ -122,6 +150,11 @@ export class CrossDeviceMesh {
     this.send({ type: 'notification', payload: { title, body } });
   }
 
+  /** Announce this device's capability inventory to every paired peer. */
+  broadcastCapabilityProfile(profile: CapabilityMeshPayload): void {
+    this.send({ type: 'capability_profile', payload: profile });
+  }
+
   private send(partial: Partial<MeshMessage>): void {
     const msg: MeshMessage = {
       type: partial.type || 'ping',
@@ -152,6 +185,14 @@ export class CrossDeviceMesh {
 
     if (msg.type === 'pong') {
       this.addOrUpdatePeer(msg.sourceDevice, (msg.payload as { deviceType?: MeshPeer['type'] })?.deviceType || 'browser');
+      return;
+    }
+
+    if (msg.type === 'capability_profile') {
+      this.addOrUpdatePeer(msg.sourceDevice, (msg.payload as { deviceType?: MeshPeer['type'] })?.deviceType
+        || (msg.payload as CapabilityMeshPayload)?.platform === 'mobile' ? 'android'
+        : (msg.payload as CapabilityMeshPayload)?.platform === 'desktop' ? 'electron' : 'browser');
+      this.peerCapabilities.set(msg.sourceDevice, msg.payload as CapabilityMeshPayload);
       return;
     }
 
@@ -198,6 +239,36 @@ export class CrossDeviceMesh {
 
   getPeers(): MeshPeer[] {
     return Array.from(this.peers.values());
+  }
+
+  /** Capability inventory last announced by a peer (or null if none yet). */
+  getCapabilityProfile(peerId: string): CapabilityMeshPayload | null {
+    return this.peerCapabilities.get(peerId) ?? null;
+  }
+
+  /** All peers that have announced a capability inventory. */
+  getPeerCapabilities(): { peer: MeshPeer; profile: CapabilityMeshPayload }[] {
+    return Array.from(this.peerCapabilities.entries())
+      .filter(([id]) => this.peers.has(id))
+      .map(([id, profile]) => ({ peer: this.peers.get(id)!, profile }));
+  }
+
+  /** Compact per-peer overview for the model prompt (fleet awareness). */
+  getFleetContext(): string {
+    const lines: string[] = [];
+    for (const { peer, profile } of this.getPeerCapabilities()) {
+      const bits: string[] = [profile.os || 'unknown OS'];
+      if (profile.packageManagers.length > 0) bits.push(`pm: ${profile.packageManagers.join(',')}`);
+      bits.push(`${profile.binaryCount} tools`);
+      if (profile.gpu) bits.push('gpu');
+      if (profile.webgpu) bits.push('webgpu');
+      if (profile.engines.localLLMReady.length > 0) bits.push(`llm: ${profile.engines.localLLMReady.join(',')}`);
+      if (profile.engines.kokoro === 'ready') bits.push('kokoro');
+      if (profile.engines.speech5 === 'ready') bits.push('speech5');
+      if (profile.engines.whisper === 'ready') bits.push('whisper');
+      lines.push(`- ${peer.name} (${peer.type}): ${bits.join(' · ')}`);
+    }
+    return lines.join('\n');
   }
 
   getStatus(): string {

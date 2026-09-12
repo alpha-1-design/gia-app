@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { Github, ArrowRight, Smartphone } from 'lucide-react'
+import { Github, ArrowRight, Smartphone, MonitorDown } from 'lucide-react'
 
 export function CTA() {
   return (
@@ -19,25 +19,33 @@ export function CTA() {
           </div>
 
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-6">
-            Ready to Own{' '}
-            <span className="gradient-text">Your AI?</span>
+            Own{' '}
+            <span className="gradient-text">Your AI.</span>{' '}
+            On Your Machine.
           </h2>
 
           <p className="text-lg text-zinc-500 max-w-xl mx-auto mb-10 leading-relaxed">
-            Download GIA and experience a truly private AI workspace.
+            GIA Desktop for Linux — and the companion Android app — are ready.
             No sign-up. No cloud. No strings attached.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
+              href="#download"
+              className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-violet-500 to-fuchsia-500 hover:brightness-110 text-base font-semibold text-white shadow-2xl shadow-violet-500/25 transition-all duration-300"
+            >
+              <MonitorDown size={18} />
+              Download for Linux
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </a>
+            <a
               href="https://github.com/alpha-1-design/gia-app/releases"
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-base font-semibold text-white shadow-2xl shadow-violet-500/25 transition-all duration-300"
+              className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-base font-medium text-zinc-400 hover:text-white transition-all"
             >
               <Smartphone size={18} />
-              Download for Android
-              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              Get the Android app
             </a>
             <a
               href="https://github.com/alpha-1-design/gia-app"

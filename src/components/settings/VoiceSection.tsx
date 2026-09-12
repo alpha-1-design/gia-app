@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Headphones, Radio, Mic, MicOff, Activity, Play, Square, AlertTriangle, Download } from 'lucide-react';
+import { Headphones, Radio, Mic, MicOff, Activity, Play, Square, AlertTriangle, Download, Cloud } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import TTSService from '../../services/TTSService';
 import WhisperService from '../../services/WhisperService';
+import { getCloudSTTConfig, saveCloudSTTConfig, type CloudSTTConfig } from '../../services/CloudSTT';
 import { LANGUAGES } from '../../config/constants';
 import { Switch } from '../ui/Switch';
 
@@ -34,6 +35,7 @@ export const VoiceSection: React.FC = () => {
   const [useWhisper, setUseWhisper] = useState(() => localStorage.getItem('gia-use-whisper') === 'true');
   const [whisperStatus, setWhisperStatus] = useState(WhisperService.status);
   const [whisperLoading, setWhisperLoading] = useState(false);
+  const [cloudStt, setCloudStt] = useState<CloudSTTConfig>(() => getCloudSTTConfig());
 
   // ── Diagnostics state ──────────────────────────────────────────────
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>({
@@ -306,6 +308,74 @@ export const VoiceSection: React.FC = () => {
         description="When enabled, mic button records audio and transcribes via on-device Whisper (instead of browser STT)."
         accentColor="#22c55e"
       />
+
+      <div className="border-t" style={{ borderColor: 'var(--gia-border)', margin: '4px 0' }} />
+
+      <div className="flex items-center gap-2">
+        <Cloud size={14} style={{ color: '#38bdf8' }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>
+          Orb Cloud STT
+        </span>
+      </div>
+      <p className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+        Fallback for the floating orb when Whisper isn't downloaded. Sends your voice clip to an OpenAI-compatible
+        <b> /audio/transcriptions </b> endpoint (OpenAI, Groq, ...) — audio leaves the phone for these calls.
+      </p>
+
+      <Switch
+        checked={cloudStt.enabled}
+        onChange={v => setCloudStt(saveCloudSTTConfig({ enabled: v }))}
+        icon={<Cloud size={11} />}
+        label="Enable Cloud STT fallback"
+        description="Only used when on-device Whisper isn't ready."
+        accentColor="#38bdf8"
+      />
+
+      {cloudStt.enabled && (
+        <>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+              API Key
+            </label>
+            <input
+              className="gia-input"
+              type="password"
+              value={cloudStt.apiKey}
+              onChange={e => setCloudStt(saveCloudSTTConfig({ apiKey: e.target.value }))}
+              placeholder="sk-…"
+              style={{ fontSize: '12px', flex: 1 }}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+              Base URL
+            </label>
+            <input
+              className="gia-input"
+              value={cloudStt.baseUrl}
+              onChange={e => setCloudStt(saveCloudSTTConfig({ baseUrl: e.target.value }))}
+              placeholder="https://api.openai.com/v1"
+              style={{ fontSize: '12px', flex: 1 }}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+              Model
+            </label>
+            <input
+              className="gia-input"
+              value={cloudStt.model}
+              onChange={e => setCloudStt(saveCloudSTTConfig({ model: e.target.value }))}
+              placeholder="gpt-4o-mini-transcribe"
+              style={{ fontSize: '12px', flex: 1 }}
+            />
+            <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+              Defaults: OpenAI <b>gpt-4o-mini-transcribe</b> · Groq <b>whisper-large-v3-turbo</b> (with
+              base URL <b>https://api.groq.com/openai/v1</b>).
+            </p>
+          </div>
+        </>
+      )}
 
       {/* ── Diagnostics Section ───────────────────────────────────── */}
       <div className="flex items-center gap-2 mt-4">

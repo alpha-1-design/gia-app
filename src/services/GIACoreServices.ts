@@ -6,6 +6,7 @@ import { moodService } from './MoodService';
 import { screenAgent } from './ScreenAgent';
 import { cloudSync } from './CloudSync';
 import { crossDeviceMesh } from './CrossDeviceMesh';
+import CapabilityService from './CapabilityService';
 import { skillsSDK } from './SkillsSDK';
 import { knowledgeGraphService } from './KnowledgeGraphService';
 import { useMemoryStore } from '../store/useMemoryStore';
@@ -13,6 +14,7 @@ import { useMoodStore } from '../store/useMoodStore';
 import { useKnowledgeGraphStore } from '../store/useKnowledgeGraphStore';
 import { useSyncStore } from '../store/useSyncStore';
 import { neuraBridge } from './NeuraBridge';
+import OrbAssistant from './OrbAssistant';
 
 export class GIAFeatureFlags {
   private features: Map<string, boolean> = new Map([
@@ -122,6 +124,12 @@ class GIACoreServices {
       crossDeviceMesh.startLocalBroadcast();
       logger.info('[GIACoreServices] CrossDeviceMesh ready');
     }
+
+    void CapabilityService.warm();
+    logger.info('[GIACoreServices] Capability scan warming...');
+
+    void OrbAssistant.start();
+    logger.info('[GIACoreServices] OrbAssistant ready (floating orb listens for captures)');
 
     neuraBridge.init();
     logger.info('[GIACoreServices] NeuraBridge ready — Neura tools exposed for external MCP agents');

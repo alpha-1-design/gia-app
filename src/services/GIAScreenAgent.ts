@@ -49,6 +49,22 @@ export interface ScreenAgentPlugin {
   /** Set orb size in dp */
   setOrbSize(options: { size: number }): Promise<void>;
 
+  /**
+   * Orb Assistant bridge — stream a response delta/final into the orb's HUD.
+   * Called by OrbAssistant while GIA processes a capture in the background.
+   */
+  orbResponse(options: { delta: string; done: boolean; final?: string }): Promise<void>;
+  /** Toggle native orb speech (Android TextToSpeech). */
+  setOrbSpeech(options: { enabled: boolean }): Promise<void>;
+  /** Show an image (screen capture) in the orb HUD so GIA can send pictures. */
+  orbShowImage(options: { path: string }): Promise<void>;
+  /** Scroll/swipe the current screen (up/down/left/right). */
+  performSwipe(options: { direction: 'up' | 'down' | 'left' | 'right' }): Promise<{ ok: boolean }>;
+  /** Launch an app by package name or launcher label. */
+  openApp(options: { app: string }): Promise<{ ok: boolean }>;
+  /** Send the system BACK action. */
+  goBack(): Promise<{ ok: boolean }>;
+
   addListener(eventName: string, handler: (result: Record<string, unknown>) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }

@@ -105,6 +105,36 @@ export class GIAScreenAgentWeb implements ScreenAgentPlugin {
     // Web: no floating overlay support
   }
 
+  async orbResponse(): Promise<void> {
+    // Web: no native orb HUD
+  }
+
+  async setOrbSpeech(): Promise<void> {
+    // Web: no native orb
+  }
+
+  async orbShowImage(): Promise<void> {
+    // Web: no native orb HUD
+  }
+
+  async performSwipe(): Promise<{ ok: boolean }> {
+    // Web: no native orb controller
+    return { ok: false };
+  }
+
+  async openApp(): Promise<{ ok: boolean }> {
+    // Web: cannot launch arbitrary apps
+    return { ok: false };
+  }
+
+  async goBack(): Promise<{ ok: boolean }> {
+    if (window.history.length > 1) {
+      window.history.back();
+      return { ok: true };
+    }
+    return { ok: false };
+  }
+
   addListener(eventName: string, handler: (result: Record<string, unknown>) => void): Promise<PluginListenerHandle> {
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, []);

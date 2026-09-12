@@ -28,6 +28,9 @@ public class GIAScreenAgentPlugin extends Plugin {
 
     private static final String EVENT_SCREEN_CHANGED = "screenChanged";
     private static final String EVENT_ELEMENT_FOUND = "elementFound";
+    private static final String EVENT_ORBIT_ANALYZE = "orbitAnalyze";
+
+    private static GIAScreenAgentPlugin instance;
 
     private GIAAccessibilityService accessibilityService;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -38,7 +41,188 @@ public class GIAScreenAgentPlugin extends Plugin {
     @Override
     public void load() {
         super.load();
+        instance = this;
         accessibilityService = GIAAccessibilityService.getInstance();
+    }
+
+    /**
+     * Emit an event to the JS layer from a background service (static path so
+     * the orb service can fire it without a plugin context).
+     */
+    public static void emit(String event, JSObject data) {
+        GIAScreenAgentPlugin p = instance;
+        if (p != null) {
+            p.notifyListeners(event, data);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Orb Assistant bridge (floating orb <-> JS brain)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Stream a response delta into the floating orb HUD. Called from JS while
+     * GIA processes an orb capture in the background.
+     */
+    @PluginMethod
+    public void orbResponse(PluginCall call) {
+        String delta = call.getString("delta", "");
+        boolean done = call.getBoolean("done", false);
+        String finalText = call.getString("final", null);
+        GIAScreenOrbService.streamHudDelta(delta, done, finalText);
+        call.resolve();
+    }
+
+    /**
+     * Toggle native orb speech (TTS).
+     */
+    @PluginMethod
+    public void setOrbSpeech(PluginCall call) {
+        GIAScreenOrbService.setSpeechEnabled(call.getBoolean("enabled", true));
+        call.resolve();
+    }
+
+    /**
+     * Show an image (e.g. the latest screen capture) in the orb HUD so GIA can
+     * literally send pictures to the user without opening the app.
+     */
+    @PluginMethod
+    public void orbShowImage(PluginCall call) {
+        String path = call.getString("path", "");
+        if (!path.isEmpty()) {
+            GIAScreenOrbService.showHudImage(path);
+        }
+        call.resolve();
+    }
+
+    /**
+     * Scroll/swipe the screen via a gesture (up/down/left/right).
+     */
+    @PluginMethod
+    public void performSwipe(PluginCall call) {
+        String direction = call.getString("direction", "down");
+        boolean ok = performSwipeGesture(direction);
+        JSObject res = new JSObject();
+        res.put("ok", ok);
+        call.resolve(res);
+    }
+
+    /**
+     * Launch an app by package name (contains a dot) or by launcher label
+     * (e.g. "YouTube", "Spotify"). GIA can open apps this way.
+     */
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String app = call.getString("app", "");
+        if (app == null || app.isEmpty()) {
+            call.reject("app required");
+            return;
+        }
+        boolean ok = launchApp(app);
+        JSObject res = new JSObject();
+        res.put("ok", ok);
+        call.resolve(res);
+    }
+
+    /**
+     * Send the global BACK action via the accessibility service.
+     */
+    @PluginMethod
+    public void goBack(PluginCall call) {
+        boolean ok = accessibilityService != null && GIAAccessibilityService.isRunning()
+            && accessibilityService.performGlobalAction(
+                android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
+        JSObject res = new JSObject();
+        res.put("ok", ok);
+        call.resolve(res);
+    }
+
+    private boolean performSwipeGesture(String direction) {
+        if (accessibilityService == null || !GIAAccessibilityService.isRunning()
+                || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            return false;
+        }
+        AccessibilityNodeInfo root = accessibilityService.getRootInActiveWindow();
+        if (root == null) return false;
+        Rect bounds = new Rect();
+        root.getBoundsInScreen(bounds);
+        root.recycle();
+        if (bounds.isEmpty()) bounds.set(0, 0, getScreenWidth(), getScreenHeight());
+
+        int cx = bounds.centerX();
+        int cy = bounds.centerY();
+        int len = Math.min(bounds.width(), bounds.height()) / 3;
+        if (len < 1) len = 100;
+
+        int x0 = cx, y0 = cy, x1 = cx, y1 = cy;
+        String d = direction == null ? "down" : direction.toLowerCase();
+        switch (d) {
+            case "up":    y1 = cy - len; break;
+            case "left":  x1 = cx - len; break;
+            case "right": x1 = cx + len; break;
+            case "down":
+            default:      y1 = cy + len; break;
+        }
+
+        android.graphics.Path path = new android.graphics.Path();
+        path.moveTo(x0, y0);
+        path.lineTo((x0 + x1) / 2f, (y0 + y1) / 2f);
+        path.lineTo(x1, y1);
+        android.accessibilityservice.GestureDescription gesture =
+            new android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 600))
+                .build();
+        return accessibilityService.dispatchGesture(gesture, null, null);
+    }
+
+    private int getScreenWidth() {
+        android.util.DisplayMetrics dm = getContext().getResources().getDisplayMetrics();
+        return dm.widthPixels;
+    }
+
+    private int getScreenHeight() {
+        android.util.DisplayMetrics dm = getContext().getResources().getDisplayMetrics();
+        return dm.heightPixels;
+    }
+
+    private boolean launchApp(String app) {
+        String pkg;
+        if (app.contains(".")) {
+            pkg = app;
+        } else {
+            pkg = resolvePackageByLabel(app);
+        }
+        if (pkg == null) return false;
+        try {
+            Intent launch = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
+            if (launch == null) return false;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            getContext().startActivity(launch);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String resolvePackageByLabel(String label) {
+        try {
+            android.content.pm.PackageManager pm = getContext().getPackageManager();
+            Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+            mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+            List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(mainIntent, 0);
+            String lower = label.toLowerCase();
+            String best = null;
+            for (android.content.pm.ResolveInfo ri : apps) {
+                String l = ri.loadLabel(pm).toString();
+                if (l.toLowerCase().contains(lower)) {
+                    if (l.equalsIgnoreCase(label)) return ri.activityInfo.packageName;
+                    if (best == null) best = ri.activityInfo.packageName;
+                }
+            }
+            return best;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

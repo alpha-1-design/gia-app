@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Copy, Check, Globe, Code2, FileText, Image, Cpu, Wrench } from 'lucide-react';
+import { X, Copy, Check, Play, Globe, Code2, FileText, Image, Cpu, Wrench } from 'lucide-react';
 import giaTools from '../../services/GiaTools';
 import type { LucideIcon } from 'lucide-react';
 
 interface ToolsCatalogSheetProps {
   open: boolean;
   onClose: () => void;
+  /** Called when the user taps a tool so its request can be sent to the composer. */
+  onUse?: (id: string, description: string) => void;
 }
 
 // Same taxonomy as the Agents tool picker — every registered tool, grouped.
@@ -23,7 +25,7 @@ function categorize(id: string): { category: string; icon: LucideIcon } {
   return { category: rule.category, icon: rule.icon };
 }
 
-export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onClose }) => {
+export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onClose, onUse }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const groups = useMemo(() => {
@@ -46,6 +48,14 @@ export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onCl
       setCopiedId(id);
       setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 1500);
     } catch { /* clipboard unavailable */ }
+  };
+
+  const triggerTool = (t: { id: string; description: string }) => {
+    if (onUse) {
+      onUse(t.id, t.description);
+      return;
+    }
+    void copyId(t.id);
   };
 
   return (
@@ -74,7 +84,7 @@ export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onCl
                 </div>
                 <div>
                   <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>All Tools ({giaTools.getAllTools().length})</p>
-                  <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>Tap a tool to copy its ID — then just ask GIA to use it</p>
+                  <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{onUse ? 'Tap a tool to build a request GIA can run for you' : 'Tap a tool to copy its ID — then just ask GIA to use it'}</p>
                 </div>
               </div>
               <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
@@ -94,7 +104,7 @@ export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onCl
                       return (
                         <button
                           key={t.id}
-                          onClick={() => copyId(t.id)}
+                          onClick={() => triggerTool(t)}
                           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all tap-feedback"
                           style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
                         >
@@ -107,11 +117,21 @@ export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onCl
                               <span className="block text-[9px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{t.description}</span>
                             )}
                           </span>
-                          {copiedId === t.id ? (
-                            <Check size={13} style={{ color: '#34d399' }} />
-                          ) : (
-                            <Copy size={12} style={{ color: 'var(--gia-muted-2)' }} />
-                          )}
+                          {onUse ? (
+                            <span
+                              role="button"
+                              tabIndex={-1}
+                              onClick={(e) => { e.stopPropagation(); void copyId(t.id); }}
+                              title="Copy tool ID"
+                              className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-black/10"
+                              style={{ color: 'var(--gia-muted-2)' }}
+                            >
+                              {copiedId === t.id ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={11} />}
+                            </span>
+                          ) : null}
+                          <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.12)' }}>
+                            {copiedId === t.id ? <Check size={12} style={{ color: '#34d399' }} /> : onUse ? <Play size={11} style={{ color: '#34d399' }} /> : <Copy size={11} style={{ color: 'var(--gia-muted-2)' }} />}
+                          </span>
                         </button>
                       );
                     })}

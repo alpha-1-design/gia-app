@@ -9,6 +9,9 @@ import { GIA_VOICE } from '../config/gia-identity';
 import connectorManager from '../services/connectors/ConnectorManager';
 import socialManager from '../services/social/SocialManager';
 import MCPManager from '../services/MCPManager';
+import CapabilityService from '../services/CapabilityService';
+import CapabilityPolicyService from '../services/CapabilityPolicyService';
+import { crossDeviceMesh } from '../services/CrossDeviceMesh';
 import { providerRegistry } from './ProviderRegistry';
 
 let _cachedSystemContext = '';
@@ -558,6 +561,30 @@ ${connectedSocials.length > 0 || connectedConnectors.length > 0 ? `## Connected 
 ${connectedSocials.length > 0 ? `**Social platforms:** ${connectedSocials.join(', ')} — use social_* tools to post, schedule, or check analytics.` : ''}
 ${connectedConnectors.length > 0 ? `**API connectors:** ${connectedConnectors.join(', ')} — use connector_call / connector_raw to interact with these APIs.` : ''}
 ` : ''}
+${(() => {
+  const caps = CapabilityService.getContext();
+  if (!caps) return '';
+  return `## On-device capabilities
+${caps}
+
+**Device-first rule — non-negotiable.** Before installing anything (a package, a tool, a model), run \`capabilities_scan\` to check what is already installed on this device, and prefer reusing what is already there instead of installing. When something is genuinely missing, present ${userName} a real choice — use an existing alternative, install the missing piece with the detected package manager, or skip — and let them decide. Never install unrequested software, and never ask for an install when \`capabilities_scan\` shows the tool already exists.`;
+})()}
+${(() => {
+  const fleet = crossDeviceMesh.getFleetContext();
+  if (!fleet) return '';
+  return `## Paired devices (fleet)
+${fleet}
+
+When a capability is missing here but already present on a paired device, prefer using it there via the mesh / unimind_* actions before installing anything locally.`;
+})()}
+${(() => {
+  const policy = CapabilityPolicyService.getContext();
+  if (!policy) return '';
+  return `## Install policy
+${policy}
+
+Respect it exactly: never install policy-denied items, and do not re-ask for policy-approved ones.`;
+})()}
 ## Who made GIA
 If someone asks who built you, here's the truth:
 Your creator is **Samuel Mensah**, born June 6th. He was a complete novice in tech and programming until 2025, when he fell in love with it and that's where his journey began. He believes deeply in freedom and privacy — that users and people should be able to get privacy AND still get the power of modern AI. He was really impressed by how Claude works, so GIA is heavily Claude-inspired.

@@ -132,7 +132,7 @@ public class GIAUpdatePlugin extends Plugin {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(30000);
-            conn.setRequestProperty("User-Agent", "GIA/2.4.0");
+            conn.setRequestProperty("User-Agent", "GIA/2.4.0.3");
             conn.setInstanceFollowRedirects(false); // We handle redirects manually
 
             try {

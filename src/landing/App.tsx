@@ -1,5 +1,8 @@
 import { Hero } from './components/Hero'
 import { Features } from './components/Features'
+import { DesktopSection } from './components/DesktopSection'
+import { Pairing } from './components/Pairing'
+import { Download } from './components/Download'
 import { OnDevice } from './components/OnDevice'
 import { Modules } from './components/Modules'
 import { HowItWorks } from './components/HowItWorks'
@@ -14,16 +17,12 @@ import { Footer } from './components/Footer'
 import './landing.css'
 
 const navItems = [
+  { label: 'Desktop', href: '#desktop' },
   { label: 'Features', href: '#features' },
   { label: 'On-Device', href: '#on-device' },
-  { label: 'App', href: '#app' },
-  { label: 'How', href: '#how' },
-  { label: 'Use Cases', href: '#usecases' },
-  { label: 'Compare', href: '#compare' },
+  { label: 'Pairing', href: '#pairing' },
   { label: 'Docs', href: '#docs' },
-  { label: 'Skills', href: '#skills' },
   { label: 'FAQ', href: '#faq' },
-  { label: 'Stats', href: '#stats' },
 ]
 
 export default function App() {
@@ -32,13 +31,17 @@ export default function App() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#050508]/70 backdrop-blur-2xl border-b border-white/[0.04]">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <a href="#" className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center text-white text-[10px] font-bold shadow-lg shadow-violet-500/20">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-violet-500 to-fuchsia-500 flex items-center justify-center text-white text-[10px] font-bold shadow-lg shadow-violet-500/20">
               G
             </div>
             <span className="text-sm font-semibold tracking-tight">GIA</span>
+            <span className="hidden sm:flex items-center gap-1.5 ml-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-300 uppercase tracking-wider">
+              <span className="status-dot h-1 w-1 rounded-full bg-emerald-400" />
+              Desktop out
+            </span>
           </a>
 
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-7">
             {navItems.map(item => (
               <a
                 key={item.href}
@@ -58,9 +61,7 @@ export default function App() {
               GitHub
             </a>
             <a
-              href="https://github.com/alpha-1-design/gia-app/releases"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#download"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-all"
             >
               Download
@@ -72,13 +73,16 @@ export default function App() {
 
       <Hero />
       <Features />
+      <DesktopSection />
+      <Pairing />
+      <Download />
       <OnDevice />
       <Modules />
       <HowItWorks />
       <UseCases />
+      <Skills />
       <Comparison />
       <Docs />
-      <Skills />
       <FAQ />
       <Stats />
       <CTA />

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BarChart3, Trash2, Smartphone, Globe } from 'lucide-react';
+import { BarChart3, Trash2, Smartphone, Globe, History } from 'lucide-react';
 import { SubPageHeader } from './SubPageHeader';
 import { useGiaStore } from '../../store/useGiaStore';
 import { isNativePlatform } from '../../utils/helpers';
 import AnalyticsService from '../../services/AnalyticsService';
 import ConfirmDialog from '../ConfirmDialog';
+import ChangelogModal from '../ChangelogModal';
 
 export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [confirmChats, setConfirmChats] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
   const dangerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current); }; }, []);
 
@@ -123,10 +125,20 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </p>
       </div>
 
-      {/* Version */}
-      <p className="text-center text-[10px] pb-4" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.4.0.2 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
-      </p>
+      {/* Version + changelog */}
+      <div className="flex flex-col items-center gap-2 pb-4">
+        <button
+          onClick={() => setShowChangelog(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all"
+          style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)', color: '#a78bfa' }}
+        >
+          <History size={13} />
+          <span className="text-xs font-semibold">View Changelog</span>
+        </button>
+        <p className="text-center text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
+          GIA v2.4.0.3 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        </p>
+      </div>
 
       <ConfirmDialog
         open={confirmChats}
@@ -141,6 +153,8 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         }}
         onCancel={() => setConfirmChats(false)}
       />
+
+      <ChangelogModal open={showChangelog} onClose={() => setShowChangelog(false)} />
     </div>
   );
 };
