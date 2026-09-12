@@ -21,6 +21,12 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- Required on Android 8+ (API 26+) to launch ACTION_INSTALL_PACKAGE
+         for the in-app APK updater. Without this declared, the OS blocks
+         the install intent outright (or shows a dead-end "blocked" screen)
+         even if resolveActivity() succeeds and startActivity() is called
+         without throwing — this was silently breaking every update. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Required on Android 14+ (API 34) for GIAAlarmReceiver's
          setFullScreenIntent() to actually launch a full-screen wake UI when
          an alarm fires. Without it, the platform silently degrades the

@@ -94,10 +94,22 @@ class UpdateService {
     // On Android, use native HttpURLConnection download — avoids the
     // WebView blob→base64 OOM that crashes on low-end devices with 21MB APKs.
     if (Capacitor.isNativePlatform()) {
-      await GIAUpdate.downloadAndInstall({ url });
-      // downloadAndInstall handles both download + install trigger
-      if (onProgress) {
-        onProgress({ loaded: 100, total: 100, percent: 100 });
+      // Real progress: listen for the native plugin's events instead of
+      // faking a single 100% jump at the end. This is what was making the
+      // bar look frozen — it never received an update until everything,
+      // download AND install, had already finished.
+      const handle = await GIAUpdate.addListener('downloadProgress', (event) => {
+        if (!onProgress) return;
+        onProgress({
+          loaded: event.loaded ?? 0,
+          total: event.total ?? 0,
+          percent: event.percent,
+        });
+      });
+      try {
+        await GIAUpdate.downloadApk({ url });
+      } finally {
+        await handle.remove();
       }
       return;
     }
@@ -143,12 +155,13 @@ class UpdateService {
   }
 
   async installUpdate(): Promise<void> {
-    // On native, install is already triggered by downloadAndInstall.
-    // This is only called for the web fallback path.
-    if (Capacitor.isNativePlatform()) return; // Already handled by downloadAndInstall
-
+    // Previously this was a no-op on native — downloadAndInstall used to
+    // auto-trigger the install intent internally, so by the time the UI
+    // showed the "Install" button and the user tapped it, this returned
+    // immediately and did nothing. That's why the button looked dead.
+    // Now download and install are two real, separate steps.
     try {
-      await GIAUpdate.installApk({ fileName: 'update.apk' });
+      await GIAUpdate.installApk();
     } catch (e) {
       logger.error('[UpdateService] Install failed:', e);
       throw e;
