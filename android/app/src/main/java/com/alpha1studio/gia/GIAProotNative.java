@@ -5,22 +5,24 @@ import android.util.Log;
 import java.io.File;
 
 /**
- * JNI bridge to libproot.so — proot compiled as a shared native library.
+ * Dead code — kept only as a record of an approach that was never finished.
  *
- * On Android 10+ (API 29+), SELinux W^X policy blocks execution of binaries
- * in app-private data directories (/data/data/.../files/). The traditional
- * proot binary extracted from assets cannot be started via ProcessBuilder.
+ * This class describes a genuine JNI bridge (System.loadLibrary + a native
+ * proot_main() JNI export) that was never actually built: the file that
+ * shipped as jniLibs/arm64-v8a/libproot.so was just the plain proot
+ * *executable* renamed to .so, which is not a valid loadable JNI library and
+ * has no such exported symbol — System.loadLibrary("proot") here would fail.
+ * Nothing in the app calls execute()/prootMain(); GIATerminalService is the
+ * real code path and never touches this class.
  *
- * Fix: compile proot as a shared library (libproot.so) using the Android NDK,
- * package it in jniLibs/arm64-v8a/, and load it here via System.loadLibrary().
- * The JNI function proot_main() wraps proot's main() entry point so it can be
- * called from Java without an execve() syscall.
- *
- * Build instructions:
- *   1. Clone https://github.com/proot-me/proot
- *   2. Add JNI wrapper (proot_jni.c) that calls proot's main() with argv
- *   3. Compile with: ndk-build APP_ABI=arm64-v8a APP_PLATFORM=android-24
- *   4. Copy libs/arm64-v8a/libproot.so to android/app/src/main/jniLibs/arm64-v8a/
+ * The actual, working fix for the Android 10+ W^X problem this class was
+ * trying to solve lives in GIATerminalService: libproot.so is still placed
+ * in jniLibs (so nativeLibraryDir extraction makes it executable) but is
+ * invoked as a normal subprocess via ProcessBuilder, not via JNI/dlopen —
+ * see GIATerminalService.resolveProotPath()/resolveLoaderPath() and the
+ * PROOT_LOADER/PROOT_LOADER_32 env vars in startSession() for how the guest
+ * rootfs's own binaries (which do live in non-executable app storage) get to
+ * run despite that.
  */
 public class GIAProotNative {
 

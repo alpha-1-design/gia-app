@@ -601,6 +601,35 @@ public class GIATerminalService extends Service {
     }
 
     /**
+     * Resolve the path to proot's "loader" helper for a given ABI, or null if
+     * it isn't present in the native library directory.
+     *
+     * <p>This proot build (green-green-avk's Android fork, not upstream
+     * proot-me/proot) uses an *unbundled* loader: instead of proot extracting
+     * its embedded loader to a temp file and exec'ing it (which fails outright
+     * on Android 10+ — that temp file lives in app-private, non-executable
+     * storage, producing exactly the "execve(...): Permission denied" error
+     * this was hitting on every single guest command), the loader ships as
+     * its own file so it can sit in nativeLibraryDir next to proot itself —
+     * the one location the OS always keeps executable, install-verified,
+     * regardless of targetSdkVersion. Once proot and its loader both run from
+     * there, the loader manually maps and runs every other guest binary
+     * (env, sh, apk, busybox, whatever apk later installs) without ever
+     * calling execve()/mmap(PROT_EXEC) on a file inside the non-executable
+     * rootfs directory again.
+     *
+     * <p>Same technique used in production by e.g. feelfreelinux/octo4a via
+     * feelfreelinux/android-linux-bootstrap, which uses this exact proot build.
+     *
+     * @param fileName "libprootloader.so" (64-bit) or "libprootloader32.so" (32-bit)
+     */
+    private static String resolveLoaderPath(Context context, String fileName) {
+        String path = context.getApplicationInfo().nativeLibraryDir + File.separator + fileName;
+        File f = new File(path);
+        return (f.exists() && f.canRead()) ? path : null;
+    }
+
+    /**
      * Start a new terminal session running the given command inside proot+Alpine.
      *
      * @param sessionId Unique session identifier
@@ -664,6 +693,26 @@ public class GIATerminalService extends Service {
         }
         pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
         pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
+        // Tell proot where its unbundled loader lives (see resolveLoaderPath()
+        // doc comment for why this is the actual fix for the exec-permission
+        // failures, not just PROOT_NO_SECCOMP/-0 below). Only set these when
+        // the loader files are actually present in nativeLibraryDir — if this
+        // build somehow shipped without them, leave proot to its own (broken
+        // on Android 10+) embedded-loader default rather than pointing it at
+        // a path that doesn't exist.
+        String loader64 = resolveLoaderPath(context, "libprootloader.so");
+        String loader32 = resolveLoaderPath(context, "libprootloader32.so");
+        if (loader64 != null) pb.environment().put("PROOT_LOADER", loader64);
+        if (loader32 != null) pb.environment().put("PROOT_LOADER_32", loader32);
+        // proot needs a writable place to keep hardlink metadata for
+        // --link2symlink (see buildProotCommand()) — regular apps can't call
+        // link() on Android, so proot emulates hardlinks with symlinks plus a
+        // side-table of "what this symlink is really supposed to be" here.
+        File l2sDir = new File(rootfsPath, ".proot.meta");
+        if (!l2sDir.exists()) {
+            l2sDir.mkdirs();
+        }
+        pb.environment().put("PROOT_L2S_DIR", l2sDir.getAbsolutePath());
         // PROOT_NO_SECCOMP=1 is read by proot itself at startup (this must be
         // in the HOST process's env, not the "env -i ..." guest env inside
         // buildProotCommand -- that only reaches the guest shell after proot
@@ -705,17 +754,24 @@ public class GIATerminalService extends Service {
                         process = pb.start();
                         Log.i(TAG, "Asset extraction fallback succeeded");
                     } catch (IOException e2) {
+                        // This fallback binary lives in app-private storage,
+                        // same as the rootfs itself — it hits the identical
+                        // W^X restriction and was never going to work on
+                        // Android 10+. It only exists for the very unlikely
+                        // case nativeLibraryDir/libproot.so is missing.
                         throw new IOException(
-                            "Cannot execute proot from any location. " +
-                            "Android W^X policy blocks binaries in app data directory. " +
-                            "Fix: compile proot as libproot.so and use GIAProotNative JNI bridge.",
+                            "Cannot execute proot from any location. Android blocks execution of " +
+                            "binaries in the app's own writable storage on Android 10+. The native " +
+                            "library copy (jniLibs/libproot.so) should handle this — if you're seeing " +
+                            "this, that file is likely missing from this build.",
                             e2
                         );
                     }
                 } else {
                     throw new IOException(
-                        "Cannot execute proot: Android W^X policy blocks binaries in app data directory. " +
-                        "Fix: compile proot as libproot.so and use GIAProotNative JNI bridge.",
+                        "Cannot execute proot: Android blocks execution of binaries in the app's " +
+                        "own writable storage on Android 10+. jniLibs/libproot.so should avoid this " +
+                        "— if you're seeing this, that file is likely missing from this build.",
                         e
                     );
                 }
@@ -831,6 +887,19 @@ public class GIATerminalService extends Service {
                 + " -b /mnt"
                 + " -b /storage"
                 + " -b /proc/self/fd:/dev/fd"
+                // Regular Android apps can't call link() (hardlinks), which
+                // Alpine's apk and plain tar extraction both rely on for some
+                // packages. This build's --link2symlink emulates them with
+                // symlinks + the PROOT_L2S_DIR side-table set in startSession().
+                + " --link2symlink"
+                // Belt-and-suspenders alongside the unbundled-loader fix above:
+                // this build's --bind-memfd reads a target file's bytes into an
+                // anonymous memfd and execs *that* instead of the file's own
+                // (non-executable, app-private) path, for any exec that somehow
+                // doesn't go through the loader's own ELF-mapping path. Marked
+                // "Experimental" upstream; harmless to enable broadly here since
+                // the loader path above should already handle the normal case.
+                + " --bind-memfd='*'"
                 + " -w /root"
                 + " /usr/bin/env -i"
                 + " TERM=xterm-256color"
