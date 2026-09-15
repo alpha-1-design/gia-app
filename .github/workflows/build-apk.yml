@@ -31,6 +31,16 @@ jobs:
           java-version: 21
 
       - uses: android-actions/setup-android@v4
+        with:
+          # v4's default packages input is "tools platform-tools" — but the
+          # legacy "tools" package (Android SDK Tools) has been removed from
+          # Google's SDK repo entirely, so `sdkmanager tools` fails outright
+          # with "Failed to find package 'tools'" (exit code 1), taking the
+          # whole step down before Gradle ever runs. Gradle/AGP resolves the
+          # actual platform + build-tools versions it needs on its own via
+          # the SDK root this step sets up, so nothing here needs to be
+          # pre-installed — skip it entirely.
+          packages: ''
 
       - run: npx cap sync android
 
