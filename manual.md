@@ -1,4 +1,4 @@
-# GIA v2.4.0.3 — User Manual
+# GIA v2.4.0.4 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,13 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.4
+
+| Fix | Description |
+|-----|-------------|
+| **In-App Updater** | Progress bar no longer freezes mid-download, and the Install button actually installs — both were silently broken for the last few releases. |
+| **Terminal Full Install** | Fixed `proot error: execve(...): Permission denied` on every guest command. Root cause: Android 10+ blocks running binaries placed in the app's own writable storage; proot's bundled loader was hitting that wall on every single command. Swapped to a build with an Android-adapted, separately-placed loader that avoids it. Package installs (Python, Node.js, git, build tools) now actually work. |
 
 ## 🧠 What's New in v2.4.0.3
 

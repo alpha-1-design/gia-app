@@ -1,45 +1,23 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, PlusCircle, Wrench, Sparkles, CheckCircle2 } from 'lucide-react';
+import { X, Wrench, CheckCircle2 } from 'lucide-react';
 
 interface ChangelogProps {
   open: boolean;
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.3';
+const VERSION = '2.4.0.4';
 
 const sections = [
-  {
-    key: 'added',
-    title: 'Added',
-    icon: PlusCircle,
-    color: '#34d399',
-    items: [
-      'Floating Jarvis orb you can now talk to — hold the orb, say what you want, tap again to finish. It hears you with the same on-device Whisper brain that powers voice chats.',
-      'Talk-to-the-orb now keeps working with no Whisper download: enable the Cloud STT fallback in Settings → Voice and it will route your clip to OpenAI or Groq.',
-      'Tools catalog became actionable — tap any tool in the Tools list and GIA starts a ready-made request for it, instead of only copying its ID.',
-      'New GIA Desktop (Linux) release surfaced across the app and landing page: terminal, files, sandbox, 270+ tools, a screen-aware orb, and phone ↔ desktop pairing.',
-    ],
-  },
   {
     key: 'fixed',
     title: 'Fixed',
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'In-app updater no longer fails with "Failed to find configured root" on every install — the update root is resolved once and reused.',
-      'Orb HUD no longer flashes graphical emoji on devices without emoji fonts — replaced with clean vector icons.',
-    ],
-  },
-  {
-    key: 'changed',
-    title: 'Changed',
-    icon: Sparkles,
-    color: '#a78bfa',
-    items: [
-      'New-device onboarding now announces GIA Desktop and pairs nicely with a phone on the same network (Unimind mesh).',
-      'Voice reality check: when an orb voice clip can\u2019t be processed, you get a clear next-step — download Whisper or enable the cloud fallback — instead of a dead silence.',
+      'In-app updater: the progress bar no longer sits frozen during download, and the Install button now actually installs instead of doing nothing — both were silently broken for the last few releases.',
+      'Terminal "Full Install" no longer fails on every command with "execve(...): Permission denied" — package installs (Python, Node.js, git, build tools) now actually work.',
     ],
   },
 ];
