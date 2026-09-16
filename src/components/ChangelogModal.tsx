@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.4';
+const VERSION = '2.4.0.5';
 
 const sections = [
   {
@@ -16,8 +16,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'In-app updater: the progress bar no longer sits frozen during download, and the Install button now actually installs instead of doing nothing — both were silently broken for the last few releases.',
-      'Terminal "Full Install" no longer fails on every command with "execve(...): Permission denied" — package installs (Python, Node.js, git, build tools) now actually work.',
+      'The real fix for the in-app updater: every previous release was accidentally signed with a different certificate each time, which is why Install kept doing nothing no matter what else got fixed. Releases now use one permanent signing key, so updates actually install going forward.',
     ],
   },
 ];

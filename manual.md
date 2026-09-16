@@ -1,4 +1,4 @@
-# GIA v2.4.0.4 — User Manual
+# GIA v2.4.0.5 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,12 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.5
+
+| Fix | Description |
+|-----|-------------|
+| **In-App Updater (for real this time)** | Every prior release (2.4.0.1–2.4.0.4) was signed with a brand-new, throwaway signing certificate generated fresh on each CI run. Android silently refuses to install an APK as an update over an existing install unless the certificate matches — which is why "Install" would spin and then do nothing, no matter how many other fixes landed. Releases now reuse one permanent signing key stored securely in CI, so updates finally install in place. Anyone on 2.4.0.1–2.4.0.4 needs one manual uninstall+reinstall to get onto this baseline; every release after this one will update normally. |
 
 ## 🧠 What's New in v2.4.0.4
 
