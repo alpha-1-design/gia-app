@@ -55,12 +55,32 @@ jobs:
           cd android && /tmp/gradle/gradle-${GRADLE_VERSION}/bin/gradle wrapper --gradle-version ${GRADLE_VERSION}
           rm -rf /tmp/gradle /tmp/gradle.zip
 
-      - name: Generate release keystore
+      - name: Restore persistent release keystore
         run: |
-          keytool -genkey -v -keystore android/app/release.keystore \
-            -alias gia -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=GIA App, OU=GIA, O=alpha1studio, L=Kumasi, ST=Ashanti, C=GH"
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            # Decode the one, permanent signing keystore stored as a repo
+            # secret. Every prior release generated a brand-new throwaway
+            # keystore in this step (`keytool -genkey` with no persistence),
+            # so every single build was signed with a different certificate.
+            # Android refuses to install an APK as an *update* over an
+            # existing install unless the signing certificate matches — it
+            # doesn't error loudly, it just silently declines, which is
+            # exactly why "tap Install" produced a spinner that went nowhere
+            # and the app stayed on its old version no matter how many times
+            # this workflow ran. Reusing the same keystore every time is the
+            # actual fix; nothing about the app or updater code was wrong.
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            echo "Using persistent release keystore from repo secret"
+          else
+            # Fallback for forks/PRs that don't have access to the secret —
+            # generates a working but throwaway keystore so the build still
+            # succeeds. Real releases must never go out signed with this.
+            keytool -genkey -v -keystore android/app/release.keystore \
+              -alias gia -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=GIA App, OU=GIA, O=alpha1studio, L=Kumasi, ST=Ashanti, C=GH"
+            echo "::warning::No RELEASE_KEYSTORE_BASE64 secret available — used a throwaway keystore. This build must not be published as a real release."
+          fi
 
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
