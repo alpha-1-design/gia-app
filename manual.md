@@ -1,4 +1,4 @@
-# GIA v2.4.0.5 — User Manual
+# GIA v2.4.0.6 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,12 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.6
+
+| Fix | Description |
+|-----|-------------|
+| **Terminal Full Install — attempt 2** | The previous fix (unbundled loader) solved the "Permission denied" exec wall, but a new error surfaced on-device: `execve` returning "No such file or directory" plus `ptrace(PEEKDATA): I/O error`. Added `/apex` and `/vendor` bind mounts — since Android 10, core runtime libraries live there instead of plain `/system/lib64`, and missing these binds is a documented cause of proot exec failures on modern Android. This is a genuine, evidence-based fix, but the `ptrace(PEEKDATA)` symptom touches a deeper mechanism this may not fully resolve — please test and report back the exact error text if it still fails. |
 
 ## 🧠 What's New in v2.4.0.5
 

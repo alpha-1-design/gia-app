@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.5';
+const VERSION = '2.4.0.6';
 
 const sections = [
   {
@@ -16,7 +16,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'The real fix for the in-app updater: every previous release was accidentally signed with a different certificate each time, which is why Install kept doing nothing no matter what else got fixed. Releases now use one permanent signing key, so updates actually install going forward.',
+      'Terminal Full Install: added missing /apex and /vendor bind mounts, needed on Android 10+ where core runtime libraries moved out of plain /system.',
     ],
   },
 ];

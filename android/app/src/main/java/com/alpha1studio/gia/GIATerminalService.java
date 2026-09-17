@@ -883,6 +883,13 @@ public class GIATerminalService extends Service {
                 + " -b /dev"
                 + " -b /dev/pts"
                 + " -b /system"
+                // /vendor and /apex hold core Android runtime pieces (since
+                // Android 10, libc/libdl/libm and friends live under APEX
+                // modules, not plain /system/lib64 anymore). Missing these
+                // binds is a documented cause of proot exec failures on
+                // modern Android in other proot-on-Android projects.
+                + " -b /vendor"
+                + " -b /apex"
                 + " -b /data"
                 + " -b /mnt"
                 + " -b /storage"
