@@ -136,7 +136,7 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <span className="text-xs font-semibold">View Changelog</span>
         </button>
         <p className="text-center text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-          GIA v2.4.0.6 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+          GIA v2.4.0.7 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
         </p>
       </div>
 

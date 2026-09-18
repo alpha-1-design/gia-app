@@ -1,4 +1,4 @@
-# GIA v2.4.0.6 — User Manual
+# GIA v2.4.0.7 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,12 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.7
+
+| Fix | Description |
+|-----|-------------|
+| **Terminal Full Install — the actual mechanism this time** | Root cause found: Android sets every non-debug app's "dumpable" flag to 0, and `ptrace(PTRACE_PEEKDATA)` — exactly how proot reads/writes a traced process's memory — fails against a non-dumpable process. This is unrelated to bind mounts, proot's own seccomp backend, or which proot binary is used; no proot build can work around its own tracer being denied ptrace access. Now calling `prctl(PR_SET_DUMPABLE, 1)` on our own process before spawning proot, which is inherited down to everything it forks. This is backed by documented Android/kernel behavior, not another guess — but please still test and report the exact output if it's not fully fixed. |
 
 ## 🧠 What's New in v2.4.0.6
 

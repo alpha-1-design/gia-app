@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.6';
+const VERSION = '2.4.0.7';
 
 const sections = [
   {
@@ -16,7 +16,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'Terminal Full Install: added missing /apex and /vendor bind mounts, needed on Android 10+ where core runtime libraries moved out of plain /system.',
+      'Terminal Full Install: found the actual mechanism behind the proot exec failures — Android marks non-debug apps as non-"dumpable", which blocks the ptrace calls proot relies on. Now explicitly opting back in before spawning proot.',
     ],
   },
 ];

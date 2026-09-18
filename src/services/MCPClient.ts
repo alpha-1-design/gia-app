@@ -57,7 +57,7 @@ export class MCPClient {
       }
 
       this._client = new Client(
-        { name: 'GIA', version: '2.4.0.6' },
+        { name: 'GIA', version: '2.4.0.7' },
         { capabilities: {} }
       ) as unknown as MCPClientHandle;
 

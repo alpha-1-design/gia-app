@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.content.res.AssetManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.system.ErrnoException;
+import android.system.Os;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -726,6 +728,33 @@ public class GIATerminalService extends Service {
         // exercises far more syscalls -- fails or hangs partway through.
         // This is almost certainly why "Set Up Environment" never worked.
         pb.environment().put("PROOT_NO_SECCOMP", "1");
+
+        // The real fix for "ptrace(PEEKDATA): I/O error" cascading into
+        // "execve(...): No such file or directory" / "chdir: Function not
+        // implemented" on every guest command: Android sets a process's
+        // "dumpable" attribute to 0 for every zygote-spawned app process
+        // UNLESS it's a debug build (android:debuggable="true") or the
+        // process explicitly opts back in via prctl(PR_SET_DUMPABLE, 1).
+        // ptrace(PTRACE_PEEKDATA/POKEDATA) — which is exactly how proot
+        // reads/writes a traced process's memory to translate its syscalls —
+        // fails outright against a non-dumpable process. dumpable is
+        // inherited across fork()/execve() (a plain, non-setuid exec like
+        // ours doesn't reset it), so setting it to 1 here, on our own
+        // process, before we spawn anything, propagates to the shell,
+        // proot, and everything proot itself forks. This is unrelated to
+        // PROOT_NO_SECCOMP above (that's proot's own optional internal
+        // seccomp-based backend; this is the kernel's ptrace permission
+        // check) and unrelated to which proot binary is in use — no proot
+        // build can work around its own tracer being denied ptrace access
+        // to begin with. android.system.Os.prctl() is a real public Android
+        // API (since API 21) — no native/NDK code needed.
+        try {
+            final int PR_SET_DUMPABLE = 4;
+            Os.prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+            Log.i(TAG, "Set PR_SET_DUMPABLE=1 so proot can ptrace its children");
+        } catch (ErrnoException e) {
+            Log.w(TAG, "prctl(PR_SET_DUMPABLE, 1) failed: " + e.getMessage());
+        }
 
         Process process;
         try {
