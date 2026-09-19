@@ -1,4 +1,4 @@
-# GIA v2.4.0.7 — User Manual
+# GIA v2.4.0.8 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,12 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.8
+
+| Fix | Description |
+|-----|-------------|
+| **Terminal Full Install — switched to Kai's proven proot build** | Three prior attempts on the proot binary didn't resolve the underlying `execve`/`ptrace(PEEKDATA)` failures. Rather than keep guessing, adopted the exact proot binaries and invocation pattern from [Kai](https://github.com/SimonSchubert/Kai), a real production Android app doing the same thing (Alpine/Ubuntu via proot, no root). This includes a newer proot build (termux/proot mainline, not the stale fork used before) plus its `libtalloc` dependency, and a rewrite from the fragile "build one giant shell string" invocation to passing arguments directly — removing an entire layer of shell quoting/parsing that could itself have been contributing to the fragility. |
 
 ## 🧠 What's New in v2.4.0.7
 

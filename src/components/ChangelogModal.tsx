@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.7';
+const VERSION = '2.4.0.8';
 
 const sections = [
   {
@@ -16,7 +16,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'Terminal Full Install: found the actual mechanism behind the proot exec failures — Android marks non-debug apps as non-"dumpable", which blocks the ptrace calls proot relies on. Now explicitly opting back in before spawning proot.',
+      'Terminal Full Install: switched to the exact proot build and invocation pattern used by Kai, a real production app doing the same thing (Alpine/Ubuntu via proot, no root), instead of continuing to patch the previous approach.',
     ],
   },
 ];

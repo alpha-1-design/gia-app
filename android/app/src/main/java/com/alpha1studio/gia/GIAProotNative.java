@@ -91,7 +91,7 @@ public class GIAProotNative {
             "proot",
             "-r", rootfsPath,
             "-0", // fake root UID/GID -- see the identical comment in
-                  // GIATerminalService.buildProotCommand(). Note: this file
+                  // GIATerminalService.buildProotArgs(). Note: this file
                   // (GIAProotNative) is currently dead code -- nothing in
                   // the app calls execute()/prootMain(), and libproot.so
                   // isn't actually built/bundled (see the class doc comment

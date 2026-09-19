@@ -606,24 +606,24 @@ public class GIATerminalService extends Service {
      * Resolve the path to proot's "loader" helper for a given ABI, or null if
      * it isn't present in the native library directory.
      *
-     * <p>This proot build (green-green-avk's Android fork, not upstream
-     * proot-me/proot) uses an *unbundled* loader: instead of proot extracting
-     * its embedded loader to a temp file and exec'ing it (which fails outright
-     * on Android 10+ — that temp file lives in app-private, non-executable
-     * storage, producing exactly the "execve(...): Permission denied" error
-     * this was hitting on every single guest command), the loader ships as
-     * its own file so it can sit in nativeLibraryDir next to proot itself —
-     * the one location the OS always keeps executable, install-verified,
-     * regardless of targetSdkVersion. Once proot and its loader both run from
-     * there, the loader manually maps and runs every other guest binary
-     * (env, sh, apk, busybox, whatever apk later installs) without ever
-     * calling execve()/mmap(PROT_EXEC) on a file inside the non-executable
-     * rootfs directory again.
+     * <p>proot ships an *unbundled* loader: instead of proot extracting its
+     * embedded loader to a temp file and exec'ing it (which fails outright on
+     * Android 10+ — that temp file lives in app-private, non-executable
+     * storage, producing "execve(...): Permission denied" on every guest
+     * command), the loader ships as its own file so it can sit in
+     * nativeLibraryDir next to proot itself — the one location the OS always
+     * keeps executable, install-verified, regardless of targetSdkVersion.
+     * Once proot and its loader both run from there, the loader manually maps
+     * and runs every other guest binary without ever calling
+     * execve()/mmap(PROT_EXEC) on a file inside the non-executable rootfs
+     * directory again.
      *
-     * <p>Same technique used in production by e.g. feelfreelinux/octo4a via
-     * feelfreelinux/android-linux-bootstrap, which uses this exact proot build.
+     * <p>These binaries (and the whole invocation pattern in this class) are
+     * copied from github.com/SimonSchubert/Kai — see
+     * jniLibs/THIRD_PARTY_LICENSES.md for the exact source commit and license
+     * terms (proot is GPL-2.0, its talloc dependency is LGPL-3.0).
      *
-     * @param fileName "libprootloader.so" (64-bit) or "libprootloader32.so" (32-bit)
+     * @param fileName "libproot-loader.so" (64-bit) or "libproot-loader32.so" (32-bit)
      */
     private static String resolveLoaderPath(Context context, String fileName) {
         String path = context.getApplicationInfo().nativeLibraryDir + File.separator + fileName;
@@ -668,66 +668,59 @@ public class GIATerminalService extends Service {
         String prootPath = resolveProotPath(context);
         String rootfsPath = new File(new File(context.getFilesDir(), TERMINAL_DIR), ROOTFS_DIR).getAbsolutePath();
 
-        // Build proot command: run Alpine's /bin/sh -c "<command>"
-        String prootCmd = buildProotCommand(prootPath, rootfsPath, command);
+        // proot needs a writable scratch directory to build its "glue" rootfs.
+        // Android apps have no /tmp, and without this proot fails immediately
+        // with "can't create temporary directory" before it ever gets to the
+        // guest rootfs — which is also what was producing the downstream
+        // "can't chdir /root/." and "/usr/bin/env not found" errors, since
+        // proot's own initialization never completed. Also bound into the
+        // guest at /tmp itself, matching Kai's proven setup (see below).
+        File prootTmpDir = new File(context.getCacheDir(), "proot-tmp");
+        if (!prootTmpDir.exists()) {
+            prootTmpDir.mkdirs();
+        }
+
+        // Build proot's argv directly instead of one big "sh -c '<string>'".
+        // The previous approach ran proot as a child of an intermediate sh
+        // process, with the *entire* proot invocation — flags, binds, and the
+        // guest command — concatenated into one shell string that sh then had
+        // to re-parse (word-splitting, quote handling, glob expansion, all of
+        // it). That's an extra process and an extra layer of string escaping
+        // for no benefit; proot itself is a perfectly good top-level process.
+        // This, the binaries below, and the flag/env set are copied from
+        // github.com/SimonSchubert/Kai (ProotLauncher.kt) — a real,
+        // actively-maintained Android app doing the same thing (Alpine/Ubuntu
+        // via proot, no root) in production. See jniLibs/THIRD_PARTY_LICENSES.md.
+        List<String> prootArgs = buildProotArgs(prootPath, rootfsPath, prootTmpDir.getAbsolutePath(), command);
 
         // Setup I/O pipes — PipedOutputStream connects TO PipedInputStream
         PipedInputStream stdinIn = new PipedInputStream();
         PipedOutputStream stdinOut = new PipedOutputStream(stdinIn);
         // We'll capture stdout+stderr merged; use ProcessBuilder redirectErrorStream(true)
         ProcessBuilder pb = new ProcessBuilder();
-        pb.command("sh", "-c", prootCmd);
-        pb.directory(new File(rootfsPath));
+        pb.command(prootArgs);
+        pb.directory(new File(rootfsPath).getParentFile());
         pb.redirectErrorStream(true);
-        pb.environment().put("TERM", "xterm-256color");
         pb.environment().put("HOME", "/root");
         pb.environment().put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+        pb.environment().put("TERM", "xterm-256color");
+        pb.environment().put("LANG", "C.UTF-8");
         pb.environment().put("SHELL", "/bin/sh");
-        // proot needs a writable scratch directory to build its "glue" rootfs.
-        // Android apps have no /tmp, and without this proot fails immediately
-        // with "can't create temporary directory" before it ever gets to the
-        // guest rootfs — which is also what was producing the downstream
-        // "can't chdir /root/." and "/usr/bin/env not found" errors, since
-        // proot's own initialization never completed.
-        File prootTmpDir = new File(context.getCacheDir(), "proot-tmp");
-        if (!prootTmpDir.exists()) {
-            prootTmpDir.mkdirs();
-        }
+        // proot itself is dynamically linked against libtalloc.so, which — like
+        // proot — lives in nativeLibraryDir, not a system library path the
+        // dynamic linker searches by default.
+        pb.environment().put("LD_LIBRARY_PATH", context.getApplicationInfo().nativeLibraryDir);
         pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
         pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
         // Tell proot where its unbundled loader lives (see resolveLoaderPath()
-        // doc comment for why this is the actual fix for the exec-permission
-        // failures, not just PROOT_NO_SECCOMP/-0 below). Only set these when
-        // the loader files are actually present in nativeLibraryDir — if this
-        // build somehow shipped without them, leave proot to its own (broken
-        // on Android 10+) embedded-loader default rather than pointing it at
-        // a path that doesn't exist.
-        String loader64 = resolveLoaderPath(context, "libprootloader.so");
-        String loader32 = resolveLoaderPath(context, "libprootloader32.so");
+        // doc comment). Only set these when the loader files are actually
+        // present in nativeLibraryDir — if this build somehow shipped without
+        // them, leave proot to its own (broken on Android 10+) embedded-loader
+        // default rather than pointing it at a path that doesn't exist.
+        String loader64 = resolveLoaderPath(context, "libproot-loader.so");
+        String loader32 = resolveLoaderPath(context, "libproot-loader32.so");
         if (loader64 != null) pb.environment().put("PROOT_LOADER", loader64);
         if (loader32 != null) pb.environment().put("PROOT_LOADER_32", loader32);
-        // proot needs a writable place to keep hardlink metadata for
-        // --link2symlink (see buildProotCommand()) — regular apps can't call
-        // link() on Android, so proot emulates hardlinks with symlinks plus a
-        // side-table of "what this symlink is really supposed to be" here.
-        File l2sDir = new File(rootfsPath, ".proot.meta");
-        if (!l2sDir.exists()) {
-            l2sDir.mkdirs();
-        }
-        pb.environment().put("PROOT_L2S_DIR", l2sDir.getAbsolutePath());
-        // PROOT_NO_SECCOMP=1 is read by proot itself at startup (this must be
-        // in the HOST process's env, not the "env -i ..." guest env inside
-        // buildProotCommand -- that only reaches the guest shell after proot
-        // has already initialized). Without it, proot's ptrace-based syscall
-        // interception crashes or silently misbehaves on many Android
-        // kernels' seccomp-bpf filters -- this is *the* most common
-        // documented failure mode for proot on Android (same fix Termux
-        // ships). Trivial commands like "echo ok" tend to survive fine,
-        // which is exactly why this went unnoticed: isExecutable()'s probe
-        // passes, but real work like "apk update && apk add ..." -- which
-        // exercises far more syscalls -- fails or hangs partway through.
-        // This is almost certainly why "Set Up Environment" never worked.
-        pb.environment().put("PROOT_NO_SECCOMP", "1");
 
         // The real fix for "ptrace(PEEKDATA): I/O error" cascading into
         // "execve(...): No such file or directory" / "chdir: Function not
@@ -742,12 +735,10 @@ public class GIATerminalService extends Service {
         // ours doesn't reset it), so setting it to 1 here, on our own
         // process, before we spawn anything, propagates to the shell,
         // proot, and everything proot itself forks. This is unrelated to
-        // PROOT_NO_SECCOMP above (that's proot's own optional internal
-        // seccomp-based backend; this is the kernel's ptrace permission
-        // check) and unrelated to which proot binary is in use — no proot
-        // build can work around its own tracer being denied ptrace access
-        // to begin with. android.system.Os.prctl() is a real public Android
-        // API (since API 21) — no native/NDK code needed.
+        // which proot binary is in use — no proot build can work around its
+        // own tracer being denied ptrace access to begin with.
+        // android.system.Os.prctl() is a real public Android API (since API
+        // 21) — no native/NDK code needed.
         try {
             final int PR_SET_DUMPABLE = 4;
             Os.prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
@@ -777,8 +768,7 @@ public class GIATerminalService extends Service {
                             e
                         );
                     }
-                    prootCmd = buildProotCommand(terminalProot.getAbsolutePath(), fallbackRootfs, command);
-                    pb.command("sh", "-c", prootCmd);
+                    pb.command(buildProotArgs(terminalProot.getAbsolutePath(), fallbackRootfs, prootTmpDir.getAbsolutePath(), command));
                     try {
                         process = pb.start();
                         Log.i(TAG, "Asset extraction fallback succeeded");
@@ -893,56 +883,46 @@ public class GIATerminalService extends Service {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private static String buildProotCommand(String prootPath, String rootfsPath, String command) {
-        return prootPath
-                + " -r " + rootfsPath
-                + " -0" // fake root UID/GID (0/0). Without this, the guest
-                        // shell shows "root@..." in its own prompt string
-                        // (that's just HOME=/root + a hardcoded banner) but
-                        // is NOT actually running as UID 0 inside the
-                        // sandbox -- it's still the app's real unprivileged
-                        // Android UID. apk's package installs do real
-                        // chown/chmod-to-root operations while unpacking
-                        // packages; those silently fail (or apk aborts) 
-                        // without proot's fake-root UID mapping, regardless
-                        // of PROOT_NO_SECCOMP. This is very likely the other
-                        // half of why "Set Up Environment" never worked.
-                + " -b /proc"
-                + " -b /sys"
-                + " -b /dev"
-                + " -b /dev/pts"
-                + " -b /system"
-                // /vendor and /apex hold core Android runtime pieces (since
-                // Android 10, libc/libdl/libm and friends live under APEX
-                // modules, not plain /system/lib64 anymore). Missing these
-                // binds is a documented cause of proot exec failures on
-                // modern Android in other proot-on-Android projects.
-                + " -b /vendor"
-                + " -b /apex"
-                + " -b /data"
-                + " -b /mnt"
-                + " -b /storage"
-                + " -b /proc/self/fd:/dev/fd"
-                // Regular Android apps can't call link() (hardlinks), which
-                // Alpine's apk and plain tar extraction both rely on for some
-                // packages. This build's --link2symlink emulates them with
-                // symlinks + the PROOT_L2S_DIR side-table set in startSession().
-                + " --link2symlink"
-                // Belt-and-suspenders alongside the unbundled-loader fix above:
-                // this build's --bind-memfd reads a target file's bytes into an
-                // anonymous memfd and execs *that* instead of the file's own
-                // (non-executable, app-private) path, for any exec that somehow
-                // doesn't go through the loader's own ELF-mapping path. Marked
-                // "Experimental" upstream; harmless to enable broadly here since
-                // the loader path above should already handle the normal case.
-                + " --bind-memfd='*'"
-                + " -w /root"
-                + " /usr/bin/env -i"
-                + " TERM=xterm-256color"
-                + " HOME=/root"
-                + " PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-                + " SHELL=/bin/sh"
-                + " /bin/sh -c '" + command.replace("'", "'\\''") + "'";
+    /**
+     * Build proot's argv directly (no intermediate shell) — matching the
+     * proven invocation pattern from github.com/SimonSchubert/Kai
+     * (ProotLauncher.kt). The final three elements run the guest command via
+     * Alpine's /bin/sh -c "<command>"; the guest command is passed as one
+     * discrete Java String, so it never needs manual shell-quote escaping.
+     */
+    private static List<String> buildProotArgs(String prootPath, String rootfsPath, String tmpPath, String command) {
+        List<String> args = new ArrayList<>();
+        args.add(prootPath);
+        args.add("--rootfs=" + rootfsPath);
+        args.add("--bind=/dev");
+        args.add("--bind=/proc");
+        args.add("--bind=/sys");
+        args.add("--bind=/dev/pts");
+        args.add("--bind=/system");
+        // /vendor and /apex hold core Android runtime pieces (since Android
+        // 10, libc/libdl/libm and friends live under APEX modules, not plain
+        // /system/lib64 anymore).
+        args.add("--bind=/vendor");
+        args.add("--bind=/apex");
+        args.add("--bind=/data");
+        args.add("--bind=/mnt");
+        args.add("--bind=/storage");
+        args.add("--bind=/proc/self/fd:/dev/fd");
+        args.add("--bind=" + tmpPath + ":/tmp");
+        // Fake root UID/GID (0/0). Without this, the guest shell shows
+        // "root@..." in its own prompt string (that's just HOME=/root + a
+        // hardcoded banner) but is NOT actually running as UID 0 inside the
+        // sandbox — it's still the app's real unprivileged Android UID. apk's
+        // package installs do real chown/chmod-to-root operations while
+        // unpacking packages; those silently fail (or apk aborts) without
+        // proot's fake-root UID mapping.
+        args.add("-0");
+        args.add("-w");
+        args.add("/root");
+        args.add("/bin/sh");
+        args.add("-c");
+        args.add(command);
+        return args;
     }
 
     private static void copyStream(InputStream in, OutputStream out) throws IOException {
