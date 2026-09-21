@@ -701,51 +701,7 @@ public class GIATerminalService extends Service {
         pb.command(prootArgs);
         pb.directory(new File(rootfsPath).getParentFile());
         pb.redirectErrorStream(true);
-        pb.environment().put("HOME", "/root");
-        pb.environment().put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
-        pb.environment().put("TERM", "xterm-256color");
-        pb.environment().put("LANG", "C.UTF-8");
-        pb.environment().put("SHELL", "/bin/sh");
-        // proot itself is dynamically linked against libtalloc.so, which — like
-        // proot — lives in nativeLibraryDir, not a system library path the
-        // dynamic linker searches by default.
-        pb.environment().put("LD_LIBRARY_PATH", context.getApplicationInfo().nativeLibraryDir);
-        pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
-        pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
-        // Tell proot where its unbundled loader lives (see resolveLoaderPath()
-        // doc comment). Only set these when the loader files are actually
-        // present in nativeLibraryDir — if this build somehow shipped without
-        // them, leave proot to its own (broken on Android 10+) embedded-loader
-        // default rather than pointing it at a path that doesn't exist.
-        String loader64 = resolveLoaderPath(context, "libproot-loader.so");
-        String loader32 = resolveLoaderPath(context, "libproot-loader32.so");
-        if (loader64 != null) pb.environment().put("PROOT_LOADER", loader64);
-        if (loader32 != null) pb.environment().put("PROOT_LOADER_32", loader32);
-
-        // The real fix for "ptrace(PEEKDATA): I/O error" cascading into
-        // "execve(...): No such file or directory" / "chdir: Function not
-        // implemented" on every guest command: Android sets a process's
-        // "dumpable" attribute to 0 for every zygote-spawned app process
-        // UNLESS it's a debug build (android:debuggable="true") or the
-        // process explicitly opts back in via prctl(PR_SET_DUMPABLE, 1).
-        // ptrace(PTRACE_PEEKDATA/POKEDATA) — which is exactly how proot
-        // reads/writes a traced process's memory to translate its syscalls —
-        // fails outright against a non-dumpable process. dumpable is
-        // inherited across fork()/execve() (a plain, non-setuid exec like
-        // ours doesn't reset it), so setting it to 1 here, on our own
-        // process, before we spawn anything, propagates to the shell,
-        // proot, and everything proot itself forks. This is unrelated to
-        // which proot binary is in use — no proot build can work around its
-        // own tracer being denied ptrace access to begin with.
-        // android.system.Os.prctl() is a real public Android API (since API
-        // 21) — no native/NDK code needed.
-        try {
-            final int PR_SET_DUMPABLE = 4;
-            Os.prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
-            Log.i(TAG, "Set PR_SET_DUMPABLE=1 so proot can ptrace its children");
-        } catch (ErrnoException e) {
-            Log.w(TAG, "prctl(PR_SET_DUMPABLE, 1) failed: " + e.getMessage());
-        }
+        configureProotEnvironment(pb, context, prootTmpDir);
 
         Process process;
         try {
@@ -890,7 +846,7 @@ public class GIATerminalService extends Service {
      * Alpine's /bin/sh -c "<command>"; the guest command is passed as one
      * discrete Java String, so it never needs manual shell-quote escaping.
      */
-    private static List<String> buildProotArgs(String prootPath, String rootfsPath, String tmpPath, String command) {
+    static List<String> buildProotArgs(String prootPath, String rootfsPath, String tmpPath, String command) {
         List<String> args = new ArrayList<>();
         args.add(prootPath);
         args.add("--rootfs=" + rootfsPath);
@@ -923,6 +879,75 @@ public class GIATerminalService extends Service {
         args.add("-c");
         args.add(command);
         return args;
+    }
+
+    /**
+     * Set every environment variable a spawned proot process needs, plus the
+     * one process-wide prctl() call that must happen before spawning it.
+     *
+     * This used to be inlined separately in both GIATerminalService.startSession()
+     * and GIATerminalPlugin's one-shot command path (buildPackageCmd/runProotCommand) —
+     * two copies of the same setup that silently drifted apart. Every proot/loader
+     * fix that went into this app over several releases (native-lib placement,
+     * PROOT_LOADER, /apex+/vendor binds, PR_SET_DUMPABLE, the Kai binary swap) only
+     * ever touched the startSession() copy, because that's the one used by the
+     * interactive terminal UI — but the "Full Install" button, and every apk
+     * install/search/update call, went through the OTHER, never-updated copy the
+     * whole time. That's the actual reason none of those fixes appeared to work:
+     * they were real fixes, applied to a code path Full Install doesn't use.
+     * One shared method now; there is nowhere left for the two to diverge.
+     */
+    static void configureProotEnvironment(ProcessBuilder pb, Context context, File prootTmpDir) {
+        pb.environment().put("HOME", "/root");
+        pb.environment().put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+        pb.environment().put("TERM", "xterm-256color");
+        pb.environment().put("LANG", "C.UTF-8");
+        pb.environment().put("SHELL", "/bin/sh");
+        // apk/wget/curl need this to validate HTTPS certs (e.g. fetching
+        // packages from dl-cdn.alpinelinux.org) — was set in the old
+        // one-shot command path (buildPackageCmd) but not here; carried
+        // over during the consolidation of the two paths into this method.
+        pb.environment().put("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt");
+        // proot itself is dynamically linked against libtalloc.so, which — like
+        // proot — lives in nativeLibraryDir, not a system library path the
+        // dynamic linker searches by default.
+        pb.environment().put("LD_LIBRARY_PATH", context.getApplicationInfo().nativeLibraryDir);
+        pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
+        pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
+        // Tell proot where its unbundled loader lives (see resolveLoaderPath()
+        // doc comment). Only set these when the loader files are actually
+        // present in nativeLibraryDir — if this build somehow shipped without
+        // them, leave proot to its own (broken on Android 10+) embedded-loader
+        // default rather than pointing it at a path that doesn't exist.
+        String loader64 = resolveLoaderPath(context, "libproot-loader.so");
+        String loader32 = resolveLoaderPath(context, "libproot-loader32.so");
+        if (loader64 != null) pb.environment().put("PROOT_LOADER", loader64);
+        if (loader32 != null) pb.environment().put("PROOT_LOADER_32", loader32);
+
+        // The real fix for "ptrace(PEEKDATA): I/O error" cascading into
+        // "execve(...): No such file or directory" / "chdir: Function not
+        // implemented" on every guest command: Android sets a process's
+        // "dumpable" attribute to 0 for every zygote-spawned app process
+        // UNLESS it's a debug build (android:debuggable="true") or the
+        // process explicitly opts back in via prctl(PR_SET_DUMPABLE, 1).
+        // ptrace(PTRACE_PEEKDATA/POKEDATA) — which is exactly how proot
+        // reads/writes a traced process's memory to translate its syscalls —
+        // fails outright against a non-dumpable process. dumpable is
+        // inherited across fork()/execve() (a plain, non-setuid exec like
+        // ours doesn't reset it), so setting it to 1 here, on our own
+        // process, before we spawn anything, propagates to the shell,
+        // proot, and everything proot itself forks. This is unrelated to
+        // which proot binary is in use — no proot build can work around its
+        // own tracer being denied ptrace access to begin with.
+        // android.system.Os.prctl() is a real public Android API (since API
+        // 21) — no native/NDK code needed.
+        try {
+            final int PR_SET_DUMPABLE = 4;
+            Os.prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+            Log.i(TAG, "Set PR_SET_DUMPABLE=1 so proot can ptrace its children");
+        } catch (ErrnoException e) {
+            Log.w(TAG, "prctl(PR_SET_DUMPABLE, 1) failed: " + e.getMessage());
+        }
     }
 
     private static void copyStream(InputStream in, OutputStream out) throws IOException {

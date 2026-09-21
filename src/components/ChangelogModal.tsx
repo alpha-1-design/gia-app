@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.8';
+const VERSION = '2.4.0.9';
 
 const sections = [
   {
@@ -16,7 +16,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'Terminal Full Install: switched to the exact proot build and invocation pattern used by Kai, a real production app doing the same thing (Alpine/Ubuntu via proot, no root), instead of continuing to patch the previous approach.',
+      'Found the actual bug behind every failed Full Install: it ran through a separate, never-updated copy of the proot launch code that none of the recent fixes touched. Consolidated into one shared path.',
     ],
   },
 ];

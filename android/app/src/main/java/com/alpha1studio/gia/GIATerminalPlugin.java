@@ -328,6 +328,10 @@ public class GIATerminalPlugin extends Plugin {
     // Generic command execution (for workspace setup, etc.)
     // -----------------------------------------------------------------------
 
+    private String currentRootfsPath() {
+        return new File(new File(getContext().getFilesDir(), "terminal"), "rootfs").getAbsolutePath();
+    }
+
     @PluginMethod
     public void execCommand(PluginCall call) {
         String command = call.getString("command");
@@ -336,8 +340,7 @@ public class GIATerminalPlugin extends Plugin {
             return;
         }
         int timeout = call.getInt("timeout", 30000);
-        String prootCmd = buildPackageCmd(command);
-        runProotCommand(call, prootCmd, timeout);
+        runProotCommand(call, currentRootfsPath(), command, timeout);
     }
 
     // -----------------------------------------------------------------------
@@ -681,8 +684,7 @@ public class GIATerminalPlugin extends Plugin {
             call.reject("packageName is required");
             return;
         }
-        String prootCmd = buildPackageCmd("apk add --no-cache " + packageName);
-        runProotCommand(call, prootCmd, 300000);
+        runProotCommand(call, currentRootfsPath(), "apk add --no-cache " + packageName, 300000);
     }
 
     /**
@@ -695,8 +697,7 @@ public class GIATerminalPlugin extends Plugin {
             call.reject("packageName is required");
             return;
         }
-        String prootCmd = buildPackageCmd("apk del " + packageName);
-        runProotCommand(call, prootCmd, 60000);
+        runProotCommand(call, currentRootfsPath(), "apk del " + packageName, 60000);
     }
 
     /**
@@ -705,8 +706,7 @@ public class GIATerminalPlugin extends Plugin {
     @PluginMethod
     public void searchPackages(PluginCall call) {
         String query = call.getString("query", "");
-        String prootCmd = buildPackageCmd("apk search " + query);
-        runProotCommand(call, prootCmd, 30000);
+        runProotCommand(call, currentRootfsPath(), "apk search " + query, 30000);
     }
 
     /**
@@ -714,8 +714,7 @@ public class GIATerminalPlugin extends Plugin {
      */
     @PluginMethod
     public void listInstalledPackages(PluginCall call) {
-        String prootCmd = buildPackageCmd("apk list --installed 2>/dev/null | sort");
-        runProotCommand(call, prootCmd, 15000);
+        runProotCommand(call, currentRootfsPath(), "apk list --installed 2>/dev/null | sort", 15000);
     }
 
     /**
@@ -723,38 +722,22 @@ public class GIATerminalPlugin extends Plugin {
      */
     @PluginMethod
     public void updatePackageIndex(PluginCall call) {
-        String prootCmd = buildPackageCmd("apk update");
-        runProotCommand(call, prootCmd, 60000);
+        runProotCommand(call, currentRootfsPath(), "apk update", 60000);
     }
 
-    private String buildPackageCmd(String cmd) {
-        Context ctx = getContext();
-        String prootPath = GIATerminalService.resolveProotPath(ctx);
-        File rootfsDir = new File(new File(ctx.getFilesDir(), "terminal"), "rootfs");
-        return prootPath
-            + " -r " + rootfsDir.getAbsolutePath()
-            + " -0"
-            + " -b /proc -b /sys -b /dev -b /dev/pts"
-            + " -b /system -b /data -b /mnt -b /storage"
-            + " -w /root"
-            + " /usr/bin/env -i"
-            + " TERM=xterm-256color HOME=/root"
-            + " PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            + " SHELL=/bin/sh"
-            + " SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
-            + " /bin/sh -c '" + cmd.replace("'", "'\\''") + "'";
-    }
-
-    private void runProotCommand(PluginCall call, String prootCmd, int timeout) {
+    private void runProotCommand(PluginCall call, String rootfsPath, String cmd, int timeout) {
         new Thread(() -> {
             try {
-                ProcessBuilder pb = new ProcessBuilder("sh", "-c", prootCmd);
-                pb.redirectErrorStream(true);
-                File prootTmpDir = new File(getContext().getCacheDir(), "proot-tmp");
+                Context ctx = getContext();
+                String prootPath = GIATerminalService.resolveProotPath(ctx);
+                File prootTmpDir = new File(ctx.getCacheDir(), "proot-tmp");
                 prootTmpDir.mkdirs();
-                pb.environment().put("PROOT_NO_SECCOMP", "1");
-                pb.environment().put("PROOT_TMP_DIR", prootTmpDir.getAbsolutePath());
-                pb.environment().put("TMPDIR", prootTmpDir.getAbsolutePath());
+                java.util.List<String> args = GIATerminalService.buildProotArgs(
+                    prootPath, rootfsPath, prootTmpDir.getAbsolutePath(), cmd);
+                ProcessBuilder pb = new ProcessBuilder(args);
+                pb.directory(new File(rootfsPath).getParentFile());
+                pb.redirectErrorStream(true);
+                GIATerminalService.configureProotEnvironment(pb, ctx, prootTmpDir);
                 Process proc = pb.start();
                 StringBuilder output = new StringBuilder();
                 Thread reader = new Thread(() -> {

@@ -1,4 +1,4 @@
-# GIA v2.4.0.8 — User Manual
+# GIA v2.4.0.9 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,12 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.9
+
+| Fix | Description |
+|-----|-------------|
+| **Terminal Full Install — the actual bug, found** | Every proot fix across the last several releases (unbundled loader, /apex+/vendor binds, PR_SET_DUMPABLE, the Kai binary swap) was applied to the interactive terminal's code path — but "Full Install," and every apk install/search/update action, ran through a **second, separate copy** of the proot-launching logic that none of those fixes ever touched, still using the old broken loader-less, string-based invocation. Consolidated both into one shared method, so there's nowhere left for them to silently diverge again. |
 
 ## 🧠 What's New in v2.4.0.8
 
