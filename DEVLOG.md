@@ -41,6 +41,14 @@ Hardened the execution boundary and documented the remaining Android-only releas
 
 Android Gradle compilation could not run on the Windows development machine because Java/JAVA_HOME is unavailable. Native PRoot/rootfs behavior, permissions, Termux, lifecycle services, and Alpine/Ubuntu installation still require CI/Android Studio and a real-phone pass.
 
+### Follow-up release UI and provider catalogue
+
+- Expanded the fallback provider catalogue to 71 entries, covering major hosted providers, gateways, cloud platforms, custom-compatible endpoints, and local servers.
+- Updated provider copy across the README and landing page from 18+ to 70+ providers.
+- Fixed the model-switcher regression test timeout by making its remote provider registry dependency deterministic; the focused provider/model-switcher suite passes 25/25.
+- Added a phone design preview to the About page showing the orb, Talk/Scan/Act controls, permission-first behavior, secure credentials, sandbox, and Termux.
+- Added an in-app complaint/feedback form that opens a user-reviewed email to `alphariansamuel@gmail.com`, plus a GitHub issue link.
+
 ---
 
 ## 2026-07-20

@@ -11,9 +11,34 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.util.ArrayList;
 import org.json.JSONArray;
+import android.app.PendingIntent;
+import android.os.Bundle;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @CapacitorPlugin(name = "GIAIntent")
 public class GIAIntentPlugin extends Plugin {
+    private static GIAIntentPlugin instance;
+    private final ConcurrentHashMap<String, PluginCall> termuxCalls = new ConcurrentHashMap<>();
+
+    @Override
+    public void load() {
+        super.load();
+        instance = this;
+    }
+
+    public static void deliverTermuxResult(String jobId, Bundle result) {
+        GIAIntentPlugin plugin = instance;
+        if (plugin == null) return;
+        PluginCall call = plugin.termuxCalls.remove(jobId);
+        if (call == null) return;
+        JSObject response = new JSObject();
+        response.put("jobId", jobId);
+        response.put("stdout", result.getString("com.termux.RUN_COMMAND_RESULT_STDOUT", ""));
+        response.put("stderr", result.getString("com.termux.RUN_COMMAND_RESULT_STDERR", ""));
+        response.put("exitCode", result.getInt("com.termux.RUN_COMMAND_RESULT_EXITCODE", 0));
+        call.resolve(response);
+    }
 
     private static final String EVENT_ASSIST = "onAssist";
     private static final String EVENT_DEEP_LINK = "onDeepLink";
@@ -203,6 +228,7 @@ public class GIAIntentPlugin extends Plugin {
             call.reject("command is required");
             return;
         }
+        String jobId = UUID.randomUUID().toString();
         Intent run = new Intent("com.termux.RUN_COMMAND");
         run.setPackage("com.termux");
         run.putExtra("com.termux.RUN_COMMAND_PATH", command);
@@ -218,11 +244,19 @@ public class GIAIntentPlugin extends Plugin {
         }
         run.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", args);
         run.putExtra("com.termux.RUN_COMMAND_WORKDIR", call.getString("workdir", "/data/data/com.termux/files/home"));
-        run.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        run.putExtra("com.termux.RUN_COMMAND_BACKGROUND", false);
+        run.putExtra("com.termux.RUN_COMMAND_RESULT", true);
+        PendingIntent resultIntent = PendingIntent.getBroadcast(
+                getContext(),
+                jobId.hashCode(),
+                new Intent(getContext(), TermuxResultReceiver.class).putExtra("jobId", jobId),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        run.putExtra("com.termux.RUN_COMMAND_RESULT_PENDINGINTENT", resultIntent);
         try {
+            termuxCalls.put(jobId, call);
             getContext().sendBroadcast(run, "com.termux.permission.RUN_COMMAND");
-            call.resolve();
         } catch (Exception e) {
+            termuxCalls.remove(jobId);
             call.reject("Termux command could not be started", e);
         }
     }

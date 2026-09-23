@@ -17,11 +17,11 @@ vi.mock('@capacitor/core', () => ({
 describe('TermuxService', () => {
   it('reports Termux availability and forwards commands', async () => {
     mocks.termuxStatus.mockResolvedValue({ installed: true });
-    mocks.runTermuxCommand.mockResolvedValue(undefined);
+    mocks.runTermuxCommand.mockResolvedValue({ jobId: 'job-1', stdout: 'Python 3.12', exitCode: 0 });
     const { default: service } = await import('../TermuxService');
 
     expect(await service.isInstalled()).toBe(true);
-    await service.run('python', ['-V'], '/data/data/com.termux/files/home');
+    await expect(service.run('python', ['-V'], '/data/data/com.termux/files/home')).resolves.toMatchObject({ jobId: 'job-1', exitCode: 0 });
     expect(mocks.runTermuxCommand).toHaveBeenCalledWith({
       command: 'python',
       args: ['-V'],

@@ -5,7 +5,7 @@ export interface GIAIntentPlugin {
   clearIntent(): Promise<void>;
   termuxStatus(): Promise<{ installed: boolean }>;
   openTermux(): Promise<void>;
-  runTermuxCommand(options: { command: string; args?: string[]; workdir?: string }): Promise<void>;
+  runTermuxCommand(options: { command: string; args?: string[]; workdir?: string }): Promise<{ jobId: string; stdout?: string; stderr?: string; exitCode?: number }>;
   addListener(eventName: 'onAssist', handler: (data: { source: string; type: string }) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'onDeepLink', handler: (data: { type: string; uri: string; scheme: string; host: string; path: string; query: string }) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'onShareReceived', handler: (data: { type: string; mimeType: string; text?: string; subject?: string; imageUri?: string }) => void): Promise<PluginListenerHandle>;

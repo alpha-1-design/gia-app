@@ -238,7 +238,7 @@ export function Skills() {
         {/* Provider + tool ecosystem */}
         <div className="text-center mb-8">
           <h3 className="text-xl font-semibold text-zinc-300 mb-2">Works with every major provider</h3>
-          <p className="text-sm text-zinc-600">18+ AI providers · 200+ tool actions · one GIA</p>
+          <p className="text-sm text-zinc-600">70+ AI providers · 200+ tool actions · one GIA</p>
         </div>
 
         <div className="flex flex-wrap justify-center gap-3 mb-16">

@@ -50,6 +50,61 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   { id: 'local-llm',    label: 'Local LLM (On-Device)', baseUrl: '',                                    defaultModel: 'Xenova/Qwen2.5-1.5B-Instruct', needsApiKey: false, listingType: 'local', aliases: ['local', 'ondevice'] },
 ];
 
+// Extended catalogue for users who bring their own provider credentials.
+// These entries use OpenAI-compatible routing where the provider exposes it;
+// live model discovery remains optional and falls back to the default model.
+const ADDITIONAL_PROVIDERS: ProviderDef[] = [
+  { id: 'azure-openai', label: 'Azure OpenAI', baseUrl: '', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: ['azure'], apiKeyUrl: 'https://oai.azure.com/portal' },
+  { id: 'vertex-ai', label: 'Google Vertex AI', baseUrl: 'https://us-central1-aiplatform.googleapis.com/v1', defaultModel: 'gemini-2.5-flash', needsApiKey: true, listingType: 'openai', aliases: ['vertex'] },
+  { id: 'github-models', label: 'GitHub Models', baseUrl: 'https://models.inference.ai.azure.com', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: ['github-ai'] },
+  { id: 'sambanova', label: 'SambaNova Cloud', baseUrl: 'https://api.sambanova.ai/v1', defaultModel: 'Meta-Llama-3.3-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: ['samba'] },
+  { id: 'hyperbolic', label: 'Hyperbolic', baseUrl: 'https://api.hyperbolic.xyz/v1', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'novita', label: 'Novita AI', baseUrl: 'https://api.novita.ai/v3/openai', defaultModel: 'meta-llama/llama-3.1-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'moonshot', label: 'Moonshot AI', baseUrl: 'https://api.moonshot.ai/v1', defaultModel: 'kimi-k2-0711-preview', needsApiKey: true, listingType: 'openai', aliases: ['kimi'] },
+  { id: 'zhipu', label: 'Zhipu AI (GLM)', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4.5', needsApiKey: true, listingType: 'openai', aliases: ['glm'] },
+  { id: 'qwen', label: 'Qwen (DashScope)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus', needsApiKey: true, listingType: 'openai', aliases: ['dashscope'] },
+  { id: 'minimax', label: 'MiniMax', baseUrl: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'baichuan', label: 'Baichuan AI', baseUrl: 'https://api.baichuan-ai.com/v1', defaultModel: 'Baichuan4', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'yi', label: '01.AI (Yi)', baseUrl: 'https://api.lingyiwanwu.com/v1', defaultModel: 'yi-large', needsApiKey: true, listingType: 'openai', aliases: ['01ai'] },
+  { id: 'siliconflow', label: 'SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', defaultModel: 'deepseek-ai/DeepSeek-V3', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'stepfun', label: 'StepFun', baseUrl: 'https://api.stepfun.com/v1', defaultModel: 'step-2-16k', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'inflection', label: 'Inflection AI', baseUrl: 'https://api.inflection.ai/v1', defaultModel: 'Pi', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'aleph-alpha', label: 'Aleph Alpha', baseUrl: 'https://api.aleph-alpha.com', defaultModel: 'luminous-supreme', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'databricks', label: 'Databricks', baseUrl: '', defaultModel: 'databricks-meta-llama-3-3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'watsonx', label: 'IBM watsonx', baseUrl: '', defaultModel: 'meta-llama/llama-3-3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'bedrock', label: 'Amazon Bedrock', baseUrl: '', defaultModel: 'anthropic.claude-3-5-sonnet-20241022-v2:0', needsApiKey: true, listingType: 'openai', aliases: ['aws-bedrock'] },
+  { id: 'friendli', label: 'FriendliAI', baseUrl: 'https://api.friendli.ai/serverless/v1', defaultModel: 'meta-llama-3.1-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'lepton', label: 'Lepton AI', baseUrl: 'https://llama3-1-70b.lepton.run/api/v1', defaultModel: 'llama3-1-70b', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'lambda', label: 'Lambda Cloud', baseUrl: 'https://api.lambdal.ai/v1', defaultModel: 'hermes-3-llama-3.1-405b', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'nebius', label: 'Nebius AI Studio', baseUrl: 'https://api.studio.nebius.ai/v1', defaultModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'scaleway', label: 'Scaleway AI', baseUrl: 'https://api.scaleway.ai/v1', defaultModel: 'llama-3.3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'nscale', label: 'Nscale', baseUrl: 'https://inference.api.nscale.com/v1', defaultModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'modal', label: 'Modal', baseUrl: '', defaultModel: 'custom-endpoint', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'baseten', label: 'Baseten', baseUrl: '', defaultModel: 'custom-endpoint', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'cloudflare-ai', label: 'Cloudflare Workers AI', baseUrl: '', defaultModel: '@cf/meta/llama-3.1-8b-instruct', needsApiKey: true, listingType: 'openai', aliases: ['workers-ai'] },
+  { id: 'cloudflare-gateway', label: 'Cloudflare AI Gateway', baseUrl: '', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'volcengine', label: 'Volcengine Ark', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-1-5-pro-32k', needsApiKey: true, listingType: 'openai', aliases: ['doubao'] },
+  { id: 'cometapi', label: 'CometAPI', baseUrl: 'https://api.cometapi.com/v1', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'requesty', label: 'Requesty', baseUrl: 'https://router.requesty.ai/v1', defaultModel: 'openai/gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'portkey', label: 'Portkey AI Gateway', baseUrl: 'https://api.portkey.ai/v1', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'litellm', label: 'LiteLLM Proxy', baseUrl: 'http://localhost:4000/v1', defaultModel: 'gpt-4o-mini', needsApiKey: false, listingType: 'openai', aliases: ['lite-llm'] },
+  { id: 'vllm', label: 'vLLM Server', baseUrl: 'http://localhost:8000/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
+  { id: 'llamacpp', label: 'llama.cpp Server', baseUrl: 'http://localhost:8080/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: ['llama-cpp'] },
+  { id: 'jan', label: 'Jan (Local)', baseUrl: 'http://localhost:1337/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
+  { id: 'text-generation-webui', label: 'Text Generation WebUI', baseUrl: 'http://localhost:5000/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: ['oobabooga'] },
+  { id: 'koboldcpp', label: 'KoboldCpp', baseUrl: 'http://localhost:5001/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
+  { id: 'tabbyml', label: 'TabbyML', baseUrl: 'http://localhost:8080/v1', defaultModel: 'StarCoder-2-3B', needsApiKey: false, listingType: 'openai', aliases: [] },
+  { id: 'custom-openai', label: 'Custom OpenAI-Compatible', baseUrl: '', defaultModel: 'custom-model', needsApiKey: true, listingType: 'openai', aliases: ['custom'] },
+  { id: 'custom-anthropic', label: 'Custom Anthropic-Compatible', baseUrl: '', defaultModel: 'custom-model', needsApiKey: true, listingType: 'anthropic', aliases: [] },
+  { id: 'custom-gemini', label: 'Custom Gemini-Compatible', baseUrl: '', defaultModel: 'custom-model', needsApiKey: true, listingType: 'gemini', aliases: [] },
+  { id: 'predibase', label: 'Predibase', baseUrl: 'https://serving.app.predibase.com/v1', defaultModel: 'llama-3.1-8b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'sagemaker', label: 'Amazon SageMaker', baseUrl: '', defaultModel: 'custom-endpoint', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'ollama-cloud', label: 'Ollama Cloud', baseUrl: 'https://ollama.com/v1', defaultModel: 'llama3.3', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'lmstudio-remote', label: 'LM Studio Remote', baseUrl: '', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
+  { id: 'cohere-command', label: 'Cohere Command', baseUrl: 'https://api.cohere.ai/compatibility/v1', defaultModel: 'command-a-03-2025', needsApiKey: true, listingType: 'openai', aliases: [] },
+  { id: 'google-ai-studio', label: 'Google AI Studio', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.5-flash', needsApiKey: true, listingType: 'openai', aliases: ['ai-studio'] },
+];
+
 // Curated fallback catalogs — used when live model listing is unavailable
 // (some providers block browser CORS, or have no public models endpoint).
 // Only well-established, verified model IDs are included.
@@ -210,6 +265,9 @@ class ProviderRegistry {
   async init(): Promise<void> {
     // Start with fallback
     for (const def of FALLBACK_PROVIDERS) {
+      this.providers.set(def.id, def);
+    }
+    for (const def of ADDITIONAL_PROVIDERS) {
       this.providers.set(def.id, def);
     }
     for (const [id, models] of Object.entries(FALLBACK_MODELS)) {

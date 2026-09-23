@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BarChart3, Trash2, Smartphone, Globe, History } from 'lucide-react';
+import { BarChart3, Trash2, Smartphone, Globe, History, MessageSquare, Send, ExternalLink } from 'lucide-react';
 import { SubPageHeader } from './SubPageHeader';
 import { useGiaStore } from '../../store/useGiaStore';
 import { isNativePlatform } from '../../utils/helpers';
@@ -7,9 +7,14 @@ import AnalyticsService from '../../services/AnalyticsService';
 import ConfirmDialog from '../ConfirmDialog';
 import ChangelogModal from '../ChangelogModal';
 
+const FEEDBACK_EMAIL = 'alphariansamuel@gmail.com';
+
 export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [confirmChats, setConfirmChats] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState('Bug report');
+  const [feedbackText, setFeedbackText] = useState('');
   const dangerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { return () => { if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current); }; }, []);
 
@@ -125,7 +130,117 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </p>
       </div>
 
+      {/* Phone design preview */}
+      <div className="gia-card p-4" style={{ borderColor: 'rgba(34,211,238,0.2)', background: 'linear-gradient(160deg, rgba(34,211,238,0.06), rgba(139,92,246,0.08))' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: '#a5f3fc' }}>The GIA phone experience</p>
+            <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>A calm command center for your device, not another noisy chatbot.</p>
+          </div>
+          <Smartphone size={18} style={{ color: '#67e8f9' }} />
+        </div>
+        <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="w-[142px] shrink-0 rounded-[24px] p-1.5 shadow-xl" style={{ background: '#090b14', border: '1px solid rgba(165,243,252,0.35)', boxShadow: '0 12px 32px rgba(34,211,238,0.12)' }}>
+            <div className="rounded-[19px] overflow-hidden p-2.5" style={{ minHeight: 220, background: 'linear-gradient(180deg, #111827, #080a12)' }}>
+              <div className="flex items-center justify-between mb-5">
+                <span className="text-[8px] font-bold tracking-[0.18em] text-cyan-200">GIA</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              </div>
+              <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: 'radial-gradient(circle at 35% 30%, #67e8f9, #8b5cf6 52%, #111827 72%)', boxShadow: '0 0 24px rgba(139,92,246,0.55)' }}>
+                <span className="text-[10px] font-bold text-white">ASK</span>
+              </div>
+              <div className="rounded-xl px-2.5 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                <p className="text-[8px] leading-relaxed text-zinc-300">Ready when you are. I can use your phone, files, and connected services—with your approval.</p>
+              </div>
+              <div className="flex gap-1.5">
+                {['Talk', 'Scan', 'Act'].map(action => <span key={action} className="flex-1 text-center rounded-md py-1 text-[7px] text-cyan-100" style={{ background: 'rgba(34,211,238,0.12)' }}>{action}</span>)}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 flex-1 w-full">
+            {[
+              ['Orb assistant', 'Talk, see, and act from anywhere on the phone.'],
+              ['Permission-first', 'GIA pauses and asks before sensitive actions.'],
+              ['Secure connections', 'API keys and service tokens stay in the vault.'],
+              ['Sandbox + Termux', 'Build, inspect, and automate with explicit control.'],
+            ].map(([title, description]) => (
+              <div key={title} className="rounded-xl p-2.5" style={{ background: 'rgba(0,0,0,0.16)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <p className="text-[10px] font-semibold mb-1" style={{ color: 'var(--gia-text)' }}>{title}</p>
+                <p className="text-[9px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="mt-3 text-[10px] leading-relaxed text-center" style={{ color: 'var(--gia-muted-2)' }}>
+          This preview represents the direction: a floating orb, fast actions, visible capability state, and a clear pause whenever GIA needs your permission.
+        </p>
+      </div>
+
       {/* Version + changelog */}
+      <div className="gia-card p-4" style={{ borderColor: 'rgba(34,211,238,0.2)' }}>
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(34,211,238,0.1)', color: '#67e8f9' }}>
+            <MessageSquare size={16} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Report a problem or send feedback</p>
+            <p className="text-[10px] leading-relaxed mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+              Tell Samuel what went wrong or what GIA should improve. The app opens your email client; nothing is sent automatically.
+            </p>
+          </div>
+        </div>
+        {feedbackOpen ? (
+          <div className="mt-4 space-y-3">
+            <select
+              value={feedbackType}
+              onChange={e => setFeedbackType(e.target.value)}
+              className="w-full rounded-xl px-3 py-2 text-xs"
+              style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+            >
+              <option>Bug report</option>
+              <option>Complaint</option>
+              <option>Feature request</option>
+              <option>Privacy or security concern</option>
+            </select>
+            <textarea
+              value={feedbackText}
+              onChange={e => setFeedbackText(e.target.value)}
+              placeholder="Describe what happened, what you expected, and how to reproduce it..."
+              rows={4}
+              className="w-full rounded-xl px-3 py-2 text-xs resize-none"
+              style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
+            />
+            <div className="flex gap-2">
+              <button
+                disabled={!feedbackText.trim()}
+                onClick={() => {
+                  const subject = `[GIA ${feedbackType}] v2.4.0.10`;
+                  const body = `${feedbackText.trim()}\n\n---\nGIA version: 2.4.0.10\nPlatform: ${isNativePlatform() ? 'Android/iOS' : 'Web Browser'}`;
+                  window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                }}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40"
+                style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.25)', color: '#67e8f9' }}
+              >
+                <Send size={13} /> Open email
+              </button>
+              <button onClick={() => setFeedbackOpen(false)} className="px-3 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--gia-muted)' }}>
+                Cancel
+              </button>
+            </div>
+            <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>Feedback goes to {FEEDBACK_EMAIL} only after you review and send it.</p>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => setFeedbackOpen(true)} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)', color: '#67e8f9' }}>
+              <MessageSquare size={13} /> Write feedback
+            </button>
+            <a href="https://github.com/alpha-1-design/gia-app/issues/new" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}>
+              <ExternalLink size={12} /> GitHub issue
+            </a>
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-col items-center gap-2 pb-4">
         <button
           onClick={() => setShowChangelog(true)}

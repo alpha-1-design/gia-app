@@ -147,7 +147,7 @@ GIA ships with a bench of 20 distinct agent personas, each with its own reasonin
 
 ---
 
-## 🤖 Supported Providers (18+)
+## 🤖 Supported Providers (70+)
 
 GIA connects directly to provider APIs — no proxy, no middleman. All providers support OpenAI-compatible chat completions unless noted. Models are dynamically fetched from each provider's API; fallback model lists are bundled for offline-first startup.
 

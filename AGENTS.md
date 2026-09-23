@@ -284,3 +284,5 @@ Remaining release gates:
 - Android Gradle compilation must run in CI or Android Studio because this Windows environment has no Java/JAVA_HOME.
 - Alpine and Ubuntu installation, package operations, file creation, permissions, Termux, and lifecycle behavior still require real Android-device validation.
 - Credential/permission automatic continuation and legacy credential-store consolidation remain follow-up work.
+- Termux is optional: when `com.termux` is already installed, GIA detects it and sends explicitly approved commands through `RUN_COMMAND`; Termux currently owns stdout/stderr rather than streaming output back into chat.
+- The fallback provider catalogue now contains 71 entries; live model discovery remains provider-dependent and unsupported endpoints use their configured default model.

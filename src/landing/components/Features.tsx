@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 
 const features = [
-  { icon: Brain, title: 'Multi-Model AI', description: '18+ AI providers — OpenAI, Anthropic, Gemini, local LLMs. Switch freely, no lock-in.' },
+  { icon: Brain, title: 'Multi-Model AI', description: '70+ AI providers — OpenAI, Anthropic, Gemini, local LLMs, gateways, and private endpoints. Switch freely, no lock-in.' },
   { icon: Bot, title: 'Autonomous Agents', description: 'Goal-driven agents that plan, execute, and adapt. Let AI handle complex multi-step tasks.' },
   { icon: MessageSquare, title: 'Smart Chat', description: 'Context-aware conversations with tool execution, file generation, and real-time streaming.' },
   { icon: Search, title: 'RAG & Memory', description: 'Vector search over your documents. Persistent memory that learns from every interaction.' },

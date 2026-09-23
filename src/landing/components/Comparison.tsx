@@ -5,7 +5,7 @@ const rows = [
   { feature: 'Runs on your device', gia: true, other: false },
   { feature: 'No account, no telemetry', gia: true, other: false },
   { feature: 'Works fully offline', gia: true, other: false },
-  { feature: 'Bring your own API key (18+ providers)', gia: true, other: 'partial' as const },
+  { feature: 'Bring your own API key (70+ providers)', gia: true, other: 'partial' as const },
   { feature: 'Persistent personal memory', gia: true, other: false },
   { feature: 'Autonomous agents + tool loop', gia: true, other: 'partial' as const },
   { feature: 'Open source', gia: true, other: false },

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Wrench, CheckCircle2 } from 'lucide-react';
+import { X, Wrench, CheckCircle2, Sparkles, ShieldCheck, Terminal } from 'lucide-react';
 
 interface ChangelogProps {
   open: boolean;
@@ -11,12 +11,58 @@ const VERSION = '2.4.0.10';
 
 const sections = [
   {
+    key: 'added',
+    title: 'Added',
+    icon: Sparkles,
+    color: '#a78bfa',
+    items: [
+      'Phone-first Capability Center with live status for providers, on-device models, camera, microphone, location, files, terminal, MCP, and notifications.',
+      'Shared credential vault for API keys, tokens, and service secrets, with Android Keystore protection and secure chat prompts.',
+      'Termux integration with availability checks, explicit command execution, working-directory support, and refusal when Termux is unavailable.',
+      'Chat skill creation through the new skill_create tool, plus expanded follow-up suggestions and clarification guidance.',
+      'Detailed Alpine and Ubuntu sandbox provisioning with package-manager detection, Debian package mappings, and progress reporting.',
+      'Expanded the built-in provider catalogue from 22 to 71 entries, including hosted APIs, gateways, private endpoints, and local OpenAI-compatible servers.',
+      'Added an About-page phone design preview showing the orb, fast actions, permission-first controls, secure connections, sandbox, and Termux capabilities.',
+      'Added an in-app feedback and complaint form that opens a reviewed email to alphariansamuel@gmail.com, plus a GitHub issue shortcut.',
+      'Termux commands now return stdout, stderr, exit code, and a job ID to GIA so she can inspect what actually happened before reporting completion.',
+    ],
+  },
+  {
     key: 'fixed',
     title: 'Fixed',
     icon: Wrench,
     color: '#f59e0b',
     items: [
       'Found the actual bug behind every failed Full Install: it ran through a separate, never-updated copy of the proot launch code that none of the recent fixes touched. Consolidated into one shared path.',
+      'Sandbox package index, install, repair, and reset failures now surface as failures instead of false success.',
+      'Remote filesystem paths are canonicalized inside the workspace and clone inputs are validated against shell injection and traversal.',
+      'Removed silent remote host fallback: a missing rootfs now blocks execution instead of running commands on the host.',
+      'Native terminal startup and Android boot behavior are gated so GIA does not start expensive background services before setup is enabled.',
+    ],
+  },
+  {
+    key: 'security',
+    title: 'Security & privacy',
+    icon: ShieldCheck,
+    color: '#34d399',
+    items: [
+      'MCP runtime tokens are removed from persisted server definitions and loaded through the shared credential vault.',
+      'Added Android Keystore-backed AES-GCM storage with migration support for existing credential records.',
+      'SSH host verification now uses accept-new behavior instead of silently disabling host-key checks.',
+      'Sensitive actions remain approval-gated, with clearer capability and permission guidance in GIA’s system instructions.',
+    ],
+  },
+  {
+    key: 'changed',
+    title: 'Changed',
+    icon: Terminal,
+    color: '#22d3ee',
+    items: [
+      'Sandbox tools now use the shared native/remote service instead of a desktop-only localhost path.',
+      'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
+      'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
+      'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.10.',
     ],
   },
 ];

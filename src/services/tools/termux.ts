@@ -35,8 +35,14 @@ const termuxRun: Tool = {
     }).safeParse(args);
     if (!parsed.success) return { success: false, content: '', error: parsed.error.message };
     try {
-      await termuxService.run(parsed.data.command, parsed.data.args, parsed.data.workdir);
-      return { success: true, content: `Started \`${parsed.data.command}\` in Termux. Termux owns the process output and permissions.` };
+      const result = await termuxService.run(parsed.data.command, parsed.data.args, parsed.data.workdir);
+      const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+      const exitCode = result.exitCode ?? 0;
+      return {
+        success: exitCode === 0,
+        content: `Termux job ${result.jobId} finished with exit code ${exitCode}.${output ? `\n\nOutput:\n${output}` : ''}`,
+        error: exitCode === 0 ? undefined : (result.stderr || `Termux exited with code ${exitCode}`),
+      };
     } catch (e) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
     }
