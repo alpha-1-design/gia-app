@@ -46,11 +46,6 @@ public class GIAIntentPlugin extends Plugin {
     private static final String EVENT_WIDGET_ACTION = "onWidgetAction";
 
     @Override
-    public void load() {
-        super.load();
-    }
-
-    @Override
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
         if (intent == null) return;

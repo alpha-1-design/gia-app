@@ -148,7 +148,9 @@ public class GIATerminalPlugin extends Plugin {
         JSObject env = call.getObject("env");
         if (env == null || env.length() == 0) return null;
         Map<String, String> map = new HashMap<>();
-        for (String key : env.keys()) {
+        java.util.Iterator<String> keys = env.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
             Object value = env.opt(key);
             if (value != null) map.put(key, String.valueOf(value));
         }
