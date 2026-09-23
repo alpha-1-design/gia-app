@@ -4,7 +4,7 @@ import type { Tool } from './types';
 const gatewayDaemonStart: Tool = {
   id: 'gateway_daemon_start',
   name: 'gateway_daemon_start',
-  description: 'Start the GIA gateway daemon in the proot terminal. This enables 24/7 message listening on Telegram and other platforms.',
+  description: 'Start the GIA gateway daemon in the proot terminal. This enables 24/7 Telegram bridge listening. The daemon acknowledges messages but does not perform LLM routing.',
   schema: {
     type: 'object',
     properties: {
@@ -23,7 +23,7 @@ const gatewayDaemonStart: Tool = {
       if (result.exitCode === 0) {
         return {
           success: true,
-          content: '## Gateway Daemon Started\n\nThe GIA gateway daemon is now running 24/7 in your proot+Alpine terminal.\n\nIt listens for messages on Telegram and routes them through GIA.\n\n**Manage it:**\n- Status: `ps aux | grep node`\n- Stop: `kill $(pgrep -f "gia-app/daemon")`\n- Logs: `cat ~/.gia/gateway-daemon.log`',
+          content: '## Gateway Daemon Started\n\nThe GIA gateway daemon is now running 24/7 in your proot+Alpine terminal.\n\nIt provides a Telegram bridge and acknowledges incoming messages. It does not currently route messages through the GIA LLM.\n\n**Manage it:**\n- Status: `ps aux | grep node`\n- Stop: `kill $(pgrep -f "gia-app/daemon")`\n- Logs: `cat ~/.gia/gateway-daemon.log`',
         };
       }
       return { success: false, content: '', error: result.output || 'Failed to start daemon' };

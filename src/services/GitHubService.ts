@@ -41,8 +41,18 @@ export interface GitHubFile {
 const GITHUB_API = 'https://api.github.com';
 
 class GitHubService {
+  private headers(): Record<string, string> {
+    const token = credentialStore.getState().getCredential('github')?.value;
+    return token ? { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } : { Accept: 'application/vnd.github+json' };
+  }
+
+  hasToken(): boolean {
+    return !!credentialStore.getState().getCredential('github')?.value;
+  }
+
   async getUser(username: string): Promise<GitHubUser> {
-    const res = await fetch(`${GITHUB_API}/users/${encodeURIComponent(username)}`);
+    const url = username === 'me' ? `${GITHUB_API}/user` : `${GITHUB_API}/users/${encodeURIComponent(username)}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     return res.json();
   }
@@ -51,7 +61,10 @@ class GitHubService {
     const repos: GitHubRepo[] = [];
     let page = 1;
     while (true) {
-      const res = await fetch(`${GITHUB_API}/users/${encodeURIComponent(username)}/repos?per_page=100&page=${page}&sort=${sort}`);
+      const url = username === 'me'
+        ? `${GITHUB_API}/user/repos?per_page=100&page=${page}&sort=${sort}`
+        : `${GITHUB_API}/users/${encodeURIComponent(username)}/repos?per_page=100&page=${page}&sort=${sort}`;
+      const res = await fetch(url, { headers: this.headers() });
       if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
       const batch: GitHubRepo[] = await res.json();
       if (batch.length === 0) break;
@@ -62,19 +75,19 @@ class GitHubService {
   }
 
   async getRepo(owner: string, repo: string): Promise<GitHubRepo> {
-    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
   async listRepoContents(owner: string, repo: string, path: string = ''): Promise<GitHubFile[]> {
-    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}`);
+    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
   async getFileContent(owner: string, repo: string, path: string): Promise<string> {
-    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}`);
+    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     const data = await res.json();
     if (data.encoding === 'base64' && data.content) {
@@ -84,7 +97,7 @@ class GitHubService {
   }
 
   async getReadme(owner: string, repo: string): Promise<string> {
-    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`);
+    const res = await fetch(`${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`, { headers: this.headers() });
     if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     const data = await res.json();
     if (data.encoding === 'base64' && data.content) {
@@ -95,3 +108,4 @@ class GitHubService {
 }
 
 export default new GitHubService();
+import credentialStore from '../store/useCredentialStore';

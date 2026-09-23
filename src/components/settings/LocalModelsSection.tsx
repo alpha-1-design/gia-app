@@ -4,10 +4,11 @@ import { logger } from '../../utils/logger';
 import LocalLLMService, { LOCAL_LLM_MODELS, type LocalModelId, type LocalLLMState, type DownloadProgress } from '../../services/LocalLLMService';
 import { detectDeviceCapabilities, checkModelCompatibility, recommendModel, type DeviceCapabilities } from '../../services/DeviceCapabilities';
 
-type ModelStatusKey = 'not_loaded' | 'loading' | 'ready' | 'error';
+type ModelStatusKey = 'not_loaded' | 'downloaded' | 'loading' | 'ready' | 'error';
 
 const STATUS_CONFIG: Record<ModelStatusKey, { label: string; color: string; bg: string }> = {
   not_loaded: { label: 'Not Downloaded', color: '#71717a', bg: 'rgba(113,113,122,0.1)' },
+  downloaded: { label: 'Downloaded', color: '#60a5fa', bg: 'rgba(96,165,250,0.1)' },
   loading:    { label: 'Downloading',   color: '#fbbf24',  bg: 'rgba(251,191,36,0.1)' },
   ready:      { label: 'Ready',         color: '#34d399',  bg: 'rgba(52,211,153,0.1)' },
   error:      { label: 'Error',         color: '#f87171',  bg: 'rgba(248,113,113,0.1)' },
@@ -275,7 +276,7 @@ export const LocalModelsSection: React.FC = () => {
                       <><ShieldAlert size={10} /> Insufficient</>
                     ) : isLoading ? (
                       <><RefreshCw size={10} className="animate-spin" /> Downloading...</>
-                    ) : state?.status === 'ready' ? (
+                    ) : state?.status === 'ready' || state?.status === 'downloaded' ? (
                       <><Zap size={10} /> Load Model</>
                     ) : (
                       <><Download size={10} /> Download & Load</>

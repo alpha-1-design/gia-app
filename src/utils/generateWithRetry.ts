@@ -20,6 +20,10 @@ interface RetryResult<T> {
   wasRepaired: boolean;
 }
 
+function isUserActionRequiredError(message: string): boolean {
+  return /(api key|token|credential|authorization|authorize|permission|approval|approve|sign in|connect .*service|missing .*key|provide .*key)/i.test(message);
+}
+
 export async function generateWithRetry<T>(
   generateFn: () => Promise<{ text: string }>,
   options: RetryOptions = {}
@@ -71,6 +75,10 @@ export async function generateWithRetry<T>(
       const msg = lastError.message.slice(0, 100);
       logger.warn(`[${moduleName}] Attempt ${attempt + 1}/${maxRetries + 1} failed:`, msg);
       onRetry?.(attempt, msg);
+
+      if (isUserActionRequiredError(lastError.message)) {
+        throw new Error('The model is waiting for required credentials or approval. Please provide the missing API key / permission, then retry.');
+      }
 
       if (attempt < maxRetries) {
         const delay = RETRY_DELAYS_MS[attempt] || RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];

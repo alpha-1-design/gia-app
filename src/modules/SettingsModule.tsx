@@ -25,6 +25,7 @@ import { AboutPage } from '../components/settings/AboutPage';
 import { NeuraPage } from '../components/settings/NeuraPage';
 import { NexusPage } from '../components/settings/NexusPage';
 import { MicalPage } from '../components/settings/MicalPage';
+import { CapabilityCenterPage } from '../components/settings/CapabilityCenterPage';
 import { TerminalPage } from '../components/settings/TerminalPage';
 import { SkillsMarketplaceUI } from '../components/settings/SkillsMarketplaceSection';
 import { DashboardModule } from './DashboardModule';
@@ -32,9 +33,10 @@ import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
 
-type SettingsPage = 'main' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge' | 'terminal' | 'unimind';
+type SettingsPage = 'main' | 'capabilities' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge' | 'terminal' | 'unimind';
 
 const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
+  { id: 'capabilities', icon: <Activity size={20} />, label: 'GIA Capabilities', desc: 'See what GIA can use on this phone right now', sections: 'Live device inventory', color: '#06b6d4' },
   { id: 'profile-identity', icon: <UserCircle size={20} />, label: 'Profile & Identity', desc: 'Your profile, GIA identity, skills, memory & brain export', sections: '5 sections', color: '#a855f7' },
   { id: 'connections', icon: <PlugZap size={20} />, label: 'Connections', desc: 'API connectors, social media, gateway, browser & search', sections: '5 sections', color: '#f59e0b' },
   { id: 'mcp', icon: <Globe size={20} />, label: 'MCP Servers', desc: 'Model Context Protocol servers — tools, data sources & OAuth', sections: 'Server management', color: '#a855f7' },
@@ -124,6 +126,11 @@ const SettingsModule: React.FC = () => {
 
   // ── Sub-page routing ──────────────────────────────────────────────
   if (settingsPage === 'profile-identity') return <ProfileIdentityPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'capabilities') {
+    return <CapabilityCenterPage onBack={() => setSettingsPage('main')} onNavigate={(page) => {
+      setSettingsPage(page as SettingsPage);
+    }} />;
+  }
   if (settingsPage === 'connections') return <ConnectionsPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'system') return <SystemPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'local-ai') return <LocalAIPage onBack={() => setSettingsPage('main')} />;
@@ -518,7 +525,7 @@ const SettingsModule: React.FC = () => {
 
       {/* Version */}
       <p className="text-center text-[10px] pb-4 pt-2" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.4.0.9 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        GIA v2.4.0.10 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
 
       <ConfirmDialog

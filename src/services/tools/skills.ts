@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { useGiaStore } from '../../store/useGiaStore';
+import SkillsMarketplace from '../SkillsMarketplace';
 import type { Tool } from './types';
 
 /**
@@ -51,4 +53,36 @@ const skillActivate: Tool = {
   },
 };
 
-export const skillTools: Tool[] = [skillList, skillActivate];
+const skillCreate: Tool = {
+  id: 'skill_create',
+  name: 'skill_create',
+  description: 'Create and activate a custom skill from a name, description, category, system prompt, and optional tool IDs.',
+  schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Short skill name' },
+      description: { type: 'string', description: 'What this skill is for' },
+      category: { type: 'string', description: 'Skill category' },
+      systemPrompt: { type: 'string', description: 'Instructions added to GIA behavior' },
+      tools: { type: 'array', items: { type: 'string' }, description: 'Optional tool IDs' },
+    },
+    required: ['name', 'description', 'category', 'systemPrompt'],
+  },
+  execute: async (args) => {
+    const parsed = z.object({
+      name: z.string().trim().min(1).max(80),
+      description: z.string().trim().min(1).max(500),
+      category: z.string().trim().min(1).max(40),
+      systemPrompt: z.string().trim().min(1).max(10000),
+      tools: z.array(z.string().trim().min(1).max(100)).max(100).optional().default([]),
+    }).safeParse(args);
+    if (!parsed.success) {
+      return { success: false, content: '', error: parsed.error.issues.map(issue => issue.message).join(', ') };
+    }
+    const skill = await SkillsMarketplace.createCustomSkill(parsed.data);
+    useGiaStore.getState().setSkill(skill.id);
+    return { success: true, content: `Created and activated custom skill "${skill.name}" (${skill.id}).` };
+  },
+};
+
+export const skillTools: Tool[] = [skillList, skillActivate, skillCreate];

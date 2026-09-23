@@ -4,6 +4,7 @@ import { useGiaStore } from '../../store/useGiaStore';
 import { providerRegistry } from '../ProviderRegistry';
 import { isNativePlatform } from '../../utils/helpers';
 import type { Tool } from './types';
+import credentialStore from '../../store/useCredentialStore';
 
 const isNative = isNativePlatform;
 
@@ -20,7 +21,7 @@ const environmentInfo: Tool = {
       const giaTools = (await import('../GiaTools')).default;
       const info = {
         identity: {
-          name: 'GIA', fullName: 'Generative Interface Agent', version: '2.4.0.9',
+          name: 'GIA', fullName: 'Generative Interface Agent', version: '2.4.0.10',
           tagline: 'Private on-device AI workspace',
           platform: native ? 'Android (Capacitor)' : 'Browser (Web)',
           architecture: 'React 18 + TypeScript + Zustand + Vite + Capacitor',
@@ -70,7 +71,7 @@ const environmentInfo: Tool = {
 const github: Tool = {
   id: 'github',
   name: 'github',
-  description: 'Fetch data from GitHub — user profile, repos, repo contents, README, or file contents from any public repo. Ask the user for their GitHub username if they don\'t specify one.',
+  description: 'Fetch data from GitHub — public repos or the user\'s own account. Use username "me" for the signed-in user; if private/account access is needed and no GitHub token is saved, call request_api_key with providerId "github", connectorId "github", label "GitHub", and kind "token".',
   schema: {
     type: 'object',
     properties: {
@@ -92,6 +93,16 @@ const github: Tool = {
     const repo = args.repo as string | undefined;
     const path = args.path as string | undefined;
     const sort = args.sort as string | undefined;
+    if ((username === 'me' || action === 'get_user' && !username) && !credentialStore.getState().getCredential('github')) {
+      useGiaStore.getState().setPendingApiKeyRequest({
+        providerId: 'github',
+        connectorId: 'github',
+        label: 'GitHub',
+        kind: 'token',
+        description: 'A GitHub personal access token lets GIA read your private repositories and account data. GIA will store it for future GitHub requests.',
+      });
+      return { success: true, content: 'GitHub access is not connected yet. I opened a secure GitHub token input below. A token is optional for public repositories, but required to inspect your private account or repositories.' };
+    }
     if (!username) return { success: false, content: '', error: 'GitHub username is required — ask the user for their GitHub username.' };
     const githubUser = username;
     const gh = (await import('../GitHubService')).default;

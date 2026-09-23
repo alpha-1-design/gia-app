@@ -8,7 +8,7 @@ export class TelegramPoller {
   constructor(botToken, channelId) {
     if (!botToken) throw new Error('botToken required');
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
-    this.channelId = channelId;
+    this.channelId = channelId == null ? undefined : String(channelId);
     this.offset = 0;
     this._running = false;
     this._timeout = 30; // Long polling timeout
@@ -59,7 +59,7 @@ export class TelegramPoller {
           for (const update of data.result) {
             this.offset = update.update_id + 1;
             const msg = update.message || update.channel_post;
-            if (msg) {
+            if (msg && (!this.channelId || String(msg.chat?.id) === this.channelId)) {
               this._emit('message', msg);
             }
           }
@@ -117,7 +117,17 @@ export class TelegramPoller {
 
   _emit(event, payload) {
     for (const h of this._handlers[event] || []) {
-      try { h(payload); } catch (err) { console.error('[telegram] handler error:', err); }
+      try {
+        const result = h(payload);
+        if (result && typeof result.then === 'function') {
+          result.catch(err => event === 'error'
+            ? console.error('[telegram] error handler failed:', err)
+            : this._emit('error', err));
+        }
+      } catch (err) {
+        if (event === 'error') console.error('[telegram] error handler failed:', err);
+        else this._emit('error', err);
+      }
     }
   }
 

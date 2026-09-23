@@ -253,7 +253,7 @@
 }
 
 /* Aurora agent core glow — multicolor */
-[data-theme="obsidian-aurora"] @keyframes agent-core-glow {
+@keyframes agent-core-glow {
   0%, 100% { box-shadow: 0 0 20px rgba(6,182,212,0.15), 0 0 50px rgba(139,92,246,0.08), 0 0 80px rgba(236,72,153,0.03); }
   50% { box-shadow: 0 0 30px rgba(6,182,212,0.25), 0 0 60px rgba(139,92,246,0.12), 0 0 100px rgba(236,72,153,0.06); }
 }
@@ -464,6 +464,26 @@ body {
 #root {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* GIA is designed around one-handed phone use. Native builds keep controls
+ * comfortably tappable and avoid desktop-style hover affordances. */
+.gia-phone button,
+.gia-phone [role="button"],
+.gia-phone input,
+.gia-phone select,
+.gia-phone textarea {
+  touch-action: manipulation;
+}
+
+.gia-phone button,
+.gia-phone [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 640px) {
+  .gia-card { border-radius: 18px; }
+  .gia-phone .text-\[10px\] { line-height: 1.45; }
 }
 
 /* ============================================================

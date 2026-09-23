@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,6 +56,11 @@ public class GIATerminalPlugin extends Plugin {
     private void startTerminalService() {
         try {
             Context context = getContext();
+            File marker = new File(new File(context.getFilesDir(), "terminal"), "rootfs/.gia-rootfs-ok");
+            if (!marker.isFile()) {
+                Log.i(TAG, "Skipping terminal service startup: rootfs is not installed");
+                return;
+            }
             Intent serviceIntent = new Intent(context, GIATerminalService.class);
             context.startForegroundService(serviceIntent);
         } catch (Exception e) {
@@ -86,7 +92,7 @@ public class GIATerminalPlugin extends Plugin {
         try {
             // Start the session
             GIATerminalService.TerminalSession session =
-                    GIATerminalService.startSession(getContext(), sessionId, command);
+                    GIATerminalService.startSession(getContext(), sessionId, command, workdirFrom(call), envFrom(call));
 
             // Wait for output with timeout
             String output = session.awaitOutput(timeout);
@@ -126,6 +132,30 @@ public class GIATerminalPlugin extends Plugin {
     }
 
     /**
+     * Optional working directory for the guest session, or null when unset.
+     */
+    private static String workdirFrom(PluginCall call) {
+        String workdir = call.getString("workdir");
+        return (workdir == null || workdir.isEmpty()) ? null : workdir;
+    }
+
+    /**
+     * Optional extra environment variables for the guest session, or null when
+     * none were supplied. Returns a plain Map so GIATerminalService does not
+     * depend on Capacitor's JSObject on its own.
+     */
+    private static Map<String, String> envFrom(PluginCall call) {
+        JSObject env = call.getObject("env");
+        if (env == null || env.length() == 0) return null;
+        Map<String, String> map = new HashMap<>();
+        for (String key : env.keys()) {
+            Object value = env.opt(key);
+            if (value != null) map.put(key, String.valueOf(value));
+        }
+        return map.isEmpty() ? null : map;
+    }
+
+    /**
      * Start a command in the background and return immediately (run-detached).
      *
      * Unlike exec(), the session is NOT awaited and NOT killed when this call
@@ -146,7 +176,7 @@ public class GIATerminalPlugin extends Plugin {
         String sessionId = UUID.randomUUID().toString();
         try {
             GIATerminalService.TerminalSession session =
-                    GIATerminalService.startSession(getContext(), sessionId, command);
+                    GIATerminalService.startSession(getContext(), sessionId, command, workdirFrom(call), envFrom(call));
 
             JSObject result = new JSObject();
             result.put("sessionId", sessionId);
@@ -675,7 +705,8 @@ public class GIATerminalPlugin extends Plugin {
     }
 
     /**
-     * Install a single Alpine package via the sandbox.
+     * Install a package using the package manager belonging to the installed
+     * rootfs. Ubuntu must not receive Alpine's apk commands.
      */
     @PluginMethod
     public void installPackage(PluginCall call) {
@@ -684,7 +715,7 @@ public class GIATerminalPlugin extends Plugin {
             call.reject("packageName is required");
             return;
         }
-        runProotCommand(call, currentRootfsPath(), "apk add --no-cache " + packageName, 300000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("add", packageName), 300000);
     }
 
     /**
@@ -697,7 +728,7 @@ public class GIATerminalPlugin extends Plugin {
             call.reject("packageName is required");
             return;
         }
-        runProotCommand(call, currentRootfsPath(), "apk del " + packageName, 60000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("remove", packageName), 60000);
     }
 
     /**
@@ -706,7 +737,7 @@ public class GIATerminalPlugin extends Plugin {
     @PluginMethod
     public void searchPackages(PluginCall call) {
         String query = call.getString("query", "");
-        runProotCommand(call, currentRootfsPath(), "apk search " + query, 30000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("search", query), 30000);
     }
 
     /**
@@ -714,7 +745,7 @@ public class GIATerminalPlugin extends Plugin {
      */
     @PluginMethod
     public void listInstalledPackages(PluginCall call) {
-        runProotCommand(call, currentRootfsPath(), "apk list --installed 2>/dev/null | sort", 15000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("list", ""), 15000);
     }
 
     /**
@@ -722,7 +753,33 @@ public class GIATerminalPlugin extends Plugin {
      */
     @PluginMethod
     public void updatePackageIndex(PluginCall call) {
-        runProotCommand(call, currentRootfsPath(), "apk update", 60000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("update", ""), 60000);
+    }
+
+    private String packageManagerCommand(String operation, String value) {
+        boolean ubuntu = "ubuntu".equalsIgnoreCase(readInstalledOs());
+        if (!ubuntu) {
+            if ("add".equals(operation)) return "apk add --no-cache " + value;
+            if ("remove".equals(operation)) return "apk del " + value;
+            if ("search".equals(operation)) return "apk search " + value;
+            if ("list".equals(operation)) return "apk list --installed 2>/dev/null | sort";
+            return "apk update";
+        }
+        if ("add".equals(operation)) return "DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y " + value.replace("py3-pip", "python3-pip").replace("build-base", "build-essential");
+        if ("remove".equals(operation)) return "DEBIAN_FRONTEND=noninteractive apt-get remove -y " + value.replace("py3-pip", "python3-pip").replace("build-base", "build-essential");
+        if ("search".equals(operation)) return "apt-cache search " + value;
+        if ("list".equals(operation)) return "dpkg-query -W -f='${Package} ${Version}\\n' 2>/dev/null | sort";
+        return "DEBIAN_FRONTEND=noninteractive apt-get update";
+    }
+
+    private String readInstalledOs() {
+        File marker = new File(getContext().getFilesDir(), "terminal/installed-os.txt");
+        if (!marker.exists()) return "alpine";
+        try {
+            return new String(java.nio.file.Files.readAllBytes(marker.toPath())).trim();
+        } catch (Exception ignored) {
+            return "alpine";
+        }
     }
 
     private void runProotCommand(PluginCall call, String rootfsPath, String cmd, int timeout) {

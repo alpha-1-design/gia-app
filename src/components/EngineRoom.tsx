@@ -23,7 +23,7 @@ let lastExport: string | null = null;
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
-  mk('info', '║         GIA ENGINE ROOM  v2.4.0.3        ║'),
+  mk('info', '║         GIA ENGINE ROOM  v2.4.0.10        ║'),
   mk('info', '║  10 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
@@ -114,7 +114,10 @@ const EngineRoom: React.FC = () => {
         if (!isNaN(idx) && allProviders[idx]) {
           const p = allProviders[idx].id;
           setWizard({ flow: 'enter-key', provider: p });
-          push(mk('res', `Provider: ${providerRegistry.getLabel(p)}`), mk('prompt', 'Paste your API key (or type "cancel"):'));
+          const keyUrl = providerRegistry.getApiKeyUrl(p);
+          push(mk('res', `Provider: ${providerRegistry.getLabel(p)}`));
+          if (keyUrl) push(mk('info', `Get a key: ${keyUrl}`));
+          push(mk('prompt', 'Paste your API key (or type "cancel"):'));
         } else push(mk('err', `Enter 1–${allProviders.length}.`));
         return;
       }

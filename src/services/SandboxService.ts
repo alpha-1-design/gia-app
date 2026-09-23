@@ -19,6 +19,16 @@ const DEFAULT_SANDBOX_URL = typeof window !== 'undefined' && window.location?.or
   ? '/api/sandbox'
   : 'http://localhost:3081';
 
+/** Parent directory of a sandbox path ('' when there is none). Mirrors how
+ *  tools address files: absolute /workspace/... paths land under the mounted
+ *  workspace; bare filenames land in the guest's cwd (remote /workspace,
+ *  native /root). */
+function sandboxParent(path: string): string {
+  const idx = path.lastIndexOf('/');
+  if (idx <= 0) return '';
+  return path.slice(0, idx);
+}
+
 class SandboxService {
   private baseUrl: string = DEFAULT_SANDBOX_URL;
   private _available: boolean | null = null;
@@ -86,6 +96,12 @@ class SandboxService {
   get available(): boolean | null { return this._available; }
 
   async exec(command: string, options?: { timeout?: number; workdir?: string }): Promise<SandboxResult> {
+    if (!this.usingNativeFallback) {
+      const available = await this.ensureAvailable();
+      if (!available) {
+        throw new Error('Sandbox is unavailable: start the desktop sandbox server or set up the native terminal.');
+      }
+    }
     if (this.usingNativeFallback) {
       const result = await terminalService.exec(command, options?.workdir, undefined, options?.timeout);
       return { stdout: result.output, stderr: '', exitCode: result.exitCode };
@@ -124,9 +140,18 @@ class SandboxService {
 
   async writeFile(path: string, content: string): Promise<void> {
     if (this.usingNativeFallback) {
+      // On-device rootfs has no /workspace until the Full Install button
+      // created it (SandboxSetupPanel mkdirs it explicitly — busybox ash
+      // silently no-ops brace expansion, so a bare `mkdir -p /workspace`
+      // even in our own writeFile would be fine but the audit calls this
+      // gap out directly). mkdir the parent dir first so nested writes and
+      // /workspace/<file> tool paths work on a fresh rootfs, mirroring the
+      // remote server's auto-provisioning at sandbox-server.cjs:338.
+      const parent = sandboxParent(path);
+      const mkdir = parent ? `mkdir -p -- "${parent.replace(/"/g, '\\"')}" && ` : '';
       // Base64 round-trip avoids any quoting/escaping issues with the shell heredoc.
       const b64 = btoa(unescape(encodeURIComponent(content)));
-      const result = await terminalService.exec(`echo '${b64}' | base64 -d > "${path.replace(/"/g, '\\"')}"`);
+      const result = await terminalService.exec(`${mkdir}echo '${b64}' | base64 -d > "${path.replace(/"/g, '\\"')}"`);
       if (result.exitCode !== 0) throw new Error(result.output || `Failed to write ${path}`);
       return;
     }

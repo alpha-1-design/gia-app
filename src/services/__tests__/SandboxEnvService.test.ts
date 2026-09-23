@@ -220,6 +220,7 @@ describe('SandboxEnvService', () => {
       // Track installs so the final status() check sees them as installed
       let apkAddCount = 0;
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd === 'echo ok') return Promise.resolve(makeExecResult('ok'));
         if (cmd.includes('resolv.conf')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('apk update')) return Promise.resolve(makeExecResult('OK'));
@@ -249,6 +250,7 @@ describe('SandboxEnvService', () => {
     it('skips already-installed packages', async () => {
       isAvailableMock.mockReturnValue(true);
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd === 'echo ok') return Promise.resolve(makeExecResult('ok'));
         if (cmd.includes('resolv.conf')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('node --version')) return Promise.resolve(makeExecResult('v20.11.0'));
@@ -271,6 +273,7 @@ describe('SandboxEnvService', () => {
     it('calls onProgress with step numbers', async () => {
       isAvailableMock.mockReturnValue(true);
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd.includes('resolv.conf') && !cmd.includes('echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('resolv.conf && echo')) return Promise.resolve(makeExecResult('YES'));
         return Promise.resolve(makeExecResult('not found'));
@@ -287,7 +290,8 @@ describe('SandboxEnvService', () => {
     it('handles provision error mid-step', async () => {
       isAvailableMock.mockReturnValue(true);
       let callCount = 0;
-      execMock.mockImplementation(() => {
+      execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         callCount++;
         if (callCount <= 3) return Promise.resolve(makeExecResult('YES'));
         return Promise.reject(new Error('Process killed'));
@@ -295,6 +299,43 @@ describe('SandboxEnvService', () => {
       const r = await SandboxEnvService.provision();
       expect(r.success).toBe(false);
       expect(r.output).toContain('Process killed');
+    });
+
+    it('uses apt-get and Debian package names for Ubuntu', async () => {
+      isAvailableMock.mockReturnValue(true);
+      let aptInstalled = false;
+      execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apt-get'));
+        if (cmd.includes('resolv.conf')) return Promise.resolve(makeExecResult('YES'));
+        if (cmd.includes('apt-get update')) return Promise.resolve(makeExecResult('OK'));
+        if (cmd.includes('apt-get install')) {
+          aptInstalled = true;
+          return Promise.resolve(makeExecResult(''));
+        }
+        if (aptInstalled && cmd.includes('node --version')) return Promise.resolve(makeExecResult('v20.11.0'));
+        if (aptInstalled && cmd.includes('npm --version')) return Promise.resolve(makeExecResult('10.2.4'));
+        if (aptInstalled && cmd.includes('git --version')) return Promise.resolve(makeExecResult('git version 2.43.0'));
+        if (aptInstalled && cmd.includes('python3 --version')) return Promise.resolve(makeExecResult('Python 3.11.6'));
+        if (aptInstalled && cmd.includes('pip3 --version')) return Promise.resolve(makeExecResult('24.0'));
+        if (aptInstalled && cmd.includes('gcc --version')) return Promise.resolve(makeExecResult('gcc 13.2'));
+        if (aptInstalled && cmd.includes('curl --version')) return Promise.resolve(makeExecResult('curl 8.5.0'));
+        return Promise.resolve(makeExecResult('not found', 1));
+      });
+      const result = await SandboxEnvService.provision();
+      expect(result.success).toBe(true);
+      expect(execMock.mock.calls.some(([cmd]) => cmd.includes('apt-get install'))).toBe(true);
+      expect(execMock.mock.calls.some(([cmd]) => cmd.includes('apk add'))).toBe(false);
+    });
+
+    it('fails explicitly when no supported package manager is available', async () => {
+      isAvailableMock.mockReturnValue(true);
+      execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult(''));
+        return Promise.resolve(makeExecResult('ok'));
+      });
+      const result = await SandboxEnvService.provision();
+      expect(result.success).toBe(false);
+      expect(result.output).toContain('package manager');
     });
   });
 
@@ -306,6 +347,7 @@ describe('SandboxEnvService', () => {
       isAvailableMock.mockReturnValue(true);
       reinstallRootfsMock.mockResolvedValue({ success: true, message: 'Re-extracted' });
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd.includes('resolv.conf') && !cmd.includes('echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('resolv.conf && echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('echo ok')) return Promise.resolve(makeExecResult('ok'));
@@ -329,6 +371,7 @@ describe('SandboxEnvService', () => {
       isAvailableMock.mockReturnValue(true);
       reinstallRootfsMock.mockRejectedValue(new Error('Native plugin crashed'));
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd.includes('echo ok')) return Promise.resolve(makeExecResult('ok'));
         if (cmd.includes('resolv.conf') && !cmd.includes('echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('resolv.conf && echo')) return Promise.resolve(makeExecResult('YES'));
@@ -358,6 +401,7 @@ describe('SandboxEnvService', () => {
       isAvailableMock.mockReturnValue(true);
       reinstallRootfsMock.mockResolvedValue({ success: true, message: 'OK' });
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd.includes('echo ok')) return Promise.resolve(makeExecResult('ok'));
         if (cmd.includes('resolv.conf') && !cmd.includes('echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('resolv.conf && echo')) return Promise.resolve(makeExecResult('YES'));
@@ -411,6 +455,7 @@ describe('SandboxEnvService', () => {
     it('runs apk update, upgrade, fix when terminal works', async () => {
       isAvailableMock.mockReturnValue(true);
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd.includes('echo ok')) return Promise.resolve(makeExecResult('ok'));
         if (cmd.includes('resolv.conf') && !cmd.includes('echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('resolv.conf && echo')) return Promise.resolve(makeExecResult('YES'));
@@ -436,6 +481,7 @@ describe('SandboxEnvService', () => {
     it('removes packages and returns success', async () => {
       isAvailableMock.mockReturnValue(true);
       execMock.mockImplementation((cmd: string) => {
+        if (cmd.includes('command -v apk')) return Promise.resolve(makeExecResult('apk'));
         if (cmd.includes('echo ok')) return Promise.resolve(makeExecResult('ok'));
         if (cmd.includes('resolv.conf') && !cmd.includes('echo')) return Promise.resolve(makeExecResult('YES'));
         if (cmd.includes('resolv.conf && echo')) return Promise.resolve(makeExecResult('YES'));

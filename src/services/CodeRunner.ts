@@ -1,7 +1,6 @@
 import { logger } from '../utils/logger';
 import { CapacitorHttp } from '@capacitor/core';
 import { isNativePlatform } from '../utils/helpers';
-import { Directory, Filesystem } from '@capacitor/filesystem';
 
 export interface CodeRunRequest {
   language: string;
@@ -64,15 +63,6 @@ class CodeRunner {
   private getAuthHeaders(): Record<string, string> {
     return this.userApiKey ? { 'Authorization': `Bearer ${this.userApiKey}` } : {};
   }
-  private async isSandboxAvailable(): Promise<boolean> {
-    if (!isNative) return false;
-    try {
-      await Filesystem.stat({ path: 'alpine/bin/sh', directory: Directory.External });
-      return true;
-    } catch {
-      return false;
-    }
-  }
 
   /**
    * Fall back to on-device Pyodide (WASM Python, no server needed) when the
@@ -109,42 +99,11 @@ class CodeRunner {
     }
   }
 
-  private async runInSandbox(req: CodeRunRequest): Promise<CodeRunResult> {
-    const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
-    try {
-      const command = `proot -S alpine -b /data/data/com.gia.dev/files/alpine/bin/sh echo "${req.code}" | alpine/bin/sh`;
-      const result = await Filesystem.readFile({
-        path: command,
-        directory: Directory.External,
-      });
-
-      return {
-        output: result.data as string,
-        error: null,
-        exitCode: 0,
-        language: lang,
-        version: 'Alpine/proot',
-      };
-    } catch (e: unknown) {
-      return {
-        output: '',
-        error: e instanceof Error ? e.message : 'Sandbox execution failed',
-        exitCode: 1,
-        language: lang,
-        version: 'Alpine/proot',
-      };
-    }
-  }
-
   async run(req: CodeRunRequest, attempts = 0, signal?: AbortSignal): Promise<CodeRunResult> {
     const maxAttempts = 3;
     const lang = LANGUAGE_MAP[req.language.toLowerCase()] || req.language;
 
     if (signal?.aborted) return { output: '', error: 'Request aborted', exitCode: 1, language: lang, version: '' };
-
-    if (await this.isSandboxAvailable()) {
-      return this.runInSandbox(req);
-    }
 
     const files = [{ name: `main.${lang}`, content: req.code }];
 

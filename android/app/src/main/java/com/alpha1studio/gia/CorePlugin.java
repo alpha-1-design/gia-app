@@ -20,6 +20,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  */
 @CapacitorPlugin(name = "GIACore")
 public class CorePlugin extends Plugin {
+    private static final String PREFS = "gia_core";
+    private static final String PREF_ENABLED = "enabled";
 
     private GIACoreService coreService;
     private NetworkBroadcastReceiver networkReceiver;
@@ -46,6 +48,8 @@ public class CorePlugin extends Plugin {
      */
     @PluginMethod
     public void startCoreService(PluginCall call) {
+        getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_ENABLED, true).apply();
         Intent intent = new Intent(getContext(), GIACoreService.class);
         intent.putExtra("startWakeWord", call.getBoolean("startWakeWord", false));
         intent.putExtra("accessKey", call.getString("accessKey", ""));
@@ -63,6 +67,8 @@ public class CorePlugin extends Plugin {
 
     @PluginMethod
     public void stopCoreService(PluginCall call) {
+        getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_ENABLED, false).apply();
         Intent intent = new Intent(getContext(), GIACoreService.class);
         getContext().stopService(intent);
         call.resolve();

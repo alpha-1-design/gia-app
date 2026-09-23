@@ -190,3 +190,97 @@ npx cap open android  # opens Android Studio
 ```
 
 Keystore generated in CI (`github.com/alpha-1-design/gia-app/actions`). Release APK ready to sideload from GitHub Releases. CI requires Java 21 + Android SDK (see `.github/workflows/build-apk.yml`).
+
+## 2026-09-12 Session Summary
+
+### Version bump → 2.4.0.3
+Updated everywhere: `package.json`, `package-lock.json`, `android/app/build.gradle` (versionCode 10→11), `public/docs/gia-docs.json`, 9 User-Agent strings (`ConnectorManager`, `GatewayManager`, `FallbackWebSearch`, `powerTools`, `MCPClient`, `core`, `GIATerminalPlugin`, `GIAScreenAgentPlugin`, `GIATerminalPlugin.java`), UI strings (`SettingsModule`, `AboutPage`, `EngineRoom`), stale spots (`README.md` 2.4.0.1, `manual.md` 2.3.2.0, `GIAUpdatePlugin.java` 2.4.0).
+
+### Changelog modal
+New `src/components/ChangelogModal.tsx` + "View Changelog" button in `AboutPage.tsx`. Categorized Added/Fixed/Changed for v2.4.0.3 (talk-to-the-orb, Cloud STT fallback, runnable tools catalog, updater root fix, onboarding). Dismiss via X, "Got it", or Esc.
+
+### Landing page redesign (`src/landing/`, lint + build green)
+- **New components**: `DesktopMock.tsx` (intricate desktop window mock), `DesktopSection.tsx` (features + how-it-works), `Pairing.tsx` (phone↔desktop mesh/capability profiles), `Download.tsx` (3 real release links: AppImage/deb/rpm + self-updater flow)
+- **Hero**: desktop-ready aurora hero with "Linux ships today" + Windows/iOS coming-soon badges
+- **Nav + sections**: Desktop, Features, On-Device, Pairing, Download, Skills, Docs, FAQ — new order in `App.tsx`
+- **CTA/Footer/landing.html** updated with desktop repo links
+- **Windows & iOS "coming soon"** badges in Hero + banner in Download section
+
+### Orb voice + Cloud STT (from prior work, now committed)
+- Native: `GIAScreenOrbService.java` — MediaRecorder voice capture (AAC 16k), 5-item popup with vector mic icon (`ic_mic.xml`), HUD placeholders, 15s auto-stop
+- JS: `OrbAssistant.ts` — `orbitVoice` listener, `transcribeOrbAudio` (Whisper-first → cloud fallback), `voicePrompt` in `streamTurn`
+- `CloudSTT.ts` — OpenAI/Groq fallback, `gia:cloud-stt` config
+- `VoiceSection.tsx` — "Orb Cloud STT" card (enable, API key, base URL, model, Groq hint)
+- Emoji cleanup: HUD strings plain text, `ic_mic.xml` vector drawable in popup
+
+### GitHub profile README rewrite + push
+`alpha-1-design/alpha-1-design` → new "About the developer" section, GIA desktop release coverage, updated project links (commit `15d7f09`).
+
+### CI/CD
+- Tag `v2.4.0.3` pushed → GitHub Actions builds signed release APK + debug APK
+- Release published: https://github.com/alpha-1-design/gia-app/releases/tag/v2.4.0.3
+- Assets: `app-release.apk` (20.9 MB), `app-debug.apk` (24.7 MB)
+
+## 2026-09-21 — terminal/rootfs proot audit (research only, files NOT changed)
+
+Context: commit `0f1e074` (v2.4.0.10) fixed one two-copy divergence — the proot one-shot path in `GIATerminalPlugin` previously bypassed every fix applied to the interactive `GIATerminalService.startSession()` path. That class of bug repeats elsewhere. Verified against working tree.
+
+**Consolidated & safe (do NOT re-split):**
+- Only TWO native spawn sites, both through the shared builders: `GIATerminalService.java:700-704` (startSession) + `GIATerminalPlugin.java:735-740` (one-shot, used by Full Install/install/remove/search/list/update). Shared code: `buildProotArgs()` (`GIATerminalService.java:849`, binds `/dev /proc /sys /system /vendor /apex /data /mnt /storage`, `-0`, `-w /root`, `/bin/sh -c`) + `configureProotEnvironment()` (`:900`, env vars incl. `PROOT_LOADER`/`_32`, `LD_LIBRARY_PATH`=nativeLibraryDir, `SSL_CERT_FILE`, `PR_SET_DUMPABLE` via `prctl`). Named loader path via `resolveLoaderPath()` (`:628`).
+- DNS written during native rootfs extraction (all paths): `GIATerminalService.java:346-350, 560-564`, `GIATerminalPlugin.java:563-568`. Remote server also writes resolv.conf + mkdirs `/workspace` (`server/sandbox-server.cjs:152-162, 338`).
+- Non-proot Java plugins verified process-free: `GIAScreenAgentPlugin`, `GIAUpdatePlugin`, `GIADeviceInfoPlugin`, `GIAMediaPlugin`, `GIAIntentPlugin`, `CorePlugin`.
+
+**Divergent/fragile copies — real traps:**
+- `GIAProotNative.java:84` — DEAD but divergent argv (no loader env, no PR_SET_DUMPABLE). Do not port/revive it as "the simpler path"; keep. JNI `loadLibrary("proot")` always fails so it never runs.
+- `src/services/CodeRunner.ts:112-137` `runInSandbox()` — BROKEN dead copy: wrong proot style (`-S`, `files/alpine` path), then misuses `Filesystem.readFile` with the command string as path. Only unreachable because `isSandboxAvailable()` (`:67-75`, stats `files/alpine/bin/sh` = never exists) is always false. Delete or rewrite against `TerminalService`.
+- **Native drops `workdir`/`env`:** TS `TerminalService.exec()` (`:155-191`) passes them, but `GIATerminalPlugin.exec` (`:73-126`) reads only command/sessionId/timeout; proot hardcodes `-w /root`. Every native exec runs in `/root` (remote honors workdir → native/remote behavioral split).
+
+**Missing DNS / package-verification — these fail silently:**
+- `src/services/tools/security.ts:38`, `ssh.ts:103`, `network.ts:7` — `apk` via hardcoded `http://localhost:3081/exec` → dead on-device. `database.ts:47` — `execViaSandbox` `apk add` with no `apk update` first.
+- `src/services/SandboxEnvService.ts:313-329` `repair()` — `apk update/fix` but NEVER regenerates a deleted resolv.conf (installEnvironment `:184-191` + provision `:267-275` are the correct DNS-first pattern to copy).
+- Correct DNS-first pattern to replicate: `SandboxSetupPanel.tsx:208-220` (Full Install) + `SandboxEnvService` above.
+
+**Workspace & helper-script gaps — tools that fail out-of-the-box:**
+- `/workspace` created ONLY by the Full Install button (`SandboxSetupPanel.tsx:246-248`, explicit-space `mkdir -p` — busybox ash silently no-ops brace expansion). Native `writeFile` (`SandboxService.ts:125-131`) never mkdirs it; `filegen.ts` writes its input with a relative path (= `/root` on native) then reads `/workspace/<it>` → always fails on-device.
+- `generate_file` pdf/pptx/docx (`filegen.ts:78-82, 121`): `gen_pdf.py`/`gen_pptx.py`/`gen_docx.py` DO NOT EXIST anywhere in the repo and are never provisioned → those formats always fail, remote AND native.
+- `browse_web.py` exists in `server/` but is never uploaded to `/workspace` → `documents.ts:325` fails fresh. Only `read_doc.py` is self-provisioning (`documents.ts:467 READ_DOC_SCRIPT`).
+- Bare `python3`/`node` with zero toolchain check: `filegen.ts:121`, `documents.ts:325/469`, `tools/build.ts` (a fresh rootfs yields confusing `sh: node: not found`). Safe pattern to copy: `SandboxEnvService.ts:200-207` version-check + short-circuit.
+
+**Proposed fix order (user value):** (1) provision `gen_*.py` + `browse_web.py`; (2) native exec/writeFile honor `workdir` + `mkdir -p /workspace`; (3) delete `CodeRunner.runInSandbox`; (4) DNS guard in `repair()`.
+**Do NOT fix any of this without the user's go** (standing rule: don't commit/work without instructions; UI shows the MCP-tab catalog in `SandboxSetupPanel.tsx:107-116, 654-678` is static links only — no real MCP wiring there).
+
+## 2026-09-22 — audit fixes implemented + 3 user complaints confirmed (pending, do tomorrow)
+
+### Fix round 1 — DONE, verified (830/830 tests, tsc, eslint on changed files, `npm run build` ✔)
+All applied to the working tree (HEAD still `0f1e074`; nothing committed). Java edits are read-verified only — no Java toolchain on this box, they need the CI `gradlew` run:
+1. **Provision `gen_*.py` + `browse_web.py`:** `src/services/tools/filegen.ts` — `gen_pdf.py`/`gen_pptx.py`/`gen_docx.py` (never existed in repo) now embedded as `GEN_SCRIPT_BODY` const (stdlib-only, JSON-on-stdin) and self-provisioned to `/workspace/` + input file, exec'd with absolute paths, both deleted in `finally`. `src/services/tools/documents.ts` — `BROWSE_WEB_SCRIPT` mirrors `server/browse_web.py`; `browse_web` writes it to `/workspace/browse_web.py` before exec and deletes after.
+2. **Native exec/writeFile honor `workdir` + `mkdir -p /workspace`:** `GIATerminalService.java` — `startSession`/`buildProotArgs`/`configureProotEnvironment` got `(…, workdir, env)` overloads (old 3-arg forms delegate); proot `-w` now uses caller workdir (default `/root`); `extraEnv` applied FIRST so guest critical vars (HOME/PATH/proot loader) always win. `GIATerminalPlugin.java` — `exec`/`spawn` pass `workdirFrom(call)`/`envFrom(call)` (new helpers; `HashMap` import). `SandboxService.ts` — `sandboxParent()` helper; native `writeFile` runs `mkdir -p -- "<parent>"` first.
+3. **Delete `CodeRunner.runInSandbox`:** `src/services/CodeRunner.ts` — dead broken `runInSandbox` + `isSandboxAvailable` removed, branch deleted, `@capacitor/filesystem` `Directory`/`Filesystem` import removed (file now 302 lines).
+4. **DNS guard in repair():** `src/services/SandboxEnvService.ts` — `repair()` seeds `test -f /etc/resolv.conf || (echo nameserver 8.8.8.8 … 1.1.1.1 …)` before `apk update`.
+
+### Fix round 2 — 3 user complaints CONFIRMED, do tomorrow (user's go given 2026-09-22)
+1. **No skill creator.** CONFIRMED. GIA only has `skill_list`/`skill_activate` (`src/services/tools/skills.ts:11,28`) + `install_skill` (install of pre-built URL/package defs, `src/services/tools/build.ts:218`). `SkillsMarketplace.createCustomSkill` exists (`src/services/SkillsMarketplace.ts:1014`) but its ONLY caller is the Settings form (`src/components/settings/SkillsMarketplaceSection.tsx:105`) — no chat tool, so GIA cannot author a skill while talking. **Fix:** add `skill_create` tool (schema → `createCustomSkill`), register in `src/services/tools/index.ts` + prompt table at `src/services/buildGiaSystem.ts:170`; optional `skill_delete`/`skill_edit`.
+2. **Always running in background.** CONFIRMED. `android/.../BootReceiver.java:20-29` starts `GIACoreService` unconditionally on every boot (`ACTION_BOOT_COMPLETED`) with wake word `"JARVIS"` (0.7f sensitivity). `GIACoreService.java` is a foreground service (`startForeground` :78, `START_STICKY` :90) holding an **indefinite `PARTIAL_WAKE_LOCK`** (:119) with a watchdog that re-acquires the lock if stripped (:132-148). `GIAAccessibilityService.java:234-235` also persists once OS-enabled. No preference gates the boot receiver. **Fix:** gate `BootReceiver` on a persisted prefs toggle + UI control (Settings → Developer), and stop the core/fg service when the user turns GIA off; consider deferring `startWakeLockWatchdog`/wake lock until a user action needs it.
+2b. **TerminalService always active even when terminal not set up.** CONFIRMED. `GIATerminalPlugin.load()` (`GIATerminalPlugin.java:40-43`) calls `startTerminalService()` (:56-64) UNCONDITIONALLY at plugin registration — every app launch starts the foreground `GIATerminalService` (`giaterminalservice` is `START_STICKY`, `GIATerminalService.java:242`; `startForeground` :197, :235), which immediately kicks off rootfs extraction in `onStartCommand` (:214-226). No check whether the rootfs was ever set up (`GIATerminalPlugin.java:800-809` already exposes a `.gia-rootfs-ok` marker written by `extractAndVerify` :685-689 — gate on it). **Fix:** in `startTerminalService()` only start when rootfs marker exists (or after first successful setup), else defer until `terminalRun`/`sandbox_exec` first needs it.
+3. **Not proactive.** CONFIRMED (opt-in, off by default). Full autonomy stack exists (`useAutonomyStore`, `useAutomationStore`, `useProtocolStore` fullAutonomy, `SchedulerService`, `ProactiveEngine.ts`) but `useAutonomyStore.ts:49` `enabled: false` default and `ProactiveEngine.ts` early-returns on that flag — nothing initiates until the user flips Settings → Autonomy. **Fix:** the user wants proactivity to work; plan = default toggle on + opt-in onboarding nudge, and verify ProactiveEngine actually fires (schedules, proactive tools, notifications).
+
+**Standing rules:** don't commit without the user's go; do not `git add` blindly; keep `M AGENTS.md` + untracked `.github/copilot-instructions.md` as-is unless asked. Repo git identity still unset — use inline `-c user.name=alpha-1-design -c user.email=alpha-1-design@users.noreply.github.com`.
+
+## 2026-09-23 — release hardening completed
+
+Completed:
+
+- Sandbox package operations now detect `apk` or `apt-get` explicitly. Unsupported package managers fail clearly instead of silently defaulting to Alpine.
+- Alpine and Ubuntu provisioning use their native package managers, including Debian mappings for `py3-pip` and `build-base`.
+- Package index, install, repair, and reset failures are surfaced as failures.
+- Remote sandbox host fallback was removed. A missing rootfs now blocks execution instead of running commands on the host.
+- Remote filesystem paths are canonicalized and constrained to the configured workspace; clone inputs are validated.
+- Sandbox tests cover Alpine detection, Ubuntu package selection, unsupported-manager failure, provisioning, repair, reset, and workspace behavior.
+- Daemon hardening removed Telegram token-prefix logging, preserves the last valid config during reload failures, reconciles pollers after valid reloads, and documents bridge-only Telegram behavior.
+- Test validation reached 84 test files and 836 passing tests before the latest release-validation run; focused sandbox coverage is green after the test updates.
+
+Remaining release gates:
+
+- Android Gradle compilation must run in CI or Android Studio because this Windows environment has no Java/JAVA_HOME.
+- Alpine and Ubuntu installation, package operations, file creation, permissions, Termux, and lifecycle behavior still require real Android-device validation.
+- Credential/permission automatic continuation and legacy credential-store consolidation remain follow-up work.

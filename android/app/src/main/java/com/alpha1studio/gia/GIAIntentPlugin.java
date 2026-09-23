@@ -10,6 +10,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.util.ArrayList;
+import org.json.JSONArray;
 
 @CapacitorPlugin(name = "GIAIntent")
 public class GIAIntentPlugin extends Plugin {
@@ -167,5 +168,62 @@ public class GIAIntentPlugin extends Plugin {
     public void clearIntent(PluginCall call) {
         getActivity().setIntent(new Intent());
         call.resolve();
+    }
+
+    @PluginMethod
+    public void termuxStatus(PluginCall call) {
+        boolean installed;
+        try {
+            getContext().getPackageManager().getPackageInfo("com.termux", 0);
+            installed = true;
+        } catch (Exception e) {
+            installed = false;
+        }
+        JSObject result = new JSObject();
+        result.put("installed", installed);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void openTermux(PluginCall call) {
+        Intent launch = getContext().getPackageManager().getLaunchIntentForPackage("com.termux");
+        if (launch == null) {
+            call.reject("Termux is not installed");
+            return;
+        }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(launch);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void runTermuxCommand(PluginCall call) {
+        String command = call.getString("command");
+        if (command == null || command.trim().isEmpty()) {
+            call.reject("command is required");
+            return;
+        }
+        Intent run = new Intent("com.termux.RUN_COMMAND");
+        run.setPackage("com.termux");
+        run.putExtra("com.termux.RUN_COMMAND_PATH", command);
+        JSONArray jsonArgs = call.getArray("args");
+        String[] args = new String[jsonArgs == null ? 0 : jsonArgs.length()];
+        if (jsonArgs != null) {
+            try {
+                for (int i = 0; i < jsonArgs.length(); i++) args[i] = jsonArgs.getString(i);
+            } catch (Exception e) {
+                call.reject("args must be an array of strings", e);
+                return;
+            }
+        }
+        run.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", args);
+        run.putExtra("com.termux.RUN_COMMAND_WORKDIR", call.getString("workdir", "/data/data/com.termux/files/home"));
+        run.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        try {
+            getContext().sendBroadcast(run, "com.termux.permission.RUN_COMMAND");
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Termux command could not be started", e);
+        }
     }
 }

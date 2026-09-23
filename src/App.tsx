@@ -146,6 +146,15 @@ const App: React.FC = () => {
   const edgeSwipeRef = useRef<EdgeSwipeState | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  useEffect(() => {
+    const native = Capacitor.isNativePlatform();
+    document.documentElement.classList.toggle('gia-phone', native);
+    document.documentElement.classList.toggle('gia-browser', !native);
+    return () => {
+      document.documentElement.classList.remove('gia-phone', 'gia-browser');
+    };
+  }, []);
+
   // Hardware-keyboard command palette — Ctrl/Cmd+K from anywhere.
   // Memoized: an inline array literal here was a fresh reference every App
   // render, and useKeyboardShortcuts' effect depends on it — rebinding the

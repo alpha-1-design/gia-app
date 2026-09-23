@@ -18,7 +18,7 @@ export interface MCPServerConfig {
   oauthClientId?: string;
   oauthRedirectUri?: string;
   oauthScopes?: string;
-  // Stored tokens (not persisted to IndexedDB for security)
+  // Runtime-only token fields. Persisted state strips these fields below.
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
@@ -125,7 +125,22 @@ export const useMCPStore = create<MCPStoreState>()(
     {
       name: 'gia-mcp-storage-v1',
       storage: createJSONStorage(() => idbStorage),
-      partialize: (s) => ({ servers: s.servers }),
+      partialize: (s) => ({
+        servers: s.servers.map(server => ({
+          id: server.id,
+          name: server.name,
+          transport: server.transport,
+          url: server.url,
+          command: server.command,
+          args: server.args,
+          enabled: server.enabled,
+          autoConnect: server.autoConnect,
+          oauthUrl: server.oauthUrl,
+          oauthClientId: server.oauthClientId,
+          oauthRedirectUri: server.oauthRedirectUri,
+          oauthScopes: server.oauthScopes,
+        })),
+      }),
     }
   )
 );

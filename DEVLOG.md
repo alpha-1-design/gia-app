@@ -4,6 +4,45 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-09-23
+
+### Release hardening — sandbox, daemon, and validation
+
+Hardened the execution boundary and documented the remaining Android-only release gates.
+
+**Sandbox and rootfs**
+
+- Removed the remote server's silent host-execution fallback. Missing or invalid rootfs state now fails explicitly.
+- Canonicalized remote filesystem paths and constrained reads, writes, deletes, listings, and downloads to the configured workspace.
+- Validated clone repository URLs and destination names before execution.
+- Added explicit package-manager detection for native rootfs provisioning:
+  - Alpine uses `apk`.
+  - Ubuntu uses `apt-get`.
+  - Debian package mappings include `py3-pip` → `python3-pip` and `build-base` → `build-essential`.
+- Package index, install, repair, and reset errors now return failures instead of warning-shaped success.
+
+**Daemon**
+
+- Removed Telegram token-prefix logging.
+- Invalid configuration reloads preserve the last valid configuration.
+- Valid reloads reconcile the Telegram poller.
+- Telegram behavior is explicitly documented as acknowledgement-only bridge mode; it does not claim to provide LLM routing.
+- Added focused daemon configuration/reload tests.
+
+**Tests**
+
+- Updated sandbox mocks for explicit Alpine detection.
+- Added Ubuntu package-manager and unsupported-manager coverage.
+- Focused sandbox coverage: 46 tests passed.
+- Full suite before the final release-validation pass: 84 test files, 836 tests passed.
+- Lint, production build, syntax checks, and `git diff --check` passed for the hardening changes.
+
+**Release limitation**
+
+Android Gradle compilation could not run on the Windows development machine because Java/JAVA_HOME is unavailable. Native PRoot/rootfs behavior, permissions, Termux, lifecycle services, and Alpine/Ubuntu installation still require CI/Android Studio and a real-phone pass.
+
+---
+
 ## 2026-07-20
 
 ### Premium push — Tier 2.5: Reaction feedback injected into GIA

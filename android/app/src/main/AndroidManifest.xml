@@ -51,6 +51,8 @@
 
     <!-- Required for VoiceInteractionService (default assistant) -->
     <uses-permission android:name="android.permission.BIND_VOICE_INTERACTION" />
+    <!-- Allows the user-authorized Termux bridge to receive explicit commands. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 

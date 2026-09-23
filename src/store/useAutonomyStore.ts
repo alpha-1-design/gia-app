@@ -46,7 +46,7 @@ export const useAutonomyStore = create<AutonomyStore>()(
       plans: [],
       reflections: [],
       config: {
-        enabled: false,
+        enabled: true,
         proactivenessLevel: 0.5,
         maxConcurrentGoals: 3,
         reflectionRequired: true,

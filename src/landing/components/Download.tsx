@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { Package, Download as DownloadIcon, ArrowRight, Rocket, Boxes, Terminal, Wifi, RefreshCcw, ExternalLink } from 'lucide-react'
+import { Package, Download as DownloadIcon, ArrowRight, Rocket, Boxes, Terminal, Wifi, RefreshCcw, ExternalLink, ShieldCheck, KeyRound, Smartphone } from 'lucide-react'
 
 const BASE = 'https://github.com/alpha-1-design/gia-cowork/releases/download/v0.1.0'
 
@@ -46,6 +46,15 @@ const steps = [
   { icon: Wifi, title: 'Pair the phone', desc: 'Point gia-app at the desktop’s LAN URL with the same pairing id — two devices, one brain.' },
 ]
 
+const phoneReleaseHighlights = [
+  'Phone-first Android experience with native device controls',
+  'Secure credential vault with Android Keystore support',
+  'Alpine apk and Ubuntu apt-get sandbox provisioning',
+  'Termux integration with explicit user approval',
+  'Safer workspace file operations and no silent host fallback',
+  'Live capability center for providers, permissions, terminal, and device features',
+]
+
 export function Download() {
   return (
     <section id="download" className="relative py-28 overflow-hidden bg-[#050508]">
@@ -73,6 +82,46 @@ export function Download() {
             releases on launch, streams newer builds to <code className="text-violet-400">~/Downloads</code>{' '}
             with a live progress bar, then installs and relaunches itself — no package manager gymnastics.
           </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.10] via-white/[0.03] to-cyan-500/[0.06] p-6 sm:p-8 mb-12"
+        >
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-400/20 text-violet-200 text-[10px] font-bold uppercase tracking-widest mb-4">
+                <Smartphone size={12} />
+                Phone release · v2.4.0.10
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+                A real assistant for your Android device.
+              </h3>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                GIA v2.4.0.10 brings the phone app’s device, privacy, and sandbox foundations
+                together. It can ask before sensitive actions, request credentials without exposing
+                them in chat, and keep execution inside the configured workspace.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3 min-w-0 lg:max-w-xl">
+              {phoneReleaseHighlights.map((highlight) => (
+                <div key={highlight} className="flex items-start gap-2.5 rounded-xl bg-black/20 border border-white/[0.06] px-3 py-3">
+                  <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-300" />
+                  <span className="text-xs leading-relaxed text-zinc-300">{highlight}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
+            <span className="inline-flex items-center gap-1.5"><KeyRound size={13} className="text-amber-300" /> Credentials stay protected</span>
+            <span className="text-zinc-700">·</span>
+            <span>Android APK available from GitHub Releases</span>
+            <a href="https://github.com/alpha-1-design/gia-app/releases" target="_blank" rel="noopener noreferrer" className="text-violet-300 hover:text-violet-200 font-semibold transition-colors">
+              View v2.4.0.10 release →
+            </a>
+          </div>
         </motion.div>
 
         {/* Package cards */}

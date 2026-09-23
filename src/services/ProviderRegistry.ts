@@ -11,6 +11,7 @@ export interface ProviderDef {
   imageModel?: string;
   headers?: Record<string, string>;
   aliases?: string[];
+  apiKeyUrl?: string;
 }
 
 interface StaticModelOption {
@@ -24,11 +25,11 @@ interface StaticModelOption {
 
 const FALLBACK_PROVIDERS: ProviderDef[] = [
   // Primary / cloud providers
-  { id: 'openai',       label: 'OpenAI',        baseUrl: 'https://api.openai.com/v1',                 defaultModel: 'gpt-4o-mini',      needsApiKey: true,  listingType: 'openai',     aliases: ['oai'] },
-  { id: 'anthropic',    label: 'Anthropic',     baseUrl: 'https://api.anthropic.com/v1',               defaultModel: 'claude-sonnet-4-6', needsApiKey: true,  listingType: 'anthropic', aliases: ['ant', 'claude'] },
-  { id: 'gemini',       label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com',  defaultModel: 'gemini-2.5-flash', needsApiKey: true,  listingType: 'gemini',    aliases: ['gmi', 'google'] },
+  { id: 'openai',       label: 'OpenAI',        baseUrl: 'https://api.openai.com/v1',                 defaultModel: 'gpt-4o-mini',      needsApiKey: true,  listingType: 'openai',     aliases: ['oai'], apiKeyUrl: 'https://platform.openai.com/api-keys' },
+  { id: 'anthropic',    label: 'Anthropic',     baseUrl: 'https://api.anthropic.com/v1',               defaultModel: 'claude-sonnet-4-6', needsApiKey: true,  listingType: 'anthropic', aliases: ['ant', 'claude'], apiKeyUrl: 'https://console.anthropic.com/settings/keys' },
+  { id: 'gemini',       label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com',  defaultModel: 'gemini-2.5-flash', needsApiKey: true,  listingType: 'gemini',    aliases: ['gmi', 'google'], apiKeyUrl: 'https://aistudio.google.com/app/apikey' },
   { id: 'opencode',     label: 'OpenCode Zen',  baseUrl: 'https://opencode.ai/zen/v1',                 defaultModel: 'deepseek-v4-flash-free',    needsApiKey: true,  listingType: 'openai',     aliases: ['oc', 'zen'] },
-  { id: 'openrouter',   label: 'OpenRouter',    baseUrl: 'https://openrouter.ai/api/v1',               defaultModel: 'google/gemma-3-27b-it:free', needsApiKey: true, listingType: 'openai', aliases: ['or'] },
+  { id: 'openrouter',   label: 'OpenRouter',    baseUrl: 'https://openrouter.ai/api/v1',               defaultModel: 'google/gemma-3-27b-it:free', needsApiKey: true, listingType: 'openai', aliases: ['or'], apiKeyUrl: 'https://openrouter.ai/keys' },
   { id: 'groq',         label: 'Groq',          baseUrl: 'https://api.groq.com/openai/v1',            defaultModel: 'llama3-70b-8192',  needsApiKey: true,  listingType: 'openai',     aliases: [] },
   { id: 'deepseek',     label: 'DeepSeek',      baseUrl: 'https://api.deepseek.com/v1',                defaultModel: 'deepseek-chat',    needsApiKey: true,  listingType: 'openai',     aliases: ['ds'] },
   { id: 'cerebras',     label: 'Cerebras',      baseUrl: 'https://api.cerebras.ai/v1',                defaultModel: 'llama3.1-8b',      needsApiKey: true,  listingType: 'openai',     aliases: [] },
@@ -305,6 +306,10 @@ class ProviderRegistry {
 
   getNeedsApiKey(id: string): boolean {
     return this.providers.get(id)?.needsApiKey ?? true;
+  }
+
+  getApiKeyUrl(id: string): string | undefined {
+    return this.providers.get(id)?.apiKeyUrl;
   }
 
   /** Resolve an id or alias to a full provider id, or return the input unchanged if not found. */

@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.9';
+const VERSION = '2.4.0.10';
 
 const sections = [
   {

@@ -7,6 +7,9 @@ export class GIAIntentWeb implements GIAIntentPlugin {
   }
 
   async clearIntent(): Promise<void> {}
+  async termuxStatus(): Promise<{ installed: boolean }> { return { installed: false }; }
+  async openTermux(): Promise<void> { throw new Error('Termux integration requires the native Android app'); }
+  async runTermuxCommand(): Promise<void> { throw new Error('Termux integration requires the native Android app'); }
 
   async addListener(eventName: 'onAssist', handler: (data: { source: string; type: string }) => void): Promise<PluginListenerHandle>;
   async addListener(eventName: 'onDeepLink', handler: (data: { type: string; uri: string; scheme: string; host: string; path: string; query: string }) => void): Promise<PluginListenerHandle>;

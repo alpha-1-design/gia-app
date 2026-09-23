@@ -3,52 +3,65 @@
  * Reads from ~/.gia/gateway.json — the same file the GIA app syncs to.
  */
 import fs from 'node:fs';
+import path from 'node:path';
+
+export const DEFAULT_CONFIG = Object.freeze({
+  telegram: { enabled: false, mode: 'bridge' },
+  discord: { enabled: false },
+  llm: {
+    provider: 'openai',
+    model: 'gpt-4o',
+    apiKey: '',
+    baseUrl: 'https://api.openai.com/v1',
+  },
+  logLevel: 'info',
+});
 
 export class ConfigManager {
-  constructor(configPath) {
+  constructor(configPath, logger = console) {
     this.path = configPath;
+    this.logger = logger;
     this.data = {};
-    this.load();
+    this.load(true);
   }
 
-  load() {
+  load(initial = false) {
     try {
       const raw = fs.readFileSync(this.path, 'utf-8');
-      this.data = JSON.parse(raw);
-      console.log(`[config] Loaded ${Object.keys(this.data).length} top-level keys`);
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('config root must be an object');
+      }
+      this.data = parsed;
+      this.logger.log(`[config] Loaded ${Object.keys(this.data).length} top-level keys`);
+      return true;
     } catch (err) {
       if (err.code === 'ENOENT') {
-        console.log(`[config] No config file at ${this.path}, creating defaults`);
-        this.data = {
-          telegram: { enabled: false },
-          discord: { enabled: false },
-          llm: {
-            provider: 'openai',
-            model: 'gpt-4o',
-            apiKey: '',
-            baseUrl: 'https://api.openai.com/v1',
-          },
-          logLevel: 'info',
-        };
+        this.logger.log(`[config] No config file at ${this.path}, creating defaults`);
+        this.data = structuredClone(DEFAULT_CONFIG);
         this.save();
+        return true;
       } else {
-        console.error(`[config] Error loading config: ${err.message}`);
-        this.data = {};
+        // Never replace a known-good config with an incomplete parse during a
+        // concurrent/partial write. On startup, use safe defaults in memory.
+        this.logger.error(`[config] Error loading config: ${err.message}`);
+        if (initial) this.data = structuredClone(DEFAULT_CONFIG);
+        return false;
       }
     }
   }
 
   reload() {
-    this.load();
+    return this.load(false);
   }
 
   save() {
     try {
-      const dir = this.path.substring(0, this.path.lastIndexOf('/'));
+      const dir = path.dirname(this.path);
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(this.path, JSON.stringify(this.data, null, 2));
     } catch (err) {
-      console.error(`[config] Error saving config: ${err.message}`);
+      this.logger.error(`[config] Error saving config: ${err.message}`);
     }
   }
 

@@ -49,6 +49,7 @@ import { sshTools } from './ssh';
 import { taskTools } from './tasks';
 import { telegramTools } from './telegram';
 import { terminalTools } from './terminal';
+import { termuxTools } from './termux';
 import { webSearchTools } from './webSearch';
 import { websocketTools } from './websocket';
 
@@ -102,6 +103,7 @@ export function registerAllTools(): void {
     taskTools,
     telegramTools,
     terminalTools,
+    termuxTools,
     webSearchTools,
     websocketTools,
   ];

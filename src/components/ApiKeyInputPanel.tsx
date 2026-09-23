@@ -5,6 +5,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
 import { logger } from '../utils/logger';
+import credentialStore from '../store/useCredentialStore';
+import connectorManager from '../services/connectors/ConnectorManager';
 
 const ApiKeyInputPanel: React.FC = () => {
   const { pendingApiKeyRequest, setPendingApiKeyRequest } = useGiaStore(
@@ -19,7 +21,7 @@ const ApiKeyInputPanel: React.FC = () => {
 
   if (!pendingApiKeyRequest) return null;
 
-  const { providerId, description } = pendingApiKeyRequest;
+  const { providerId, description, label, kind = 'api_key', connectorId } = pendingApiKeyRequest;
 
   const handleSave = async () => {
     if (!apiKey.trim()) {
@@ -30,14 +32,31 @@ const ApiKeyInputPanel: React.FC = () => {
     setError(null);
     try {
       const { providers } = useProviderStore.getState();
-      const providerConfigs = providers;
-      if (providerConfigs[providerId]) {
+      const serviceId = connectorId || providerId;
+      if (providers[providerId]) {
+        credentialStore.getState().setCredential({
+          serviceId,
+          label: label || providerId,
+          kind,
+          value: apiKey.trim(),
+        });
         useProviderStore.getState().setProviderKey(providerId, apiKey.trim());
         setPendingApiKeyRequest(null);
         setApiKey('');
         useGiaStore.getState().addNotification(`API key saved for ${providerId}`);
+      } else if (connectorId && connectorManager.get(connectorId)) {
+        credentialStore.getState().setCredential({
+          serviceId,
+          label: label || providerId,
+          kind,
+          value: apiKey.trim(),
+        });
+        connectorManager.configure(connectorId, { apiKey: apiKey.trim(), enabled: true });
+        setPendingApiKeyRequest(null);
+        setApiKey('');
+        useGiaStore.getState().addNotification(`${label || connectorId} credential saved`);
       } else {
-        setError(`Provider ${providerId} not found. Add it in Settings first.`);
+        setError(`Service ${label || providerId} is not registered yet. Add it from Settings → Connections.`);
       }
     } catch (e) {
       setError((e as Error).message || 'Failed to save API key');
@@ -91,7 +110,7 @@ const ApiKeyInputPanel: React.FC = () => {
                 type="password"
                 value={apiKey}
                 onChange={(e) => { setApiKey(e.target.value); setError(null); }}
-                placeholder="Enter API key..."
+                placeholder={kind === 'token' ? 'Paste token…' : 'Enter API key…'}
                 className="w-full px-3 py-2 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 style={{
                   background: 'var(--gia-surface-2)',

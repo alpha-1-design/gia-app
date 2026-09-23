@@ -30,6 +30,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GIAMediaPlugin.class);
         registerPlugin(GIAUpdatePlugin.class);
         registerPlugin(GIADeviceInfoPlugin.class);
+        registerPlugin(GIACredentialVaultPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

@@ -66,6 +66,29 @@ function pickRandom<T>(arr: T[], count: number): T[] {
 
 export function generateSuggestions(content: string, userQuestion?: string): string[] {
   const pool = [...ALL_SUGGESTIONS.general];
+  const combined = `${content}\n${userQuestion || ''}`;
+
+  if (/(?:api key|token|credential|sign in|connect(?:ed|ion)?|permission required|not configured)/i.test(combined)) {
+    pool.push('Open Connections and manage this service');
+    pool.push('What permissions will GIA need?');
+    pool.push('Test the connection now');
+  }
+
+  if (/(?:github|repository|repo|pull request|issue)/i.test(combined)) {
+    pool.push('Check my private repositories too');
+    pool.push('Show me what GIA can do with GitHub');
+  }
+
+  if (/(?:error|failed|unavailable|cannot|could not|blocked)/i.test(combined)) {
+    pool.push('What exactly do you need from me?');
+    pool.push('Try the safest alternative');
+    pool.push('Show me how to fix this');
+  }
+
+  if (/(?:created|updated|deleted|sent|changed|scheduled|moved)/i.test(content)) {
+    pool.push('Undo that change');
+    pool.push('What else can you do here?');
+  }
 
   if (EXPLANATION_MARKERS.test(content) || EXPLANATION_MARKERS.test(userQuestion || '')) {
     pool.push(...ALL_SUGGESTIONS.examples);

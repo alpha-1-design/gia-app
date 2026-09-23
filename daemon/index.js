@@ -1,7 +1,7 @@
 /**
  * GIA Gateway Daemon
  * 
- * Runs 24/7 in proot+Alpine terminal. Listens on Telegram, Discord, etc.
+ * Runs 24/7 in proot+Alpine terminal. Provides a Telegram bridge.
  * Reads config from ~/.gia/gateway.json (shared with the GIA app).
  * 
  * Usage:
@@ -30,39 +30,69 @@ async function main() {
   // Ensure config dir
   try { fs.mkdirSync(GIA_DIR, { recursive: true }); } catch {}
 
-  const config = new ConfigManager(CONFIG_PATH);
+  const config = new ConfigManager(CONFIG_PATH, { log: (...args) => log(...args), error: (...args) => log(...args) });
   const pollers = [];
+  let telegram = null;
 
-  // ── Telegram ───────────────────────────────────────────────
-  if (config.get('telegram.botToken') && config.get('telegram.enabled') !== false) {
+  const stopTelegram = () => {
+    if (!telegram) return;
+    telegram.stop();
+    const index = pollers.indexOf(telegram);
+    if (index !== -1) pollers.splice(index, 1);
+    telegram = null;
+  };
+
+  const reconcileTelegram = () => {
     const token = config.get('telegram.botToken');
-    log(`Telegram: starting poller with token ${token.slice(0, 8)}...`);
+    const enabled = config.get('telegram.enabled') !== false;
+    const mode = config.get('telegram.mode') || 'bridge';
+    if (!token || !enabled) {
+      if (telegram) log('Telegram: stopping (disabled or not configured)');
+      stopTelegram();
+      if (!token) log('⚠️ Telegram not configured — set "telegram.botToken" in gateway.json');
+      return;
+    }
+    if (mode !== 'bridge') {
+      log(`⚠️ Telegram mode "${mode}" is unsupported; only bridge mode is available`);
+      stopTelegram();
+      return;
+    }
+    stopTelegram();
+    log('Telegram: starting bridge poller (no LLM routing)');
     const tg = new TelegramPoller(token, config.get('telegram.channelId'));
     tg.onMessage(async (msg) => {
       log(`📩 Telegram message from ${msg.from?.username || msg.from?.id}: ${msg.text?.slice(0, 100)}`);
-      // Send to LLM and reply
-      await tg.sendMessage(msg.chat.id, `🤖 GIA received your message! (This is a daemon bridge — full LLM routing coming soon)`);
+      await tg.sendMessage(msg.chat.id, 'GIA received your Telegram message. This daemon currently sends acknowledgements only; LLM routing is not enabled.');
     });
     tg.onError((err) => log(`❌ Telegram error: ${err.message}`));
     tg.start();
-    pollers.push(tg);
+    telegram = tg;
+    pollers.push(telegram);
     log('✅ Telegram poller started');
-  } else {
-    log('⚠️ Telegram not configured — set "telegram.botToken" in gateway.json');
-  }
+  };
+
+  reconcileTelegram();
 
   // ── Watch config for changes ──────────────────────────────
-  let lastConfigStat = null;
-  try { lastConfigStat = fs.statSync(CONFIG_PATH); } catch {}
+  let lastConfigSignature = null;
+  try {
+    const stat = fs.statSync(CONFIG_PATH);
+    lastConfigSignature = `${stat.mtimeMs}:${stat.size}`;
+  } catch {}
   
   setInterval(() => {
     try {
       const stat = fs.statSync(CONFIG_PATH);
-      if (stat.mtimeMs !== lastConfigStat?.mtimeMs) {
-        lastConfigStat = stat;
+      const signature = `${stat.mtimeMs}:${stat.size}`;
+      if (signature !== lastConfigSignature) {
         log('🔄 Config changed, reloading...');
-        config.reload();
-        // In future: restart pollers on config change
+        if (config.reload()) {
+          lastConfigSignature = signature;
+          reconcileTelegram();
+          log('✅ Config reloaded');
+        } else {
+          log('⚠️ Config reload rejected; keeping the last valid configuration');
+        }
       }
     } catch {}
   }, 10000);

@@ -15,6 +15,7 @@ interface ProtocolStore {
   protocols: ProtocolProposal[];
   consoleProtocols: ProtocolProposal[];
   pendingConfirm: PendingConfirm | null;
+  pendingQueue: PendingConfirm[];
   autoConfirmTypes: ProtocolType[];
   fullAutonomy: boolean;
 
@@ -43,6 +44,7 @@ export const useProtocolStore = create<ProtocolStore>()(
       protocols: [],
       consoleProtocols: [],
       pendingConfirm: null,
+      pendingQueue: [],
       autoConfirmTypes: [...DEFAULT_AUTO_CONFIRM],
       fullAutonomy: false,
 
@@ -157,30 +159,30 @@ export const useProtocolStore = create<ProtocolStore>()(
 
       waitForConfirmation: (protocolId, timeoutMs) => {
         return new Promise((resolve) => {
-          const existing = get().pendingConfirm;
-          if (existing?.timeout) clearTimeout(existing.timeout);
-
-          // Default to 120s (not 30s) so the user has time to review and
-          // approve/reject.  A short 30 s timeout made tools silently
-          // auto-reject on mobile where the approval card wasn't in view.
           const effectiveTimeout = timeoutMs ?? 120_000;
-
           const timeout = setTimeout(() => {
             get().reject(protocolId);
             resolve({ type: 'reject', protocolId, timestamp: Date.now() });
           }, effectiveTimeout);
 
-          set({ pendingConfirm: { protocolId, resolve, timeout } });
+          const pending = { protocolId, resolve, timeout };
+          set((state) => {
+            const queue = [...state.pendingQueue.filter((entry) => entry.protocolId !== protocolId), pending];
+            const nextPending = queue[0] ?? null;
+            return { pendingQueue: queue, pendingConfirm: nextPending };
+          });
         });
       },
 
       resolvePending: (action) => {
-        const pending = get().pendingConfirm;
-        if (pending && pending.protocolId === action.protocolId) {
-          if (pending.timeout) clearTimeout(pending.timeout);
-          pending.resolve(action);
-          set({ pendingConfirm: null });
-        }
+        set((state) => {
+          const matching = state.pendingQueue.find((entry) => entry.protocolId === action.protocolId);
+          if (!matching) return {};
+          if (matching.timeout) clearTimeout(matching.timeout);
+          matching.resolve(action);
+          const queue = state.pendingQueue.filter((entry) => entry.protocolId !== action.protocolId);
+          return { pendingQueue: queue, pendingConfirm: queue[0] ?? null };
+        });
       },
     }),
     {

@@ -78,8 +78,8 @@ function execCmd(cmd, opts = {}) {
 
 async function ensureDockerImage() {
   log('Checking for Alpine Docker image...');
-  const { exitCode } = await execCmd(`docker images -q ${ALPINE_IMAGE} 2>/dev/null | head -c1`);
-  if (exitCode !== 0 || !exitCode) {
+  const { exitCode, stdout } = await execCmd(`docker images -q ${ALPINE_IMAGE} 2>/dev/null | head -c1`);
+  if (exitCode !== 0 || !stdout.trim()) {
     log('Pulling Alpine image...');
     const result = await execCmd(`docker pull ${ALPINE_IMAGE}`, { timeout: 120000 });
     if (result.exitCode !== 0) throw new Error(`Failed to pull Alpine: ${result.stderr}`);
@@ -139,12 +139,7 @@ async function ensureProotRootfs() {
   }
 
   if (!fs.existsSync(ROOTFS) || !fs.existsSync(path.join(ROOTFS, 'bin', 'sh'))) {
-    log(`WARNING: Alpine rootfs still unavailable at ${ROOTFS}. Falling back to host execution in workspace.`);
-    useHostFallback = true;
-    if (!fs.existsSync(WORKSPACE)) {
-      fs.mkdirSync(WORKSPACE, { recursive: true });
-    }
-    return;
+    throw new Error(`Alpine rootfs unavailable at ${ROOTFS}; refusing unsafe host fallback`);
   }
 
   log(`Rootfs found at ${ROOTFS}`);
@@ -274,6 +269,17 @@ function parseBody(req) {
   });
 }
 
+function workspacePath(input) {
+  if (typeof input !== 'string' || !input.trim()) throw new Error('path is required');
+  const relative = input.replace(/^\/workspace(?:\/|$)/, '').replace(/^[/\\]+/, '');
+  const resolved = path.resolve(WORKSPACE, relative);
+  const root = path.resolve(WORKSPACE);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error('path must stay inside the workspace');
+  }
+  return resolved;
+}
+
 async function handleExec(req, res) {
   const { command, timeout, workdir } = await parseBody(req);
   if (!command) return sendJSON(res, 400, { error: 'command is required' });
@@ -302,7 +308,11 @@ async function handleInstall(req, res) {
   const { packages } = await parseBody(req);
   if (!packages || !packages.length) return sendJSON(res, 400, { error: 'packages array is required' });
   try {
-    const pkgList = Array.isArray(packages) ? packages.join(' ') : packages;
+    const requested = Array.isArray(packages) ? packages : [packages];
+    if (!requested.every(p => typeof p === 'string' && /^[A-Za-z0-9_.+@:-]+$/.test(p))) {
+      return sendJSON(res, 400, { error: 'packages contains an invalid package name' });
+    }
+    const pkgList = requested.join(' ');
     const result = await execInSandbox(`apk add --no-cache ${pkgList}`, { timeout: 120000 });
     sendJSON(res, 200, result);
   } catch (e) { sendJSON(res, 500, { error: e.message }); }
@@ -311,6 +321,12 @@ async function handleInstall(req, res) {
 async function handleClone(req, res) {
   const { repo, dest } = await parseBody(req);
   if (!repo) return sendJSON(res, 400, { error: 'repo URL is required' });
+  if (!/^https?:\/\/[^\s;&|`$]+$|^git@[A-Za-z0-9_.-]+:[^\s;&|`$]+$/.test(repo)) {
+    return sendJSON(res, 400, { error: 'repo must be a valid HTTPS or SSH Git URL' });
+  }
+  if (dest !== undefined && (!/^[A-Za-z0-9_.-]+$/.test(dest) || dest === '.' || dest === '..')) {
+    return sendJSON(res, 400, { error: 'dest must be a simple workspace directory name' });
+  }
   try {
     const destPath = dest || repo.split('/').pop().replace('.git', '');
     const result = await execInSandbox(`GIT_ASKPASS= GIT_TERMINAL_PROMPT=0 git clone --depth 1 ${repo} ${destPath}`, { timeout: 120000 });
@@ -322,8 +338,8 @@ async function handleFSRead(req, res) {
   const p = new url.URL(req.url, 'http://localhost').searchParams.get('path');
   if (!p) return sendJSON(res, 400, { error: 'path is required' });
   try {
-    const safePath = p.replace(/\.\./g, '');
-    const result = await execInSandbox(`cat ${JSON.stringify("/workspace/" + safePath)}`);
+    const safePath = workspacePath(p);
+    const result = await execInSandbox(`cat ${JSON.stringify(safePath.replace(WORKSPACE, '/workspace'))}`);
     if (result.exitCode !== 0) return sendJSON(res, 404, { error: result.stderr || 'File not found' });
     sendJSON(res, 200, { content: result.stdout });
   } catch (e) { sendJSON(res, 500, { error: e.message }); }
@@ -333,8 +349,7 @@ async function handleFSWrite(req, res) {
   const { path: p, content } = await parseBody(req);
   if (!p || content === undefined) return sendJSON(res, 400, { error: 'path and content are required' });
   try {
-    const safePath = p.replace(/\.\./g, '');
-    const fullPath = '/workspace/' + safePath;
+    const fullPath = workspacePath(p).replace(WORKSPACE, '/workspace');
     await execInSandbox(`mkdir -p /workspace`, { timeout: 5000 });
     // Write content via base64 to avoid shell escaping issues
     const encoded = Buffer.from(content).toString('base64');
@@ -348,8 +363,8 @@ async function handleFSDelete(req, res) {
   const { path: p } = await parseBody(req);
   if (!p) return sendJSON(res, 400, { error: 'path is required' });
   try {
-    const safePath = p.replace(/\.\./g, '');
-    const result = await execInSandbox(`rm -rf "/workspace/${safePath}"`);
+    const safePath = workspacePath(p).replace(WORKSPACE, '/workspace');
+    const result = await execInSandbox(`rm -rf -- ${JSON.stringify(safePath)}`);
     if (result.exitCode !== 0) return sendJSON(res, 500, { error: result.stderr });
     sendJSON(res, 200, { ok: true });
   } catch (e) { sendJSON(res, 500, { error: e.message }); }
@@ -358,8 +373,7 @@ async function handleFSDelete(req, res) {
 async function handleFSList(req, res) {
   const p = new url.URL(req.url, 'http://localhost').searchParams.get('path') || '';
   try {
-    const safePath = p.replace(/\.\./g, '');
-    const lsPath = safePath ? `"/workspace/${safePath}"` : '"/workspace"';
+    const lsPath = JSON.stringify(workspacePath(p || '/workspace').replace(WORKSPACE, '/workspace'));
     const result = await execInSandbox(`ls -la ${lsPath}`);
     if (result.exitCode !== 0) return sendJSON(res, 404, { error: result.stderr || 'Path not found' });
     const lines = result.stdout.split('\n').filter(l => l).slice(1);
@@ -427,11 +441,7 @@ async function handleFSDownload(req, res) {
   const p = new url.URL(req.url, 'http://localhost').searchParams.get('path');
   if (!p) return sendJSON(res, 400, { error: 'path query parameter is required' });
   try {
-    const safePath = p.replace(/\.\./g, '');
-    const fullPath = path.join(WORKSPACE, safePath);
-    const resolvedPath = path.resolve(fullPath);
-    if (!resolvedPath.startsWith(path.resolve(WORKSPACE)))
-      return sendJSON(res, 403, { error: 'Access denied' });
+    const resolvedPath = workspacePath(p);
     if (!fs.existsSync(resolvedPath))
       return sendJSON(res, 404, { error: 'File not found' });
     const stats = fs.statSync(resolvedPath);

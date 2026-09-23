@@ -1,22 +1,11 @@
 import { z } from 'zod';
 import { logger } from '../../utils/logger';
+import SandboxService from '../SandboxService';
 import type { Tool } from './types';
 
 async function sandboxExec(cmd: string, timeout = 15000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
-    const baseUrl = 'http://localhost:3081';
-    const res = await fetch(`${baseUrl}/exec`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmd, timeout: Math.floor(timeout / 1000) }),
-      signal: AbortSignal.timeout(timeout + 2000),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return { stdout: '', stderr: text, exitCode: 1 };
-    }
-    const data = await res.json();
-    return { stdout: data.stdout || '', stderr: data.stderr || '', exitCode: data.exitCode ?? 1 };
+    return await SandboxService.exec(cmd, { timeout });
   } catch (e) {
     return { stdout: '', stderr: (e instanceof Error ? e.message : String(e)), exitCode: 1 };
   }

@@ -640,6 +640,21 @@ public class GIATerminalService extends Service {
      */
     public static TerminalSession startSession(Context context, String sessionId, String command)
             throws IOException {
+        return startSession(context, sessionId, command, null, null);
+    }
+
+    /**
+     * Start a new terminal session running the given command inside proot+Alpine.
+     *
+     * @param sessionId Unique session identifier
+     * @param command   Shell command(s) to execute
+     * @param workdir   Working directory inside the guest (null/empty = /root)
+     * @param env       Extra environment variables for the guest (may be null)
+     * @return The TerminalSession, or throws if startup fails
+     */
+    public static TerminalSession startSession(Context context, String sessionId, String command,
+                                               String workdir, Map<String, String> env)
+            throws IOException {
 
         GIATerminalService service = null;
         if (context instanceof GIATerminalService) {
@@ -691,7 +706,7 @@ public class GIATerminalService extends Service {
         // github.com/SimonSchubert/Kai (ProotLauncher.kt) — a real,
         // actively-maintained Android app doing the same thing (Alpine/Ubuntu
         // via proot, no root) in production. See jniLibs/THIRD_PARTY_LICENSES.md.
-        List<String> prootArgs = buildProotArgs(prootPath, rootfsPath, prootTmpDir.getAbsolutePath(), command);
+        List<String> prootArgs = buildProotArgs(prootPath, rootfsPath, prootTmpDir.getAbsolutePath(), command, workdir, env);
 
         // Setup I/O pipes — PipedOutputStream connects TO PipedInputStream
         PipedInputStream stdinIn = new PipedInputStream();
@@ -701,7 +716,7 @@ public class GIATerminalService extends Service {
         pb.command(prootArgs);
         pb.directory(new File(rootfsPath).getParentFile());
         pb.redirectErrorStream(true);
-        configureProotEnvironment(pb, context, prootTmpDir);
+        configureProotEnvironment(pb, context, prootTmpDir, env);
 
         Process process;
         try {
@@ -724,7 +739,7 @@ public class GIATerminalService extends Service {
                             e
                         );
                     }
-                    pb.command(buildProotArgs(terminalProot.getAbsolutePath(), fallbackRootfs, prootTmpDir.getAbsolutePath(), command));
+                    pb.command(buildProotArgs(terminalProot.getAbsolutePath(), fallbackRootfs, prootTmpDir.getAbsolutePath(), command, workdir, env));
                     try {
                         process = pb.start();
                         Log.i(TAG, "Asset extraction fallback succeeded");
@@ -847,6 +862,11 @@ public class GIATerminalService extends Service {
      * discrete Java String, so it never needs manual shell-quote escaping.
      */
     static List<String> buildProotArgs(String prootPath, String rootfsPath, String tmpPath, String command) {
+        return buildProotArgs(prootPath, rootfsPath, tmpPath, command, null, null);
+    }
+
+    static List<String> buildProotArgs(String prootPath, String rootfsPath, String tmpPath, String command,
+                                       String workdir, Map<String, String> env) {
         List<String> args = new ArrayList<>();
         args.add(prootPath);
         args.add("--rootfs=" + rootfsPath);
@@ -874,7 +894,12 @@ public class GIATerminalService extends Service {
         // proot's fake-root UID mapping.
         args.add("-0");
         args.add("-w");
-        args.add("/root");
+        // Mirror the remote sandbox server: honor the caller's workdir instead
+        // of always starting in /root. Without this, TerminalService passes
+        // workdir through but the native path silently ignores it — every
+        // native exec ran in /root while the remote server ran the same
+        // command in /workspace, splitting native vs remote tool behavior.
+        args.add(workdir == null || workdir.isEmpty() ? "/root" : workdir);
         args.add("/bin/sh");
         args.add("-c");
         args.add(command);
@@ -898,6 +923,20 @@ public class GIATerminalService extends Service {
      * One shared method now; there is nowhere left for the two to diverge.
      */
     static void configureProotEnvironment(ProcessBuilder pb, Context context, File prootTmpDir) {
+        configureProotEnvironment(pb, context, prootTmpDir, null);
+    }
+
+    static void configureProotEnvironment(ProcessBuilder pb, Context context, File prootTmpDir, Map<String, String> extraEnv) {
+        // Caller-supplied env first so the guest's critical vars below
+        // always WIN — a tool pass-through never gets to clobber HOME,
+        // PATH, or the proot loader variables that make the sandbox work.
+        if (extraEnv != null) {
+            for (String key : extraEnv.keySet()) {
+                if (key != null && extraEnv.get(key) != null) {
+                    pb.environment().put(key, extraEnv.get(key));
+                }
+            }
+        }
         pb.environment().put("HOME", "/root");
         pb.environment().put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
         pb.environment().put("TERM", "xterm-256color");

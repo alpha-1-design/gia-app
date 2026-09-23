@@ -23,7 +23,7 @@ export interface DownloadProgress {
   file?: string;
 }
 
-export type ModelLoadStatus = 'not_loaded' | 'loading' | 'ready' | 'error';
+export type ModelLoadStatus = 'not_loaded' | 'downloaded' | 'loading' | 'ready' | 'error';
 
 export interface LocalLLMState {
   status: ModelLoadStatus;
@@ -106,9 +106,10 @@ class LocalLLMService {
 
   private constructor() {
     this._status = {} as Record<LocalModelId, LocalLLMState>;
+    const downloaded = this.getDownloadedModels();
     for (const m of LOCAL_LLM_MODELS) {
       (this._status as Record<string, LocalLLMState>)[m.id] = {
-        status: 'not_loaded',
+        status: downloaded.includes(m.id) ? 'downloaded' : 'not_loaded',
         modelId: m.id,
       };
     }
@@ -197,6 +198,7 @@ class LocalLLMService {
         this._pipeline = pipe as typeof this._pipeline;
         this._loadedModel = modelId;
         this._setStatus(modelId, 'ready');
+        this.markDownloaded(modelId);
         delete this._progress[modelId];
         logger.log(`[LocalLLM] Loaded ${modelId}`);
       } catch (err) {
@@ -310,7 +312,7 @@ class LocalLLMService {
 
   private _unload(): void {
     if (this._loadedModel) {
-      this._setStatus(this._loadedModel, 'not_loaded');
+      this._setStatus(this._loadedModel, this.getDownloadedModels().includes(this._loadedModel) ? 'downloaded' : 'not_loaded');
     }
     this._pipeline = null;
     this._processor = null;
@@ -329,6 +331,23 @@ class LocalLLMService {
       modelId,
       error,
     };
+  }
+
+  private getDownloadedModels(): LocalModelId[] {
+    if (typeof localStorage === 'undefined') return [];
+    try {
+      const value = JSON.parse(localStorage.getItem('gia:local-llm:downloaded') || '[]');
+      return Array.isArray(value) ? value.filter((id): id is LocalModelId => LOCAL_LLM_MODELS.some(model => model.id === id)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private markDownloaded(modelId: LocalModelId): void {
+    if (typeof localStorage === 'undefined') return;
+    const models = new Set(this.getDownloadedModels());
+    models.add(modelId);
+    localStorage.setItem('gia:local-llm:downloaded', JSON.stringify([...models]));
   }
 
   /**

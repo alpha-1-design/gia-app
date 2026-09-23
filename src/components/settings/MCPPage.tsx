@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, X, Power, PowerOff, Loader2, Globe, Terminal, Lock, PlugZap } from 'lucide-react';
 import { useMCPStore, type MCPServerConfig, type MCPStoreState } from '../../store/useMCPStore';
 import MCPManager from '../../services/MCPManager';
+import { isNativePlatform } from '../../utils/helpers';
 import { SubPageHeader } from './SubPageHeader';
 
 export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -21,6 +22,7 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [newOAuthScopes, setNewOAuthScopes] = useState('openid profile email');
   const [newApiKey, setNewApiKey] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
+  const native = isNativePlatform();
 
   useEffect(() => {
     MCPManager.init().catch((e) => { console.error('[MCPPage] MCPManager init failed:', e); });
@@ -110,7 +112,8 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       <div className="px-3 py-3 rounded-xl text-xs leading-relaxed" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)', color: 'var(--gia-muted)' }}>
         <p className="font-semibold mb-2" style={{ color: '#a855f7' }}>About MCP Servers</p>
-        <p className="mb-2">MCP (Model Context Protocol) servers extend GIA's capabilities by connecting to external tools, data sources, and services. Each server supports SSE (HTTP) or stdio (local process) transports.</p>
+        <p className="mb-2">MCP (Model Context Protocol) servers extend GIA's capabilities by connecting to external tools, data sources, and services.</p>
+        <p className="mb-2">{native ? 'On this phone, hosted HTTP/SSE servers work directly. Local stdio servers require the on-device terminal and may be unavailable until the Linux environment is installed.' : 'This browser can connect to hosted HTTP/SSE servers. Local stdio servers require a desktop or configured local runtime.'}</p>
         <p className="mb-2">Open-source MCP servers to try: <strong style={{ color: '#a855f7' }}>Filesystem</strong> (local file access), <strong style={{ color: '#a855f7' }}>GitHub</strong> (repos + issues, hosted by GitHub — needs a personal access token), <strong style={{ color: '#a855f7' }}>Memory</strong> (knowledge graph memory).</p>
         <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>OAuth-enabled servers support authentication flows. Click "Auth" on any OAuth-configured server to connect via your browser.</p>
       </div>
@@ -127,12 +130,13 @@ export const MCPPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           with unverified replacements. */}
       <div className="flex flex-wrap gap-2 mb-4">
         {[
-          { name: 'Filesystem', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/home/user/gia'], desc: 'Local file access' },
+          { name: 'Filesystem', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/workspace'], desc: 'Local file access' },
           { name: 'GitHub', transport: 'sse' as const, url: 'https://api.githubcopilot.com/mcp/', desc: 'GitHub repos & issues (hosted, needs a PAT)', needsToken: true },
           { name: 'Memory', transport: 'stdio' as const, command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'], desc: 'Knowledge graph memory' },
         ].map((preset, i) => (
           <button key={i} onClick={() => addQuickServer(preset)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            disabled={native && preset.transport === 'stdio'}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
             style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)' }}>
             <Plus size={12} /> {preset.name}
           </button>

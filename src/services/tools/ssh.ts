@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger';
+import SandboxService from '../SandboxService';
 import type { Tool, ToolResult } from './types';
 
 interface SSHConnection {
@@ -33,15 +34,8 @@ function saveKey(name: string, key: string) {
 }
 
 async function execViaSandbox(cmd: string): Promise<string> {
-  const resp = await fetch('http://localhost:3081/exec', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command: cmd }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!resp.ok) throw new Error(`Sandbox error: ${resp.status}`);
-  const data = await resp.json();
-  return data.stdout + (data.stderr ? '\n' + data.stderr : '');
+  const result = await SandboxService.exec(cmd, { timeout: 30000 });
+  return result.stdout + (result.stderr ? `\n${result.stderr}` : '');
 }
 
 const sshTools: Tool[] = [
@@ -86,14 +80,14 @@ const sshTools: Tool[] = [
         if (authType === 'password') {
           if (!password) return { success: false, content: '', error: 'Password required for password auth' };
           const escaped = password.replace(/'/g, "'\\''");
-          cmd = `sshpass -p '${escaped}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${port} ${username}@${host} '${command.replace(/'/g, "'\\''")}'`;
+          cmd = `sshpass -p '${escaped}' ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/root/.ssh/known_hosts -p ${port} ${username}@${host} '${command.replace(/'/g, "'\\''")}'`;
         } else {
           const kName = keyName || existing?.keyName;
           if (!kName) return { success: false, content: '', error: 'No SSH key specified. Use ssh_add_key first or use password auth.' };
           const keys = JSON.parse(localStorage.getItem('gia:ssh:keys') || '[]');
           const keyEntry = keys.find((k: { name: string }) => k.name === kName);
           if (!keyEntry) return { success: false, content: '', error: `SSH key "${kName}" not found` };
-          cmd = `echo '${keyEntry.key}' > /tmp/ssh_key && chmod 600 /tmp/ssh_key && ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i /tmp/ssh_key -p ${port} ${username}@${host} '${command.replace(/'/g, "'\\''")}'`;
+          cmd = `echo '${keyEntry.key}' > /tmp/ssh_key && chmod 600 /tmp/ssh_key && ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/root/.ssh/known_hosts -i /tmp/ssh_key -p ${port} ${username}@${host} '${command.replace(/'/g, "'\\''")}'`;
         }
 
         let output: string;

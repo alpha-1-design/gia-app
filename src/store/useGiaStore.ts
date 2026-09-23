@@ -371,9 +371,21 @@ interface GiaState {
   pendingFiles: { name: string; type: string; content: string; preview?: string }[];
   setPendingFiles: (v: { name: string; type: string; content: string; preview?: string }[]) => void;
   pendingAction: { type: string; data: Record<string, unknown> } | null;
-  pendingApiKeyRequest: { providerId: string; description: string } | null;
+  pendingApiKeyRequest: {
+    providerId: string;
+    description: string;
+    label?: string;
+    kind?: 'api_key' | 'token' | 'secret';
+    connectorId?: string;
+  } | null;
   setPendingAction: (v: { type: string; data: Record<string, unknown> } | null) => void;
-  setPendingApiKeyRequest: (v: { providerId: string; description: string } | null) => void;
+  setPendingApiKeyRequest: (v: {
+    providerId: string;
+    description: string;
+    label?: string;
+    kind?: 'api_key' | 'token' | 'secret';
+    connectorId?: string;
+  } | null) => void;
   deepLinkQueue: string[];
   setDeepLinkQueue: (v: string[]) => void;
   liveFileEdit: LiveFileEdit | null;

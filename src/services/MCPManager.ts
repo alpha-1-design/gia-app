@@ -3,6 +3,7 @@ import { MCPClient, type MCPToolDefinition } from './MCPClient';
 import { useMCPStore, type MCPServerConfig } from '../store/useMCPStore';
 import GiaTools from './GiaTools';
 import { Browser } from '@capacitor/browser';
+import credentialStore from '../store/useCredentialStore';
 
 class MCPManager {
   private clients: Map<string, MCPClient> = new Map();
@@ -46,6 +47,8 @@ class MCPManager {
     const store = useMCPStore.getState();
     const config = store.getServer(serverId);
     if (!config) throw new Error(`Server ${serverId} not found`);
+    const stored = credentialStore.getState().getCredential(`mcp:${serverId}`);
+    const runtimeConfig = stored?.value ? { ...config, accessToken: stored.value } : config;
 
     const existing = this.clients.get(serverId);
     if (existing) {
@@ -56,22 +59,24 @@ class MCPManager {
     store.setConnectionState(serverId, { status: 'connecting', toolCount: 0 });
 
     // Check if OAuth is configured and we need to authenticate
-    if (config.oauthUrl && config.oauthClientId && !config.accessToken) {
+    if (runtimeConfig.oauthUrl && runtimeConfig.oauthClientId && !runtimeConfig.accessToken) {
       store.setConnectionState(serverId, { status: 'connecting', toolCount: 0, error: 'Authentication required' });
-      const authenticated = await this._startOAuthFlow(config);
+      const authenticated = await this._startOAuthFlow(runtimeConfig);
       if (!authenticated) {
         store.setConnectionState(serverId, { status: 'disconnected', toolCount: 0, error: 'Authentication cancelled' });
         return;
       }
       // Refresh config with new tokens
       const updatedConfig = store.getServer(serverId);
-      if (!updatedConfig?.accessToken) {
+      const updatedCredential = credentialStore.getState().getCredential(`mcp:${serverId}`);
+      if (!updatedConfig?.accessToken && !updatedCredential?.value) {
         store.setConnectionState(serverId, { status: 'disconnected', toolCount: 0, error: 'Authentication failed' });
         return;
       }
     }
 
-    const client = new MCPClient(config, {
+    const latestCredential = credentialStore.getState().getCredential(`mcp:${serverId}`);
+    const client = new MCPClient(latestCredential?.value ? { ...config, accessToken: latestCredential.value } : config, {
       onToolsChanged: (tools) => this._onToolsChanged(serverId, tools),
     });
 
@@ -223,11 +228,13 @@ class MCPManager {
       }
 
       const tokens = await response.json();
-      store.setTokens(server.id, {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresIn: tokens.expires_in,
+      credentialStore.getState().setCredential({
+        serviceId: `mcp:${server.id}`,
+        label: `${server.name} MCP`,
+        kind: 'token',
+        value: tokens.access_token,
       });
+      store.updateServer(server.id, { accessToken: undefined, refreshToken: undefined, tokenExpiresAt: undefined });
 
       pending.resolve(true);
       // Retry connection
@@ -245,6 +252,8 @@ class MCPManager {
       await client.disconnect().catch((e) => { logger.error('[MCPManager] Failed to disconnect client:', e); });
       this.clients.delete(serverId);
     }
+    credentialStore.getState().removeCredential(`mcp:${serverId}`);
+    useMCPStore.getState().clearTokens(serverId);
     useMCPStore.getState().setConnectionState(serverId, {
       status: 'disconnected',
       toolCount: 0,

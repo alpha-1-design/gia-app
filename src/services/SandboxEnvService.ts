@@ -31,6 +31,23 @@ let cached: SandboxStatus | null = null;
 const run = (command: string, timeout = 60000) =>
   terminalService.exec(command, undefined, undefined, timeout);
 
+async function packageManager(): Promise<'apk' | 'apt-get'> {
+  try {
+    const result = await run('command -v apk >/dev/null 2>&1 && echo apk || (command -v apt-get >/dev/null 2>&1 && echo apt-get || true)', 10000);
+    const manager = result.output.trim();
+    if (manager === 'apk' || manager === 'apt-get') return manager;
+    throw new Error('No supported package manager (apk or apt-get) was found in the root filesystem.');
+  } catch {
+    throw new Error('Unable to detect the sandbox package manager.');
+  }
+}
+
+function packageNames(manager: 'apk' | 'apt-get', packages: string): string {
+  return manager === 'apt-get'
+    ? packages.replace(/\bpy3-pip\b/g, 'python3-pip').replace(/\bbuild-base\b/g, 'build-essential')
+    : packages;
+}
+
 // proot spews these to stderr when the on-device rootfs/binary is broken --
 // they must never be mistaken for a real package version.
 const PROOT_FAILURE = /fatal error|libproot|proot (error|warning)|No such file or directory|can't chdir|\/usr\/bin\/env'? ?not found/i;
@@ -164,6 +181,12 @@ export const SandboxEnvService = {
       logs.push('');
 
       // Steps 2-10: Per-package provisioning
+      let manager: 'apk' | 'apt-get';
+      try {
+        manager = await packageManager();
+      } catch (error) {
+        return { success: false, output: error instanceof Error ? error.message : 'Unable to detect the sandbox package manager.' };
+      }
       const STEPS: [string, string, string][] = [
         ['DNS resolution', 'resolvconf', 'test -f /etc/resolv.conf'],
         ['Package index', '', ''],
@@ -191,7 +214,11 @@ export const SandboxEnvService = {
         }
 
         if (i === 1) {
-          const upd = await run('apk update', 120000);
+          const upd = await run(manager === 'apk' ? 'apk update' : 'apt-get update', 120000);
+          if (upd.exitCode !== 0) {
+            logs.push(`Step ${stepNum}/10: Package index failed`);
+            return { success: false, output: logs.join('\n') + `\n${upd.output || 'Package index update failed'}` };
+          }
           logs.push('Step ' + stepNum + '/10: Package index updated');
           if (upd.output) logs.push(`  ${upd.output.split('\n').slice(-2).join('\n  ')}`);
           continue;
@@ -207,11 +234,13 @@ export const SandboxEnvService = {
         }
 
         onProgress?.(`[${stepNum}/${totalSteps}] Installing ${label}...`, stepNum, totalSteps);
-        const inst = await run(`apk add ${pkgs}`, 180000);
+        const inst = await run(manager === 'apk'
+          ? `apk add --no-cache ${pkgs}`
+          : `DEBIAN_FRONTEND=noninteractive apt-get install -y ${packageNames(manager, pkgs)}`, 180000);
         if (inst.exitCode === 0) {
           logs.push(`Step ${stepNum}/10: ${label} installed`);
         } else {
-          logs.push(`Step ${stepNum}/10: ${label} -- installed with warnings`);
+          logs.push(`Step ${stepNum}/10: ${label} -- installation failed`);
           if (inst.output) logs.push(`  ${inst.output.split('\n').slice(-2).join('\n  ')}`);
         }
       }
@@ -244,6 +273,12 @@ export const SandboxEnvService = {
     }
 
     // Each step: [label, apk-packages, check-command]
+    let manager: 'apk' | 'apt-get';
+    try {
+      manager = await packageManager();
+    } catch (error) {
+      return { success: false, output: error instanceof Error ? error.message : 'Unable to detect the sandbox package manager.' };
+    }
     const STEPS: [string, string, string][] = [
       ['DNS resolution', 'resolvconf', 'test -f /etc/resolv.conf'],
       ['Package index', '', ''],
@@ -276,7 +311,11 @@ export const SandboxEnvService = {
 
         // Step 1: Package index
         if (i === 1) {
-          const upd = await run('apk update', 120000);
+          const upd = await run(manager === 'apk' ? 'apk update' : 'apt-get update', 120000);
+          if (upd.exitCode !== 0) {
+            logs.push(`${label} failed`);
+            return { success: false, output: logs.join('\n') + `\n${upd.output || 'Package index update failed'}` };
+          }
           logs.push('Package index updated');
           if (upd.output) logs.push(`  ${upd.output.split('\n').slice(-2).join('\n  ')}`);
           continue;
@@ -293,11 +332,13 @@ export const SandboxEnvService = {
 
         // Install
         onProgress?.(`[${i + 1}/${totalSteps}] Installing ${label}...`, i + 1, totalSteps);
-        const inst = await run(`apk add ${pkgs}`, 180000);
+        const inst = await run(manager === 'apk'
+          ? `apk add --no-cache ${pkgs}`
+          : `DEBIAN_FRONTEND=noninteractive apt-get install -y ${packageNames(manager, pkgs)}`, 180000);
         if (inst.exitCode === 0) {
           logs.push(`${label} installed`);
         } else {
-          logs.push(`${label} -- installed with warnings`);
+          logs.push(`${label} -- installation failed`);
           if (inst.output) logs.push(`  ${inst.output.split('\n').slice(-2).join('\n  ')}`);
         }
       }
@@ -315,12 +356,25 @@ export const SandboxEnvService = {
       return { success: false, output: 'On-device sandbox terminal is not available on this device.' };
     }
     try {
-      onProgress?.('Fixing packages (apk fix)...');
-      await run('apk update', 120000);
-      await run('apk upgrade', 180000);
-      await run('apk fix', 120000);
+      // DNS-first: a missing /etc/resolv.conf makes apk's index fetch fail
+      // outright ("could not connect to dl-cdn.alpinelinux.org") — and nothing
+      // in repair() ever regenerated it, so a deleted resolv.conf permanently
+      // broke every "fix" attempt. Same guard installEnvironment/provision use.
+      onProgress?.('Restoring DNS...');
+      await run(
+        "test -f /etc/resolv.conf || (echo nameserver 8.8.8.8 > /etc/resolv.conf && echo nameserver 1.1.1.1 >> /etc/resolv.conf)",
+        15000,
+      );
+
+      const manager = await packageManager();
+      onProgress?.(`Fixing packages (${manager})...`);
+      await run(manager === 'apk' ? 'apk update' : 'apt-get update', 120000);
+      await run(manager === 'apk' ? 'apk upgrade' : 'DEBIAN_FRONTEND=noninteractive apt-get upgrade -y', 180000);
+      if (manager === 'apk') await run('apk fix', 120000);
       onProgress?.('Re-installing build environment...');
-      const inst = await run(`apk add ${BUILD_PACKAGES}`, 300000);
+      const inst = await run(manager === 'apk'
+        ? `apk add --no-cache ${BUILD_PACKAGES}`
+        : `DEBIAN_FRONTEND=noninteractive apt-get install -y ${packageNames(manager, BUILD_PACKAGES)}`, 300000);
       const s = await this.status();
       return { success: s.ready, output: inst.output };
     } catch (e) {
@@ -334,7 +388,13 @@ export const SandboxEnvService = {
     }
     try {
       onProgress?.('Removing installed packages...');
-      await run(`apk del -r ${BUILD_PACKAGES} || true`, 120000);
+      const manager = await packageManager();
+      const removal = await run(manager === 'apk'
+        ? `apk del -r ${BUILD_PACKAGES}`
+        : `DEBIAN_FRONTEND=noninteractive apt-get remove -y ${packageNames(manager, BUILD_PACKAGES)}`, 120000);
+      if (removal.exitCode !== 0) {
+        return { success: false, output: removal.output || 'Environment package removal failed.' };
+      }
       await this.status();
       return {
         success: true,

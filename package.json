@@ -1,14 +1,14 @@
 {
   "name": "gia-app",
   "private": true,
-  "version": "2.4.0.9",
+  "version": "2.4.0.10",
   "type": "module",
   "scripts": {
     "dev": "node server/sandbox-server.cjs & vite --port=3000 --host=0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "NODE_OPTIONS='--experimental-require-module' vitest",
-    "test:run": "NODE_OPTIONS='--experimental-require-module' vitest run",
+    "test": "node --experimental-require-module ./node_modules/vitest/vitest.mjs",
+    "test:run": "node --experimental-require-module ./node_modules/vitest/vitest.mjs run",
     "preview": "vite preview",
     "cap:add:android": "npx cap add android",
     "cap:sync": "npx cap sync android",
