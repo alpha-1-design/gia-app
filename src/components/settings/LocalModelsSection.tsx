@@ -126,6 +126,29 @@ export const LocalModelsSection: React.FC = () => {
         </div>
       )}
 
+      {/* Recommendation banner — the per-card "Best for your device" badge is
+          easy to miss when scrolling, and a low-end user picking the wrong
+          model gets a phone that stalls or OOMs. State the choice up front. */}
+      {caps && recommendedId && (
+        <div className="px-3 py-2.5 rounded-xl text-[11px] leading-relaxed" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#86efac' }}>
+          <p className="font-medium mb-1 flex items-center gap-1.5">
+            <Zap size={11} /> Recommended for this device
+          </p>
+          <p>
+            <strong>{LOCAL_LLM_MODELS.find(m => m.id === recommendedId)?.label}</strong>
+            {caps.availableRAMGB < 3
+              ? ` — with ~${caps.availableRAMGB.toFixed(1)} GB RAM free, keep the model small. Anything larger will be slow or may be killed by Android.`
+              : ` — you have ~${caps.availableRAMGB.toFixed(1)} GB RAM free, so this fits comfortably.`}
+          </p>
+          {caps.availableRAMGB < 3 && (
+            <p className="mt-1" style={{ color: 'var(--gia-muted)' }}>
+              Running a model that is too large on a low-RAM phone is the usual cause of local models
+              freezing mid-answer. If answers stall, unload this and drop to the ultra-lite option.
+            </p>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {LOCAL_LLM_MODELS.map((model) => {
           const state = statuses[model.id];

@@ -102,6 +102,58 @@ function getIndependentGroups(toolCalls: ToolCall[]): ToolCall[][] {
   return groups;
 }
 
+/**
+ * Hard ceiling for a single tool execution.
+ *
+ * A tool that never settles (dead socket, native bridge that stops replying,
+ * runaway subprocess) used to wedge the whole brain loop: `await
+ * tool.execute(...)` had no timeout, so the `while` below never advanced, no
+ * observation was ever fed back to the model, and the UI sat in a thinking
+ * state until the user navigated away and back. This bounds every attempt.
+ */
+const TOOL_EXECUTION_TIMEOUT_MS = 120_000;
+
+/**
+ * Races a tool call against a timeout and the caller's abort signal. Rejects
+ * with a descriptive Error rather than hanging, and leaves the underlying
+ * promise abandoned — we cannot cancel an arbitrary tool, but we can stop
+ * waiting on it.
+ */
+function withToolTimeout<T>(
+  run: (signal?: AbortSignal) => Promise<T>,
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      fn();
+    };
+
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error(`Tool did not respond within ${timeoutMs / 1000}s and was abandoned`)));
+    }, timeoutMs);
+
+    function onAbort() {
+      finish(() => reject(new DOMException('Aborted', 'AbortError')));
+    }
+
+    if (signal) {
+      if (signal.aborted) { onAbort(); return; }
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    run(signal).then(
+      value => finish(() => resolve(value)),
+      err => finish(() => reject(err)),
+    );
+  });
+}
+
 async function executeSingleTool(
   toolCall: ToolCall,
   text: string,
@@ -243,13 +295,21 @@ async function executeSingleTool(
   while (true) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     try {
-      result = await tool.execute(toolCall.args, toolContext);
+      result = await withToolTimeout(
+        () => tool.execute(toolCall.args, toolContext),
+        signal,
+        TOOL_EXECUTION_TIMEOUT_MS,
+      );
     } catch (e: unknown) {
+      // A timeout is a permanent failure for this tool — retrying it would just
+      // burn another 120s, so classify it alongside validation/auth errors.
       result = { success: false, content: '', error: e instanceof Error ? e.message : 'Unknown error' };
     }
-    // Don't retry permanent failures: validation errors, auth errors, "not found", parse errors
+    // Don't retry permanent failures: validation errors, auth errors, "not found", parse errors.
+    // A timeout is included — the tool already consumed its full budget, so a
+    // retry would just stall the turn for another 120s.
     const errorMsg = result!.error || '';
-    const isPermanent = /validation|auth|not found|permission|invalid|parse|syntax/i.test(errorMsg);
+    const isPermanent = /validation|auth|not found|permission|invalid|parse|syntax|timed out|did not respond|abandoned/i.test(errorMsg);
     if (result.success || isPermanent || toolAttempts >= maxToolAttempts - 1) break;
     toolAttempts++;
     const backoff = Math.min(1000 * Math.pow(2, toolAttempts), 8000);
