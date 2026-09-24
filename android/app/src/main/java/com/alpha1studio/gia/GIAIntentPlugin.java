@@ -2,6 +2,8 @@ package com.alpha1studio.gia;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -10,7 +12,11 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import org.json.JSONArray;
+import org.json.JSONObject;
 import android.app.PendingIntent;
 import android.os.Bundle;
 import java.util.UUID;
@@ -20,6 +26,22 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GIAIntentPlugin extends Plugin {
     private static GIAIntentPlugin instance;
     private final ConcurrentHashMap<String, PluginCall> termuxCalls = new ConcurrentHashMap<>();
+    // Timeout runnables keyed by jobId so a late Termux result can cancel its
+    // own watchdog instead of leaking both the call and the scheduled task.
+    private final ConcurrentHashMap<String, Runnable> termuxTimeouts = new ConcurrentHashMap<>();
+    private final Handler termuxHandler = new Handler(Looper.getMainLooper());
+
+    /** How long to wait for Termux before rejecting. */
+    private static final long TERMUX_TIMEOUT_MS = 30000L;
+    /** Readiness probe budget — short, because it only proves the bridge works. */
+    private static final long TERMUX_PROBE_TIMEOUT_MS = 4000L;
+
+    /** Job id prefix used to tell a readiness probe from a real command. */
+    private static final String PROBE_PREFIX = "probe-";
+
+    private static final String ALLOW_EXTERNAL_APPS_HINT =
+            "Termux did not respond to GIA. Open Termux and add "
+            + "`allow-external-apps = true` to ~/.termux/termux.properties, then restart Termux.";
 
     @Override
     public void load() {
@@ -27,11 +49,51 @@ public class GIAIntentPlugin extends Plugin {
         instance = this;
     }
 
+    @Override
+    protected void handleOnDestroy() {
+        // Reject anything still parked so JS promises never outlive the plugin.
+        for (String jobId : new ArrayList<>(termuxCalls.keySet())) {
+            failTermuxCall(jobId, "Termux integration was shut down before the command finished");
+        }
+        super.handleOnDestroy();
+    }
+
+    private void scheduleTermuxTimeout(final String jobId, long delayMs, final String message) {
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
+                termuxTimeouts.remove(jobId);
+                failTermuxCall(jobId, message);
+            }
+        };
+        termuxTimeouts.put(jobId, task);
+        termuxHandler.postDelayed(task, delayMs);
+    }
+
+    private void cancelTermuxTimeout(String jobId) {
+        Runnable task = termuxTimeouts.remove(jobId);
+        if (task != null) termuxHandler.removeCallbacks(task);
+    }
+
+    /** Reject and remove a parked call. Safe to call more than once. */
+    private void failTermuxCall(String jobId, String message) {
+        cancelTermuxTimeout(jobId);
+        PluginCall call = termuxCalls.remove(jobId);
+        if (call == null) return;
+        call.reject(message);
+    }
+
     public static void deliverTermuxResult(String jobId, Bundle result) {
         GIAIntentPlugin plugin = instance;
         if (plugin == null) return;
+        plugin.cancelTermuxTimeout(jobId);
         PluginCall call = plugin.termuxCalls.remove(jobId);
         if (call == null) return;
+        // Readiness probes answer with the status shape, not a command result.
+        if (jobId.startsWith(PROBE_PREFIX)) {
+            call.resolve(plugin.buildStatusPayload(true, Boolean.TRUE, "probe_ok"));
+            return;
+        }
         JSObject response = new JSObject();
         response.put("jobId", jobId);
         response.put("stdout", result.getString("com.termux.RUN_COMMAND_RESULT_STDOUT", ""));
@@ -190,6 +252,34 @@ public class GIAIntentPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * Reads Termux's termux.properties to see whether it accepts commands from
+     * other apps. GIA usually cannot read Termux's private data dir (separate
+     * UID), so an unknown answer is normal and means "probe required".
+     *
+     * @return true / false, or null when the file is unreadable.
+     */
+    private Boolean readAllowExternalApps() {
+        File props = new File("/data/data/com.termux/files/home/.termux/termux.properties");
+        if (!props.isFile()) return null;
+        try (BufferedReader reader = new BufferedReader(new FileReader(props))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("#") || trimmed.startsWith("!")) continue;
+                int eq = trimmed.indexOf('=');
+                if (eq < 0) continue;
+                String key = trimmed.substring(0, eq).trim();
+                if (!"allow-external-apps".equals(key)) continue;
+                String value = trimmed.substring(eq + 1).trim();
+                return "true".equalsIgnoreCase(value);
+            }
+        } catch (Exception ignored) {
+            // Different UID, SELinux, or no such file — fall through to probe.
+        }
+        return null;
+    }
+
     @PluginMethod
     public void termuxStatus(PluginCall call) {
         boolean installed;
@@ -199,9 +289,96 @@ public class GIAIntentPlugin extends Plugin {
         } catch (Exception e) {
             installed = false;
         }
-        JSObject result = new JSObject();
-        result.put("installed", installed);
-        call.resolve(result);
+
+        if (!installed) {
+            JSObject missing = new JSObject();
+            missing.put("installed", false);
+            missing.put("ready", false);
+            missing.put("allowExternalApps", false);
+            missing.put("bridgeResponsive", false);
+            missing.put("reason", "not_installed");
+            missing.put("hint", "Install Termux to let GIA run approved commands there.");
+            call.resolve(missing);
+            return;
+        }
+
+        final Boolean declared = readAllowExternalApps();
+        final String probeJobId = "probe-" + UUID.randomUUID();
+
+        // The honest check: a real round trip. A package being installed says
+        // nothing about whether Termux will service RUN_COMMAND, so we send a
+        // trivial command and see whether the result comes back. The probe call
+        // is parked in termuxCalls like any other and resolves via
+        // TermuxResultReceiver; if nothing arrives, the watchdog fires.
+        Intent probe = new Intent("com.termux.RUN_COMMAND");
+        probe.setPackage("com.termux");
+        probe.putExtra("com.termux.RUN_COMMAND_PATH", "/system/bin/true");
+        probe.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", new String[0]);
+        probe.putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home");
+        probe.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        probe.putExtra("com.termux.RUN_COMMAND_RESULT", true);
+        PendingIntent probeIntent = PendingIntent.getBroadcast(
+                getContext(),
+                probeJobId.hashCode(),
+                new Intent(getContext(), TermuxResultReceiver.class).putExtra("jobId", probeJobId),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        probe.putExtra("com.termux.RUN_COMMAND_RESULT_PENDINGINTENT", probeIntent);
+
+        termuxCalls.put(probeJobId, call);
+        // Probe watchdog. It resolves (not rejects) with a not-ready status, so
+        // the status tool always gets a truthful answer instead of an error.
+        Runnable probeWatchdog = new Runnable() {
+            @Override
+            public void run() {
+                termuxTimeouts.remove(probeJobId);
+                resolveTermuxStatus(probeJobId, buildStatusPayload(false, declared, "probe_timeout"));
+            }
+        };
+        termuxTimeouts.put(probeJobId, probeWatchdog);
+        termuxHandler.postDelayed(probeWatchdog, TERMUX_PROBE_TIMEOUT_MS);
+
+        try {
+            getContext().sendBroadcast(probe, "com.termux.permission.RUN_COMMAND");
+        } catch (Exception e) {
+            cancelTermuxTimeout(probeJobId);
+            resolveTermuxStatus(probeJobId, buildStatusPayload(false, declared, "broadcast_failed"));
+        }
+    }
+
+    /**
+     * Resolves a parked readiness-probe call with its status payload. Removes
+     * the call first so a call that was already rejected by handleOnDestroy (or
+     * resolved by a late Termux reply) can never be settled twice.
+     */
+    private void resolveTermuxStatus(String jobId, JSObject payload) {
+        PluginCall call = termuxCalls.remove(jobId);
+        if (call == null) return;
+        call.resolve(payload);
+    }
+
+    /**
+     * Builds the honest status object. `responsive` means a real round trip
+     * completed; `declared` is the termux.properties value, which is usually
+     * unreadable from GIA's UID and therefore often null.
+     */
+    private JSObject buildStatusPayload(boolean responsive, Boolean declared, String reason) {
+        // A completed round trip is proof the bridge works, whatever the
+        // properties file claims (it is usually unreadable from GIA's UID).
+        boolean ready = responsive || Boolean.TRUE.equals(declared);
+
+        JSObject payload = new JSObject();
+        payload.put("installed", true);
+        payload.put("ready", ready);
+        payload.put("bridgeResponsive", responsive);
+        payload.put("allowExternalApps", ready);
+        payload.put("declaredAllowExternalApps", declared == null ? JSONObject.NULL : declared);
+        payload.put("reason", reason);
+        payload.put("hint", ready
+                ? (responsive
+                    ? "Termux responded to a live probe; approved commands will run."
+                    : "Termux declares allow-external-apps = true, but GIA could not confirm a live round trip.")
+                : ALLOW_EXTERNAL_APPS_HINT);
+        return payload;
     }
 
     @PluginMethod
@@ -249,10 +426,14 @@ public class GIAIntentPlugin extends Plugin {
         run.putExtra("com.termux.RUN_COMMAND_RESULT_PENDINGINTENT", resultIntent);
         try {
             termuxCalls.put(jobId, call);
+            // Watchdog: if Termux never answers, reject and clean up instead of
+            // leaving the JS promise pending forever.
+            scheduleTermuxTimeout(jobId, TERMUX_TIMEOUT_MS,
+                    "Termux did not respond within " + (TERMUX_TIMEOUT_MS / 1000)
+                    + "s. " + ALLOW_EXTERNAL_APPS_HINT);
             getContext().sendBroadcast(run, "com.termux.permission.RUN_COMMAND");
         } catch (Exception e) {
-            termuxCalls.remove(jobId);
-            call.reject("Termux command could not be started", e);
+            failTermuxCall(jobId, "Termux command could not be started: " + e.getMessage());
         }
     }
 }

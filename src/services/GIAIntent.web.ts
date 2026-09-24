@@ -1,4 +1,4 @@
-import type { GIAIntentPlugin } from './GIAIntent';
+import type { GIAIntentPlugin, TermuxStatus } from './GIAIntent';
 import type { PluginListenerHandle } from '@capacitor/core';
 
 export class GIAIntentWeb implements GIAIntentPlugin {
@@ -7,7 +7,17 @@ export class GIAIntentWeb implements GIAIntentPlugin {
   }
 
   async clearIntent(): Promise<void> {}
-  async termuxStatus(): Promise<{ installed: boolean }> { return { installed: false }; }
+  async termuxStatus(): Promise<TermuxStatus> {
+    return {
+      installed: false,
+      ready: false,
+      bridgeResponsive: false,
+      allowExternalApps: false,
+      declaredAllowExternalApps: null,
+      reason: 'not_native',
+      hint: 'Termux integration requires the native Android app.',
+    };
+  }
   async openTermux(): Promise<void> { throw new Error('Termux integration requires the native Android app'); }
   async runTermuxCommand(): Promise<{ jobId: string; stdout?: string; stderr?: string; exitCode?: number }> { throw new Error('Termux integration requires the native Android app'); }
 

@@ -5,19 +5,52 @@ import termuxService from '../TermuxService';
 const termuxStatus: Tool = {
   id: 'termux_status',
   name: 'termux_status',
-  description: 'Check whether Termux is installed on this Android phone. Termux is optional and separate from GIA.',
-  execute: async () => ({
-    success: true,
-    content: (await termuxService.isInstalled())
-      ? 'Termux is installed and can receive approved background commands.'
-      : 'Termux is not installed on this phone.',
-  }),
+  description:
+    'Check whether Termux is installed AND actually able to run commands from GIA. ' +
+    'Reports whether the Termux bridge is ready, or what the user must change to enable it.',
+  execute: async () => {
+    const status = await termuxService.status();
+
+    if (!status.installed) {
+      return {
+        success: false,
+        content: `Termux is not installed on this phone.\n\n${status.hint}`,
+        error: status.hint,
+      };
+    }
+
+    if (status.ready) {
+      const confirmed = status.bridgeResponsive
+        ? 'Termux responded to a live round-trip probe, so approved commands will run.'
+        : 'Termux reports allow-external-apps = true, but GIA could not confirm a live round trip.';
+      return {
+        success: true,
+        content:
+          `Termux bridge READY. Installed: yes. allow-external-apps: ${status.allowExternalApps ? 'enabled' : 'unknown'}.\n` +
+          `${confirmed}\n\nYou can send explicitly approved commands with termux_run.`,
+      };
+    }
+
+    // Installed but not usable — this is the case that used to silently hang.
+    return {
+      success: false,
+      content:
+        `Termux is INSTALLED but NOT READY to run commands from GIA.\n` +
+        `Bridge responded: no. allow-external-apps: not enabled or unreadable.\n\n` +
+        `To fix: ${status.hint}\n` +
+        'Until then, termux_run will time out — do not attempt it.',
+      error: status.hint,
+    };
+  },
 };
 
 const termuxRun: Tool = {
   id: 'termux_run',
   name: 'termux_run',
-  description: 'Start an explicitly requested command in the user’s Termux app. This never installs packages or runs hidden commands; ask for confirmation before mutating or network actions.',
+  description:
+    'Start an explicitly requested command in the user’s Termux app. Requires a working Termux ' +
+    'bridge (see termux_status). This never installs packages or runs hidden commands; ask for ' +
+    'confirmation before mutating or network actions. Always returns within 30 seconds.',
   schema: {
     type: 'object',
     properties: {
@@ -34,6 +67,18 @@ const termuxRun: Tool = {
       workdir: z.string().max(1000).optional(),
     }).safeParse(args);
     if (!parsed.success) return { success: false, content: '', error: parsed.error.message };
+
+    // Fail fast with an actionable message rather than burning 30s on a
+    // command that cannot possibly be delivered.
+    const status = await termuxService.status();
+    if (status.installed && !status.ready) {
+      return {
+        success: false,
+        content: `Termux is installed but the bridge is not ready. ${status.hint}`,
+        error: status.hint,
+      };
+    }
+
     try {
       const result = await termuxService.run(parsed.data.command, parsed.data.args, parsed.data.workdir);
       const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
@@ -44,7 +89,9 @@ const termuxRun: Tool = {
         error: exitCode === 0 ? undefined : (result.stderr || `Termux exited with code ${exitCode}`),
       };
     } catch (e) {
-      return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
+      // Includes the 30s timeout. Never hangs the tool loop.
+      const message = e instanceof Error ? e.message : String(e);
+      return { success: false, content: '', error: message };
     }
   },
 };
