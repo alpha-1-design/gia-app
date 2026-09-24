@@ -100,7 +100,7 @@ export const ProtocolsApprovalsSection: React.FC = () => {
       {!fullAutonomy && (
         <div className="mt-3 p-2.5 rounded-lg" style={{ background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.12)' }}>
           <p className="text-[9px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
-            Tools marked as auto-approved run without asking. All others pause and show a prompt in the Protocol Panel (⚡) until you approve or reject them. Timeout: 30 seconds.
+            Tools marked as auto-approved run without asking. All others pause and show an approval card inline under GIA's message (with Approve/Reject buttons) until you respond. Each prompt times out after 30 seconds.
           </p>
         </div>
       )}
