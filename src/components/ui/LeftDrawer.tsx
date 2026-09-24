@@ -33,11 +33,12 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/55"
             style={{ zIndex }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={reduceMotion ? { duration: 0.15 } : { duration: 0.2, ease: 'easeOut' }}
             onClick={onClose}
           />
           <motion.div
@@ -48,6 +49,11 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
               maxWidth: '340px',
               background: 'var(--gia-surface)',
               borderRight: '1px solid var(--gia-border)',
+              // Promote to its own compositor layer so the slide is a pure
+              // transform. Without this the drawer repaints on every frame of
+              // the spring, which reads as stiffness on mid-range Android.
+              willChange: 'transform',
+              contain: 'paint',
               // fixed positioning escapes #root's own safe-area padding (it's
               // relative to the real viewport, not the padded box), so with
               // edge-to-edge status bar overlay this drawer's content would
@@ -59,10 +65,12 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: reduceMotion ? 0 : '-100%', opacity: reduceMotion ? 0 : 1 }}
             // Softer spring: less overshoot and no rubber-band wobble while
-            // dragging, so the drawer glides instead of snapping.
+            // dragging, so the drawer glides instead of snapping. Slightly
+            // stiffer + lighter than before so it settles faster and feels
+            // responsive rather than floaty.
             transition={reduceMotion
               ? { duration: 0.15, ease: 'easeOut' }
-              : { type: 'spring', stiffness: 180, damping: 28, mass: 0.85 }}
+              : { type: 'spring', stiffness: 320, damping: 34, mass: 0.7 }}
             drag={reduceMotion ? false : 'x'}
             dragDirectionLock
             dragConstraints={{ left: 0, right: 0 }}
