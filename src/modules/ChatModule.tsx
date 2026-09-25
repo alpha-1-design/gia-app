@@ -5,7 +5,7 @@ import {
   Paperclip, X, Download, Globe, Image as ImageIcon, Camera, Terminal,
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
-  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench,
+  Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench, WifiOff,
   Maximize2, ChevronRight, Settings as SettingsIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -74,7 +74,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
     createSession, deleteSession,
     addNotification,
     webSearch, deepSearch, extThinking, handsOff,
-    localVision, localTranslate,
+    localVision, localTranslate, onDeviceMode,
     activeSkillId, setSkill,
     skills, thinkingPhase, currentTool,
     messages, activeSession, providerConnected, providerLabel,
@@ -111,7 +111,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const userProfile = useGiaStore((s) => s.userProfile);
   const activeProvider = useProviderStore((s) => s.activeProvider);
 
-  const toolItems: { key: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate'; label: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string }[] = [
+  const toolItems: { key: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate' | 'offline'; label: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string }[] = [
     { key: 'webSearch', label: 'Web Search', icon: Globe, active: webSearch, color: '#3b82f6' },
     { key: 'deepSearch', label: 'DeepSearch', icon: Radar, active: deepSearch, color: '#22d3ee' },
     { key: 'extThinking', label: 'Think', icon: Brain, active: extThinking, color: '#f59e0b' },
@@ -119,6 +119,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
     { key: 'listen', label: 'Listen', icon: Headphones, active: voiceEnabled, color: '#ec4899' },
     { key: 'vision', label: 'Vision', icon: Eye, active: localVision, color: '#22c55e' },
     { key: 'translate', label: 'Translate', icon: Languages, active: localTranslate, color: '#14b8a6' },
+    { key: 'offline', label: 'Offline', icon: WifiOff, active: onDeviceMode, color: '#34d399' },
   ];
   const activeToolCount = toolItems.filter(t => t.active).length;
   const activeSkill = skills.find(s => s.id === activeSkillId);
@@ -649,7 +650,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             open={showTools}
             onClose={() => setShowTools(false)}
             items={toolItems}
-            onToggle={(key) => toggleFeature(key as 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate')}
+            onToggle={(key) => toggleFeature(key as 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate' | 'offline')}
             footer={
               <>
                 {activeSkill && (

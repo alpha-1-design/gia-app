@@ -140,7 +140,21 @@ export async function delegateTask(
       const msg = e instanceof Error ? e.message.toLowerCase() : '';
       ProviderMonitor.recordFailure(currentProvider, useProviderStore.getState().providers[currentProvider]?.model || '', msg, Math.round(performance.now() - callStart));
       const recoverable = isRateLimitOrQuotaError(msg) || isRetryableServerError(msg);
-      if (!recoverable) return `Error delegating: ${e instanceof Error ? e.message : 'Unknown error'}`;
+      if (!recoverable) {
+        // Configuration-style failures (provider not configured/supported,
+        // bad or missing key) are permanent *for that provider* — but other
+        // configured providers may work. Without this hop, a sub-agent
+        // targeting a provider the user never set up died instantly even
+        // when a perfectly good provider was one hop away.
+        const providerSide = /not configured|not supported|unauthorized|invalid.{0,12}key|no api key|401|403/.test(msg);
+        const fallback = pickFallbackProvider(triedProviders);
+        if (providerSide && fallback) {
+          onStatus?.(`${currentProvider} unavailable (${e instanceof Error ? e.message : 'error'}) — retrying as ${fallback.provider}`);
+          currentProvider = fallback.provider;
+          continue;
+        }
+        return `Error delegating: ${e instanceof Error ? e.message : 'Unknown error'}`;
+      }
 
       const fallback = pickFallbackProvider(triedProviders);
       if (fallback) {

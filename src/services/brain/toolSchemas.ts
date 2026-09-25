@@ -553,6 +553,15 @@ export const toolSchemas: Record<string, { description: string; required: string
       proactivenessLevel: { type: 'number', description: 'How proactive (0.0-1.0)' },
     }
   },
+  sub_agent_call: {
+    description: 'Delegate a task to a specialized Nexus sub-agent. Sub-agents have full tool access and run concurrently — split heavy or parallelizable work (chunked file analysis, multi-topic research) across several calls. Their results are returned to you for synthesis.',
+    required: ['prompt'],
+    properties: {
+      prompt: { type: 'string', description: 'Clear, self-contained description of the task for the sub-agent to complete' },
+      provider: { type: 'string', description: 'Optional provider id for the sub-agent (defaults to the active provider)' },
+      agent: { type: 'string', description: 'Optional persona name (e.g. "Onyx", "Atlas") — the sub-agent embodies that specialist' },
+    }
+  },
 };
 
 export function mapSchemaProperty([k, v]: [string, { type: string; description: string; items?: { type: string } }]): [string, { type: string; description: string; items?: { type: string } }] {

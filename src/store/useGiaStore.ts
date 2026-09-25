@@ -578,7 +578,7 @@ export const useGiaStore = create<GiaState>()(
       localVision: false,
       localSummarize: true,
       localTranslate: false,
-      onDeviceMode: false,
+      onDeviceMode: (() => { try { return localStorage.getItem('gia-on-device-mode') === 'true'; } catch { return false; } })(),
       responseCache: true,
       inputGuardrails: true,
       outputValidation: true,
@@ -721,7 +721,10 @@ export const useGiaStore = create<GiaState>()(
       setLocalVision: (enabled) => set({ localVision: enabled }),
       setLocalSummarize: (enabled) => set({ localSummarize: enabled }),
       setLocalTranslate: (enabled) => set({ localTranslate: enabled }),
-      setOnDeviceMode: (enabled) => set({ onDeviceMode: enabled }),
+      setOnDeviceMode: (enabled) => {
+        set({ onDeviceMode: enabled });
+        try { localStorage.setItem('gia-on-device-mode', String(enabled)); } catch { /* private mode */ }
+      },
       setResponseCache: (enabled) => set({ responseCache: enabled }),
       setInputGuardrails: (enabled) => set({ inputGuardrails: enabled }),
       setOutputValidation: (enabled) => set({ outputValidation: enabled }),

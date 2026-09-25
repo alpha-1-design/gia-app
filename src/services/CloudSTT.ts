@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { isOnDeviceMode } from './OfflineMode';
 
 /**
  * CloudSTT — optional cloud speech-to-text fallback for the floating orb.
@@ -60,6 +61,11 @@ export function isCloudSTTConfigured(): boolean {
 
 /** Transcribe a voice clip through the configured endpoint. Throws CloudSTTError on any failure. */
 export async function cloudTranscribe(blob: Blob): Promise<string> {
+  // On-Device Mode: audio must never leave the phone, even if cloud STT is
+  // configured. On-device Whisper is the only transcription path.
+  if (isOnDeviceMode()) {
+    throw new CloudSTTError('On-Device Mode is on — cloud transcription is disabled. Download on-device Whisper in Settings → Voice to transcribe offline.');
+  }
   const cfg = getCloudSTTConfig();
   if (!cfg.enabled) throw new CloudSTTError('Cloud STT is disabled.');
   if (!cfg.apiKey.trim()) throw new CloudSTTError('Cloud STT has no API key.');

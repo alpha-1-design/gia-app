@@ -225,7 +225,7 @@ export function useChatGeneration() {
         state.addNotification('⚠️ Safety check failed, proceeding without guardrails');
       }
     }
-    const { webSearch: rawWebSearch, deepSearch, extThinking, handsOff, localVision } = state;
+    const { webSearch: rawWebSearch, deepSearch, extThinking, handsOff, localVision, onDeviceMode } = state;
     const webSearch = rawWebSearch || deepSearch;
     let sessionId = state.activeSessionId;
     if (!sessionId) sessionId = state.createSession();
@@ -338,7 +338,8 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 - DeepSearch: ${deepSearch ? 'ON' : 'OFF'}
 - Extended Thinking: ${extThinking ? 'ON' : 'OFF'}
 - Hands-off Mode: ${handsOff ? 'ON' : 'OFF'}
-- Local Vision: ${localVision ? 'ON' : 'OFF'}]\n\n`;
+- Local Vision: ${localVision ? 'ON' : 'OFF'}
+- On-Device Mode: ${onDeviceMode ? 'ON — you are running fully offline on the local model. Network tools are BLOCKED; use only memory, notes, tasks, clipboard, local files, device info, and local ML tools. If the request truly needs the internet, say so and suggest disabling On-Device Mode.' : 'OFF'}]\n\n`;
 
       const deepSearchPrefix = deepSearch ? `[DEEP SEARCH MODE: Conduct thorough, multi-step web research before answering.
 - Break the question into sub-questions and run SEVERAL distinct web_search queries (at least 3-5), not just one.

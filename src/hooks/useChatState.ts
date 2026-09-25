@@ -72,6 +72,7 @@ export function useChatState() {
     handsOff, setHandsOff,
     localVision, setLocalVision,
     localTranslate, setLocalTranslate,
+    onDeviceMode, setOnDeviceMode,
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase,
     keepListening, currentTool,
@@ -93,6 +94,7 @@ export function useChatState() {
     handsOff: s.handsOff, setHandsOff: s.setHandsOff,
     localVision: s.localVision, setLocalVision: s.setLocalVision,
     localTranslate: s.localTranslate, setLocalTranslate: s.setLocalTranslate,
+    onDeviceMode: s.onDeviceMode, setOnDeviceMode: s.setOnDeviceMode,
     skills: s.skills, activeSkillId: s.activeSkillId, setSkill: s.setSkill,
     wakeWord: s.wakeWord, thinkingPhase: s.thinkingPhase, setThinkingPhase: s.setThinkingPhase,
     keepListening: s.keepListening, setKeepListening: s.setKeepListening,
@@ -161,7 +163,7 @@ export function useChatState() {
     setInput,
   );
 
-  const toggleFeature = useCallback((feature: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate') => {
+  const toggleFeature = useCallback((feature: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate' | 'offline') => {
     let newFeatureState: boolean | undefined;
     if (feature === 'webSearch') { setWebSearch(!webSearch); newFeatureState = !webSearch; }
     if (feature === 'deepSearch') {
@@ -174,6 +176,14 @@ export function useChatState() {
     if (feature === 'handsOff') { setHandsOff(!handsOff); newFeatureState = !handsOff; }
     if (feature === 'vision') { setLocalVision(!localVision); newFeatureState = !localVision; }
     if (feature === 'translate') { setLocalTranslate(!localTranslate); newFeatureState = !localTranslate; }
+    if (feature === 'offline') {
+      const next = !onDeviceMode;
+      setOnDeviceMode(next);
+      newFeatureState = next;
+      addNotification(next
+        ? '🛰️ On-Device Mode ON — GIA runs fully offline on the local model. Network tools are blocked.'
+        : 'On-Device Mode off — cloud providers are available again.');
+    }
     if (feature === 'listen') {
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
@@ -207,7 +217,7 @@ export function useChatState() {
       }
     }
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
-  }, [setWebSearch, setDeepSearch, setExtThinking, setHandsOff, setLocalVision, setLocalTranslate, setVoiceEnabled, webSearch, deepSearch, extThinking, handsOff, localVision, localTranslate, voiceEnabled, voiceRef, setInput, addNotification]);
+  }, [setWebSearch, setDeepSearch, setExtThinking, setHandsOff, setLocalVision, setLocalTranslate, setVoiceEnabled, webSearch, deepSearch, extThinking, handsOff, localVision, localTranslate, voiceEnabled, voiceRef, setInput, addNotification, onDeviceMode, setOnDeviceMode]);
 
   useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
 
@@ -543,6 +553,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     handsOff, setHandsOff,
     localVision, setLocalVision,
     localTranslate, setLocalTranslate,
+    onDeviceMode, setOnDeviceMode,
     skills, activeSkillId, setSkill,
     wakeWord, thinkingPhase, setThinkingPhase, currentTool,
     clarification, setClarification,

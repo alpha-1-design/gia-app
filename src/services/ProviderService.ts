@@ -8,11 +8,16 @@ import { buildGiaSystem } from './buildGiaSystem';
 import { buildMessages } from './brain/modelUtils';
 import { buildOpenAITools, buildAnthropicTools, buildGeminiTools } from './brain/toolSchemas';
 import { retryFetch, friendlyError } from './brain/network';
+import { isOnDeviceMode } from './OfflineMode';
 
 
 class ProviderService {
   public async callProvider(req: BrainRequest, overrideProvider?: string): Promise<BrainResponse> {
-    const providerId = overrideProvider ?? useProviderStore.getState().activeProvider;
+    // On-Device Mode: every response comes from the on-device LLM — no
+    // network provider is contacted, no matter what the user had selected.
+    const providerId = isOnDeviceMode() && !overrideProvider?.startsWith('local')
+      ? 'local-llm'
+      : (overrideProvider ?? useProviderStore.getState().activeProvider);
     const ctx: BrainContext = {
       buildSystemPrompt: this.buildSystemPrompt,
       buildMessages: buildMessages as BrainContext['buildMessages'],

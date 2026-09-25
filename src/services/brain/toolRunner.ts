@@ -11,6 +11,21 @@ import { extractToolCalls, hasTruncatedToolCall, ToolCall } from '../../utils/js
 import AnalyticsService from '../AnalyticsService';
 import AnalyticsTracker from '../AnalyticsTracker';
 import { toolRateLimiter, globalToolLimiter } from '../ToolRateLimiter';
+import { isOnDeviceMode, isOnDeviceTool } from '../OfflineMode';
+import { useProviderStore } from '../../store/useProviderStore';
+
+/**
+ * Default provider for sub-agent delegation: the user's ACTIVE provider, not
+ * a hardcoded 'openai'. The old default made every sub-agent fail instantly
+ * for anyone whose key was Gemini/Groq/anything-else ("Provider openai is
+ * not configured") — a big reason Nexus sub-agents never seemed to run.
+ */
+function defaultSubAgentProvider(): string {
+  const { providers, activeProvider } = useProviderStore.getState();
+  if (activeProvider && providers[activeProvider]?.enabled) return activeProvider;
+  const firstEnabled = Object.keys(providers).find(id => providers[id]?.enabled);
+  return firstEnabled || 'openai';
+}
 
 import type { BrainRequest } from '../providers/types';
 
@@ -176,7 +191,8 @@ async function executeSingleTool(
   }
 
   if (toolCall.id === 'sub_agent_call') {
-    const { provider, prompt: subPrompt, agent } = toolCall.args as { provider: string; prompt: string; agent?: string };
+    const { prompt: subPrompt, agent } = toolCall.args as { provider?: string; prompt: string; agent?: string };
+    const provider = (toolCall.args.provider as string) || defaultSubAgentProvider();
     onThought?.(agent ? `Delegating to sub-agent (${provider}) as ${agent}...` : `Delegating to sub-agent (${provider})...`);
     const subRes = await delegateTask(provider, subPrompt, signal, agent);
     observations.push(`SUB-AGENT (${provider}): ${subRes}`);
@@ -203,6 +219,17 @@ async function executeSingleTool(
 
   const tool = GiaTools.getTool(toolCall.id);
   if (!tool) return { observations };
+
+  // On-Device Mode: only tools that run entirely on-device may execute.
+  // Anything that would touch the network (web, messaging, social, cloud)
+  // is blocked with a clear observation so the model adapts instead of
+  // retrying a tool that will never be allowed this turn.
+  if (isOnDeviceMode() && !isOnDeviceTool(toolCall.id)) {
+    useGiaStore.getState().setCurrentTool(null);
+    onThought?.(`🔒 ${tool.name} blocked — On-Device Mode`);
+    observations.push(`BLOCKED (On-Device Mode): ${toolCall.id} is not available while On-Device Mode is on — it needs the network. Use on-device tools only (memory, notes, tasks, clipboard, local files, device info, local ML). If the task cannot be done on-device, say so and suggest turning On-Device Mode off in Settings → Reliability.`);
+    return { observations };
+  }
 
   const validationError = validateToolArgs(toolCall.id, toolCall.args);
   if (validationError) {
@@ -415,7 +442,7 @@ export async function executeToolBlocks(
       // param — that param is only meaningful for single delegateTask() calls outside
       // a batch. See SubAgentManager.executeOne, which now passes identity.name through.
       const tasks = group.map((call) => ({
-        provider: (call.args.provider as string) || 'openai',
+        provider: (call.args.provider as string) || defaultSubAgentProvider(),
         prompt: (call.args.prompt as string) || '',
       }));
       onThought?.(`Spawning ${group.length} sub-agents in parallel${isGodMode ? ' [GOD MODE]' : ''}...`);
