@@ -421,16 +421,6 @@ const MessageRow = memo<MessageRowProps>(({
                     onSubmit={(answer) => onClarificationFormAnswer?.(answer)}
                   />
                 )}
-                {msg.role === 'assistant' && pendingProtocols.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider px-1 mb-1" style={{ color: 'var(--gia-muted)' }}>
-                      Waiting for your approval
-                    </p>
-                    {pendingProtocols.map(p => (
-                      <ProtocolApprovalCard key={p.id} protocol={p} />
-                    ))}
-                  </div>
-                )}
                 {msg.role === 'assistant' && allProtocols.length > 0 && (
                   <>
                     <InlineToolCalls protocols={allProtocols} />
@@ -451,6 +441,21 @@ const MessageRow = memo<MessageRowProps>(({
               <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
             )}
           </div>
+          {/* Pending tool approvals render OUTSIDE the thinking/content
+              branches: the generation loop blocks on waitForConfirmation
+              the moment a sensitive tool is proposed, so this card must be
+              visible immediately — even while GIA is still "thinking" —
+              or the turn stalls with no visible prompt (the "delay disease"). */}
+          {msg.role === 'assistant' && pendingProtocols.length > 0 && (
+            <div className="w-full max-w-[85%] mb-1">
+              <p className="text-[9px] font-semibold uppercase tracking-wider px-1 mb-1" style={{ color: 'var(--gia-muted)' }}>
+                Waiting for your approval
+              </p>
+              {pendingProtocols.map(p => (
+                <ProtocolApprovalCard key={p.id} protocol={p} />
+              ))}
+            </div>
+          )}
           {msg.role === 'assistant' && msg.wasTruncated && (
             <button
               onClick={() => onContinue(msg.id)}
