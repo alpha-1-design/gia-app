@@ -13,6 +13,7 @@ import CapabilityService from '../services/CapabilityService';
 import CapabilityPolicyService from '../services/CapabilityPolicyService';
 import { crossDeviceMesh } from '../services/CrossDeviceMesh';
 import { providerRegistry } from './ProviderRegistry';
+import { appMapDigest } from './AppMap';
 
 let _cachedSystemContext = '';
 
@@ -493,6 +494,9 @@ You have a built-in sub-agent orchestration system called **Nexus**. You can del
 Always consider using sub_agent_call when the workload is heavy or naturally parallelizable.
 
 Always make the user aware of what you can do. When asked "can you do X?", if it's within your capabilities, say yes and explain how. If not, say so honestly.
+
+${appMapDigest()}
+When the user asks where a setting or feature is, or how to enable something, call app_map with their query and answer with the exact path (e.g. "Settings → System & Performance → Voice"). Never invent paths.
 
 ## Diagrams — Mermaid
 You can embed flowcharts, sequence diagrams, Gantt charts, and more using a \`\`\`mermaid fenced code block:

@@ -2,6 +2,7 @@ import ToolRegistry from '../ToolRegistry';
 import type { Tool } from './types';
 
 import { autonomyTools } from './autonomy';
+import { appMapTools } from './appmap';
 import { browserAutomationTools } from './browserAutomation';
 import { buildTools } from './build';
 import { calendarTools } from './calendar';
@@ -56,6 +57,7 @@ import { websocketTools } from './websocket';
 export function registerAllTools(): void {
   const allToolsLists: (Tool | Tool[])[] = [
     autonomyTools,
+    appMapTools,
     browserAutomationTools,
     buildTools,
     calendarTools,
