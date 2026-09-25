@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.10';
+const VERSION = '2.4.0.11';
 
 const sections = [
   {
@@ -16,7 +16,12 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
-      'Phone-first Capability Center with live status for providers, on-device models, camera, microphone, location, files, terminal, MCP, and notifications.',
+      'On-Device Mode — one toggle (composer Tools sheet or Settings → System → Reliability) that runs GIA fully offline: every response from the local model, network tools blocked, cloud transcription refused. Nothing leaves your phone.',
+      'Real permission system — GIA asks for camera, location, contacts, SMS, and friends exactly when a task needs them, explains why, and continues once you decide. Review or flip any permission anytime in Settings → Permissions.',
+      'GIA now knows her own app — ask “where do I change X?” and she answers with the exact screen and control (new app_map tool), and she points you to the built-in report form when something is broken.',
+      '“Use Local AI (Free)” now detects your phone first and recommends the model that actually fits your RAM, with download size and reasoning shown before it downloads.',
+      'One-tap “Get API key” links for every provider in the connect panel — no more hunting for the right dashboard.',
+      'Device-aware local model recommendation, Nexus sub-agents that actually fire, and a real approval flow are in — details below.',
       'Shared credential vault for API keys, tokens, and service secrets, with Android Keystore protection and secure chat prompts.',
       'Termux integration with availability checks, explicit command execution, working-directory support, and refusal when Termux is unavailable.',
       'Chat skill creation through the new skill_create tool, plus expanded follow-up suggestions and clarification guidance.',
@@ -33,7 +38,10 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
-      'Found the actual bug behind every failed Full Install: it ran through a separate, never-updated copy of the proot launch code that none of the recent fixes touched. Consolidated into one shared path.',
+      'Responses no longer appear frozen mid-stream on long chats — only the message being written re-renders now, not the whole conversation.',
+      'Tool approval prompts appear the moment a tool needs your OK, not after the whole turn finishes.',
+      'Nexus sub-agents now actually run: they were invisible to native tool-calling models (missing schema) and defaulted to a provider you may not have keys for. They now use your active provider and fail over like chat does.',
+      'Providers without a logo no longer show an empty box — a distinct two-letter mark in the provider colour instead.',
       'Sandbox package index, install, repair, and reset failures now surface as failures instead of false success.',
       'Remote filesystem paths are canonicalized inside the workspace and clone inputs are validated against shell injection and traversal.',
       'Removed silent remote host fallback: a missing rootfs now blocks execution instead of running commands on the host.',
@@ -62,7 +70,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.10.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.11.',
     ],
   },
 ];

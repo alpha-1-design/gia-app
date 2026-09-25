@@ -223,7 +223,7 @@ New `src/components/ChangelogModal.tsx` + "View Changelog" button in `AboutPage.
 
 ## 2026-09-21 — terminal/rootfs proot audit (research only, files NOT changed)
 
-Context: commit `0f1e074` (v2.4.0.10) fixed one two-copy divergence — the proot one-shot path in `GIATerminalPlugin` previously bypassed every fix applied to the interactive `GIATerminalService.startSession()` path. That class of bug repeats elsewhere. Verified against working tree.
+Context: commit `0f1e074` (v2.4.0.11) fixed one two-copy divergence — the proot one-shot path in `GIATerminalPlugin` previously bypassed every fix applied to the interactive `GIATerminalService.startSession()` path. That class of bug repeats elsewhere. Verified against working tree.
 
 **Consolidated & safe (do NOT re-split):**
 - Only TWO native spawn sites, both through the shared builders: `GIATerminalService.java:700-704` (startSession) + `GIATerminalPlugin.java:735-740` (one-shot, used by Full Install/install/remove/search/list/update). Shared code: `buildProotArgs()` (`GIATerminalService.java:849`, binds `/dev /proc /sys /system /vendor /apex /data /mnt /storage`, `-0`, `-w /root`, `/bin/sh -c`) + `configureProotEnvironment()` (`:900`, env vars incl. `PROOT_LOADER`/`_32`, `LD_LIBRARY_PATH`=nativeLibraryDir, `SSL_CERT_FILE`, `PR_SET_DUMPABLE` via `prctl`). Named loader path via `resolveLoaderPath()` (`:628`).
