@@ -19,6 +19,7 @@ import giaTools from '../services/GiaTools';
 import SandboxEnvService from '../services/SandboxEnvService';
 import MessageList from '../components/MessageList';
 import ComposerToolsSheet from '../components/ComposerToolsSheet';
+import UseLocalAIFlow from '../components/chat/UseLocalAIFlow';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
 import BuildPreviewSheet from '../components/BuildPreviewSheet';
@@ -151,6 +152,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const setShowEngine = useGiaStore((s) => s.setShowEngine);
   const showModelSwitcher = useGiaStore((s) => s.showModelSwitcher);
   const [showToolsCatalog, setShowToolsCatalog] = React.useState(false);
+  const [showLocalAIFlow, setShowLocalAIFlow] = React.useState(false);
   const setShowModelSwitcher = useGiaStore((s) => s.setShowModelSwitcher);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
   const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
@@ -348,7 +350,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           </div>
             {!providerConnected && (
             <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
-              <button onClick={() => { useProviderStore.getState().setProviderKey('local-llm', ''); }} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
+              <button onClick={() => setShowLocalAIFlow(true)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
                 <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.2)' }}><Zap size={14} style={{ color: '#a855f7' }} /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Use Local AI (Free)</p>
@@ -646,6 +648,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               <span className="font-semibold max-w-[80px] truncate">{activeSkill.name}</span>
             </button>
           )}
+          <UseLocalAIFlow open={showLocalAIFlow} onClose={() => setShowLocalAIFlow(false)} />
           <ComposerToolsSheet
             open={showTools}
             onClose={() => setShowTools(false)}
