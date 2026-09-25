@@ -1,7 +1,9 @@
 import React from 'react';
 import {
-  SiAnthropic, SiDeepseek, SiGooglegemini, SiHuggingface, SiLmstudio,
-  SiMeta, SiNvidia, SiOllama, SiOpenrouter, SiPerplexity, SiReplicate, SiX,
+  SiAlibabacloud, SiAnthropic, SiCloudflare, SiDatabricks, SiDeepseek,
+  SiGithub, SiGooglegemini, SiGooglecloud, SiHuggingface, SiLmstudio,
+  SiMeta, SiMinimax, SiMoonshotai, SiNvidia, SiOllama, SiOpenrouter,
+  SiPerplexity, SiQwen, SiReplicate, SiScaleway, SiX,
 } from 'react-icons/si';
 
 interface ProviderIconProps {
@@ -14,31 +16,62 @@ interface ProviderIconProps {
 // Brand colors.
 const BRAND: Record<string, string> = {
   openai: '#10a37f', anthropic: '#d97757', gemini: '#4285f4', google: '#4285f4',
+  'google-ai-studio': '#4285f4', 'vertex-ai': '#4285f4', 'google-cloud': '#4285f4',
   opencode: '#a855f7', openrouter: '#ff6b35', groq: '#f55036', deepseek: '#4d6bfe',
   cerebras: '#06b6d4', mistral: '#ff7000', xai: '#e5e7eb', togetherai: '#6b7280',
-  huggingface: '#ffd21e', ollama: '#e5e7eb', lmstudio: '#f59e0b', nvidia: '#76b900',
-  local: '#34d399', 'local-llm': '#34d399', cohere: '#d64545', ai21: '#6b7280', perplexity: '#20808d',
+  huggingface: '#ffd21e', ollama: '#e5e7eb', 'ollama-cloud': '#e5e7eb', lmstudio: '#f59e0b',
+  'lmstudio-remote': '#f59e0b', nvidia: '#76b900', local: '#34d399', 'local-llm': '#34d399',
+  cohere: '#d64545', 'cohere-command': '#d64545', ai21: '#6b7280', perplexity: '#20808d',
   fireworks: '#ef4444', deepinfra: '#8b5cf6', replicate: '#22c55e', meta: '#0866ff',
+  'moonshot': '#111111', 'zhipu': '#3859ff', 'qwen': '#615ced', 'minimax': '#ff4d4d',
+  'github-models': '#e5e7eb', 'cloudflare-ai': '#f6821f', 'cloudflare-gateway': '#f6821f',
+  'databricks': '#ff3621', 'watsonx': '#be95ff', 'bedrock': '#ff9900', 'sagemaker': '#ff9900',
+  'azure-openai': '#0078d4', 'scaleway': '#4f0599', 'lambda': '#a855f7',
+  'sambanova': '#00a56d', 'hyperbolic': '#000000', 'novita': '#20c997', 'nebius': '#0f6fff',
+  'friendli': '#12a594', 'nscale': '#6366f1', 'modal': '#0f0f0f', 'baseten': '#213147',
+  'volcengine': '#00c8d2', 'cometapi': '#8b5cf6', requesty: '#f97316', portkey: '#dc2626',
+  litellm: '#8b5cf6', vllm: '#34d399', llamacpp: '#22c55e', jan: '#0ea5e9',
+  koboldcpp: '#f59e0b', tabbyml: '#a855f7', 'text-generation-webui': '#94a3b8',
+  'siliconflow': '#7c3aed', stepfun: '#0ea5e9', baichuan: '#f43f5e',
+  yi: '#10b981', inflection: '#e11d48', 'aleph-alpha': '#1d4ed8', predibase: '#6366f1',
+  lepton: '#0284c7', 'custom-openai': '#a1a1aa', 'custom-anthropic': '#a1a1aa', 'custom-gemini': '#a1a1aa',
 };
 
 // ── Official simple-icons marks (real brand logos) ──────────────────────────
+// ── Official simple-icons marks (real brand logos) ──────────────────────────
+// Module-level so resolveIcon can check availability before falling back.
+const SIMPLE_ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+  anthropic: SiAnthropic,
+  deepseek: SiDeepseek,
+  gemini: SiGooglegemini,
+  google: SiGooglegemini,
+  'google-ai-studio': SiGooglegemini,
+  openrouter: SiOpenrouter,
+  xai: SiX,
+  huggingface: SiHuggingface,
+  ollama: SiOllama,
+  'ollama-cloud': SiOllama,
+  lmstudio: SiLmstudio,
+  'lmstudio-remote': SiLmstudio,
+  nvidia: SiNvidia,
+  perplexity: SiPerplexity,
+  replicate: SiReplicate,
+  meta: SiMeta,
+  moonshot: SiMoonshotai,
+  minimax: SiMinimax,
+  qwen: SiQwen,
+  'github-models': SiGithub,
+  'cloudflare-ai': SiCloudflare,
+  'cloudflare-gateway': SiCloudflare,
+  databricks: SiDatabricks,
+  'vertex-ai': SiGooglecloud,
+  'google-cloud': SiGooglecloud,
+  'alibaba-cloud': SiAlibabacloud,
+  scaleway: SiScaleway,
+};
+
 const SimpleIcon: React.FC<{ id: string; size: number; color: string }> = ({ id, size, color }) => {
-  const map: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
-    anthropic: SiAnthropic,
-    deepseek: SiDeepseek,
-    gemini: SiGooglegemini,
-    google: SiGooglegemini,
-    openrouter: SiOpenrouter,
-    xai: SiX,
-    huggingface: SiHuggingface,
-    ollama: SiOllama,
-    lmstudio: SiLmstudio,
-    nvidia: SiNvidia,
-    perplexity: SiPerplexity,
-    replicate: SiReplicate,
-    meta: SiMeta,
-  };
-  const Icon = map[id];
+  const Icon = SIMPLE_ICON_MAP[id];
   if (!Icon) return <></>;
   return <Icon size={size} color={color} />;
 };
@@ -83,11 +116,20 @@ const LocalLLMMark: React.FC<{ size: number; color: string }> = ({ size, color }
   </svg>
 );
 
-const Monogram: React.FC<{ id: string; size: number; color: string }> = ({ id, size, color }) => (
-  <span style={{ color, fontWeight: 800, fontSize: size * 0.5, lineHeight: 1 }} className="select-none">
-    {(id || '?').replace(/[^a-z0-9]/gi, '').charAt(0).toUpperCase() || '?'}
-  </span>
-);
+// Deterministic 2-letter monogram for providers without a real mark —
+// distinct per provider (zhipu → Zh, sambanova → Sa, baseten → Ba …),
+// tinted in the provider's brand colour.
+const Monogram: React.FC<{ id: string; size: number; color: string }> = ({ id, size, color }) => {
+  const letters = (id || '?').replace(/[^a-z0-9]/gi, '').slice(0, 2);
+  const text = letters
+    ? letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase()
+    : '?';
+  return (
+    <span style={{ color, fontWeight: 800, fontSize: size * 0.42, lineHeight: 1, letterSpacing: '-0.02em' }} className="select-none">
+      {text}
+    </span>
+  );
+};
 
 function resolveIcon(id: string): { node: React.ReactElement; color: string } {
   const color = BRAND[id] ?? '#a855f7';
@@ -97,18 +139,15 @@ function resolveIcon(id: string): { node: React.ReactElement; color: string } {
     groq: <GroqMark size={0} color={color} />,
     cerebras: <CerebrasMark size={0} color={color} />,
     mistral: <MistralMark size={0} color={color} />,
-    togetherai: <Monogram id="togetherai" size={0} color={color} />,
-    cohere: <Monogram id="cohere" size={0} color={color} />,
-    fireworks: <Monogram id="fireworks" size={0} color={color} />,
-    deepinfra: <Monogram id="deepinfra" size={0} color={color} />,
-    ai21: <Monogram id="ai21" size={0} color={color} />,
     local: <LocalLLMMark size={0} color={color} />,
     'local-llm': <LocalLLMMark size={0} color={color} />,
     'local_llm': <LocalLLMMark size={0} color={color} />,
   };
   const node = map[id];
   if (node) return { node, color };
-  return { node: <SimpleIcon id={id} size={0} color={color} />, color };
+  if (SIMPLE_ICON_MAP[id]) return { node: <SimpleIcon id={id} size={0} color={color} />, color };
+  // No real mark — a distinct 2-letter monogram beats an empty box.
+  return { node: <Monogram id={id} size={0} color={color} />, color };
 }
 
 const ProviderIcon: React.FC<ProviderIconProps> = ({ provider, size = 18, className, bare = false }) => {

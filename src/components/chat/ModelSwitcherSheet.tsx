@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw } from 'lucide-react';
+import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw, ExternalLink } from 'lucide-react';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../../services/ProviderRegistry';
 import { useShallow } from 'zustand/react/shallow';
@@ -75,6 +75,9 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
   const selectedCfg = providers[selected];
   const selectedConnected = !!selectedCfg?.enabled && !!selectedCfg?.apiKey;
   const selectedNeedsKey = providerRegistry.getNeedsApiKey(selected);
+  // Direct link to the provider's API-key page — users shouldn't have to
+  // hunt for where to create a key before they can connect.
+  const keyUrl = providerRegistry.getProvider(selected)?.apiKeyUrl;
   const currentModelId = selectedCfg?.model;
 
   // Pull LIVE models for the selected provider once per selection. Avoids
@@ -204,6 +207,17 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
                     <p className="text-[11px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
                       Connect a <span className="font-semibold" style={{ color: 'var(--gia-text)' }}>{providerRegistry.getLabel(selected)}</span> API key to use its models.
                     </p>
+                    {keyUrl && (
+                      <a
+                        href={keyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-[11px] font-medium w-fit px-2.5 py-1.5 rounded-lg transition-all hover:opacity-80"
+                        style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}
+                      >
+                        <ExternalLink size={11} /> Get a {providerRegistry.getLabel(selected)} API key
+                      </a>
+                    )}
                     <div className="flex items-center gap-2">
                       <input
                         type="password"
