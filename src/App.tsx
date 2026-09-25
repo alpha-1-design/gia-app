@@ -11,8 +11,6 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import ChatModule from './modules/ChatModule';
 import BuildModule from './modules/BuildModule';
-import WriterModule from './modules/WriterModule';
-import PlannerModule from './modules/PlannerModule';
 import SettingsModule from './modules/SettingsModule';
 import ErrorBoundary from './components/ErrorBoundary';
 import ApiKeyInputPanel from './components/ApiKeyInputPanel';
@@ -62,6 +60,8 @@ const AnalystModule = lazy(() => import('./modules/AnalystModule'));
 const ExamModule = lazy(() => import('./modules/ExamModule'));
 const AutonomyModule = lazy(() => import('./modules/AutonomyModule'));
 const AgentsModule = lazy(() => import('./modules/AgentsModule'));
+const WriterModule = lazy(() => import('./modules/WriterModule'));
+const PlannerModule = lazy(() => import('./modules/PlannerModule'));
 
 async function checkProviderHealth(provider: string, apiKey: string, model: string): Promise<boolean> {
   try {
@@ -107,8 +107,8 @@ const ModuleView: React.FC = () => {
     build:     <ErrorBoundary name="Build"><BuildModule /></ErrorBoundary>,
     exam:      <Suspense fallback={<Fallback />}><ErrorBoundary name="Exam"><ExamModule /></ErrorBoundary></Suspense>,
     analyst:   <Suspense fallback={<Fallback />}><ErrorBoundary name="Analyst"><AnalystModule /></ErrorBoundary></Suspense>,
-    writer:    <ErrorBoundary name="Writer"><WriterModule /></ErrorBoundary>,
-    planner:   <ErrorBoundary name="Planner"><PlannerModule /></ErrorBoundary>,
+    writer:    <Suspense fallback={<Fallback />}><ErrorBoundary name="Writer"><WriterModule /></ErrorBoundary></Suspense>,
+    planner:   <Suspense fallback={<Fallback />}><ErrorBoundary name="Planner"><PlannerModule /></ErrorBoundary></Suspense>,
     settings:  <ErrorBoundary name="Settings"><SettingsModule /></ErrorBoundary>,
     autonomy:  <Suspense fallback={<Fallback />}><ErrorBoundary name="Autonomy"><AutonomyModule /></ErrorBoundary></Suspense>,
     agents:    <Suspense fallback={<Fallback />}><ErrorBoundary name="Agents"><AgentsModule /></ErrorBoundary></Suspense>,
