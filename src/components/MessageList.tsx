@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { motion } from 'motion/react';
 import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { ReasoningChain } from './ReasoningChain';
 import { WorkLog } from './WorkLog';
 import { SegmentedReasoning } from './SegmentedReasoning';
@@ -44,8 +45,6 @@ interface MessageListProps {
   setExpandedMsgs: React.Dispatch<React.SetStateAction<Set<string>>>;
   showThoughts: Set<string>;
   setShowThoughts: React.Dispatch<React.SetStateAction<Set<string>>>;
-  liveThoughts: Record<string, string>;
-  liveSegments?: Record<string, import('../store/useGiaStore').MessageSegment[]>;
   thinkingPhase: ThinkingPhase;
   currentTool: string | null;
   responseTimesRef: React.MutableRefObject<Record<string, number>>;
@@ -65,7 +64,7 @@ const formatTimeAgo = (ts: number) => {
   const diff = Date.now() - ts;
   if (diff < 60000) return 'just now';
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 86400000)}h ago`;
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
@@ -130,11 +129,397 @@ function useShowTokenUsage(): boolean {
   return show;
 }
 
+// ── MessageRow ──────────────────────────────────────────────────────
+// One chat message, memoized. During a stream only the streaming row's
+// `msg` object changes (updateMessageInTree replaces that node), so with
+// row-level memoization each flush re-renders ONE row instead of every
+// row — previously N rows × (Markdown + motion) per frame saturated the
+// main thread on long chats and the screen appeared frozen until a
+// module switch forced a remount. Live thoughts/segments are subscribed
+// per-row (keyed by msg.id) so other rows don't even see those updates.
+
+interface MessageRowProps {
+  msg: Message;
+  isStreaming: boolean;
+  loading: boolean;
+  thinkingPhase: ThinkingPhase;
+  currentTool: string | null;
+  responseTimesRef: React.MutableRefObject<Record<string, number>>;
+  messagesRef: React.MutableRefObject<Message[]>;
+  reactions: Record<string, { value: 'up' | 'down'; snippet: string }>;
+  clarification?: Clarification | null;
+  expandedMsgs: Set<string>;
+  setExpandedMsgs: React.Dispatch<React.SetStateAction<Set<string>>>;
+  showThoughts: Set<string>;
+  setShowThoughts: React.Dispatch<React.SetStateAction<Set<string>>>;
+  sheetMsgId: string | null;
+  openSheet: (id: string | null) => void;
+  extThinking: boolean;
+  showTokenUsage: boolean;
+  onCopyMessage: (id: string, content: string) => void;
+  onEdit: (id: string) => void;
+  onDeleteWithUndo: (id: string) => void;
+  onContinue: (id: string) => void;
+  onFork: (id: string) => void;
+  onRetry: (id: string) => Promise<void>;
+  onEditResend: (msgId: string) => void;
+  onRewrite: (id: string, instruction: string) => void;
+  onSuggestionClick?: (text: string) => void;
+  onClarificationFormAnswer?: (answer: string) => void;
+}
+
+const MessageRow = memo<MessageRowProps>(({
+  msg, isStreaming, loading, thinkingPhase, currentTool,
+  responseTimesRef, messagesRef, reactions, clarification,
+  expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
+  sheetMsgId, openSheet, extThinking, showTokenUsage,
+  onCopyMessage, onEdit, onDeleteWithUndo, onContinue, onFork,
+  onRetry, onEditResend, onRewrite, onSuggestionClick, onClarificationFormAnswer,
+}) => {
+  // Per-row live subscriptions — only THIS row re-renders when its own
+  // stream data changes. (The liveThoughts/liveSegments records are
+  // replaced wholesale on every flush; a whole-record prop would have
+  // defeated the memoization.)
+  const liveThought = useGiaStore(s => s.liveThoughts[msg.id]);
+  const liveSegs = useGiaStore(s => s.liveSegments[msg.id]);
+  // Protocols for this message only; shallow-compare so unrelated
+  // protocol updates (other messages, other progress ticks) don't
+  // re-render this row.
+  const myProtocols = useProtocolStore(useShallow(s =>
+    s.consoleProtocols.filter(p => p.messageId === msg.id)
+  ));
+
+  const pendingProtocols = useMemo(
+    () => myProtocols.filter(p => p.state === 'proposed').sort((a, b) => a.createdAt - b.createdAt),
+    [myProtocols],
+  );
+  const allProtocols = useMemo(
+    () => myProtocols.slice().sort((a, b) => a.createdAt - b.createdAt),
+    [myProtocols],
+  );
+
+  const thoughts = liveThought ?? msg.thoughts ?? '';
+  const segs = liveSegs ?? msg.segments;
+
+  const toggleThoughts = useCallback(() => {
+    setShowThoughts(prev => {
+      const next = new Set(prev);
+      if (next.has(msg.id)) next.delete(msg.id);
+      else next.add(msg.id);
+      return next;
+    });
+  }, [msg.id, setShowThoughts]);
+
+  const handleReact = useCallback((value: 'up' | 'down') => {
+    const m = messagesRef.current.find(x => x.id === msg.id);
+    useGiaStore.getState().setReaction(msg.id, value, m ? m.content.slice(0, 200) : '');
+  }, [msg.id, messagesRef]);
+
+  const nextAssistantId = useMemo(() => {
+    const msgs = messagesRef.current;
+    const i = msgs.findIndex(m => m.id === msg.id);
+    const n = msgs[i + 1];
+    return n && n.role === 'assistant' ? n.id : undefined;
+  }, [messagesRef, msg.id, sheetMsgId]); // eslint-disable-line react-hooks/exhaustive-deps -- recompute when the sheet opens
+
+  return (
+    <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
+        {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
+      </div>
+      <div className="flex-1 min-w-0 space-y-1">
+        {msg.attachments?.some(a => a.preview) && (
+          <div className={`flex flex-wrap gap-2 mb-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {msg.attachments.filter(a => a.preview).map((a, ai) => (
+              <img key={ai} src={a.preview} alt={a.name} className="w-24 h-24 rounded-xl object-cover" style={{ border: '1px solid var(--gia-border)' }} />
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 mb-0.5 ml-1">
+          <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
+            {msg.agentId ? msg.agentName : msg.role === 'user' ? 'You' : 'GIA'}
+          </span>
+          <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
+            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+        <>
+          <div
+            className={`max-w-[85%] p-3 sm:p-4 md:p-5 rounded-2xl relative cursor-pointer ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : `border ${isStreaming ? 'streaming-message' : ''}`}`}
+            style={{
+              background: msg.role === 'assistant' && !msg.error ? 'var(--gia-surface-2)' : undefined,
+              borderColor: msg.role === 'assistant' && !msg.error ? 'var(--gia-border)' : undefined,
+              borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
+              borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
+            }}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('a, button')) return;
+              openSheet(sheetMsgId === msg.id ? null : msg.id);
+            }}
+          >
+            {msg.thinking && !((isStreaming) && msg.content) ? (
+              <div>
+                <WorkLog
+                  thoughts={thoughts}
+                  isLive={!!liveThought}
+                  isExpanded={showThoughts.has(msg.id)}
+                  onToggle={toggleThoughts}
+                  currentTool={currentTool}
+                  thinkingPhase={thinkingPhase}
+                  startTime={msg.timestamp}
+                />
+              </div>
+            ) : msg.error ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm leading-relaxed" style={{ color: '#f87171' }}>{msg.content}</p>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => onRetry(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-semibold w-fit" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5' }}>
+                    <RotateCcw size={10} /> Retry
+                  </button>
+                  <button onClick={() => onEditResend(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] w-fit" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>
+                    <RotateCcw size={10} /> Edit & Resend
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {msg.role === 'assistant' && (
+                  <div className="flex items-center gap-1.5 mb-1.5 ml-0.5">
+                    {msg.agentId ? (
+                      <AgentBadge agentName={msg.agentName} agentIcon={msg.agentIcon} agentTask={msg.agentTask} />
+                    ) : (
+                      <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
+                        {msg.model ? `via ${msg.model}` : 'GIA'}
+                      </span>
+                    )}
+                    <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
+                      {formatTimeAgo(msg.timestamp)}
+                    </span>
+                    {msg.thinking ? (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
+                        Thinking…
+                      </span>
+                    ) : isStreaming ? (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
+                        Generating…
+                      </span>
+                    ) : responseTimesRef.current[msg.id] ? (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
+                        {(responseTimesRef.current[msg.id] / 1000).toFixed(1)}s
+                      </span>
+                    ) : null}
+                    {showTokenUsage && msg.tokenUsage && !msg.thinking && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+                        {msg.tokenUsage.total} tok
+                      </span>
+                    )}
+                  </div>
+                )}
+                {msg.thinking && isStreaming && msg.content && (
+                  <div className="mb-2">
+                    <WorkLog
+                      thoughts={thoughts}
+                      isLive={!!liveThought}
+                      isExpanded={showThoughts.has(msg.id)}
+                      onToggle={toggleThoughts}
+                      currentTool={currentTool}
+                      thinkingPhase={thinkingPhase}
+                      startTime={msg.timestamp}
+                    />
+                  </div>
+                )}
+                {(() => {
+                  if (segs && segs.length > 0) {
+                    // New path: render the real think -> tool -> think
+                    // sequence as discrete blocks, always visible (not
+                    // hidden behind a single toggle) since each step
+                    // is already collapsed on its own.
+                    return <SegmentedReasoning segments={segs} isLive={!!liveSegs} />;
+                  }
+                  // Fallback for messages generated before this existed
+                  // (or any path that doesn't populate segments) --
+                  // same single collapsible blob as before.
+                  return thoughts ? (
+                  <div className="mb-3 rounded-xl overflow-hidden transition-all duration-300" style={{
+                    border: '1px solid rgba(251,191,36,0.12)',
+                    background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
+                  }}>
+                    <button
+                      onClick={toggleThoughts}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
+                      style={{ color: '#f59e0b' }}
+                    >
+                      <Brain size={12} />
+                      <span className="text-[11px] font-medium flex-1">
+                        {showThoughts.has(msg.id) ? 'Hide' : 'Show'} reasoning ({thoughts.split(' ').length} words)
+                      </span>
+                      {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                    </button>
+                    <ReasoningChain
+                      messageId={msg.id}
+                      thoughts={thoughts}
+                      isLive={!!liveThought}
+                      isExpanded={showThoughts.has(msg.id)}
+                      onToggle={toggleThoughts}
+                    />
+                  </div>
+                  ) : null;
+                })()}
+                {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
+                  <>
+                    <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} isStreaming={isStreaming} />
+                    <button onClick={() => setExpandedMsgs(prev => new Set(prev).add(msg.id))} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+                      Show more ({Math.ceil((msg.content.length - LONG_MSG_CHARS) / 1000)}k+ chars)
+                    </button>
+                  </>
+                ) : (
+                  <div className="token-reveal">
+                    <MarkdownRenderer content={msg.content} sources={msg.sources} isStreaming={isStreaming} />
+                    {isStreaming && msg.content && loading && (
+                      extThinking
+                        ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />
+                        : <span className="stream-cursor ml-0.5">▋</span>
+                    )}
+                    {expandedMsgs.has(msg.id) && (
+                      <button onClick={() => setExpandedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+                        Show less
+                      </button>
+                    )}
+                  </div>
+                )}
+                {msg.role === 'assistant' && !msg.thinking && !msg.error && (
+                  <div className="mt-1.5 text-[9px] text-right tracking-wider select-none flex items-center justify-end gap-1.5" style={{ color: 'var(--gia-muted-3)' }}>
+                    <span className="opacity-40">— </span>
+                    <span style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}66` : '#a855f766' }}>✦</span>
+                    <span className="font-medium ml-0.5" style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}44` : '#a855f744' }}>{msg.agentId ? msg.agentName : 'GIA'}</span>
+                    {msg.source === 'on-device' && (
+                      <span className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
+                        <Lock size={9} /> on-device
+                      </span>
+                    )}
+                    {msg.source === 'cloud' && (
+                      <span className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>
+                        <Cloud size={9} /> cloud
+                      </span>
+                    )}
+                  </div>
+                )}
+                {msg.role === 'assistant' && reactions[msg.id] && (
+                  <div className="mt-1 flex items-center gap-1" style={{ color: reactions[msg.id].value === 'up' ? '#22c55e' : '#f87171' }}>
+                    {reactions[msg.id].value === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
+                    <span className="text-[9px] tracking-wider select-none">{reactions[msg.id].value === 'up' ? 'Liked' : 'Disliked'}</span>
+                  </div>
+                )}
+                {msg.artifacts && msg.artifacts.length > 0 && (
+                  <ArtifactsPanel artifacts={msg.artifacts} />
+                )}
+                {msg.role === 'assistant' && clarification?.fields && clarification.fields.length > 0 && clarification.assistantMsgId === msg.id && (
+                  <InlineClarificationForm
+                    question={clarification.question}
+                    fields={clarification.fields}
+                    loading={loading}
+                    onSubmit={(answer) => onClarificationFormAnswer?.(answer)}
+                  />
+                )}
+                {msg.role === 'assistant' && pendingProtocols.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider px-1 mb-1" style={{ color: 'var(--gia-muted)' }}>
+                      Waiting for your approval
+                    </p>
+                    {pendingProtocols.map(p => (
+                      <ProtocolApprovalCard key={p.id} protocol={p} />
+                    ))}
+                  </div>
+                )}
+                {msg.role === 'assistant' && allProtocols.length > 0 && (
+                  <>
+                    <InlineToolCalls protocols={allProtocols} />
+                    <ToolTray protocols={allProtocols} />
+                  </>
+                )}
+                {msg.sources && msg.sources.length > 0 && (
+                  <SourcesBlock sources={msg.sources} />
+                )}
+                {msg.attachments?.filter(a => !a.preview).map(att => (
+                  <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
+                    <Paperclip size={10} /> {att.name}
+                  </div>
+                ))}
+              </>
+            )}
+            {msg.tasks && msg.tasks.length > 0 && (
+              <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
+            )}
+          </div>
+          {msg.role === 'assistant' && msg.wasTruncated && (
+            <button
+              onClick={() => onContinue(msg.id)}
+              className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-full transition-all tap-feedback active:scale-95"
+              style={{
+                background: 'rgba(168,85,247,0.12)',
+                color: '#c4b5fd',
+                border: '1px solid rgba(168,85,247,0.3)',
+              }}
+            >
+              <ChevronRight size={11} />
+              Response truncated — tap to continue
+            </button>
+          )}
+          {msg.role === 'assistant' && !msg.wasTruncated && msg.suggestions && msg.suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {msg.suggestions.map(s => (
+                <button
+                  key={s}
+                  onClick={() => onSuggestionClick?.(s)}
+                  className="text-[10px] px-3 py-1.5 rounded-full transition-all tap-feedback active:scale-95"
+                  style={{
+                    background: 'var(--gia-surface-2)',
+                    color: 'var(--gia-muted)',
+                    border: '1px solid var(--gia-border)',
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {sheetMsgId === msg.id && (
+            <>
+              <MessageActionSheet
+                msg={msg}
+                onClose={() => openSheet(null)}
+                onCopy={onCopyMessage}
+                onRetry={onRetry}
+                onEdit={onEdit}
+                onContinue={onContinue}
+                onFork={onFork}
+                onDelete={onDeleteWithUndo}
+                onRewrite={onRewrite}
+                onExpand={(id) => { openSheet(null); openFullScreenMsg?.(id); }}
+                reaction={reactions[msg.id]?.value}
+                onReact={handleReact}
+                nextAssistantId={nextAssistantId}
+              />
+              {msg.role === 'assistant' && (
+                <RewriteBar msgId={msg.id} onRewrite={onRewrite} onClose={() => openSheet(null)} onFork={onFork} onDelete={onDeleteWithUndo} />
+              )}
+            </>
+          )}
+        </>
+      </div>
+    </motion.div>
+  );
+});
+MessageRow.displayName = 'MessageRow';
+
+// Full-screen viewer state lives at the list level (only one at a time).
+let openFullScreenMsg: ((id: string) => void) | null = null;
+
 const MessageList: React.FC<MessageListProps> = ({
   messages, loading, streamingMsgId, streamingMsgIds,
   expandedMsgs, setExpandedMsgs,
   showThoughts, setShowThoughts,
-  liveThoughts, liveSegments = {}, thinkingPhase, currentTool,
+  thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
   onFork, onRetry, onEditResend, onRewrite,
@@ -146,330 +531,55 @@ const MessageList: React.FC<MessageListProps> = ({
   const [sheetMsgId, setSheetMsgId] = useState<string | null>(null);
   const [fullScreenMsgId, setFullScreenMsgId] = useState<string | null>(null);
   const reactions = useGiaStore(s => s.reactions);
-  const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
+
+  // Keep a ref to the latest messages so rows can read the array without
+  // receiving it as a prop (an array prop would re-render every row on
+  // every stream flush, defeating the memoization).
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // MessageRow's onExpand needs setFullScreenMsgId; route it through the
+  // module-level handle so the row doesn't need the setter as a prop.
+  openFullScreenMsg = setFullScreenMsgId;
+
+  const openSheet = useCallback((id: string | null) => setSheetMsgId(id), []);
+
   return (
     <>
       {loading && messages.length === 0 && (
         <ChatSkeleton count={3} />
       )}
       {messages.map((msg) => (
-        <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-          <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
-            {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
-          </div>
-          <div className="flex-1 min-w-0 space-y-1">
-            {msg.attachments?.some(a => a.preview) && (
-              <div className={`flex flex-wrap gap-2 mb-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.attachments.filter(a => a.preview).map((a, ai) => (
-                  <img key={ai} src={a.preview} alt={a.name} className="w-24 h-24 rounded-xl object-cover" style={{ border: '1px solid var(--gia-border)' }} />
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-2 mb-0.5 ml-1">
-              <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
-                {msg.agentId ? msg.agentName : msg.role === 'user' ? 'You' : 'GIA'}
-              </span>
-              <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-            <>
-              <div
-                className={`max-w-[85%] p-3 sm:p-4 md:p-5 rounded-2xl relative cursor-pointer ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : `border ${streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? 'streaming-message' : ''}`}`}
-                style={{
-                  background: msg.role === 'assistant' && !msg.error ? 'var(--gia-surface-2)' : undefined,
-                  borderColor: msg.role === 'assistant' && !msg.error ? 'var(--gia-border)' : undefined,
-                  borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
-                  borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
-                }}
-                onClick={(e) => {
-                  if ((e.target as HTMLElement).closest('a, button')) return;
-                  setSheetMsgId(prev => (prev === msg.id ? null : msg.id));
-                }}
-              >
-                {msg.thinking && !((streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content) ? (
-                  <div>
-                    <WorkLog
-                      thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                      isLive={!!liveThoughts[msg.id]}
-                      isExpanded={showThoughts.has(msg.id)}
-                      onToggle={() => setShowThoughts(prev => {
-                          const next = new Set(prev);
-                          if (next.has(msg.id)) next.delete(msg.id);
-                          else next.add(msg.id);
-                          return next;
-                        })}
-                      currentTool={currentTool}
-                      thinkingPhase={thinkingPhase}
-                      startTime={msg.timestamp}
-                    />
-                  </div>
-                ) : msg.error ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm leading-relaxed" style={{ color: '#f87171' }}>{msg.content}</p>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => onRetry(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-semibold w-fit" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5' }}>
-                        <RotateCcw size={10} /> Retry
-                      </button>
-                      <button onClick={() => onEditResend(msg.id)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] w-fit" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>
-                        <RotateCcw size={10} /> Edit & Resend
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {msg.role === 'assistant' && (
-                      <div className="flex items-center gap-1.5 mb-1.5 ml-0.5">
-                        {msg.agentId ? (
-                          <AgentBadge agentName={msg.agentName} agentIcon={msg.agentIcon} agentTask={msg.agentTask} />
-                        ) : (
-                          <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>
-                            {msg.model ? `via ${msg.model}` : 'GIA'}
-                          </span>
-                        )}
-                        <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
-                          {formatTimeAgo(msg.timestamp)}
-                        </span>
-                        {msg.thinking ? (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
-                            Thinking…
-                          </span>
-                        ) : streamingMsgId === msg.id || streamingMsgIds?.has(msg.id) ? (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
-                            Generating…
-                          </span>
-                        ) : responseTimesRef.current[msg.id] ? (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
-                            {(responseTimesRef.current[msg.id] / 1000).toFixed(1)}s
-                          </span>
-                        ) : null}
-                        {showTokenUsage && msg.tokenUsage && !msg.thinking && (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
-                            {msg.tokenUsage.total} tok
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {msg.thinking && (streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && (
-                      <div className="mb-2">
-                        <WorkLog
-                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                          isLive={!!liveThoughts[msg.id]}
-                          isExpanded={showThoughts.has(msg.id)}
-                          onToggle={() => setShowThoughts(prev => {
-                            const next = new Set(prev);
-                            if (next.has(msg.id)) next.delete(msg.id);
-                            else next.add(msg.id);
-                            return next;
-                          })}
-                          currentTool={currentTool}
-                          thinkingPhase={thinkingPhase}
-                          startTime={msg.timestamp}
-                        />
-                      </div>
-                    )}
-                    {(() => {
-                      const segs = liveSegments[msg.id] || msg.segments;
-                      if (segs && segs.length > 0) {
-                        // New path: render the real think -> tool -> think
-                        // sequence as discrete blocks, always visible (not
-                        // hidden behind a single toggle) since each step
-                        // is already collapsed on its own.
-                        return <SegmentedReasoning segments={segs} isLive={!!liveSegments[msg.id]} />;
-                      }
-                      // Fallback for messages generated before this existed
-                      // (or any path that doesn't populate segments) --
-                      // same single collapsible blob as before.
-                      return (liveThoughts[msg.id] || msg.thoughts) ? (
-                      <div className="mb-3 rounded-xl overflow-hidden transition-all duration-300" style={{
-                        border: '1px solid rgba(251,191,36,0.12)',
-                        background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
-                      }}>
-                        <button
-                          onClick={() => setShowThoughts(prev => {
-                            const next = new Set(prev);
-                            if (next.has(msg.id)) next.delete(msg.id);
-                            else next.add(msg.id);
-                            return next;
-                          })}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
-                          style={{ color: '#f59e0b' }}
-                        >
-                          <Brain size={12} />
-                          <span className="text-[11px] font-medium flex-1">
-                            {showThoughts.has(msg.id) ? 'Hide' : 'Show'} reasoning ({(liveThoughts[msg.id] || msg.thoughts || '').split(' ').length} words)
-                          </span>
-                          {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                        </button>
-                        <ReasoningChain
-                          messageId={msg.id}
-                          thoughts={liveThoughts[msg.id] || msg.thoughts || ''}
-                          isLive={!!liveThoughts[msg.id]}
-                          isExpanded={showThoughts.has(msg.id)}
-                          onToggle={() => setShowThoughts(prev => {
-                            const next = new Set(prev);
-                            if (next.has(msg.id)) next.delete(msg.id);
-                            else next.add(msg.id);
-                            return next;
-                          })}
-                        />
-                      </div>
-                      ) : null;
-                    })()}
-                    {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
-                      <>
-                        <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} isStreaming={!!(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id))} />
-                        <button onClick={() => setExpandedMsgs(prev => new Set(prev).add(msg.id))} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
-                          Show more ({Math.ceil((msg.content.length - LONG_MSG_CHARS) / 1000)}k+ chars)
-                        </button>
-                      </>
-                    ) : (
-                      <div className="token-reveal">
-                        <MarkdownRenderer content={msg.content} sources={msg.sources} isStreaming={!!(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id))} />
-                        {(streamingMsgId === msg.id || streamingMsgIds?.has(msg.id)) && msg.content && loading && (
-                          extThinking
-                            ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />
-                            : <span className="stream-cursor ml-0.5">▋</span>
-                        )}
-                        {expandedMsgs.has(msg.id) && (
-                          <button onClick={() => setExpandedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
-                            Show less
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {msg.role === 'assistant' && !msg.thinking && !msg.error && (
-                      <div className="mt-1.5 text-[9px] text-right tracking-wider select-none flex items-center justify-end gap-1.5" style={{ color: 'var(--gia-muted-3)' }}>
-                        <span className="opacity-40">— </span>
-                        <span style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}66` : '#a855f766' }}>✦</span>
-                        <span className="font-medium ml-0.5" style={{ color: msg.agentId ? `${resolveAgentColor(msg.agentIcon || 'Bot')}44` : '#a855f744' }}>{msg.agentId ? msg.agentName : 'GIA'}</span>
-                        {msg.source === 'on-device' && (
-                          <span className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
-                            <Lock size={9} /> on-device
-                          </span>
-                        )}
-                        {msg.source === 'cloud' && (
-                          <span className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>
-                            <Cloud size={9} /> cloud
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {msg.role === 'assistant' && reactions[msg.id] && (
-                      <div className="mt-1 flex items-center gap-1" style={{ color: reactions[msg.id].value === 'up' ? '#22c55e' : '#f87171' }}>
-                        {reactions[msg.id].value === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
-                        <span className="text-[9px] tracking-wider select-none">{reactions[msg.id].value === 'up' ? 'Liked' : 'Disliked'}</span>
-                      </div>
-                    )}
-                    {msg.artifacts && msg.artifacts.length > 0 && (
-                      <ArtifactsPanel artifacts={msg.artifacts} />
-                    )}
-                    {msg.role === 'assistant' && clarification?.fields && clarification.fields.length > 0 && clarification.assistantMsgId === msg.id && (
-                      <InlineClarificationForm
-                        question={clarification.question}
-                        fields={clarification.fields}
-                        loading={loading}
-                        onSubmit={(answer) => onClarificationFormAnswer?.(answer)}
-                      />
-                    )}
-                    {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id && p.state === 'proposed').length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[9px] font-semibold uppercase tracking-wider px-1 mb-1" style={{ color: 'var(--gia-muted)' }}>
-                          Waiting for your approval
-                        </p>
-                        {consoleProtocols
-                          .filter(p => p.messageId === msg.id && p.state === 'proposed')
-                          .sort((a, b) => a.createdAt - b.createdAt)
-                          .map(p => (
-                            <ProtocolApprovalCard key={p.id} protocol={p} />
-                          ))}
-                      </div>
-                    )}
-                    {msg.role === 'assistant' && consoleProtocols.filter(p => p.messageId === msg.id).length > 0 && (
-                      <>
-                        <InlineToolCalls
-                          protocols={consoleProtocols
-                            .filter(p => p.messageId === msg.id)
-                            .sort((a, b) => a.createdAt - b.createdAt)}
-                        />
-                        <ToolTray
-                          protocols={consoleProtocols
-                            .filter(p => p.messageId === msg.id)
-                            .sort((a, b) => a.createdAt - b.createdAt)}
-                        />
-                      </>
-                    )}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <SourcesBlock sources={msg.sources} />
-                    )}
-                    {msg.attachments?.filter(a => !a.preview).map(att => (
-                      <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
-                        <Paperclip size={10} /> {att.name}
-                      </div>
-                    ))}
-                  </>
-                )}
-                {msg.tasks && msg.tasks.length > 0 && (
-                  <TaskProgress tasks={msg.tasks} agentColor={msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : undefined} />
-                )}
-              </div>
-              {msg.role === 'assistant' && msg.wasTruncated && (
-                <button
-                  onClick={() => onContinue(msg.id)}
-                  className="flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-full transition-all tap-feedback active:scale-95"
-                  style={{
-                    background: 'rgba(168,85,247,0.12)',
-                    color: '#c4b5fd',
-                    border: '1px solid rgba(168,85,247,0.3)',
-                  }}
-                >
-                  <ChevronRight size={11} />
-                  Response truncated — tap to continue
-                </button>
-              )}
-              {msg.role === 'assistant' && !msg.wasTruncated && msg.suggestions && msg.suggestions.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {msg.suggestions.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => onSuggestionClick?.(s)}
-                      className="text-[10px] px-3 py-1.5 rounded-full transition-all tap-feedback active:scale-95"
-                      style={{
-                        background: 'var(--gia-surface-2)',
-                        color: 'var(--gia-muted)',
-                        border: '1px solid var(--gia-border)',
-                      }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {sheetMsgId === msg.id && (
-                <>
-                  <MessageActionSheet
-                    msg={msg}
-                    onClose={() => setSheetMsgId(null)}
-                    onCopy={onCopyMessage}
-                    onRetry={onRetry}
-                    onEdit={onEdit}
-                    onContinue={onContinue}
-                    onFork={onFork}
-                    onDelete={onDeleteWithUndo}
-                    onRewrite={onRewrite}
-                    onExpand={(id) => { setSheetMsgId(null); setFullScreenMsgId(id); }}
-                    reaction={reactions[msg.id]?.value}
-                    onReact={(value) => { const m = messages.find(x => x.id === msg.id); useGiaStore.getState().setReaction(msg.id, value, m ? m.content.slice(0, 200) : ''); }}
-                    nextAssistantId={(() => { const i = messages.findIndex(m => m.id === msg.id); const n = messages[i + 1]; return n && n.role === 'assistant' ? n.id : undefined; })()}
-                  />
-                  {msg.role === 'assistant' && (
-                    <RewriteBar msgId={msg.id} onRewrite={onRewrite} onClose={() => setSheetMsgId(null)} onFork={onFork} onDelete={onDeleteWithUndo} />
-                  )}
-                </>
-              )}
-            </>
-          </div>
-        </motion.div>
+        <MessageRow
+          key={msg.id}
+          msg={msg}
+          isStreaming={streamingMsgId === msg.id || !!streamingMsgIds?.has(msg.id)}
+          loading={loading}
+          thinkingPhase={thinkingPhase}
+          currentTool={currentTool}
+          responseTimesRef={responseTimesRef}
+          messagesRef={messagesRef}
+          reactions={reactions}
+          clarification={clarification}
+          expandedMsgs={expandedMsgs}
+          setExpandedMsgs={setExpandedMsgs}
+          showThoughts={showThoughts}
+          setShowThoughts={setShowThoughts}
+          sheetMsgId={sheetMsgId}
+          openSheet={openSheet}
+          extThinking={extThinking}
+          showTokenUsage={showTokenUsage}
+          onCopyMessage={onCopyMessage}
+          onEdit={onEdit}
+          onDeleteWithUndo={onDeleteWithUndo}
+          onContinue={onContinue}
+          onFork={onFork}
+          onRetry={onRetry}
+          onEditResend={onEditResend}
+          onRewrite={onRewrite}
+          onSuggestionClick={onSuggestionClick}
+          onClarificationFormAnswer={onClarificationFormAnswer}
+        />
       ))}
       <MessageFullScreen
         msg={fullScreenMsgId ? (messages.find(m => m.id === fullScreenMsgId) ?? null) : null}
