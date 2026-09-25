@@ -20,6 +20,7 @@ import BiometricService from './services/BiometricService';
 import { useProviderStore } from './store/useProviderStore';
 import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
+import { PermissionPopup } from './components/PermissionPopup';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
 import { useNativeIntents } from './hooks/useNativeIntents';
@@ -854,6 +855,7 @@ const App: React.FC = () => {
       <Suspense fallback={null}>
         <ProfileDrawer />
       </Suspense>
+      <PermissionPopup />
       {/* Global Notifications — capped to the 3 most recent. Stacked like a
           card deck rather than a growing column: the oldest of the visible
           set sits in front (fully visible), newer arrivals peek from behind

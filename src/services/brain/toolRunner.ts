@@ -12,6 +12,7 @@ import AnalyticsService from '../AnalyticsService';
 import AnalyticsTracker from '../AnalyticsTracker';
 import { toolRateLimiter, globalToolLimiter } from '../ToolRateLimiter';
 import { isOnDeviceMode, isOnDeviceTool } from '../OfflineMode';
+import { ensureGranted, permissionsForTool, PERMISSION_METADATA } from '../PermissionService';
 import { useProviderStore } from '../../store/useProviderStore';
 
 /**
@@ -220,15 +221,39 @@ async function executeSingleTool(
   const tool = GiaTools.getTool(toolCall.id);
   if (!tool) return { observations };
 
-  // On-Device Mode: only tools that run entirely on-device may execute.
-  // Anything that would touch the network (web, messaging, social, cloud)
-  // is blocked with a clear observation so the model adapts instead of
-  // retrying a tool that will never be allowed this turn.
+  // On-Device Mode check runs BEFORE the permission gate: never pop a
+  // permission dialog for a tool that offline mode is about to block.
+  // Only tools that run entirely on-device may execute. Anything that
+  // would touch the network (web, messaging, social, cloud) is blocked
+  // with a clear observation so the model adapts instead of retrying a
+  // tool that will never be allowed this turn.
   if (isOnDeviceMode() && !isOnDeviceTool(toolCall.id)) {
     useGiaStore.getState().setCurrentTool(null);
     onThought?.(`🔒 ${tool.name} blocked — On-Device Mode`);
     observations.push(`BLOCKED (On-Device Mode): ${toolCall.id} is not available while On-Device Mode is on — it needs the network. Use on-device tools only (memory, notes, tasks, clipboard, local files, device info, local ML). If the task cannot be done on-device, say so and suggest turning On-Device Mode off in Settings → Reliability.`);
     return { observations };
+  }
+
+  // Permission gate: tools that touch protected capabilities (camera,
+  // location, contacts, SMS, ...) must be granted by the user BEFORE
+  // execution. ensureGranted shows the in-app popup / native prompt on
+  // first use and resolves once the user decides. A denial skips the tool
+  // with a clear observation so GIA adapts instead of erroring cryptically.
+  const requiredPerms = permissionsForTool(toolCall.id);
+  if (requiredPerms.length > 0) {
+    onThought?.(`🔑 Checking permission: ${PERMISSION_METADATA[requiredPerms[0]].label}...`);
+    let permitted = false;
+    try {
+      permitted = await ensureGranted(toolCall.id, tool.name);
+    } catch {
+      permitted = false;
+    }
+    if (!permitted) {
+      useGiaStore.getState().setCurrentTool(null);
+      onThought?.(`🚫 ${tool.name} skipped — permission not granted`);
+      observations.push(`PERMISSION DENIED: The user did not grant ${requiredPerms.map(p => PERMISSION_METADATA[p].label).join(' + ')} for ${toolCall.id}. Do NOT retry this tool this turn. Tell the user what you couldn't do and why, and that they can enable it in Settings → Permissions (or grant it when prompted next time). Continue with the rest of the request without it.`);
+      return { observations };
+    }
   }
 
   const validationError = validateToolArgs(toolCall.id, toolCall.args);

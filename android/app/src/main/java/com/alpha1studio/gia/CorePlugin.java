@@ -142,6 +142,35 @@ public class CorePlugin extends Plugin {
     }
 
     /**
+     * Open a specific Android settings screen by ACTION name (overlay, exact
+     * alarms, DND access, unknown sources...). Falls back to the app's own
+     * settings page when the action is unknown on this Android version.
+     */
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        String action = call.getString("action", "");
+        try {
+            Intent intent = new Intent(action);
+            intent.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            // Unknown action on this Android version — open the app details
+            // page, which lists every permission with toggles.
+            try {
+                Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                fallback.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(fallback);
+                call.resolve();
+            } catch (Exception ignored) {
+                call.reject("Could not open settings: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
      * Forward to JS: network changed. The TS side listens via
      * CorePlugin.addListener('networkChanged', ...)
      */

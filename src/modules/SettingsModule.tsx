@@ -5,7 +5,7 @@ import {
   Terminal, User, Save, ChevronRight,
   Zap, Smartphone, Sun, Moon, Sparkles,
   UserCircle, PlugZap, Battery, Cpu,   Puzzle, Info,
-  Network, Bot, Activity, Download, CheckCircle, XCircle, Shield, Globe, Brain, Laptop,
+  Network, Bot, Activity, Download, CheckCircle, XCircle, Shield, ShieldCheck, Globe, Brain, Laptop,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
@@ -18,6 +18,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { ProfileIdentityPage } from '../components/settings/ProfileIdentityPage';
 import { ConnectionsPage } from '../components/settings/ConnectionsPage';
 import { SystemPage } from '../components/settings/SystemPage';
+import { PermissionsPage } from '../components/settings/PermissionsPage';
 import { LocalAIPage } from '../components/settings/LocalAIPage';
 import { UnimindPage } from '../components/settings/UnimindPage';
 import { AppExtensionsPage } from '../components/settings/AppExtensionsPage';
@@ -33,7 +34,7 @@ import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
 import type { ProviderCapabilities } from '../services/providers/capabilities';
 
-type SettingsPage = 'main' | 'capabilities' | 'profile-identity' | 'connections' | 'system' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge' | 'terminal' | 'unimind';
+type SettingsPage = 'main' | 'capabilities' | 'profile-identity' | 'connections' | 'system' | 'permissions' | 'local-ai' | 'app-extensions' | 'about' | 'dashboard' | 'neura' | 'nexus' | 'mical' | 'skills-marketplace' | 'sandbox' | 'mcp' | 'knowledge' | 'terminal' | 'unimind';
 
 const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc: string; sections: string; color: string }[] = [
   { id: 'capabilities', icon: <Activity size={20} />, label: 'GIA Capabilities', desc: 'See what GIA can use on this phone right now', sections: 'Live device inventory', color: '#06b6d4' },
@@ -42,6 +43,7 @@ const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc
   { id: 'mcp', icon: <Globe size={20} />, label: 'MCP Servers', desc: 'Model Context Protocol servers — tools, data sources & OAuth', sections: 'Server management', color: '#a855f7' },
   { id: 'knowledge', icon: <Brain size={20} />, label: 'Knowledge Base', desc: 'Upload & index documents for semantic search & RAG', sections: 'Document management', color: '#10b981' },
   { id: 'system', icon: <Battery size={20} />, label: 'System & Performance', desc: 'Security, code execution, voice, power & reliability', sections: '7 sections', color: '#34d399' },
+  { id: 'permissions', icon: <ShieldCheck size={20} />, label: 'Permissions', desc: 'What GIA may access — camera, location, contacts, SMS & more', sections: 'Per-permission control', color: '#f87171' },
   { id: 'local-ai', icon: <Cpu size={20} />, label: 'Local AI', desc: 'On-device LLM models & vision recognition', sections: '2 sections', color: '#22c55e' },
   { id: 'app-extensions', icon: <Puzzle size={20} />, label: 'App & Extensions', desc: 'Plugins, install APK, code history & developer settings', sections: '5 sections', color: '#a855f7' },
   { id: 'skills-marketplace', icon: <Sparkles size={20} />, label: 'Skills Marketplace', desc: 'Install, create, and manage GIA skills', sections: 'Marketplace', color: '#f59e0b' },
@@ -133,6 +135,7 @@ const SettingsModule: React.FC = () => {
   }
   if (settingsPage === 'connections') return <ConnectionsPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'system') return <SystemPage onBack={() => setSettingsPage('main')} />;
+  if (settingsPage === 'permissions') return <PermissionsPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'local-ai') return <LocalAIPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'unimind') return <UnimindPage onBack={() => setSettingsPage('main')} />;
   if (settingsPage === 'app-extensions') return <AppExtensionsPage onBack={() => setSettingsPage('main')} />;
