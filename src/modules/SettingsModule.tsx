@@ -528,7 +528,7 @@ const SettingsModule: React.FC = () => {
 
       {/* Version */}
       <p className="text-center text-[10px] pb-4 pt-2" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.4.0.11 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        GIA v2.4.0.12 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
 
       <ConfirmDialog
