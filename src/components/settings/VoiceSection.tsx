@@ -30,7 +30,7 @@ export const VoiceSection: React.FC = () => {
   const [ttsEnabled, setTtsEnabled] = useState(() => TTSService.isEnabled());
   const [modelVoiceEnabled, setModelVoiceEnabled] = useState(() => TTSService.isModelVoiceEnabled());
   const [voiceLang, setVoiceLang] = useState(() => localStorage.getItem('gia-voice-language') || 'en-US');
-  const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') !== 'false');
+  const [nativeWW, setNativeWW] = useState(() => localStorage.getItem('gia-native-wake-word') === 'true');
   const [sensitivity, setSensitivity] = useState(() => parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'));
   const [useWhisper, setUseWhisper] = useState(() => localStorage.getItem('gia-use-whisper') === 'true');
   const [whisperStatus, setWhisperStatus] = useState(WhisperService.status);
@@ -190,9 +190,10 @@ export const VoiceSection: React.FC = () => {
       <Switch
         checked={nativeWW}
         onChange={setNativeWW}
+        disabled
         icon={<Radio size={11} />}
-        label="Background Wake Word"
-        description="Built-in on-device wake word engine — no account or API key needed. Works when app is in background."
+        label="Background Wake Word (coming in a later release)"
+        description="The on-device wake word engine is disabled in this build — the earlier implementation was removed after a dependency break and hasn't been restored yet. This toggle has no effect right now."
         accentColor="#a855f7"
       />
 
@@ -209,17 +210,17 @@ export const VoiceSection: React.FC = () => {
               step="0.05"
               value={sensitivity}
               onChange={e => setSensitivity(parseFloat(e.target.value))}
-              style={{ width: '100%', accentColor: '#a855f7' }}
+              disabled
+              style={{ width: '100%', accentColor: '#a855f7', opacity: 0.5, cursor: 'not-allowed' }}
             />
             <div className="flex justify-between text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
               <span>Fewer detections</span>
               <span>More detections</span>
             </div>
           </div>
-          <div className="text-[9px] p-2 rounded" style={{ color: '#22c55e', background: 'rgba(34,197,94,0.08)' }}>
-            <span className="inline-block mr-1">✓</span>
-            On-device engine bundled with GIA — 100% offline, no key required.
-            Supported phrases: <b>Hey Jarvis</b> (default), Hey Gia, Hello World, Hi Google, Hey Siri, Alexa.
+          <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
+            <AlertTriangle size={10} className="inline mr-1" />
+            Not active in this build. No wake phrase is currently detected — this UI is reserved for when the engine ships.
           </div>
         </>
       )}
