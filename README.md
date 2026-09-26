@@ -227,12 +227,17 @@ Per the comment in `GIAWakeWordService.java`, restoring it means:
 |------|---------|
 | **Agentic Loop** | Autonomous reasoning with multi-turn tool execution, sub-agent delegation |
 | **Live Reasoning** | Real-time streaming thought panel during generation |
+| **Self-Knowledge (`app_map`)** | GIA can look up its own navigation paths and answer "where do I turn this on?" exactly, instead of inventing a Settings path |
+| **Just-in-Time Permissions** | Protected tools (camera, location, contacts, SMS, …) ask the first time they're used, with an in-app permission panel — no silent OS denials |
+| **On-Device Mode** | One switch blocks every tool that needs the network and tells the model why, so it adapts instead of retrying blocked calls |
+| **Streaming Stall Guard** | A provider that stops sending bytes is detected and surfaced as an error, instead of the reply freezing forever |
+| **Bounded Tool Execution** | Every tool call has a 2-minute ceiling, so one unresponsive tool can no longer wedge the entire reasoning loop |
 | **Claude Terminal UI** | Claude Code-style dark terminal execution cards with status badges, exit code tracking, duration, and collapsible output logs |
 | **Terminal Direct Chat** | Chat directly with GIA inside the Terminal console (commands like `gia ...`, `@gia ...`, `build ...`) with streaming response and tool call capabilities |
 | **Smart Execution Timeout** | Dynamic execution timeout scaling (up to 5 min for installs, 4 min for builds, 3 min for downloads) preventing premature command kills |
 | **Deep Memory** | On-device persistent memory with relevance scoring, auto-extraction, pinning, and manual fact management |
 | **Custom Instructions** | User-defined rules injected into every conversation system prompt |
-| **Voice** | Push-to-talk, transcript polishing, TTS (wake-word proposed) |
+| **Voice** | Push-to-talk, transcript polishing, TTS. Background wake word is scaffolded but **disabled in this build** — see the wake word section below |
 | **Web Search** | DuckDuckGo with formatted citations and clickable source badges |
 | **File Operations** | Read/write files (native + desktop), ZIP bundling, download triggers (browser) |
 | **Code Execution** | Run Python/JS/C++ via Piston API, auto-fix on error |
@@ -258,7 +263,7 @@ Per the comment in `GIAWakeWordService.java`, restoring it means:
 | **Response Caching** | Cache identical requests to reduce API costs |
 | **Notes System** | Full sticky notes with colors, tags, pinning, search, and AI-manageable CRUD |
 | **On-Device Local AI** | Text classification, summarization, translation, embeddings, and QA — all in-browser, no API call needed |
-| **On-Device LLM** | Run Qwen2.5 generative LLMs (0.5B–3B) locally via Transformers WASM — full text generation offline |
+| **On-Device LLM** | Run Qwen2.5 (0.5B–3B), SmolLM2-360M and TinyLlama-1.1B locally via Transformers WASM — full text generation offline, with a device-aware recommendation at the chat entry point |
 | **On-Device Python (Pyodide)** | Run Python code locally via Pyodide WASM — no server required |
 | **On-Device Vision** | Local image captioning, OCR, object detection, and classification + automatic provider fallback |
 | **Setup Wizard** | First-run onboarding with step-by-step provider setup, API key entry, and connection testing |

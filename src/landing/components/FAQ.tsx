@@ -13,7 +13,11 @@ const faqs = [
   },
   {
     q: 'Does it work offline?',
-    a: 'The personal layer does: local LLM (Transformers WASM), on-device embeddings/RAG, and memory all work with no internet. Heavy reasoning and web tools need a connection, which is why every response is tagged on-device or cloud.',
+    a: 'The personal layer does: local LLM (Transformers WASM), on-device embeddings/RAG, and memory all work with no internet. Switch on On-Device Mode and GIA also blocks every tool that would need the network, so nothing can quietly send data out mid-task. Heavy reasoning and web tools need a connection, which is why every response is tagged on-device or cloud.',
+  },
+  {
+    q: 'Will it ask for my camera, contacts or location?',
+    a: 'Only the first time a tool actually needs one — not at install. Every permission GIA uses is listed in Settings → Permissions with its current state, and declining one is reported back to the model so it suggests an alternative instead of silently failing.',
   },
   {
     q: 'Which models and providers are supported?',
