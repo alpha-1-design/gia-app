@@ -1,4 +1,4 @@
-# GIA v2.4.0.11 — User Manual
+# GIA v2.4.0.12 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,19 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.12
+
+| Fix | Description |
+|-----|-------------|
+| **Chat no longer hangs when a provider stalls** | If a provider stopped sending data mid-answer — rate-limit backoff, a wedged proxy, half-open connection — nothing timed out and the reply froze indefinitely. There's now a guard that watches for silence: 30 seconds between chunks, 60 seconds for the very first byte (a slow start or a long reasoning block is normal and is *not* treated as a hang). A long answer that's still arriving is never cut off. |
+| **Terminal Full Install — a linker error that broke every package** | Even with correct code, proot itself couldn't start: it was linked against `libtalloc.so.2` but the bundled allocator was stored as `libtalloc.so`. Android's linker matches dependency names exactly, so every proot launch died with `CANNOT LINK EXECUTABLE`. One mismatch, and it is why *every* package (python3, nodejs, git, …) failed at once. |
+| **Mind maps are actually visible** | The agent could generate a perfect mind map and the card would hide it: the root node was drawn at the left edge and clipped off, zoom was applied twice, the "drag" cursor was connected to no handler at all, and "collapse" still left an empty box. Maps now fit your screen, scroll in both directions, drag to pan, and collapse to a single line. |
+| **Smart home controls work on a phone** | Smart-home discovery and control were pointed at the desktop companion server, which doesn't exist on a phone — so they always failed. They now run through the on-device terminal like the rest of GIA's tools. |
+| **One slow tool can no longer freeze everything** | Tool calls had no timeout, so a single unresponsive tool wedged the whole reasoning loop. Every tool now has a 2-minute ceiling and the model is told which tool gave up. |
+| **Wake word: the UI stopped lying** | Settings and docs described a fully working on-device wake word engine. It's currently a stub that reports "disabled in this build" and stops itself, so the toggle is now off by default and visibly disabled rather than pretending to work. |
+| **Termux commands no longer hang** | `termux_run` could wait forever. It now has a 30s timeout, and `termux_status` performs a real round-trip probe so it can honestly say READY vs "installed but not ready" (which usually means `allow-external-apps` isn't enabled in Termux). |
+| **16 dependency vulnerabilities resolved** | Cleared all outstanding `npm audit` findings (8 high, 8 moderate), including a `pdfjs-dist` major upgrade from 5 to 6. |
 
 ## 🧠 What's New in v2.4.0.11
 

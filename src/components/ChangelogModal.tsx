@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.11';
+const VERSION = '2.4.0.12';
 
 const sections = [
   {
@@ -16,6 +16,8 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
+      'Smart home control now works on a phone. Discovery and device commands were pointed at the desktop companion server, which does not exist on Android, so they always failed — they now run through the same on-device terminal as the rest of your tools.',
+      'A streaming stall guard. If a provider stopped sending data part-way through an answer, nothing timed out and the reply just froze. GIA now watches for silence (30s between chunks, 60s for the very first byte, so a slow start or a long reasoning block is never mistaken for a hang) and tells you what happened instead of hanging.',
       'On-Device Mode — one toggle (composer Tools sheet or Settings → System → Reliability) that runs GIA fully offline: every response from the local model, network tools blocked, cloud transcription refused. Nothing leaves your phone.',
       'Real permission system — GIA asks for camera, location, contacts, SMS, and friends exactly when a task needs them, explains why, and continues once you decide. Review or flip any permission anytime in Settings → Permissions.',
       'GIA now knows her own app — ask “where do I change X?” and she answers with the exact screen and control (new app_map tool), and she points you to the built-in report form when something is broken.',
@@ -38,6 +40,9 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
+      'Terminal “Full Install” works. The proot binary was linked against libtalloc.so.2 but the bundled allocator shipped as libtalloc.so, and Android matches dependency names exactly — so every proot launch died before it started. One root cause, and it is why python3, nodejs, git and every other package failed at once.',
+      'Mind maps are actually visible. GIA could generate a perfect map and the card would hide it: the root node was drawn at the left edge and clipped, zoom was applied twice, the drag cursor was connected to no handler, and “collapse” still left an empty box. Maps now fit your screen, scroll in both directions, drag to pan, and collapse to a single line.',
+      'One slow tool can no longer freeze the whole conversation. Tool calls had no timeout, so a single unresponsive tool wedged the entire reasoning loop — every tool now has a ceiling and GIA tells the model which tool gave up.',
       'Responses no longer appear frozen mid-stream on long chats — only the message being written re-renders now, not the whole conversation.',
       'Tool approval prompts appear the moment a tool needs your OK, not after the whole turn finishes.',
       'Nexus sub-agents now actually run: they were invisible to native tool-calling models (missing schema) and defaulted to a provider you may not have keys for. They now use your active provider and fail over like chat does.',
@@ -70,7 +75,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.11.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.12.',
     ],
   },
 ];

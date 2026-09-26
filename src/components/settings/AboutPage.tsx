@@ -214,8 +214,8 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <button
                 disabled={!feedbackText.trim()}
                 onClick={() => {
-                  const subject = `[GIA ${feedbackType}] v2.4.0.11`;
-                  const body = `${feedbackText.trim()}\n\n---\nGIA version: 2.4.0.11\nPlatform: ${isNativePlatform() ? 'Android/iOS' : 'Web Browser'}`;
+                  const subject = `[GIA ${feedbackType}] v2.4.0.12`;
+                  const body = `${feedbackText.trim()}\n\n---\nGIA version: 2.4.0.12\nPlatform: ${isNativePlatform() ? 'Android/iOS' : 'Web Browser'}`;
                   window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                 }}
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40"
@@ -251,7 +251,7 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <span className="text-xs font-semibold">View Changelog</span>
         </button>
         <p className="text-center text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-          GIA v2.4.0.11 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+          GIA v2.4.0.12 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
         </p>
       </div>
 

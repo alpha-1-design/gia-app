@@ -21,7 +21,7 @@ const environmentInfo: Tool = {
       const giaTools = (await import('../GiaTools')).default;
       const info = {
         identity: {
-          name: 'GIA', fullName: 'Generative Interface Agent', version: '2.4.0.11',
+          name: 'GIA', fullName: 'Generative Interface Agent', version: '2.4.0.12',
           tagline: 'Private on-device AI workspace',
           platform: native ? 'Android (Capacitor)' : 'Browser (Web)',
           architecture: 'React 18 + TypeScript + Zustand + Vite + Capacitor',
