@@ -4,6 +4,7 @@ import { providerRegistry } from '../ProviderRegistry';
 import { useGiaStore } from '../../store/useGiaStore';
 import { corsProxy } from '../CorsProxy';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
+import { createStreamWatchdog, STREAM_IDLE_TIMEOUT_MS } from './streamWatchdog';
 
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { activeProvider, providers } = useProviderStore.getState();
@@ -61,7 +62,23 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       xhr.open('POST', url);
       Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
+      // Overall wall-clock ceiling only — a legitimately long answer can
+      // exceed it while streaming fine. Stalls are caught by the idle watchdog
+      // below, which measures time since the last byte.
       xhr.timeout = 120000;
+
+      // Idle-stall guard. xhr.timeout can't fire here: it resets on nothing
+      // and a provider that goes silent mid-answer (or dribbles keep-alive
+      // bytes) never trips it, leaving the user watching a frozen reply.
+      const stallMessage = () => `${label} stopped sending data for ${STREAM_IDLE_TIMEOUT_MS / 1000}s — the connection stalled. Try again or switch providers.`;
+      const watchdog = createStreamWatchdog({
+        onStall: () => {
+          watchdog.stop();
+          xhr.abort();
+          reject(new Error(ctx.friendlyError(label, stallMessage())));
+        },
+        message: stallMessage,
+      });
 
       let finishReason = '';
       let streamTokenUsage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
@@ -159,6 +176,8 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       };
 
       const onData = () => {
+        // Any inbound bytes count as progress, even unparseable keep-alives.
+        watchdog.poke();
         const currentLen = xhr.responseText.length;
         pendingBuffer += xhr.responseText.slice(lastProcessed);
         lastProcessed = currentLen;
@@ -168,6 +187,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       xhr.onprogress = onData;
 
       xhr.onload = () => {
+        watchdog.stop();
         onData();
         if (partialLine.trim()) {
           const t = partialLine.trim();
@@ -190,6 +210,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
       };
 
       xhr.onerror = () => {
+        watchdog.stop();
         const err = new Error(ctx.friendlyError(label, `${label} network error`)) as Error & { retryable?: boolean };
         // Only safe to retry through the CORS proxy if no content reached the
         // user yet — this fires almost instantly for a blocked cross-origin
@@ -199,29 +220,36 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         err.retryable = fullText.length === 0 && lastProcessed === 0;
         reject(err);
       };
-      xhr.ontimeout = () => reject(new Error(ctx.friendlyError(label, `${label} timed out after 120s`)));
+      xhr.ontimeout = () => {
+        watchdog.stop();
+        reject(new Error(ctx.friendlyError(label, `${label} timed out after 120s`)));
+      };
       xhr.onabort = () => {
+        watchdog.stop();
         const e = new Error('Request aborted');
         e.name = 'AbortError';
         reject(e);
       };
 
       if (req.signal) {
-        if (req.signal.aborted) { xhr.abort(); return; }
-        const onAbort = () => xhr.abort();
+        if (req.signal.aborted) { watchdog.stop(); xhr.abort(); return; }
+        const onAbort = () => { watchdog.stop(); xhr.abort(); };
         req.signal.addEventListener('abort', onAbort);
         const origLoad = xhr.onload;
         const origError = xhr.onerror;
         const origAbort = xhr.onabort;
         xhr.onload = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
+          watchdog.stop();
           req.signal?.removeEventListener('abort', onAbort);
           if (origLoad) (origLoad as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
         xhr.onerror = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
+          watchdog.stop();
           req.signal?.removeEventListener('abort', onAbort);
           if (origError) (origError as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
         xhr.onabort = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
+          watchdog.stop();
           req.signal?.removeEventListener('abort', onAbort);
           if (origAbort) (origAbort as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };

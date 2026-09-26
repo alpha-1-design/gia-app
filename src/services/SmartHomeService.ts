@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import sandboxService from './SandboxService';
 
 interface SmartDevice {
   id: string;
@@ -63,20 +64,14 @@ class SmartHomeService {
   private mqttClients: Map<string, { broker: string; connected: boolean }> = new Map();
 
   private async sandboxExec(cmd: string, timeout = 15000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    // Routed through SandboxService rather than hardcoding http://localhost:3081.
+    // That endpoint is the desktop companion server, which simply doesn't exist
+    // on a phone — so every smart-home discovery/control call silently failed
+    // on-device. SandboxService probes for the companion server and falls back
+    // to the native proot terminal, which is the only place this can actually run.
     try {
-      const baseUrl = 'http://localhost:3081';
-      const res = await fetch(`${baseUrl}/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd, timeout: Math.floor(timeout / 1000) }),
-        signal: AbortSignal.timeout(timeout + 2000),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        return { stdout: '', stderr: text, exitCode: 1 };
-      }
-      const data = await res.json();
-      return { stdout: data.stdout || '', stderr: data.stderr || '', exitCode: data.exitCode ?? 1 };
+      const result = await sandboxService.exec(cmd, { timeout });
+      return { stdout: result.stdout || '', stderr: result.stderr || '', exitCode: result.exitCode ?? 1 };
     } catch (e) {
       return { stdout: '', stderr: (e instanceof Error ? e.message : String(e)), exitCode: 1 };
     }
