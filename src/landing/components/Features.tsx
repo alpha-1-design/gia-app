@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import {
   Brain, Bot, MessageSquare, Search, FileText, Shield,
   Wifi, Smartphone, Camera, Zap, Globe, Workflow,
+  Compass, KeyRound,
 } from 'lucide-react'
 
 const features = [
@@ -16,7 +17,9 @@ const features = [
   { icon: Zap, title: 'Real-Time Streaming', description: 'Token-by-token streaming with thinking blocks, tool calls, and inline rendering.' },
   { icon: Globe, title: 'Web & API Tools', description: 'Browse the web, call APIs, SSH into servers — all from chat.' },
   { icon: Workflow, title: 'Custom Workflows', description: 'Build automation with plugins, MCP servers, and connector integrations.' },
-  { icon: Wifi, title: 'Offline Mode', description: 'Local LLM support via Transformers WASM. No internet required for basic tasks.' },
+  { icon: Wifi, title: 'Offline Mode', description: 'Local LLM support via Transformers WASM. Switch it on and GIA also blocks every tool that needs the network, so nothing can quietly send data out.' },
+  { icon: Compass, title: 'Knows Its Own Interface', description: 'Ask where a setting lives and GIA looks it up and answers with the real path, instead of inventing a menu that does not exist.' },
+  { icon: KeyRound, title: 'Permissions On Your Terms', description: 'Camera, location, contacts and SMS are requested the first time a tool needs them — never at install, and never denied behind your back.' },
 ]
 
 export function Features() {

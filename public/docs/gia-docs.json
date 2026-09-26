@@ -1,6 +1,6 @@
 {
   "version": "2.4.0.11",
-  "updated": "2026-09-19",
+  "updated": "2026-09-26",
   "sections": [
     {
       "id": "start",
@@ -166,15 +166,15 @@
     },
     {
       "id": "voice",
-      "title": "Voice & Wake Word",
+      "title": "Voice",
       "blocks": [
-        { "type": "p", "text": "GIA supports voice input, text-to-speech, and a wake word so you can talk to her hands-free." },
+        { "type": "p", "text": "GIA supports voice input and text-to-speech. Background wake word detection is scaffolded but disabled in this build — the toggle in Settings → Voice is off by default and marked as coming in a later release." },
         { "type": "ul", "items": [
-          "Built-in Voice: Without any key, GIA uses the on-device speech recognizer.",
-          "Wake Word: Say 'Hey GIA' to activate (requires free Picovoice key for always-on, or use the in-app wake word without a key).",
+          "Built-in Voice: Without any key, GIA uses the on-device speech recognizer. Tap 'Listen' in Chat to start.",
+          "Background Wake Word: Not functional in this build. The native service is currently a stub that reports 'disabled in this build' and stops itself. Earlier iterations used an on-device sherpa-onnx keyword spotter (not Picovoice/Porcupine); it was removed after a dependency version bump broke the Android build and has not been restored yet.",
           "Model Voice: With OpenAI or Gemini connected, GIA can speak in the model's native voice (OpenAI audio, Gemini TTS) — toggle in Settings → Voice.",
           "Text-to-Speech: Long-press any message to hear it read aloud.",
-          "Circle to Search: After wake word, GIA captures your screen region and analyzes it visually."
+          "Cloud STT fallback: If on-device transcription isn't available, GIA can fall back to a cloud speech-to-text provider (OpenAI or Groq) using your own key."
         ]}
       ]
     },
@@ -275,13 +275,39 @@
       "id": "ondevice",
       "title": "On-Device Mode",
       "blocks": [
-        { "type": "p", "text": "On-Device Mode runs the local Qwen LLM on your phone for completely private AI — no API key, no internet needed." },
+        { "type": "p", "text": "On-Device Mode runs a local LLM on your phone for private AI — no API key, no internet needed. It also blocks any tool that requires the network, so a request can't quietly send data out while you think it can't." },
         { "type": "ul", "items": [
           "Enable in Settings → Reliability → On-Device Mode.",
-          "Load a model in Settings → Local LLM (downloads via CDN, 0.5B–3B parameters).",
+          "Load a model in Settings → Local LLM (downloads via CDN). Options include Qwen2.5 (0.5B–3B), SmolLM2-360M and TinyLlama-1.1B.",
+          "GIA checks your device RAM and recommends a specific model at the chat entry point. An oversized model is the most common cause of local models freezing part-way through an answer.",
+          "Blocked tools: while On-Device Mode is on, only fully on-device tools run (memory, notes, tasks, clipboard, local files, device info, local ML). Anything needing the network is blocked, and the model is told why so it can adapt instead of retrying.",
           "Memory, embeddings, and translation also run locally.",
-          "If the local model is not ready, GIA falls back to your cloud provider and tags the response.",
-          "Performance depends on your device — newer phones handle 1.5B models well."
+          "If the local model is not ready, GIA falls back to your cloud provider and tags the response."
+        ]}
+      ]
+    },
+    {
+      "id": "permissions",
+      "title": "Permissions",
+      "blocks": [
+        { "type": "p", "text": "GIA asks for protected permissions the first time a tool actually needs one, instead of letting Android deny them silently in the background." },
+        { "type": "ul", "items": [
+          "Just-in-time asks: camera, location, contacts, SMS, notifications and speech recognition are requested on first use, not at install time.",
+          "In-app control: Settings → Permissions shows every permission GIA uses, its current state, and a shortcut to change it in system settings.",
+          "Denied tools report back: when you decline, the model is told the tool was denied and why, so it can suggest an alternative rather than failing cryptically.",
+          "On-Device Mode is checked before the permission prompt, so you are never asked for a permission a tool wasn't going to use."
+        ]}
+      ]
+    },
+    {
+      "id": "selfknowledge",
+      "title": "Finding Things in GIA",
+      "blocks": [
+        { "type": "p", "text": "GIA can look up its own navigation paths, so it can answer 'where do I turn this on?' with the real route instead of inventing a menu that doesn't exist." },
+        { "type": "ul", "items": [
+          "Ask naturally: 'How do I change the wake word?', 'Where are the terminal settings?', 'How do I connect WhatsApp?'",
+          "GIA calls the app_map tool and answers with the exact path, for example Settings → System & Performance → Voice.",
+          "This applies to settings, features and integrations across every module."
         ]}
       ]
     },

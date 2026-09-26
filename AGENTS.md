@@ -191,6 +191,48 @@ npx cap open android  # opens Android Studio
 
 Keystore generated in CI (`github.com/alpha-1-design/gia-app/actions`). Release APK ready to sideload from GitHub Releases. CI requires Java 21 + Android SDK (see `.github/workflows/build-apk.yml`).
 
+## 2026-09-26 Session Summary
+
+### PR review + merge pass (PRs #31–#37)
+Reviewed and merged 3 substantive PRs, closed 14 superseded Dependabot PRs, deleted 4 dead local branches + 3 dead remote branches (`staging`, `dev`, `fix/bug-hunt-and-widget-wiring`) after verifying each was patch-equivalent to `main`. Baseline before this pass: 841 tests.
+
+- **#31** `c4cee3f` — stale "Protocol Panel (⚡)" copy in `ProtocolsApprovalsSection.tsx` replaced with the real description.
+- **#32** `7a93f47` — Termux bridge: 30s `Promise.race` timeout, real `/system/bin/true` readiness probe, `allow-external-apps` hint, `handleOnDestroy` drains parked calls. Java compile-verified by `Build APK`.
+- **#33** `c660b1b` — `withToolTimeout()` in `brain/toolRunner.ts` (`TOOL_EXECUTION_TIMEOUT_MS = 120_000`, timeout error matches the `isPermanent` regex so retries don't burn another 120s); removed `backdrop-blur-sm` from the fullscreen `LeftDrawer` overlay; added SmolLM2-360M + TinyLlama-1.1B to `LOCAL_LLM_MODELS`.
+- **#34** `218aa0a` — wake word docs/UI honesty. **Also fixed a real terminal bug:** `libproot.so`'s `DT_NEEDED` said `libtalloc.so.2` but the bundled allocator is stored as `libtalloc.so`; Android's linker matches by exact filename, so *every* proot launch died with `CANNOT LINK EXECUTABLE` — one root cause for all Full Install package failures. Verified in the shipped APK: `NEEDED` now reads `libtalloc.so` and the APK contains a `libtalloc.so` next to it.
+- **#35** `d3e13ec` — npm audit 16 → 0. `pdfjs-dist` 5→6 major verified safe (v6 tarball still ships `build/pdf.worker.min.mjs`, the exact path `PDFService.ts` lazy-imports).
+- **#36** `a15a22c` — #34 left `nativeWakeWord` defaulting to `!== 'false'` (true) in `useGiaStore.ts:597` AND `true` in `useVoiceControl.ts`'s config, so fresh installs still launched the stub service. Flipped both to opt-in.
+- **#37** `b58dfb2` — streaming stall watchdog + SmartHome endpoint + proot binary docs. See below.
+
+### Streaming stall watchdog (#37) — NEW shared helper
+`xhr.timeout = 120000` is an **overall wall-clock deadline, not an idle one**, so it fails both ways: a connection that goes silent mid-answer never trips it (reply freezes forever), and a legitimately long answer can exceed 120s of *total* time and get cut off.
+
+New `src/services/providers/streamWatchdog.ts`, wired into all three adapters (`openai.ts`, `anthropic.ts`, `gemini.ts`) — verified symmetric at `import=1 create=1 poke=1 stop=10` each. Keyed on **time since last byte**: never fires while data flows, fires promptly when data stops. `FIRST_BYTE_TIMEOUT_MS = 60_000` is deliberately more generous than `STREAM_IDLE_TIMEOUT_MS = 30_000` because Anthropic streams long `thinking` blocks before the first visible token. `stop()` is wired into every settle path (`onload`/`onerror`/`ontimeout`/`onabort`/user-abort) — a leaked timer would keep firing against a dead request. Implemented as a self-rescheduling `setTimeout`, not an interval.
+
+**Standing rule reinforced:** put shared streaming logic in the helper, never copy it per-adapter. Divergent provider code paths have repeatedly been the root of bugs here.
+
+### SmartHomeService dead endpoint (#37)
+`sandboxExec()` hardcoded `http://localhost:3081` — the *desktop* companion server, which doesn't exist on a phone — so all smart-home discovery/control silently failed on-device. Now routes through `sandboxService.exec()`, which probes for the companion server and falls back to the native proot terminal. Identical return shape.
+
+### proot binary documentation (#37)
+`android/app/src/main/jniLibs/THIRD_PARTY_LICENSES.md` now records that `libproot.so` carries a local patchelf `DT_NEEDED` rewrite, the failure it fixed, verification performed, and that **renaming `libtalloc.so` → `libtalloc.so.2` would have been a valid alternative** keeping both binaries pristine.
+
+### Mind map card made usable (#37 follow-up branch `fix/mindmap-card-unusable`)
+Four defects made the card hide a correct map: root laid out at `x=0` (left half clipped → the stray "ot" in the bug report), zoom applied twice (`<svg>` width AND `<g>` transform), `cursor: grab` with no pointer handler at all, and "collapse" still rendering a 250px empty box. Also: layout matched children to positions **by name**, so duplicate sibling labels mis-wired connector lines. Now fits-to-width on paint, scrolls both axes with a viewport-capped height, real drag-to-pan, collapse to one line, and stable node ids. 11 tests using the exact payload from the bug report.
+
+### Docs refreshed
+`README.md` features table, `manual.md` "What's New in v2.4.0.11" (all of the above), and `public/docs/gia-docs.json` (rewrote the wake-word section that still claimed a working Picovoice engine; added new `permissions` and `selfknowledge` sections; refreshed On-Device Mode with the real model list and the tool-blocking behaviour; `updated` date → 2026-09-26).
+
+### Verification discipline learned
+Two linter catches worth remembering, both real: ESLint flagged dead options I'd left in the watchdog interface (`message` destructured but unused, unused `now` injection) — removed rather than suppressed. And `tsc` caught a real scoping bug: `message()` referenced inside `onStall` where the closure wasn't in scope, which would have thrown *at stall time* — exactly when it's needed. Always typecheck before declaring done.
+
+### Still needs a device
+- Proot booting from the patched APK and Full Install working end-to-end. The linker mismatch is proven fixed in the shipped binary; execution is unproven.
+- The watchdog catching a genuinely wedged socket. Unit-tested in isolation; no integration test drives a half-open connection through an adapter.
+- PR #12 (proot binaries) was **closed unmerged** by `freebuff-web[bot]`, not by the author. Its `libproot.so` was a 1 MB static `EXEC` with no `NEEDED` entries and would have regressed the terminal.
+
+---
+
 ## 2026-09-12 Session Summary
 
 ### Version bump → 2.4.0.3
