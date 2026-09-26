@@ -72,7 +72,7 @@ They've not seen this one before. They won't see this one coming. GIA isn't a ch
 | **Build Fixes** | Compose BOM 2024.09.00, widget drawable resolution, Capacitor 8 compatibility |
 | **Screen Capture Removal** | screen_capture tool removed, hardened parsing pipeline |
 | **Discoverability Badges** | AI, Privacy, On-Device, No Backend, Local-First badges added to README |
-| **Voice (enhanced)** | Native wake word engine (Porcupine), background detection, transcript polishing, TTS |
+| **Voice (enhanced)** | Push-to-talk, transcript polishing, TTS; native background wake word engine scaffolded but disabled (coming in a later release) |
 | **Message Context Menu** | Right-click or long-press on messages for Copy/Edit/Retry/Continue/Fork/Delete |
 | **Conversation Branching** | Tree-based branching from any message — rename, switch, delete branches |
 | **Session Forking** | Fork entire session at any message into a new independent session |
@@ -455,70 +455,39 @@ GIA handles network interruptions gracefully across all modules:
 
 ## 🎙 Voice Control
 
-### Wake Word System
+### Wake Word System (Coming in a later release)
 
-GIA uses **Porcupine** by Picovoice — a deep neural network wake word engine that runs **100% on-device**. No audio data ever leaves your phone.
+**This is not currently functional.** `GIAWakeWordService.java` is a stub in this build — it starts, immediately fires "Wake word detection is disabled in this build," and stops itself. The Settings → Voice Control toggle exists in the UI, but turning it on does not start real background detection.
 
-#### How it works
+An earlier attempt at this feature used [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (`KeywordSpotter`) for on-device, keyless detection — not Porcupine/Picovoice. It was removed after a sherpa-onnx version bump broke the API the code depended on, and the service was stubbed out rather than fixed. Everything below describes the **target design** once this is revived, not current behavior.
 
-1. **Porcupine DNN** continuously monitors the microphone audio stream (16kHz, on-device)
-2. When the wake word is detected, Porcupine fires a signal with millisecond-level latency
+#### How it's meant to work
+
+1. An on-device keyword spotter continuously monitors the microphone audio stream, on-device
+2. When the wake word is detected, it fires a signal with low latency
 3. GIA's **Android Foreground Service** receives the signal and notifies the app
-4. GIA immediately starts a **speech-to-text session** to capture your command
+4. GIA starts a **speech-to-text session** to capture your command
 5. The transcribed text is **polished** (grammar, punctuation, noise rejection) via AI
 6. The polished text appears in the chat input field and GIA processes your request
 
-#### What happens when you say "Hey GIA"
-
-```
-You say "Hey GIA, what's the weather?"
-    │
-    ▼
-[Porcupine] on-device DNN detects "Hey GIA" (~200ms)
-    │
-    ├──→ Audio beep (880 Hz, 150ms)
-    ├──→ Notification: "Wake word detected"
-    ├──→ Speech-to-text starts (captures "what's the weather?")
-    ├──→ AI polishes transcript ("What's the weather?")
-    └──→ Text appears in chat input → GIA processes it
-```
-
-#### Key capabilities
-
-| Feature | Behavior |
-|---------|----------|
-| **Background detection** | Works when app is minimized (foreground service keeps listening) |
-| **Screen off** | Works with screen locked (service runs independently of Activity) |
-| **Auto-restart** | Automatically resumes after device reboot |
-| **Sensitivity** | Adjustable (0–1) in Settings — lower = fewer false positives, higher = catches more |
-| **Stay Listening** | On: GIA stays in wake word mode after each command. Off: one-shot, returns to idle |
-| **Auto-Start** | Automatically starts listening when the app opens |
-| **Privacy** | 100% on-device wake word detection — no cloud, no audio upload |
-
 #### Settings
 
-Go to **Settings → Voice Control**:
+Go to **Settings → Voice Control**. Note: with the engine disabled, "Background Wake Word" does not start real detection — the toggle and sensitivity slider are UI-only right now.
 
-- **Wake Word** — the phrase that activates listening (default: "hey gia")
+- **Wake Word** — the phrase that would activate listening (default: "hey gia")
 - **Recognition Language** — speech-to-text language (e.g., en-US, fr-FR)
-- **Background Wake Word** — toggle the native Porcupine engine on/off
-- **Sensitivity** — how sensitive the wake word detection is (0.0–1.0)
-- **Auto-Start** — automatically start listening when the app opens
+- **Background Wake Word** — currently non-functional; see status note above
+- **Sensitivity** — reserved for when the engine is restored
+- **Auto-Start** — automatically start listening when the app opens (no effect while the engine is disabled)
 - **Stay Listening** — keep listening after each wake word (vs. one-shot)
-- **Voice Response (TTS)** — GIA reads responses out loud
+- **Voice Response (TTS)** — GIA reads responses out loud (this part works independently of wake word)
 
-#### About "JARVIS" in the code
+#### Reviving this feature
 
-Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`) for testing without training a custom model. The default fallback uses `JARVIS` (a built-in Porcupine keyword). To use "Hey GIA" as a native keyword:
-
-1. Sign up at [Picovoice Console](https://console.picovoice.ai/) (free tier available)
-2. Train a custom "Hey GIA" wake word model
-3. Download the `.ppn` file
-4. Place it in `android/app/src/main/assets/`
-5. Get your free **AccessKey** from the Picovoice Console dashboard
-6. Pass it to GIA (hardcoded or via the plugin config)
-
-The JS-side setting ("hey gia") is used by the browser-based fallback (regex on transcript). The native Porcupine keyword is configured separately.
+Per the comment left in `GIAWakeWordService.java`:
+1. Restore the old service class from git history, updated against the current sherpa-onnx API (`KeywordSpotter(AssetManager, KeywordSpotterConfig)`, `createStream(...)`)
+2. Re-add the AAR dependency in `android/app/build.gradle`
+3. Re-add model assets under `android/app/src/main/assets/wakeword/` and the `<service>` entry in `AndroidManifest.xml`
 
 ---
 

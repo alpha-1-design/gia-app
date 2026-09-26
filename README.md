@@ -191,37 +191,33 @@ GIA connects directly to provider APIs — no proxy, no middleman. All providers
 
 ---
 
-## 🎙 Wake Word System (Proposed)
+## 🎙 Wake Word System (Coming in a later release)
 
-> **Status: Proposed** — architecture designed, Android service scaffolding in place, full implementation in progress. The wake word engine and native service code exist in the repository but require additional testing and polish before production use.
+> **Status: Disabled in this build.** The native wake word service (`GIAWakeWordService.java`) is currently a no-op stub — it starts, immediately reports "Wake word detection is disabled in this build," and stops itself. There is no working on-device wake word detector in this build.
+>
+> The JS-side plugin surface (`GIAWakeWord.ts`) and the Capacitor bridge (`GIAWakeWordPlugin.java`) are still in place, and the Settings → Voice UI shows the option, but toggling it on does not start real detection.
 
-GIA will use **Porcupine** by Picovoice — an on-device deep neural network wake word engine:
+**Engine note:** earlier iterations of this feature used [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (`KeywordSpotter`) for on-device, keyless "Hey Jarvis" / "Hey GIA" detection — not Porcupine. That implementation was pulled after a sherpa-onnx API version bump broke the Android build, and the service was stubbed out rather than fixed, pending a future release. Any Porcupine/Picovoice references elsewhere in this repo (settings copy, manual, comments) describe a direction that was never actually implemented and should be treated as aspirational, not current behavior.
 
-- **100% offline** — all audio processing stays on your phone. No audio data is ever sent to any server.
-- **Foreground Service** — on Android, GIA runs a persistent foreground service with a notification, keeping the wake word detector alive even when the app is backgrounded.
-- **Auto-restart** — after a device reboot, the wake word service automatically restarts via `BOOT_COMPLETED` receiver.
-- **Porcupine DNN** — trained on real-world environments with 97%+ accuracy. Adjustable sensitivity (0–1) to tune false positives vs. misses.
-- **Custom wake word** — the shipped fallback uses `JARVIS` (a free built-in Porcupine keyword for testing). To use a custom "Hey GIA" model, train one at [Picovoice Console](https://console.picovoice.ai/) and place the `.ppn` file in `android/app/src/main/assets/`.
+### Reviving this feature
 
-### Why `JARVIS` appears in the code
+Per the comment in `GIAWakeWordService.java`, restoring it means:
+1. Restoring the old service class from git history against the current sherpa-onnx API (`KeywordSpotter(AssetManager, KeywordSpotterConfig)`, `createStream(...)`)
+2. Re-adding the AAR dependency in `android/app/build.gradle`
+3. Re-adding model assets under `android/app/src/main/assets/wakeword/` and the `<service>` entry in `AndroidManifest.xml`
 
-Porcupine ships with free built-in keywords (`HEY_GOOGLE`, `COMPUTER`, `ALEXA`, `JARVIS`, etc.) for development/testing without training a custom model. The code uses `JARVIS` as the default keyword. The JS configuration on the settings page still shows "hey gia" — the two are independent:
-- The **JS-side** wake word ("hey gia") is used by the browser-based fallback (regex on STT transcript)
-- The **native** Porcupine keyword (`JARVIS`) is used by the Android foreground service
-- Once a custom "Hey GIA" `.ppn` model is trained and deployed, Porcupine switches to it automatically
+### UX flow (target design, not current behavior)
 
-### UX Flow — What happens when you say "Hey GIA" (planned)
-
-1. Porcupine's DNN processes the live audio stream (16kHz, on-device)
+1. On-device keyword spotter processes the live audio stream, on-device
 2. On detection → the foreground service fires a `wakeWordDetected` event to GIA's WebView
 3. A short **audio beep** plays (880 Hz sine tone, 150ms)
 4. A notification "Wake word detected" appears in the UI
-5. GIA immediately starts a **speech-to-text session** to capture your command
+5. GIA starts a **speech-to-text session** to capture your command
 6. The transcribed text is **polished** (grammar, punctuation) via AI
 7. The polished text appears in the chat input field
 8. GIA processes the query autonomously
 
-*Note: a full-screen voice overlay with animated waveform (similar to Siri/Gemini) is planned for a future release.*
+*A full-screen voice overlay with animated waveform (similar to Siri/Gemini) is also planned for a future release, alongside a real wake word engine.*
 
 ---
 
