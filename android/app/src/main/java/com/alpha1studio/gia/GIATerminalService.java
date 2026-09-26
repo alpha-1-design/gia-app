@@ -367,13 +367,21 @@ public class GIATerminalService extends Service {
     /**
      * True when the rootfs actually contains the binaries proot needs to boot
      * the guest: /bin/busybox (the real binary) plus /bin/sh and /usr/bin/env
-     * (busybox applet links that extraction must materialize).
+     * (busybox applet links that extraction must materialize), and libz.so.1
+     * (needed by apk itself — a relative-target symlink, historically the
+     * first casualty of any symlink-resolution bug since it's the only
+     * shared-library symlink outside the busybox applet paths). Checking
+     * libz.so.1 specifically catches a broken/empty materialization here
+     * instead of letting it silently "succeed" and leaving apk permanently
+     * unusable until the user manually clears app data.
      */
     static boolean rootfsHasCriticalBinaries(File rootfsDir) {
         File busybox = new File(rootfsDir, "bin/busybox");
         File sh = new File(rootfsDir, "bin/sh");
         File env = new File(rootfsDir, "usr/bin/env");
-        return busybox.exists() && sh.exists() && env.exists();
+        File libz = new File(rootfsDir, "usr/lib/libz.so.1");
+        boolean libzOk = !libz.exists() || libz.length() > 0; // absent is fine (Ubuntu rootfs), empty is not
+        return busybox.exists() && sh.exists() && env.exists() && libzOk;
     }
 
     /**
@@ -384,14 +392,44 @@ public class GIATerminalService extends Service {
     static void materializeSymlinks(File rootfsDir, List<String[]> failedSymlinks) throws IOException {
         if (failedSymlinks.isEmpty()) return;
         File busybox = new File(rootfsDir, "bin/busybox");
+        String canonicalRoot = rootfsDir.getCanonicalPath();
         int fixed = 0;
         for (String[] entry : failedSymlinks) {
             File link = new File(rootfsDir, entry[0]);
             if (link.exists() && link.length() > 0) continue; // already materialized
             link.getParentFile().mkdirs();
-            // Resolve target: strip leading '/' for absolute paths
-            String targetRel = entry[1].startsWith("/") ? entry[1].substring(1) : entry[1];
-            File targetFile = new File(rootfsDir, targetRel);
+
+            // Resolve the symlink target the way POSIX actually does it: an
+            // absolute target is rooted at the rootfs root, but a *relative*
+            // target — the common case for versioned shared libraries, e.g.
+            // "usr/lib/libz.so.1 -> libz.so.1.3.1" — is relative to the
+            // symlink's OWN directory, not the rootfs root. Resolving it
+            // against the root (the previous behavior here) silently
+            // produces a nonexistent path for every relative-target symlink
+            // outside the rootfs top level, which fell through every branch
+            // below into the empty-placeholder last resort — e.g. libz.so.1
+            // became a 0-byte file, and every binary that dlopen()s it
+            // (apk, in particular) failed with "Exec format error" followed
+            // by cascading "symbol not found" errors for everything libz
+            // provides.
+            File targetFile = entry[1].startsWith("/")
+                    ? new File(rootfsDir, entry[1].substring(1))
+                    : new File(link.getParentFile(), entry[1]);
+
+            // Guard against a target that resolves outside the rootfs (e.g.
+            // a malicious "../../.." link) — the same protection extractTar()
+            // already applies to regular file entries.
+            try {
+                String canonicalTarget = targetFile.getCanonicalPath();
+                if (!canonicalTarget.equals(canonicalRoot) && !canonicalTarget.startsWith(canonicalRoot + File.separator)) {
+                    Log.w(TAG, "materializeSymlinks: skipping symlink escaping rootfs: " + entry[0] + " -> " + entry[1]);
+                    continue;
+                }
+            } catch (IOException ignored) {
+                // Canonicalization failure just means the path doesn't exist yet;
+                // let the existence checks below handle it normally.
+            }
+
             if (targetFile.exists() && targetFile.isFile()) {
                 // Target was extracted — copy its content
                 copyFile(targetFile, link);
@@ -406,11 +444,18 @@ public class GIATerminalService extends Service {
                 link.mkdirs();
                 fixed++;
             } else {
-                // Last resort: create empty placeholder so the path exists
+                // Last resort: create empty placeholder so the path exists.
+                // Loud on purpose — an empty .so or binary here is a silent
+                // landmine (e.g. "Exec format error" far downstream in apk)
+                // unless it's logged clearly at the point it's created.
+                Log.e(TAG, "materializeSymlinks: could not resolve " + entry[0]
+                        + " -> " + entry[1] + " (expected target at "
+                        + targetFile.getPath() + ", not found) — writing empty placeholder");
                 link.getParentFile().mkdirs();
                 if (!link.exists()) {
                     try (FileOutputStream fos = new FileOutputStream(link)) {
-                        // empty file — better than nothing
+                        // empty file — better than a missing path, but callers
+                        // relying on its content will fail; see log above.
                     }
                 }
             }
