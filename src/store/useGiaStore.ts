@@ -594,7 +594,10 @@ export const useGiaStore = create<GiaState>()(
       keepListening: (() => { try { return localStorage.getItem('gia-keep-listening') === 'true'; } catch { return false; } })(),
       autoStartWakeWord: (() => { try { return localStorage.getItem('gia-auto-start-wake-word') === 'true'; } catch { return false; } })(),
       voiceLanguage: (() => { try { return localStorage.getItem('gia-voice-language') || 'en-US'; } catch { return 'en-US'; } })(),
-      nativeWakeWord: (() => { try { return localStorage.getItem('gia-native-wake-word') !== 'false'; } catch { return true; } })(),
+      // Defaults to OFF: GIAWakeWordService.java is a stub that reports
+      // "Wake word detection is disabled in this build" and stops itself, so
+      // defaulting to on made every fresh install start a dead service.
+      nativeWakeWord: (() => { try { return localStorage.getItem('gia-native-wake-word') === 'true'; } catch { return false; } })(),
       nativeSensitivity: (() => { try { return parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'); } catch { return 0.7; } })(),
       wakeWordAccessKey: (() => { try { return localStorage.getItem('gia-wake-word-access-key') || ''; } catch { return ''; } })(),
       useWhisper: localStorage.getItem('gia-use-whisper') === 'true',
