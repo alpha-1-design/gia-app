@@ -102,7 +102,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     keepListening = false,
     confidenceThreshold = 0.3,
     language = 'en-US',
-    nativeWakeWord = true,
+    nativeWakeWord = false,
     nativeSensitivity = 0.7,
     wakeWordAccessKey = '',
   } = config;
@@ -510,9 +510,9 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     activeRef.current = true;
 
-    // Native wake word uses the bundled sherpa-onnx engine (fully on-device,
-    // no API key needed). Only fall back to the browser recognizer when the
-    // native plugin is unavailable or disabled.
+    // The native wake word engine is a stub in this build (GIAWakeWordService
+    // reports "disabled in this build" and stops itself), so this stays opt-in.
+    // Falling through to the browser recognizer keeps push-to-talk working.
     const canUseNative = isNative && nativeWakeWord;
     if (manual || !canUseNative) {
       if (isCapacitor) {
