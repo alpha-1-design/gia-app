@@ -4,6 +4,7 @@ import { providerRegistry } from '../ProviderRegistry';
 import { corsProxy } from '../CorsProxy';
 import { useGiaStore } from '../../store/useGiaStore';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
+import { createStreamWatchdog, STREAM_IDLE_TIMEOUT_MS } from './streamWatchdog';
 
 export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { providers } = useProviderStore.getState();
@@ -91,7 +92,22 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
       xhr.open('POST', streamUrl);
       Object.entries(anthropicHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
       xhr.responseType = 'text';
+      // Overall wall-clock ceiling only. Stalls are caught by the idle
+      // watchdog below, which measures time since the last byte.
       xhr.timeout = 120000;
+
+      // Anthropic streams long `thinking` blocks before the first visible
+      // token, so the first-byte budget is deliberately generous; once bytes
+      // start flowing the tighter idle budget protects against a wedged
+      // connection that never trips the 120s ceiling.
+      const watchdog = createStreamWatchdog({
+        onStall: () => {
+          watchdog.stop();
+          xhr.abort();
+          reject(new Error(`Anthropic stopped sending data for ${STREAM_IDLE_TIMEOUT_MS / 1000}s — the connection stalled. Try again or switch providers.`));
+        },
+        message: () => `Anthropic stopped sending data for ${STREAM_IDLE_TIMEOUT_MS / 1000}s — the connection stalled. Try again or switch providers.`,
+      });
 
       const drain = () => {
         if (processing) return;
@@ -157,6 +173,8 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
       };
 
       const onData = () => {
+        // Any inbound bytes count as progress, even unparseable keep-alives.
+        watchdog.poke();
         const currentLen = xhr.responseText.length;
         pendingBuffer += xhr.responseText.slice(lastProcessed);
         lastProcessed = currentLen;
@@ -166,6 +184,7 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
       xhr.onprogress = onData;
 
       xhr.onload = () => {
+        watchdog.stop();
         onData();
         if (partialEvent.trim()) {
           const t = partialEvent.trim();
@@ -190,33 +209,41 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
       };
 
       xhr.onerror = () => {
+        watchdog.stop();
         const err = new Error('Anthropic network error') as Error & { retryable?: boolean };
         err.retryable = fullText.length === 0 && lastProcessed === 0;
         reject(err);
       };
-      xhr.ontimeout = () => reject(new Error('Anthropic timed out after 120s'));
+      xhr.ontimeout = () => {
+        watchdog.stop();
+        reject(new Error('Anthropic timed out after 120s'));
+      };
       xhr.onabort = () => {
+        watchdog.stop();
         const e = new Error('Request aborted');
         e.name = 'AbortError';
         reject(e);
       };
 
       if (req.signal) {
-        if (req.signal.aborted) { xhr.abort(); return; }
-        const onAbort = () => xhr.abort();
+        if (req.signal.aborted) { watchdog.stop(); xhr.abort(); return; }
+        const onAbort = () => { watchdog.stop(); xhr.abort(); };
         req.signal.addEventListener('abort', onAbort);
         const origLoad = xhr.onload;
         const origError = xhr.onerror;
         const origAbort = xhr.onabort;
         xhr.onload = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
+          watchdog.stop();
           req.signal?.removeEventListener('abort', onAbort);
           if (origLoad) (origLoad as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
         xhr.onerror = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
+          watchdog.stop();
           req.signal?.removeEventListener('abort', onAbort);
           if (origError) (origError as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };
         xhr.onabort = function (this: XMLHttpRequest, e: ProgressEvent<EventTarget>) {
+          watchdog.stop();
           req.signal?.removeEventListener('abort', onAbort);
           if (origAbort) (origAbort as (e: ProgressEvent<EventTarget>) => void).call(this, e);
         };

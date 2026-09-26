@@ -54,6 +54,69 @@ can find the same names in Kai's source):
   libproot-loader32.so  -> proot's Android-unbundled loader (32-bit)
   libtalloc.so          -> proot's memory-allocator dependency
 
+---
+
+## ⚠️ Local modification: `libproot.so` (DT_NEEDED patched)
+
+**`libproot.so` in this directory is NOT a byte-identical copy of the
+upstream/Kai binary. It carries a local patch. Do not treat it as
+pristine, and re-apply the patch if you ever replace the file.**
+
+### What was changed
+
+One ELF `DT_NEEDED` entry was rewritten with patchelf:
+
+    patchelf --replace-needed libtalloc.so.2 libtalloc.so libproot.so
+
+### Why
+
+Upstream `libproot.so` declares a dependency on **`libtalloc.so.2`**, but
+the bundled allocator is stored as **`libtalloc.so`** (no version
+suffix) — almost certainly a rename that happened when these binary
+assets were restored.
+
+Android's linker resolves `DT_NEEDED` by *exact filename* in
+`nativeLibraryDir`; unlike desktop glibc it does not consult the
+dependency's embedded `DT_SONAME`. So every proot invocation failed at
+`execve`:
+
+    CANNOT LINK EXECUTABLE libproot.so: library libtalloc.so.2 not
+    found: needed by main executable
+
+That single mismatch is what broke Terminal "Full Install" for *every*
+package (python3, nodejs, git, ...) — one root cause, not many
+failures.
+
+### Why patch the binary rather than rename the file
+
+The bundled `libtalloc.so` genuinely *is* talloc 2.4.3 — its own
+`DT_SONAME` reads `libtalloc.so.2`. Renaming the file to `libtalloc.so.2`
+would therefore also have fixed the mismatch, and would have kept both
+binaries pristine.
+
+The patch was applied instead because it keeps Kai's original filenames
+intact (see the naming list above) and avoids any chance of the rename
+conflicting with a Gradle `jniLibs` packaging rule. If you would
+rather not carry a rebuilt third-party binary, the rename is a valid
+alternative — but then `libproot.so` must be reverted to its original
+bytes so the two agree.
+
+### Verification performed
+
+- `readelf -d` confirms `NEEDED` is now `libtalloc.so`, matching the
+  filename actually present in `lib/arm64-v8a/` in a built APK
+- `readelf -h` still reports `AArch64` / `DYN (Position-Independent
+  Executable)`, with `.interp` = `/system/bin/linker64`
+- All four original `PT_LOAD` segments and all 23 section headers are
+  preserved; `text`/`data`/`bss` sizes are unchanged (+13 bytes of
+  `text` for the rebuilt dynamic section). The file grew 208,368 ->
+  263,817 bytes because patchelf appends a new segment to hold the
+  patched headers.
+
+**Not verified:** proot has not been executed from a patched APK on a
+real device. Run a Full Install and confirm `apk` works before relying
+on this.
+
 All four are placed in jniLibs/ (not real JNI libraries — this is a
 naming trick so Android's APK packager extracts them into the app's
 nativeLibraryDir, which stays executable regardless of Android version,
