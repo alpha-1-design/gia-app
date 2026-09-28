@@ -112,6 +112,14 @@ export function useSandboxSetup() {
 
   const clearLog = useCallback(() => setLog([]), []);
 
+  /** Append a line to the live output (used by package installs, which don't emit native progress events). */
+  const appendLog = useCallback((line: string) => {
+    setLog(prev => {
+      const next = [...prev, line];
+      return next.length > 100 ? next.slice(-100) : next;
+    });
+  }, []);
+
   // Start the full on-device setup
   const startSetup = useCallback(async (arch?: string, os?: string) => {
     if (!plugin.current) {
@@ -193,6 +201,7 @@ export function useSandboxSetup() {
     isInstalling,
     pkgInstalling,
     startSetup,
+    appendLog,
     execCommand,
     installPackage,
     removePackage,

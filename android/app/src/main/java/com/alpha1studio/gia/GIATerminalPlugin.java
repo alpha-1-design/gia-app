@@ -717,7 +717,7 @@ public class GIATerminalPlugin extends Plugin {
             call.reject("packageName is required");
             return;
         }
-        runProotCommand(call, currentRootfsPath(), packageManagerCommand("add", packageName), 300000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("add", packageName), 900000);
     }
 
     /**
@@ -755,7 +755,7 @@ public class GIATerminalPlugin extends Plugin {
      */
     @PluginMethod
     public void updatePackageIndex(PluginCall call) {
-        runProotCommand(call, currentRootfsPath(), packageManagerCommand("update", ""), 60000);
+        runProotCommand(call, currentRootfsPath(), packageManagerCommand("update", ""), 120000);
     }
 
     private String packageManagerCommand(String operation, String value) {
