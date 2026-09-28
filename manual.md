@@ -1,4 +1,4 @@
-# GIA v2.4.0.12 — User Manual
+# GIA v2.4.0.13 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,12 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.13
+
+| Fix | Description |
+|-----|-------------|
+| **Terminal Full Install — broken zlib** | Full Install could still end with `Error loading shared library libz.so.1: Exec format error`, followed by a cascade of missing-symbol errors from `apk`. The cause was symlink handling: relative targets such as `libz.so.1 → libz.so.1.3.1` were resolved against the top of the root filesystem instead of the folder containing the link, so the real library was never found and an empty placeholder file was written in its place. Symlinks are now resolved relative to their own directory, exactly as the OS does it. |
 
 ## 🧠 What's New in v2.4.0.12
 

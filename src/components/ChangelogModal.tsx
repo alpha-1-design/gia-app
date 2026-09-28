@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.12';
+const VERSION = '2.4.0.13';
 
 const sections = [
   {
@@ -40,6 +40,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
+      'Terminal “Full Install” no longer dies on a broken zlib. Relative symlinks (like libz.so.1 → libz.so.1.3.1) were resolved against the top of the filesystem instead of their own folder, so the real library was never found and GIA wrote an empty placeholder instead — which Android rejects with “Exec format error”, taking apk and every package install down with it. Symlinks now resolve the way the OS resolves them.',
       'Terminal “Full Install” works. The proot binary was linked against libtalloc.so.2 but the bundled allocator shipped as libtalloc.so, and Android matches dependency names exactly — so every proot launch died before it started. One root cause, and it is why python3, nodejs, git and every other package failed at once.',
       'Mind maps are actually visible. GIA could generate a perfect map and the card would hide it: the root node was drawn at the left edge and clipped, zoom was applied twice, the drag cursor was connected to no handler, and “collapse” still left an empty box. Maps now fit your screen, scroll in both directions, drag to pan, and collapse to a single line.',
       'One slow tool can no longer freeze the whole conversation. Tool calls had no timeout, so a single unresponsive tool wedged the entire reasoning loop — every tool now has a ceiling and GIA tells the model which tool gave up.',
@@ -75,7 +76,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.12.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.13.',
     ],
   },
 ];
