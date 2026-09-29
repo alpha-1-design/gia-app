@@ -1,4 +1,4 @@
-# GIA v2.4.0.13 — User Manual
+# GIA v2.4.0.14 — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,16 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧠 What's New in v2.4.0.14
+
+| Change | Description |
+|-----|-------------|
+| **Terminal Full Install now actually finishes** | Full Install ran one `apk add` per package with `--no-cache`, so it re-fetched the package index 21 times; when a large package (build-base) took long enough to hit the native timeout, the process was killed mid-transaction and left the package manager's lock behind, so everything after it failed at once with no explanation. Installs now run as a single batch, clear a stale lock before starting, retry failed packages individually, and show the real error text. |
+| **Packages tab installed count fixed** | It showed 0 installed even right after a successful install, because it compared package names against a prefix format that never matches how Alpine actually lists them. |
+| **Chat replies are full width** | Assistant replies were boxed into an 85%-wide card with the avatar in a side column, unlike the full-width expanded view. They're now full width, with the avatar moved into the header line above the text. |
+| **GIA can check her own website** | New `check_website` tool: loads the live site, lists its sections, and compares the version it shows against this build and the latest release — visible as a step ("Checking GIA website"), not something that happens silently. |
+| **Website accuracy** | The "Tool Actions" stat was corrected (35+ → 200+, matching the actual tool registry), and the missing Root Terminal & Linux Shell feature card was added. |
 
 ## 🧠 What's New in v2.4.0.13
 

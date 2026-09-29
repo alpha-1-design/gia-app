@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.13';
+const VERSION = '2.4.0.14';
 
 const sections = [
   {
@@ -20,6 +20,7 @@ const sections = [
       'A streaming stall guard. If a provider stopped sending data part-way through an answer, nothing timed out and the reply just froze. GIA now watches for silence (30s between chunks, 60s for the very first byte, so a slow start or a long reasoning block is never mistaken for a hang) and tells you what happened instead of hanging.',
       'On-Device Mode — one toggle (composer Tools sheet or Settings → System → Reliability) that runs GIA fully offline: every response from the local model, network tools blocked, cloud transcription refused. Nothing leaves your phone.',
       'Real permission system — GIA asks for camera, location, contacts, SMS, and friends exactly when a task needs them, explains why, and continues once you decide. Review or flip any permission anytime in Settings → Permissions.',
+      'GIA can check her own website. The new check_website tool loads the live site, lists its sections, and compares the version it shows against this build and the latest GitHub release — visible in the work log as “Checking GIA website”, not something that happens silently.',
       'GIA now knows her own app — ask “where do I change X?” and she answers with the exact screen and control (new app_map tool), and she points you to the built-in report form when something is broken.',
       '“Use Local AI (Free)” now detects your phone first and recommends the model that actually fits your RAM, with download size and reasoning shown before it downloads.',
       'One-tap “Get API key” links for every provider in the connect panel — no more hunting for the right dashboard.',
@@ -40,6 +41,9 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
+      'Full Install actually finishes. It ran one `apk add` per package with `--no-cache`, so each of the 21 packages re-fetched the whole index; when a big one (build-base) took long enough to hit the native timeout, the process was killed mid-transaction and left the package manager\'s lock behind — every package after that failed, with no explanation. Installs now run as one batch, clear a stale lock first, retry failures individually, and show the real error instead of a bare list of names.',
+      'The Packages tab always showed 0 installed, even right after a successful Full Install, because it compared package names against a prefix that never matched how Alpine lists them. It now reads the list correctly.',
+      'Assistant replies were boxed into a narrow 85%-width card with the avatar taking a column beside it, unlike the full-width expanded view. Replies are now full width, with the avatar moved into the header line.',
       'Terminal “Full Install” no longer dies on a broken zlib. Relative symlinks (like libz.so.1 → libz.so.1.3.1) were resolved against the top of the filesystem instead of their own folder, so the real library was never found and GIA wrote an empty placeholder instead — which Android rejects with “Exec format error”, taking apk and every package install down with it. Symlinks now resolve the way the OS resolves them.',
       'Terminal “Full Install” works. The proot binary was linked against libtalloc.so.2 but the bundled allocator shipped as libtalloc.so, and Android matches dependency names exactly — so every proot launch died before it started. One root cause, and it is why python3, nodejs, git and every other package failed at once.',
       'Mind maps are actually visible. GIA could generate a perfect map and the card would hide it: the root node was drawn at the left edge and clipped, zoom was applied twice, the drag cursor was connected to no handler, and “collapse” still left an empty box. Maps now fit your screen, scroll in both directions, drag to pan, and collapse to a single line.',
@@ -64,6 +68,7 @@ const sections = [
       'Added Android Keystore-backed AES-GCM storage with migration support for existing credential records.',
       'SSH host verification now uses accept-new behavior instead of silently disabling host-key checks.',
       'Sensitive actions remain approval-gated, with clearer capability and permission guidance in GIA’s system instructions.',
+      'Bumped the ip-address dependency (10.4.0 → 10.7.2) to pick up an upstream fix flagged by GitHub’s dependency scanning.',
     ],
   },
   {
@@ -76,7 +81,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.13.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.14.',
     ],
   },
 ];
