@@ -52,7 +52,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const TOOL_CATEGORY: Record<string, string> = {
-  web_search: 'research', read_url: 'research', browser_navigate: 'research',
+  web_search: 'research', read_url: 'research', browser_navigate: 'research', check_website: 'research',
   browser_click: 'research', browser_fill: 'research', browser_scroll: 'research',
   page_info: 'research', wikipedia: 'research', weather: 'research',
   get_directions: 'research',

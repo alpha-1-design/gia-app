@@ -80,6 +80,7 @@ const TOOL_LABELS: Record<string, { label: string; color: string }> = {
   web_search:       { label: 'Searching the web',        color: '#14b8a6' },
   read_url:         { label: 'Reading the tea leaves',   color: '#14b8a6' },
   browser_navigate: { label: 'Surfing the web',          color: '#14b8a6' },
+  check_website:    { label: 'Checking the GIA website', color: '#14b8a6' },
   page_info:        { label: 'Peeking at metadata',      color: '#14b8a6' },
   web_scrape:       { label: 'Scraping deliciously',     color: '#14b8a6' },
   terminal_run:     { label: 'Running wild',             color: '#8b5cf6' },

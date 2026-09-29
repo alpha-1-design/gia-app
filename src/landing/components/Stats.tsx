@@ -10,7 +10,7 @@ interface StatItem {
 
 const stats: StatItem[] = [
   { value: '18', label: 'AI Providers', suffix: '+' },
-  { value: '35', label: 'Tool Actions', suffix: '+' },
+  { value: '200', label: 'Tool Actions', suffix: '+' },
   { value: '8', label: 'Integrated Modules' },
   { value: '100', label: 'On-Device', suffix: '%', prefix: '' },
 ]
