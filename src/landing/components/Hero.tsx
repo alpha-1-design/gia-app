@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
 import { Sparkles, Download, Github, ArrowRight, Smartphone, Cpu, Shield, Boxes, RefreshCcw } from 'lucide-react'
 import { DesktopMock } from './DesktopMock'
+import { LiveVersion } from './LiveVersion'
 
 export function Hero() {
   return (
@@ -26,7 +27,7 @@ export function Hero() {
                 <span className="rounded-full bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
                   LINUX
                 </span>
-                Desktop v0.1.0 · Phone v2.4.0.13
+                Desktop v0.1.0 · Phone v<LiveVersion fallback="2.4.0.13" />
               </div>
             </motion.div>
 

@@ -52,6 +52,7 @@ import { telegramTools } from './telegram';
 import { terminalTools } from './terminal';
 import { termuxTools } from './termux';
 import { webSearchTools } from './webSearch';
+import { siteCheckTools } from './siteCheck';
 import { websocketTools } from './websocket';
 
 export function registerAllTools(): void {
@@ -107,6 +108,7 @@ export function registerAllTools(): void {
     terminalTools,
     termuxTools,
     webSearchTools,
+    siteCheckTools,
     websocketTools,
   ];
 

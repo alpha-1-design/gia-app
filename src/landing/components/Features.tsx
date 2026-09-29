@@ -2,7 +2,7 @@ import { motion } from 'motion/react'
 import {
   Brain, Bot, MessageSquare, Search, FileText, Shield,
   Wifi, Smartphone, Camera, Zap, Globe, Workflow,
-  Compass, KeyRound,
+  Compass, KeyRound, TerminalSquare,
 } from 'lucide-react'
 
 const features = [
@@ -20,6 +20,7 @@ const features = [
   { icon: Wifi, title: 'Offline Mode', description: 'Local LLM support via Transformers WASM. Switch it on and GIA also blocks every tool that needs the network, so nothing can quietly send data out.' },
   { icon: Compass, title: 'Knows Its Own Interface', description: 'Ask where a setting lives and GIA looks it up and answers with the real path, instead of inventing a menu that does not exist.' },
   { icon: KeyRound, title: 'Permissions On Your Terms', description: 'Camera, location, contacts and SMS are requested the first time a tool needs them — never at install, and never denied behind your back.' },
+  { icon: TerminalSquare, title: 'Root Terminal & Linux Shell', description: 'A real Alpine or Ubuntu userland on your phone — Python, Node, Git, and a full package manager — with GIA able to run commands in it directly.' },
 ]
 
 export function Features() {

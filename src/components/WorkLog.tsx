@@ -27,6 +27,7 @@ interface WorkLogStep {
 export const TOOL_META: Record<string, { label: string; color: string; icon: React.ReactNode; category: string }> = {
   web_search:        { label: 'Searching the web',   color: '#14b8a6', icon: <Search size={12} />,       category: 'research' },
   read_url:          { label: 'Reading page',        color: '#14b8a6', icon: <Globe size={12} />,       category: 'research' },
+  check_website:     { label: 'Checking GIA website', color: '#14b8a6', icon: <Globe size={12} />,      category: 'research' },
   browser_navigate:  { label: 'Navigating browser',  color: '#14b8a6', icon: <Globe size={12} />,       category: 'research' },
   browser_click:     { label: 'Clicking element',    color: '#14b8a6', icon: <Globe size={12} />,       category: 'research' },
   browser_fill:      { label: 'Filling form',        color: '#14b8a6', icon: <Globe size={12} />,       category: 'research' },
