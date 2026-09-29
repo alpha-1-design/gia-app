@@ -222,11 +222,15 @@ const MessageRow = memo<MessageRowProps>(({
     return n && n.role === 'assistant' ? n.id : undefined;
   }, [messagesRef, msg.id, sheetMsgId]); // eslint-disable-line react-hooks/exhaustive-deps -- recompute when the sheet opens
 
-  return (
-    <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+  const avatarNode = (
       <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
         {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
       </div>
+  );
+
+  return (
+    <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+      {msg.role === 'user' && avatarNode}
       <div className="flex-1 min-w-0 space-y-1">
         {msg.attachments?.some(a => a.preview) && (
           <div className={`flex flex-wrap gap-2 mb-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -236,6 +240,7 @@ const MessageRow = memo<MessageRowProps>(({
           </div>
         )}
         <div className="flex items-center gap-2 mb-0.5 ml-1">
+          {msg.role !== 'user' && avatarNode}
           <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
             {msg.agentId ? msg.agentName : msg.role === 'user' ? 'You' : 'GIA'}
           </span>
@@ -245,12 +250,10 @@ const MessageRow = memo<MessageRowProps>(({
         </div>
         <>
           <div
-            className={`max-w-[85%] p-3 sm:p-4 md:p-5 rounded-2xl relative cursor-pointer ${msg.role === 'user' ? 'bg-violet-600/10 border border-violet-500/20' : msg.error ? 'bg-rose-950/20 border border-rose-800/30' : `border ${isStreaming ? 'streaming-message' : ''}`}`}
+            className={`relative cursor-pointer ${msg.role === 'user' ? 'max-w-[85%] p-3 sm:p-4 md:p-5 rounded-2xl bg-violet-600/10 border border-violet-500/20' : msg.error ? 'w-full p-3 sm:p-4 rounded-2xl bg-rose-950/20 border border-rose-800/30' : 'w-full px-1 py-0.5'}`}
             style={{
-              background: msg.role === 'assistant' && !msg.error ? 'var(--gia-surface-2)' : undefined,
-              borderColor: msg.role === 'assistant' && !msg.error ? 'var(--gia-border)' : undefined,
-              borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
-              borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
+              borderTopRightRadius: msg.role === 'user' ? '4px' : undefined,
+              borderTopLeftRadius: msg.role === 'assistant' && msg.error ? '4px' : undefined,
             }}
             onClick={(e) => {
               if ((e.target as HTMLElement).closest('a, button')) return;
@@ -447,7 +450,7 @@ const MessageRow = memo<MessageRowProps>(({
               visible immediately — even while GIA is still "thinking" —
               or the turn stalls with no visible prompt (the "delay disease"). */}
           {msg.role === 'assistant' && pendingProtocols.length > 0 && (
-            <div className="w-full max-w-[85%] mb-1">
+            <div className="w-full mb-1">
               <p className="text-[9px] font-semibold uppercase tracking-wider px-1 mb-1" style={{ color: 'var(--gia-muted)' }}>
                 Waiting for your approval
               </p>
