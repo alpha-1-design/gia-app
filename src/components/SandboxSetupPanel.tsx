@@ -5,26 +5,20 @@
  * per-session terminal with persistent scrollback.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Download, Terminal, Package, Search, Trash2, RefreshCw,
   CheckCircle2, Loader2, FolderOpen, HardDrive, Cpu,
   ChevronDown, ChevronRight, Zap, Settings, Box,
 } from 'lucide-react';
 import { useSandboxSetup } from '../hooks/useSandboxSetup';
+import { runFullInstall, parseInstalledPackageNames, tailOutput } from '../services/terminalInstall';
 
 type Tab = 'system' | 'packages' | 'workspace' | 'mcp';
 
 // ---------------------------------------------------------------------------
 // Package categories (Kai-style grouped sections)
 // ---------------------------------------------------------------------------
-
-const FULL_INSTALL_PACKAGES = [
-  'python3', 'py3-pip', 'nodejs', 'npm', 'git', 'bash',
-  'curl', 'wget', 'openssh', 'build-base', 'gcc', 'g++', 'make',
-  'vim', 'jq', 'ripgrep', 'tree', 'zip', 'unzip',
-  'sqlite', 'ca-certificates',
-];
 
 const PACKAGE_SECTIONS = [
   {
@@ -123,8 +117,8 @@ export default function SandboxSetupPanel() {
   const {
     isNative, setupStatus, phase, progress, log,
     isInstalling, pkgInstalling,
-    startSetup, execCommand, installPackage, removePackage, searchPackages,
-    listInstalledPackages, updatePackageIndex,
+    appendLog, startSetup, execCommand, installPackage, removePackage, searchPackages,
+    listInstalledPackages,
   } = useSandboxSetup();
 
   const [tab, setTab] = useState<Tab>('system');
@@ -135,6 +129,7 @@ export default function SandboxSetupPanel() {
   const [fullInstalling, setFullInstalling] = useState(false);
   const [fullInstallProgress, setFullInstallProgress] = useState('');
   const [fullInstallFailures, setFullInstallFailures] = useState<string[]>([]);
+  const [pkgError, setPkgError] = useState<string | null>(null);
   const [selectedOS, setSelectedOS] = useState<'alpine' | 'ubuntu'>('alpine');
   const [workspaceInfo, setWorkspaceInfo] = useState<Record<string, { exists: boolean; count: number }>>({});
   const [workspaceInfoLoading, setWorkspaceInfoLoading] = useState(false);
@@ -200,65 +195,41 @@ export default function SandboxSetupPanel() {
     });
   }, []);
 
-  // Full install handler
+  // Full install handler — see services/terminalInstall.ts for the strategy
+  // (single batched transaction, retries, verification against the package
+  // database, and real error text instead of bare package names).
   const handleFullInstall = useCallback(async () => {
     setFullInstalling(true);
     setFullInstallFailures([]);
-
-    // apk needs to resolve dl-cdn.alpinelinux.org to install anything.
-    // Nothing else in this flow configures DNS inside the sandbox, so every
-    // apk add here was silently failing on a fresh rootfs (this is the same
-    // step SandboxEnvService.provision() does on the Security/Sandbox page,
-    // which is why that path worked while this one didn't).
-    setFullInstallProgress('Configuring DNS...');
-    const dnsResult = await execCommand(
-      "test -f /etc/resolv.conf || (echo nameserver 8.8.8.8 > /etc/resolv.conf && echo nameserver 1.1.1.1 >> /etc/resolv.conf)",
-      15000,
-    ).catch(() => null);
-    if (!dnsResult || dnsResult.exitCode !== 0) {
-      setFullInstallFailures(prev => [...prev, `DNS setup: ${dnsResult?.output?.trim() || 'no response from terminal'}`]);
+    setPkgError(null);
+    try {
+      const result = await runFullInstall({
+        os: setupStatus?.os === 'ubuntu' ? 'ubuntu' : 'alpine',
+        exec: execCommand,
+        onProgress: setFullInstallProgress,
+        onLog: appendLog,
+      });
+      setFullInstallFailures([
+        ...result.warnings,
+        ...result.failed.map(f => `${f.pkg}: ${f.reason}`),
+      ]);
+    } catch (e) {
+      setFullInstallFailures([`Full install stopped unexpectedly: ${e instanceof Error ? e.message : String(e)}`]);
+      setFullInstallProgress('Stopped — see below');
+    } finally {
+      await refreshInstalled();
+      await refreshWorkspaceInfo();
+      setFullInstalling(false);
     }
-
-    setFullInstallProgress('Updating package index...');
-    const indexResult = await updatePackageIndex();
-    if (!indexResult || indexResult.exitCode !== 0) {
-      setFullInstallFailures(prev => [...prev, `package index update: ${indexResult?.output?.trim() || 'no response from terminal'}`]);
-    }
-
-    const failed: string[] = [];
-    for (let i = 0; i < FULL_INSTALL_PACKAGES.length; i++) {
-      const pkg = FULL_INSTALL_PACKAGES[i];
-      setFullInstallProgress(`Installing ${pkg} (${i + 1}/${FULL_INSTALL_PACKAGES.length})...`);
-      const result = await installPackage(pkg);
-      if (!result || result.exitCode !== 0) {
-        failed.push(pkg);
-      }
-    }
-    if (failed.length) {
-      setFullInstallFailures(prev => [...prev, `packages that failed to install: ${failed.join(', ')}`]);
-    }
-
-    // Create workspace folders. mkdir -p takes multiple directory arguments
-    // directly -- brace expansion like /workspace/{a,b,c} is a bash feature
-    // and silently no-ops (creates one literally-named directory) under the
-    // busybox ash shell this runs in, so folders never actually get made.
-    setFullInstallProgress('Creating workspace folders...');
-    const workspaceDirs = ['projects', 'downloads', 'scripts', 'documents', 'data', 'tools']
-      .map(d => `/workspace/${d}`).join(' ');
-    const mkdirResult = await execCommand(`mkdir -p ${workspaceDirs}`, 10000).catch(() => null);
-    if (!mkdirResult || mkdirResult.exitCode !== 0) {
-      setFullInstallFailures(prev => [...prev, `workspace folders: ${mkdirResult?.output?.trim() || 'no response from terminal'}`]);
-    }
-
-    setFullInstallProgress(failed.length ? 'Finished with errors — see below' : 'Done!');
-    await refreshInstalled();
-    await refreshWorkspaceInfo();
-    setFullInstalling(false);
-  }, [execCommand, installPackage, updatePackageIndex, refreshInstalled, refreshWorkspaceInfo]);
+  }, [execCommand, appendLog, setupStatus?.os, refreshInstalled, refreshWorkspaceInfo]);
 
   // Single package install
   const handleInstall = useCallback(async (pkg: string) => {
-    await installPackage(pkg);
+    setPkgError(null);
+    const r = await installPackage(pkg);
+    if (!r || r.exitCode !== 0) {
+      setPkgError(`Couldn't install ${pkg}: ${tailOutput(r?.output) || 'no response from terminal'}`);
+    }
     await refreshInstalled();
   }, [installPackage, refreshInstalled]);
 
@@ -276,9 +247,10 @@ export default function SandboxSetupPanel() {
     }
   }, [searchQuery, searchPackages]);
 
-  const isPkgInstalled = useCallback((name: string) => {
-    return installedPkgs.some(p => p.startsWith(name + ' ') || p === name);
-  }, [installedPkgs]);
+  // `apk list --installed` lines start with name-version-release, so compare
+  // against parsed package names rather than string prefixes.
+  const installedNames = useMemo(() => parseInstalledPackageNames(installedPkgs.join('\n')), [installedPkgs]);
+  const isPkgInstalled = useCallback((name: string) => installedNames.has(name), [installedNames]);
 
   // Not native
   if (!isNative) {
@@ -499,6 +471,11 @@ export default function SandboxSetupPanel() {
         {/* ═══════ PACKAGES TAB ═══════ */}
         {tab === 'packages' && (
           <>
+            {pkgError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                <p className="text-xs text-red-300 font-mono break-words">{pkgError}</p>
+              </div>
+            )}
             {/* Search bar */}
             <div className="flex gap-2">
               <input
@@ -506,7 +483,7 @@ export default function SandboxSetupPanel() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                placeholder="Search Alpine packages..."
+                placeholder={setupStatus?.os === 'ubuntu' ? 'Search Ubuntu packages...' : 'Search Alpine packages...'}
                 className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:opacity-40 focus:outline-none focus:border-purple-400/50"
               />
               <button onClick={handleSearch} className="bg-purple-600 hover:bg-purple-500 rounded-lg px-3 py-2">
