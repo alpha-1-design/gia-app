@@ -27,9 +27,15 @@ export const mcpTools: Tool[] = [
       if (!name || !transport) return { success: false, content: '', error: 'Provide "name" and "transport" (sse or stdio).' };
       if (transport === 'sse' && !url) return { success: false, content: '', error: 'SSE transport requires a "url".' };
       if (transport === 'stdio' && !command) return { success: false, content: '', error: 'Stdio transport requires a "command".' };
-      const config = { name, transport: transport as MCPTransportType, url: url || '', command: command || '', args: arrArgs || [], enabled: true, autoConnect: false };
+      // autoConnect must be true here: this tool only runs because the user
+      // asked GIA to set a server up for ongoing use. With it false (the
+      // old default), the server was saved but MCPManager's launch-time
+      // connect pass (`if (server.enabled && server.autoConnect)`) skipped
+      // it every time — it would sit there every app restart until someone
+      // found it in Settings -> MCP Servers and flipped the toggle by hand.
+      const config = { name, transport: transport as MCPTransportType, url: url || '', command: command || '', args: arrArgs || [], enabled: true, autoConnect: true };
       useMCPStore.getState().addServer(config);
-      return { success: true, content: `MCP server "${name}" added (${transport}).` };
+      return { success: true, content: `MCP server "${name}" added (${transport}) and will connect automatically on launch.` };
     }
   },
   {

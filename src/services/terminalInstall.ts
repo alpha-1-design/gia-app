@@ -80,6 +80,94 @@ function updateCommand(os: DistroOs): string {
     : 'apk update 2>&1';
 }
 
+/**
+ * Alpine mirrors (CDN first, then a couple of well-known regional ones) tried
+ * in order until one actually answers. Nothing in the old flow checked
+ * reachability before installing — it just ran `apk update` against whatever
+ * /etc/apk/repositories already had and let that single mirror's failure take
+ * the whole install down.
+ */
+export const ALPINE_MIRRORS = [
+  'https://dl-cdn.alpinelinux.org/alpine',
+  'https://mirror.leaseweb.com/alpine',
+  'https://alpine.global.ssl.fastly.net/alpine',
+];
+
+/** `/etc/alpine-release` looks like "3.21.0". Extract the release branch, e.g. "v3.21". */
+function alpineBranchCommand(): string {
+  return "cat /etc/alpine-release 2>/dev/null | cut -d. -f1,2 | sed 's/^/v/' || echo v3.21";
+}
+
+/**
+ * Pick the first Alpine mirror that actually responds and write it into
+ * /etc/apk/repositories, instead of discovering a dead mirror only after
+ * `apk update` has already failed partway through Full Install.
+ */
+export async function selectReachableMirror(exec: ExecFn, log: (line: string) => void): Promise<{ mirror: string; reachable: boolean }> {
+  const branchRes = await exec(alpineBranchCommand(), 5000).catch(() => null);
+  const branch = (branchRes?.output || 'v3.21').trim().split('\n').pop() || 'v3.21';
+
+  for (const mirror of ALPINE_MIRRORS) {
+    log(`[packages] Testing mirror ${mirror}...`);
+    // Ask the on-device shell for its own architecture rather than the JS
+    // runtime's (this code runs in a WebView, not Node — there is no global
+    // `process`, and even if there were, the host device's arch is what
+    // matters here, not the one running this JS).
+    const probe = await exec(
+      `wget -q -T 8 -t 1 -O /dev/null '${mirror}/${branch}/main/'"$(uname -m)"'/APKINDEX.tar.gz' && echo REACHABLE`,
+      12000,
+    ).catch(() => null);
+    if (probe?.output.includes('REACHABLE')) {
+      log(`[packages] Using mirror ${mirror}`);
+      await exec(
+        `printf '%s\\n%s\\n' '${mirror}/${branch}/main' '${mirror}/${branch}/community' > /etc/apk/repositories`,
+        5000,
+      ).catch(() => null);
+      return { mirror, reachable: true };
+    }
+    log(`[packages] ${mirror} did not respond, trying the next one...`);
+  }
+  log('[packages] No mirror responded — continuing with the configured repositories');
+  return { mirror: ALPINE_MIRRORS[0], reachable: false };
+}
+
+/**
+ * Packages whose presence we can confirm by actually running them, which is
+ * ground truth that can't be fooled by a package-database record left behind
+ * by an interrupted install. Keyed by the Alpine package name.
+ */
+const BINARY_CHECKS: Record<string, string> = {
+  nodejs: 'node --version', git: 'git --version', python3: 'python3 --version',
+  'build-base': 'gcc --version', npm: 'npm --version',
+};
+
+const PROOT_FAILURE = /fatal error|libproot|proot (error|warning)|No such file or directory|can't chdir/i;
+
+/**
+ * Re-check packages the install reported as present against the one that
+ * actually matters: does the binary run. A package can be "installed" in
+ * apk's database (`apk info -e` says yes) because an interrupted install left
+ * a partial record, while the real binary is missing or broken — which is
+ * exactly the gap between what Full Install reports and what Settings → Mical
+ * reports, with no explanation for why they disagree.
+ */
+export async function verifyBinaries(exec: ExecFn, installed: string[]): Promise<{ confirmed: string[]; broken: { pkg: string; reason: string }[] }> {
+  const confirmed: string[] = [];
+  const broken: { pkg: string; reason: string }[] = [];
+  for (const pkg of installed) {
+    const check = BINARY_CHECKS[pkg];
+    if (!check) { confirmed.push(pkg); continue; }
+    const r = await exec(`${check} 2>&1`, 15000).catch(() => null);
+    const line = (r?.output || '').trim().split('\n').pop()?.trim() || '';
+    if (r && r.exitCode === 0 && line && !/not found|command not found/i.test(line) && !PROOT_FAILURE.test(line)) {
+      confirmed.push(pkg);
+    } else {
+      broken.push({ pkg, reason: `apk shows it installed, but the binary doesn't run: ${line || 'no output'}` });
+    }
+  }
+  return { confirmed, broken };
+}
+
 function checkCommand(os: DistroOs, pkgs: string[]): string {
   const list = pkgs.join(' ');
   return os === 'ubuntu'
@@ -146,7 +234,16 @@ export async function runFullInstall(deps: FullInstallDeps): Promise<FullInstall
     await safeExec('rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock; dpkg --configure -a 2>&1 | tail -2', 60000);
   }
 
-  // 2. Package index, with retries.
+  // 2. Find a mirror that actually answers before touching the package
+  // index — the old flow discovered a dead mirror only via a failed `apk
+  // update`, with no indication that the mirror itself was the problem.
+  if (os === 'alpine') {
+    progress('Finding a reachable mirror...');
+    const { mirror, reachable } = await selectReachableMirror(exec, log);
+    if (!reachable) warnings.push(`No Alpine mirror responded (tried ${ALPINE_MIRRORS.length}); continuing with ${mirror} anyway`);
+  }
+
+  // 3. Package index, with retries.
   progress('Updating package index...');
   log('[packages] Updating package index...');
   let indexOk = false;
@@ -210,9 +307,17 @@ export async function runFullInstall(deps: FullInstallDeps): Promise<FullInstall
     pkg,
     reason: reasons.get(pkg) || tailOutput(batchOut) || 'not present after install',
   }));
-  const installed = wanted.filter(p => present.has(p));
+  let installed = wanted.filter(p => present.has(p));
 
-  // 6. Workspace folders. mkdir -p takes multiple args; brace expansion is a
+  // 6. Confirm the packages apk's database calls "installed" actually work.
+  // This is what makes Full Install's own completion report agree with what
+  // Settings -> Mical shows, instead of the two silently disagreeing.
+  progress('Confirming installed tools actually run...');
+  const { confirmed, broken } = await verifyBinaries(exec, installed);
+  installed = confirmed;
+  failed.push(...broken);
+
+  // 7. Workspace folders. mkdir -p takes multiple args; brace expansion is a
   // bash feature and silently misbehaves under busybox ash.
   progress('Creating workspace folders...');
   const dirs = ['projects', 'downloads', 'scripts', 'documents', 'data', 'tools'].map(d => `/workspace/${d}`).join(' ');
