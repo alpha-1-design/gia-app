@@ -193,6 +193,84 @@ export interface FullInstallDeps {
   packages?: string[];
 }
 
+function upgradeCommand(os: DistroOs): string {
+  return os === 'ubuntu'
+    ? 'DEBIAN_FRONTEND=noninteractive apt-get -o APT::Sandbox::User=root upgrade -y 2>&1'
+    : 'apk upgrade --no-cache --no-progress 2>&1';
+}
+
+export interface UpdatePackagesResult {
+  ok: boolean;
+  /** Short, user-facing summary of what happened (e.g. "7 packages upgraded" or "already up to date"). */
+  summary: string;
+  warnings: string[];
+}
+
+/**
+ * Update every already-installed package to its latest available version.
+ * There was no way to do this at all before — Packages tab only had one-way
+ * "install" buttons, nothing to check for or apply updates afterward.
+ */
+export async function runUpdatePackages(deps: FullInstallDeps): Promise<UpdatePackagesResult> {
+  const { os, exec } = deps;
+  const progress = deps.onProgress ?? (() => {});
+  const log = deps.onLog ?? (() => {});
+  const sleep = deps.sleep ?? realSleep;
+  const warnings: string[] = [];
+  const safeExec = (cmd: string, timeout: number) => exec(cmd, timeout).catch(() => null);
+
+  if (os === 'alpine') {
+    await safeExec('rm -f /lib/apk/db/lock', 10000);
+  } else {
+    await safeExec('rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock', 10000);
+  }
+
+  if (os === 'alpine') {
+    progress('Finding a reachable mirror...');
+    const { reachable } = await selectReachableMirror(exec, log);
+    if (!reachable) warnings.push('No Alpine mirror responded; continuing with the configured repositories');
+  }
+
+  progress('Updating package index...');
+  log('[packages] Updating package index...');
+  let indexOk = false;
+  let indexOut = '';
+  for (let attempt = 1; attempt <= 3 && !indexOk; attempt++) {
+    const r = await safeExec(updateCommand(os), 120000);
+    indexOut = r?.output ?? '';
+    indexOk = !!r && r.exitCode === 0;
+    if (!indexOk && attempt < 3) await sleep(2000 * attempt);
+  }
+  if (!indexOk) {
+    return { ok: false, summary: `Couldn't reach the package index: ${tailOutput(indexOut) || 'no response from terminal'}`, warnings };
+  }
+
+  progress('Checking for updates...');
+  log('[packages] Checking for updates...');
+  const r = await safeExec(upgradeCommand(os), 20 * 60 * 1000);
+  const out = r?.output ?? '';
+  (out.split('\n').map(l => l.trim()).filter(Boolean).slice(-6)).forEach(l => log(`[packages] ${l}`));
+
+  if (!r) {
+    return { ok: false, summary: 'No response from the terminal', warnings };
+  }
+  if (r.exitCode !== 0) {
+    return { ok: false, summary: `Update failed: ${tailOutput(out) || `exit code ${r.exitCode}`}`, warnings };
+  }
+
+  const upgraded = os === 'alpine'
+    ? (out.match(/^Upgrading /m) ? out.split('\n').filter(l => /^\S+-\S+ -> \S+/.test(l.trim()) || /^Upgrading /.test(l)).length : 0)
+    : (out.match(/(\d+) upgraded/)?.[1] ? Number(out.match(/(\d+) upgraded/)?.[1]) : 0);
+
+  progress('Done!');
+  log(upgraded > 0 ? `[packages] ${upgraded} package(s) upgraded` : '[packages] Already up to date');
+  return {
+    ok: true,
+    summary: upgraded > 0 ? `${upgraded} package${upgraded === 1 ? '' : 's'} upgraded` : 'Already up to date',
+    warnings,
+  };
+}
+
 export interface FullInstallResult {
   installed: string[];
   failed: { pkg: string; reason: string }[];

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseInstalledPackageNames, toDistroPackage, tailOutput, runFullInstall,
-  selectReachableMirror, verifyBinaries, ALPINE_MIRRORS,
+  selectReachableMirror, verifyBinaries, runUpdatePackages, ALPINE_MIRRORS,
   type ExecFn,
 } from '../terminalInstall';
 
@@ -95,6 +95,43 @@ describe('verifyBinaries', () => {
     expect(r.broken).toHaveLength(1);
     expect(r.broken[0].pkg).toBe('build-base');
     expect(r.broken[0].reason).toContain("doesn't run");
+  });
+});
+
+describe('runUpdatePackages', () => {
+  it('reports how many packages were upgraded', async () => {
+    const exec: ExecFn = async (cmd) => {
+      if (cmd.includes('alpine-release')) return { output: 'v3.21', exitCode: 0 };
+      if (cmd.includes('APKINDEX')) return { output: 'REACHABLE', exitCode: 0 };
+      if (cmd.startsWith('apk update')) return { output: 'v3.21 ok', exitCode: 0 };
+      if (cmd.startsWith('apk upgrade')) {
+        return { output: 'Upgrading git (2.47.2-r0 -> 2.47.3-r0)\nUpgrading jq (1.7-r0 -> 1.7.1-r0)\nOK: 2 packages upgraded', exitCode: 0 };
+      }
+      return { output: '', exitCode: 0 };
+    };
+    const r = await runUpdatePackages({ os: 'alpine', exec, sleep: noSleep });
+    expect(r.ok).toBe(true);
+    expect(r.summary).toContain('2 package');
+  });
+
+  it('reports up to date when nothing changes', async () => {
+    const exec: ExecFn = async (cmd) => {
+      if (cmd.startsWith('apk upgrade')) return { output: 'OK: 0 packages upgraded', exitCode: 0 };
+      return { output: 'ok', exitCode: 0 };
+    };
+    const r = await runUpdatePackages({ os: 'alpine', exec, sleep: noSleep });
+    expect(r.ok).toBe(true);
+    expect(r.summary).toBe('Already up to date');
+  });
+
+  it('surfaces the real error when the index cannot be reached', async () => {
+    const exec: ExecFn = async (cmd) => {
+      if (cmd.startsWith('apk update')) return { output: 'ERROR: network unreachable', exitCode: 1 };
+      return { output: '', exitCode: 0 };
+    };
+    const r = await runUpdatePackages({ os: 'alpine', exec, sleep: noSleep });
+    expect(r.ok).toBe(false);
+    expect(r.summary).toContain('network unreachable');
   });
 });
 
