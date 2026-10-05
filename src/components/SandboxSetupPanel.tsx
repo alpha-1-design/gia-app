@@ -12,7 +12,7 @@ import {
   ChevronDown, ChevronRight, Zap, Settings, Box,
 } from 'lucide-react';
 import { useSandboxSetup } from '../hooks/useSandboxSetup';
-import { runFullInstall, parseInstalledPackageNames, tailOutput } from '../services/terminalInstall';
+import { runFullInstall, runUpdatePackages, parseInstalledPackageNames, tailOutput } from '../services/terminalInstall';
 
 type Tab = 'system' | 'packages' | 'workspace' | 'mcp';
 
@@ -127,6 +127,8 @@ export default function SandboxSetupPanel() {
   const [installedPkgs, setInstalledPkgs] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
   const [fullInstalling, setFullInstalling] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updateResult, setUpdateResult] = useState<{ ok: boolean; summary: string } | null>(null);
   const [fullInstallProgress, setFullInstallProgress] = useState('');
   const [fullInstallFailures, setFullInstallFailures] = useState<string[]>([]);
   const [pkgError, setPkgError] = useState<string | null>(null);
@@ -222,6 +224,29 @@ export default function SandboxSetupPanel() {
       setFullInstalling(false);
     }
   }, [execCommand, appendLog, setupStatus?.os, refreshInstalled, refreshWorkspaceInfo]);
+
+  // Update every already-installed package. There was previously no way to
+  // do this at all — only one-way "install" buttons, nothing to check for or
+  // apply updates afterward.
+  const [updateProgress, setUpdateProgress] = useState('');
+  const handleUpdatePackages = useCallback(async () => {
+    setUpdating(true);
+    setUpdateResult(null);
+    try {
+      const result = await runUpdatePackages({
+        os: setupStatus?.os === 'ubuntu' ? 'ubuntu' : 'alpine',
+        exec: execCommand,
+        onProgress: setUpdateProgress,
+        onLog: appendLog,
+      });
+      setUpdateResult({ ok: result.ok, summary: result.summary });
+    } catch (e) {
+      setUpdateResult({ ok: false, summary: e instanceof Error ? e.message : String(e) });
+    } finally {
+      await refreshInstalled();
+      setUpdating(false);
+    }
+  }, [execCommand, appendLog, setupStatus?.os, refreshInstalled]);
 
   // Single package install
   const handleInstall = useCallback(async (pkg: string) => {
@@ -430,6 +455,34 @@ export default function SandboxSetupPanel() {
                 {fullInstallFailures.map((f, i) => (
                   <p key={i} className="text-xs opacity-70 font-mono break-words">{f}</p>
                 ))}
+              </div>
+            )}
+
+            {/* Update Packages — only once something is actually installed */}
+            {setupStatus?.installed && installedPkgs.length > 0 && !updating && (
+              <button
+                onClick={handleUpdatePackages}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 flex items-center gap-3 transition-colors"
+              >
+                <RefreshCw className="w-5 h-5" style={{ color: 'var(--gia-accent)' }} />
+                <div className="text-left">
+                  <div className="text-sm font-bold">Update Packages</div>
+                  <div className="text-xs opacity-70">Check for and install the latest versions of everything you've installed</div>
+                </div>
+              </button>
+            )}
+            {updating && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="animate-spin" size={16} style={{ color: 'var(--gia-accent)' }} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--gia-text)' }}>Updating packages...</span>
+                </div>
+                <p className="text-xs opacity-60 font-mono">{updateProgress}</p>
+              </div>
+            )}
+            {!updating && updateResult && (
+              <div className={`rounded-xl p-3 text-xs ${updateResult.ok ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-red-500/10 border border-red-500/20 text-red-300'}`}>
+                {updateResult.summary}
               </div>
             )}
 

@@ -29,6 +29,7 @@ import { MicalPage } from '../components/settings/MicalPage';
 import { CapabilityCenterPage } from '../components/settings/CapabilityCenterPage';
 import { TerminalPage } from '../components/settings/TerminalPage';
 import { SkillsMarketplaceUI } from '../components/settings/SkillsMarketplaceSection';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { DashboardModule } from './DashboardModule';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { getProviderCapabilities, CAPABILITY_LABELS } from '../services/providers/capabilities';
@@ -76,6 +77,7 @@ const SettingsModule: React.FC = () => {
     }
   }, [settingsPage]);
   const [editProfile, setEditProfile] = useState(false);
+  const [capabilityMatrixOpen, setCapabilityMatrixOpen] = useState(false);
   const [name, setProfileName] = useState(userProfile.name);
   const [bio, setBio] = useState(userProfile.bio);
   const [goals, setGoals] = useState(userProfile.goals);
@@ -127,24 +129,30 @@ const SettingsModule: React.FC = () => {
   const connectedCount = Object.keys(providers).filter(p => providers[p]?.enabled).length;
 
   // ── Sub-page routing ──────────────────────────────────────────────
-  if (settingsPage === 'profile-identity') return <ProfileIdentityPage onBack={() => setSettingsPage('main')} />;
+  // Each sub-page gets its own named boundary. A crash on one screen (e.g.
+  // Neura, which does heavy per-frame canvas work) used to take down the
+  // whole Settings module and strand you with no way back except leaving
+  // the module entirely; now only that screen shows a "crashed" card, with
+  // the module's own back button still reachable via its Retry/Back.
+  const sub = (name: string, node: React.ReactNode) => <ErrorBoundary name={name}>{node}</ErrorBoundary>;
+  if (settingsPage === 'profile-identity') return sub('Profile & Identity', <ProfileIdentityPage onBack={() => setSettingsPage('main')} />);
   if (settingsPage === 'capabilities') {
-    return <CapabilityCenterPage onBack={() => setSettingsPage('main')} onNavigate={(page) => {
+    return sub('GIA Capabilities', <CapabilityCenterPage onBack={() => setSettingsPage('main')} onNavigate={(page) => {
       setSettingsPage(page as SettingsPage);
-    }} />;
+    }} />);
   }
-  if (settingsPage === 'connections') return <ConnectionsPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'system') return <SystemPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'permissions') return <PermissionsPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'local-ai') return <LocalAIPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'unimind') return <UnimindPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'app-extensions') return <AppExtensionsPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'about') return <AboutPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'dashboard') return <DashboardModule onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'neura') return <NeuraPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'nexus') return <NexusPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'mical' || settingsPage === 'sandbox') return <MicalPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'skills-marketplace') return (
+  if (settingsPage === 'connections') return sub('Connections', <ConnectionsPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'system') return sub('System & Performance', <SystemPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'permissions') return sub('Permissions', <PermissionsPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'local-ai') return sub('Local AI', <LocalAIPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'unimind') return sub('Unimind', <UnimindPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'app-extensions') return sub('App & Extensions', <AppExtensionsPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'about') return sub('About', <AboutPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'dashboard') return sub('Dashboard', <DashboardModule onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'neura') return sub('Neura', <NeuraPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'nexus') return sub('Nexus', <NexusPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'mical' || settingsPage === 'sandbox') return sub('Mical', <MicalPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'skills-marketplace') return sub('Skills Marketplace', (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
       <div className="flex items-center gap-2">
         <button onClick={() => setSettingsPage('main')} className="p-1 rounded-lg hover:bg-white/5 transition-colors" style={{ color: 'var(--gia-muted)' }}>
@@ -155,10 +163,10 @@ const SettingsModule: React.FC = () => {
       </div>
       <SkillsMarketplaceUI mode="settings" onClose={() => setSettingsPage('main')} />
     </div>
-  );
-  if (settingsPage === 'mcp') return <MCPPage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'knowledge') return <KnowledgePage onBack={() => setSettingsPage('main')} />;
-  if (settingsPage === 'terminal') return <TerminalPage onBack={() => setSettingsPage('main')} />;
+  ));
+  if (settingsPage === 'mcp') return sub('MCP Servers', <MCPPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'knowledge') return sub('Knowledge Base', <KnowledgePage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'terminal') return sub('Root Terminal & Linux Shell', <TerminalPage onBack={() => setSettingsPage('main')} />);
 
   // ── Main page ────────────────────────────────────────────
   return (
@@ -358,13 +366,31 @@ const SettingsModule: React.FC = () => {
         <ChevronRight size={16} style={{ color: 'var(--gia-muted)' }} />
       </button>
 
-      {/* Provider Capability Matrix */}
+      {/* Provider Capability Matrix — one row per registered provider (70+),
+          each computing capability flags from the registry. Rendering this
+          unconditionally made it dead weight on every single visit to
+          Settings main, whether or not anyone ever looks at it. Collapsed by
+          default; the table itself isn't mounted until expanded. */}
       <div className="gia-card p-4">
-        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--gia-text)' }}>
-          <Zap size={14} className="inline mr-2" style={{ color: '#f59e0b' }} />
-          Provider Capabilities
-        </h3>
-        <div className="overflow-x-auto">
+        <button
+          onClick={() => setCapabilityMatrixOpen(o => !o)}
+          className="w-full flex items-center justify-between"
+          style={{ color: 'var(--gia-text)' }}
+        >
+          <h3 className="text-sm font-semibold flex items-center" style={{ color: 'var(--gia-text)' }}>
+            <Zap size={14} className="inline mr-2" style={{ color: '#f59e0b' }} />
+            Provider Capabilities
+          </h3>
+          <ChevronRight size={16} style={{ color: 'var(--gia-muted)', transform: capabilityMatrixOpen ? 'rotate(90deg)' : undefined, transition: 'transform 0.15s' }} />
+        </button>
+        {!capabilityMatrixOpen && (
+          <p className="text-xs mt-1" style={{ color: 'var(--gia-muted)' }}>
+            Tap to compare what each connected provider supports (vision, tools, streaming, and more).
+          </p>
+        )}
+        {capabilityMatrixOpen && (
+        <>
+        <div className="overflow-x-auto mt-3">
           <table className="w-full text-xs">
             <thead>
               <tr>
@@ -404,6 +430,8 @@ const SettingsModule: React.FC = () => {
         <p className="text-[10px] mt-2" style={{ color: 'var(--gia-muted)' }}>
           Based on provider type and selected model. Update model in Engine Room for accurate results.
         </p>
+        </>
+        )}
       </div>
 
       {/* Theme */}
