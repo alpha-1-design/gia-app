@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
@@ -170,6 +170,13 @@ export function useVoiceInput(
     nativeSensitivity: voiceSettings.nativeSensitivity,
     nativeKeyword: voiceSettings.nativeWakeKeyword,
   });
+
+  // Mirror the microphone state into the store so the floating orb can react to it.
+  const { isListening: micListening, isHearing: micHearing } = voiceControl;
+  useEffect(() => {
+    useGiaStore.getState().setVoiceState(micHearing ? 'hearing' : micListening ? 'listening' : 'off');
+  }, [micListening, micHearing]);
+  useEffect(() => () => { useGiaStore.getState().setVoiceState('off'); }, []);
 
   const voiceRef = useRef(voiceControl);
   voiceRef.current = voiceControl;

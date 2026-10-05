@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 
 const mockStartListening = vi.fn();
 const mockStopListening = vi.fn();
+const mockSetVoiceState = vi.fn();
 
 vi.mock('../../store/useGiaStore', () => ({
   useGiaStore: Object.assign(
@@ -17,6 +18,7 @@ vi.mock('../../store/useGiaStore', () => ({
       addNotification: vi.fn(),
       setInput: vi.fn(),
       setVoiceOverlay: vi.fn(),
+      setVoiceState: mockSetVoiceState,
     })) }
   ),
 }));
@@ -42,6 +44,11 @@ const { useVoiceInput } = await import('../useVoiceInput');
 describe('useVoiceInput', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('mirrors the microphone state into the store for the floating orb', () => {
+    renderHook(() => useVoiceInput());
+    expect(mockSetVoiceState).toHaveBeenCalledWith('off');
   });
 
   it('returns initial voice state', () => {

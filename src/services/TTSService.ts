@@ -21,7 +21,15 @@ class TTSService {
   private enabled: boolean = localStorage.getItem('gia-tts-enabled') === 'true';
   private modelVoiceEnabled: boolean = localStorage.getItem('gia-model-voice-enabled') !== 'false';
   private queue: string[] = [];
-  private speaking = false;
+  private speakingValue = false;
+  private speakingListeners = new Set<(speaking: boolean) => void>();
+
+  private get speaking() { return this.speakingValue; }
+  private set speaking(v: boolean) {
+    if (v === this.speakingValue) return;
+    this.speakingValue = v;
+    this.speakingListeners.forEach(l => { try { l(v); } catch { /* a bad listener must not break speech */ } });
+  }
   private onComplete: SpeakCallback | null = null;
   private streamBuffer = '';
   private streamTimer: ReturnType<typeof setTimeout> | null = null;
@@ -41,6 +49,12 @@ class TTSService {
   isModelVoiceEnabled() { return this.modelVoiceEnabled; }
 
   isSpeaking() { return this.speaking; }
+
+  /** Notifies when speech starts or stops. Returns an unsubscribe function. */
+  onSpeakingChange(listener: (speaking: boolean) => void): () => void {
+    this.speakingListeners.add(listener);
+    return () => { this.speakingListeners.delete(listener); };
+  }
 
   onSpeakComplete(cb: SpeakCallback | null) {
     this.onComplete = cb;

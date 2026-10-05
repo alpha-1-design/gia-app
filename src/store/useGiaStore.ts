@@ -361,6 +361,9 @@ interface GiaState {
   connectionStatus: 'online' | 'offline';
   providerConnected: boolean;
   currentTool: string | null;
+  /** Live microphone state of the voice input, for the floating orb. Not persisted. */
+  voiceState: 'off' | 'listening' | 'hearing';
+  showFloatingOrb: boolean;
   generationState: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal };
   generationControllers: Map<string, AbortController>;
   showCircleSearch: boolean;
@@ -422,6 +425,8 @@ interface GiaState {
   setMultiProvider: (enabled: boolean) => void;
   setHapticFeedback: (enabled: boolean) => void;
   setThinkingPhase: (phase: ThinkingPhase) => void;
+  setVoiceState: (state: 'off' | 'listening' | 'hearing') => void;
+  setShowFloatingOrb: (on: boolean) => void;
   setLiveThoughts: (thoughts: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   setLiveSegments: (segments: Record<string, MessageSegment[]> | ((prev: Record<string, MessageSegment[]>) => Record<string, MessageSegment[]>)) => void;
   setShowThoughts: (thoughts: string[]) => void;
@@ -612,6 +617,8 @@ export const useGiaStore = create<GiaState>()(
       connectionStatus: navigator.onLine ? 'online' : 'offline',
       providerConnected: false,
       currentTool: null,
+      voiceState: 'off',
+      showFloatingOrb: (() => { try { return localStorage.getItem('gia-floating-orb') !== 'false'; } catch { return true; } })(),
       generationState: { active: false, module: null, sessionId: null, messageId: null },
       generationControllers: new Map(),
       showCircleSearch: false,
@@ -738,6 +745,11 @@ export const useGiaStore = create<GiaState>()(
       setMultiProvider: (enabled) => set({ multiProvider: enabled }),
       setHapticFeedback: (enabled) => set({ hapticFeedback: enabled }),
       setThinkingPhase: (phase) => set({ thinkingPhase: phase }),
+      setVoiceState: (voiceState) => set({ voiceState }),
+      setShowFloatingOrb: (on) => {
+        try { localStorage.setItem('gia-floating-orb', String(on)); } catch { /* storage blocked */ }
+        set({ showFloatingOrb: on });
+      },
       setLiveThoughts: (thoughts) => set((state) => ({
         liveThoughts: typeof thoughts === 'function' ? thoughts(state.liveThoughts) : thoughts
       })),

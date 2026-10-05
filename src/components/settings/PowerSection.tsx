@@ -1,11 +1,11 @@
 import React from 'react';
-import { Battery, BatteryCharging, Cpu, Moon, Vibrate, Wind } from 'lucide-react';
+import { Battery, BatteryCharging, Cpu, Moon, Sparkles, Vibrate, Wind } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Switch } from '../ui/Switch';
 
 export const PowerSection: React.FC = () => {
-  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback, reduceMotion, setReduceMotion } = useGiaStore(useShallow(s => ({
+  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback, reduceMotion, setReduceMotion, showFloatingOrb, setShowFloatingOrb } = useGiaStore(useShallow(s => ({
     longRunningMode: s.longRunningMode,
     setLongRunningMode: s.setLongRunningMode,
     autoModelUnload: s.autoModelUnload,
@@ -13,6 +13,8 @@ export const PowerSection: React.FC = () => {
     hapticFeedback: s.hapticFeedback,
     setHapticFeedback: s.setHapticFeedback,
     reduceMotion: s.reduceMotion,
+    showFloatingOrb: s.showFloatingOrb,
+    setShowFloatingOrb: s.setShowFloatingOrb,
     setReduceMotion: s.setReduceMotion,
   })));
 
@@ -65,6 +67,17 @@ export const PowerSection: React.FC = () => {
           description="Vibrate briefly when AI finishes responding."
           icon={<Vibrate size={13} />}
           accentColor="#a855f7"
+        />
+      </div>
+
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>
+        <Switch
+          checked={showFloatingOrb}
+          onChange={setShowFloatingOrb}
+          label="Floating Orb"
+          description="A draggable orb that shows what GIA is doing: listening, thinking, speaking, or running a tool. Tap it to jump to chat."
+          icon={<Sparkles size={13} />}
+          accentColor="#00f0ff"
         />
       </div>
 

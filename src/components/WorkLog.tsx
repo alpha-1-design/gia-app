@@ -229,7 +229,23 @@ export const WorkLog: React.FC<WorkLogProps> = ({
   const extThinking = useGiaStore(s => s.extThinking);
   const buildMode = useGiaStore(s => s.buildMode);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const steps = useMemo(() => buildStepsFromThoughts(thoughts, currentTool), [thoughts, currentTool]);
+  // Step timestamps used to be re-faked on every rebuild (Date.now() minus an
+  // index), so timers restarted whenever new text arrived. Remember when each
+  // step was first seen and when it first stopped running.
+  const [timing] = useState(() => new Map<string, { start: number; end?: number }>());
+  const steps = useMemo(() => {
+    const built = buildStepsFromThoughts(thoughts, currentTool);
+    const now = Date.now();
+    for (const step of built) {
+      let t = timing.get(step.id);
+      if (!t) { t = { start: now }; timing.set(step.id, t); }
+      if (step.status !== 'running' && step.status !== 'pending' && t.end === undefined) t.end = now;
+      if (step.status === 'running') t.end = undefined;
+      step.startedAt = t.start;
+      step.endedAt = t.end;
+    }
+    return built;
+  }, [thoughts, currentTool, timing]);
   const completedCount = steps.filter(s => s.status === 'done').length;
   const errorCount = steps.filter(s => s.status === 'error').length;
   const runningStep = steps.find(s => s.status === 'running');

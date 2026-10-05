@@ -21,6 +21,7 @@ import { useProviderStore } from './store/useProviderStore';
 import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
 import { wakeWordIsClaimed } from './services/wakeWordOwner';
+import FloatingOrb from './components/FloatingOrb';
 import { PermissionPopup } from './components/PermissionPopup';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
@@ -926,6 +927,8 @@ const App: React.FC = () => {
        <main className="flex-1 overflow-hidden relative z-10">
         <ModuleView />
       </main>
+
+      <FloatingOrb />
 
       {/* Clipboard toast */}
       <AnimatePresence>
