@@ -47,7 +47,8 @@ describe('useVoiceInput', () => {
   });
 
   it('mirrors the microphone state into the store for the floating orb', () => {
-    renderHook(() => useVoiceInput());
+    const abortRef = { current: null } as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    renderHook(() => useVoiceInput(abortRef));
     expect(mockSetVoiceState).toHaveBeenCalledWith('off');
   });
 

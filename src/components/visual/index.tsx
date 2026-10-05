@@ -18,6 +18,8 @@ import { CanvasVisual } from './CanvasVisual';
 import ThreeVisual from './ThreeVisual';
 import GraphVisual from './GraphVisual';
 import { FileVisual } from './FileVisual';
+import { WeatherVisual } from './WeatherVisual';
+import { CalendarVisual } from './CalendarVisual';
 
 const RenderVisualByType: React.FC<{ code: string; isStreaming?: boolean }> = ({ code, isStreaming }) => {
   const parsed = useMemo(() => parseVisualBlock(code), [code]);
@@ -99,8 +101,15 @@ const RenderVisualByType: React.FC<{ code: string; isStreaming?: boolean }> = ({
     case 'file_preview':
     case 'file-preview':
       return <FileVisual data={data as never} />;
+    case 'weather':
+    case 'forecast':
+      return <WeatherVisual data={data} />;
+    case 'calendar':
+    case 'agenda':
+    case 'schedule':
+      return <CalendarVisual data={data} />;
     default:
-      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d, graph, file_preview`} />;
+      return <ErrorVisual message={`Unknown visual type: "${type}". Supported: chart, mindmap, diff, table, gallery, timeline, terminal, widget, waveform, outline, map, slides, canvas, 3d, graph, file_preview, weather, calendar`} />;
   }
 };
 

@@ -363,6 +363,8 @@ interface GiaState {
   currentTool: string | null;
   /** Live microphone state of the voice input, for the floating orb. Not persisted. */
   voiceState: 'off' | 'listening' | 'hearing';
+  /** Version of the privacy policy and terms the user accepted ("" = never). */
+  legalAcceptedVersion: string;
   showFloatingOrb: boolean;
   generationState: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal };
   generationControllers: Map<string, AbortController>;
@@ -426,6 +428,7 @@ interface GiaState {
   setHapticFeedback: (enabled: boolean) => void;
   setThinkingPhase: (phase: ThinkingPhase) => void;
   setVoiceState: (state: 'off' | 'listening' | 'hearing') => void;
+  acceptLegal: (version: string) => void;
   setShowFloatingOrb: (on: boolean) => void;
   setLiveThoughts: (thoughts: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   setLiveSegments: (segments: Record<string, MessageSegment[]> | ((prev: Record<string, MessageSegment[]>) => Record<string, MessageSegment[]>)) => void;
@@ -618,6 +621,7 @@ export const useGiaStore = create<GiaState>()(
       providerConnected: false,
       currentTool: null,
       voiceState: 'off',
+      legalAcceptedVersion: '',
       showFloatingOrb: (() => { try { return localStorage.getItem('gia-floating-orb') !== 'false'; } catch { return true; } })(),
       generationState: { active: false, module: null, sessionId: null, messageId: null },
       generationControllers: new Map(),
@@ -746,6 +750,7 @@ export const useGiaStore = create<GiaState>()(
       setHapticFeedback: (enabled) => set({ hapticFeedback: enabled }),
       setThinkingPhase: (phase) => set({ thinkingPhase: phase }),
       setVoiceState: (voiceState) => set({ voiceState }),
+      acceptLegal: (version) => set({ legalAcceptedVersion: version }),
       setShowFloatingOrb: (on) => {
         try { localStorage.setItem('gia-floating-orb', String(on)); } catch { /* storage blocked */ }
         set({ showFloatingOrb: on });
@@ -1189,6 +1194,7 @@ export const useGiaStore = create<GiaState>()(
         hapticFeedback: s.hapticFeedback,
         customInstructions: s.customInstructions,
         theme: s.theme,
+        legalAcceptedVersion: s.legalAcceptedVersion,
         reduceMotion: s.reduceMotion,
         hiddenModules: s.hiddenModules,
         wakeWord: s.wakeWord,

@@ -1,3 +1,4 @@
+import { extractLargeInsertion } from '../utils/pasteDetect';
 import React, { useRef, useEffect } from 'react';
 import { Send, Loader2, Square, Mic, MicOff } from 'lucide-react';
 import { useGiaStore, IntentState } from '../store/useGiaStore';
@@ -15,6 +16,8 @@ interface AmbientInputProps {
   disabled?: boolean;
   isLoading?: boolean;
   multiline?: boolean;
+  /** A big block of text arrived in one change (IME paste). Receives the block; the field keeps the rest. */
+  onLargeInsert?: (text: string) => void;
   autoFocus?: boolean;
   prefix?: React.ReactNode;
 }
@@ -36,6 +39,7 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
   disabled = false,
   isLoading = false,
   multiline = false,
+  onLargeInsert,
   prefix,
 }) => {
   const intentState = useGiaStore(s => s.intentState);
@@ -86,7 +90,16 @@ const AmbientInput: React.FC<AmbientInputProps> = ({
 
   const sharedInputProps = {
     value,
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(e.target.value),
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const next = e.target.value;
+      const big = onLargeInsert ? extractLargeInsertion(value, next) : null;
+      if (big && onLargeInsert) {
+        onLargeInsert(big.inserted);
+        onChange(big.remaining);
+      } else {
+        onChange(next);
+      }
+    },
     onKeyDown: handleKeyDown,
     onPasteCapture: handlePasteCapture,
     placeholder,

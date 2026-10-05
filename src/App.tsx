@@ -22,6 +22,7 @@ import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
 import { wakeWordIsClaimed } from './services/wakeWordOwner';
 import FloatingOrb from './components/FloatingOrb';
+import LegalGate from './components/LegalGate';
 import { PermissionPopup } from './components/PermissionPopup';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
@@ -929,6 +930,7 @@ const App: React.FC = () => {
       </main>
 
       <FloatingOrb />
+      <LegalGate />
 
       {/* Clipboard toast */}
       <AnimatePresence>
