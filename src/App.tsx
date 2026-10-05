@@ -20,6 +20,7 @@ import BiometricService from './services/BiometricService';
 import { useProviderStore } from './store/useProviderStore';
 import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
+import { wakeWordIsClaimed } from './services/wakeWordOwner';
 import { PermissionPopup } from './components/PermissionPopup';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
@@ -688,12 +689,18 @@ const App: React.FC = () => {
       );
     });
 
-    // Auto-start wake word listening if enabled
-    if (autoStartWakeWord) {
+    // Auto-start background wake word listening, but only when the user turned it on.
+    if (autoStartWakeWord && useGiaStore.getState().nativeWakeWord) {
       (async () => {
         try {
+          const { Capacitor } = await import('@capacitor/core');
+          if (!Capacitor.isNativePlatform()) return;
           const { GIAWakeWord } = await import('./services/GIAWakeWord');
-          await GIAWakeWord.startListening();
+          const st = useGiaStore.getState();
+          await GIAWakeWord.startListening({
+            keyword: st.nativeWakeKeyword || st.wakeWord,
+            sensitivity: st.nativeSensitivity,
+          });
           addNotification('Wake word listening enabled');
         } catch (e) {
           logger.error('[App] Auto-start wake word failed:', e);
@@ -732,6 +739,9 @@ const App: React.FC = () => {
         if (!Capacitor.isNativePlatform()) return;
         const { GIAWakeWord } = await import('./services/GIAWakeWord');
         wakeHandle = GIAWakeWord.addListener('wakeWordDetected', async () => {
+          // The voice control hook is already handling this detection.
+          if (wakeWordIsClaimed()) return;
+          const resumeWake = () => { void GIAWakeWord.resume().catch(() => undefined); };
           try {
             const { GIAOverlay } = await import('./services/GIAOverlay');
             await GIAOverlay.startOverlay();
@@ -743,7 +753,7 @@ const App: React.FC = () => {
                 if (!available) return;
 
                 const result = await SpeechRecognition.start({
-                  language: 'en-US',
+                  language: useGiaStore.getState().voiceLanguage || 'en-US',
                   partialResults: false,
                   popup: false,
                 });
@@ -758,10 +768,13 @@ const App: React.FC = () => {
                 }
               } catch (e) {
                 logger.warn('[App] Voice capture after wake word failed:', e);
+              } finally {
+                resumeWake();   // give the microphone back to the wake word engine
               }
             }, 600);
           } catch (e) {
             logger.warn('[App] Wake word overlay chaining failed:', e);
+            resumeWake();
           }
         });
       } catch (e) {

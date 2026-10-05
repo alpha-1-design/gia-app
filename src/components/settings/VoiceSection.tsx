@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Headphones, Radio, Mic, MicOff, Activity, Play, Square, AlertTriangle, Download, Cloud } from 'lucide-react';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { useGiaStore } from '../../store/useGiaStore';
 import TTSService from '../../services/TTSService';
 import WhisperService from '../../services/WhisperService';
 import { getCloudSTTConfig, saveCloudSTTConfig, type CloudSTTConfig } from '../../services/CloudSTT';
 import { LANGUAGES } from '../../config/constants';
 import { Switch } from '../ui/Switch';
+import { GIAWakeWord, type WakeWordKeyword } from '../../services/GIAWakeWord';
+import { thresholdForSensitivity } from '../../utils/wakeWord';
 
 // ── Diagnostics types ──────────────────────────────────────────────
 interface DetectionEvent {
@@ -38,58 +41,103 @@ export const VoiceSection: React.FC = () => {
   const [cloudStt, setCloudStt] = useState<CloudSTTConfig>(() => getCloudSTTConfig());
 
   // ── Diagnostics state ──────────────────────────────────────────────
+  const hasNativeModule = Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('GIAWakeWord');
+  const nativeKeyword = useGiaStore(st => st.nativeWakeKeyword);
+  const reduceMotion = useGiaStore(st => st.reduceMotion);
+  const [keywords, setKeywords] = useState<WakeWordKeyword[]>([]);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>({
     running: false,
     micPermission: null,
     modelLoaded: false,
   });
   const [testing, setTesting] = useState(false);
+  const [liveScore, setLiveScore] = useState(0);
   const [detectionLog, setDetectionLog] = useState<DetectionEvent[]>([]);
   const didRef = useRef(0);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const testHandlesRef = useRef<PluginListenerHandle[]>([]);
+  const testingRef = useRef(false);
+  const threshold = thresholdForSensitivity(sensitivity);
+  const activeKeyword = keywords.find(k => k.id === nativeKeyword) ?? keywords[0];
 
-  // Mock check — will be replaced by CorePlugin in Phase 1
   const checkService = useCallback(async () => {
-    try {
-      // Check if native module is available
-      const hasModule = typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined';
-      if (hasModule) {
-        const status = await (window as unknown as { GIAWakeWord: { getStatus: () => ServiceStatus } }).GIAWakeWord.getStatus();
-        setServiceStatus(status);
-      } else {
-        setServiceStatus({
-          running: false,
-          micPermission: null,
-          modelLoaded: false,
-          error: 'Native module not loaded — will be available after GIACoreService build (Phase 1)',
-        });
-      }
-    } catch {
-      setServiceStatus(s => ({ ...s, error: 'Failed to check service' }));
+    if (!hasNativeModule) {
+      setServiceStatus({
+        running: false,
+        micPermission: null,
+        modelLoaded: false,
+        error: 'On-device wake word runs in the Android app only.',
+      });
+      return;
     }
-  }, []);
-
-  const [hasNativeModule, setHasNativeModule] = useState(false);
+    try {
+      const status = await GIAWakeWord.getStatus();
+      setServiceStatus({
+        running: status.running,
+        micPermission: status.micPermission,
+        modelLoaded: status.running && status.keyword !== '',
+        error: status.error || undefined,
+      });
+    } catch {
+      setServiceStatus(prev => ({ ...prev, error: 'Could not read wake word status' }));
+    }
+  }, [hasNativeModule]);
 
   useEffect(() => {
-    setHasNativeModule(typeof (window as unknown as { GIAWakeWord?: unknown }).GIAWakeWord !== 'undefined');
+    if (!hasNativeModule) return;
+    GIAWakeWord.listKeywords().then(r => setKeywords(r.keywords)).catch(() => setKeywords([]));
+  }, [hasNativeModule]);
+
+  const logLine = useCallback((text: string, confidence: number) => {
+    setDetectionLog(prev => [...prev.slice(-49), { id: didRef.current++, timestamp: Date.now(), text, confidence }]);
   }, []);
 
+  const stopTest = useCallback(async () => {
+    testHandlesRef.current.forEach(h => { void h.remove(); });
+    testHandlesRef.current = [];
+    testingRef.current = false;
+    setTesting(false);
+    setLiveScore(0);
+    try { await GIAWakeWord.stopListening(); } catch { /* service already gone */ }
+    void checkService();
+  }, [checkService]);
+
   const testWakeWord = useCallback(async () => {
-    setTesting(true);
+    if (testingRef.current) { await stopTest(); return; }
     setDetectionLog([]);
+    setLiveScore(0);
     try {
-      await (window as unknown as { GIAWakeWord: { startTest: (n: number) => Promise<void> } }).GIAWakeWord.startTest(detectionLog.length);
+      testHandlesRef.current = [
+        await GIAWakeWord.addListener('wakeWordScore', ({ score }) => setLiveScore(score)),
+        await GIAWakeWord.addListener('wakeWordDetected', ({ keyword, score }) => {
+          logLine(keyword, score ?? 0);
+          // The service releases the mic after a detection; keep the test running.
+          void GIAWakeWord.resume();
+        }),
+        await GIAWakeWord.addListener('wakeWordError', ({ error }) => {
+          logLine(`Error: ${error}`, 0);
+          void stopTest();
+        }),
+      ];
+      await GIAWakeWord.startListening({
+        keyword: nativeKeyword || wakeWord,
+        sensitivity,
+        emitScores: true,
+      });
+      testingRef.current = true;
+      setTesting(true);
+      void checkService();
     } catch (e) {
-      setDetectionLog(prev => [...prev, {
-        id: didRef.current++, timestamp: Date.now(),
-        text: `Error: ${e instanceof Error ? e.message : 'Unknown'}`,
-        confidence: 0,
-      }]);
-    } finally {
-      setTesting(false);
+      logLine(`Error: ${e instanceof Error ? e.message : 'Unknown'}`, 0);
+      await stopTest();
     }
-  }, [detectionLog.length]);
+  }, [nativeKeyword, wakeWord, sensitivity, checkService, logLine, stopTest]);
+
+  // Leaving the screen mid-test must not leave the microphone open.
+  useEffect(() => () => {
+    testHandlesRef.current.forEach(h => { void h.remove(); });
+    if (testingRef.current) void GIAWakeWord.stopListening().catch(() => undefined);
+  }, []);
 
   // Explicit, separate action — never triggered by the real "Test" button.
   // Every event it produces is tagged `simulated: true` so the log can never
@@ -167,7 +215,7 @@ export const VoiceSection: React.FC = () => {
           />
         </div>
         <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-          Say this phrase to activate voice input. Tap "Listen" in Chat to enable.
+          Phrase for the speech-recognition mode. Tap "Listen" in Chat to start. Background Wake Word below uses its own on-device phrase.
         </p>
       </div>
 
@@ -190,37 +238,67 @@ export const VoiceSection: React.FC = () => {
       <Switch
         checked={nativeWW}
         onChange={setNativeWW}
-        disabled
+        disabled={!hasNativeModule}
         icon={<Radio size={11} />}
-        label="Background Wake Word (coming in a later release)"
-        description="The on-device wake word engine is disabled in this build — the earlier implementation was removed after a dependency break and hasn't been restored yet. This toggle has no effect right now."
+        label="Background Wake Word"
+        description={hasNativeModule
+          ? 'Listens on this device, even with the screen off. No audio leaves the phone and no account key is needed. Holds the microphone and shows a notification while on.'
+          : 'Runs in the Android app only.'}
         accentColor="#a855f7"
       />
 
-      {nativeWW && (
+      {nativeWW && hasNativeModule && (
         <>
           <div>
             <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
-              Sensitivity: {sensitivity.toFixed(1)}
+              Wake phrase
+            </label>
+            {keywords.length > 1 ? (
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Wake phrase">
+                {keywords.map(k => (
+                  <button
+                    key={k.id}
+                    role="radio"
+                    aria-checked={activeKeyword?.id === k.id}
+                    onClick={() => useGiaStore.getState().setNativeWakeKeyword(k.id)}
+                    className="px-3 py-1.5 rounded text-[11px] font-medium"
+                    style={{
+                      background: activeKeyword?.id === k.id ? '#a855f7' : 'var(--gia-bg-2)',
+                      color: activeKeyword?.id === k.id ? 'white' : 'var(--gia-muted)',
+                    }}
+                  >
+                    {k.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs" style={{ color: 'var(--gia-text)' }}>
+                Say &ldquo;{activeKeyword?.label ?? 'Hey Jarvis'}&rdquo;
+              </div>
+            )}
+            <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+              This list is the phrases the engine was trained on. A custom &ldquo;Hey GIA&rdquo; needs its own trained model &mdash; see docs/wake-word.md.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="wake-sensitivity" className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
+              Sensitivity: {sensitivity.toFixed(2)} &middot; triggers at {Math.round(threshold * 100)}% confidence
             </label>
             <input
+              id="wake-sensitivity"
               type="range"
               min="0"
               max="1"
               step="0.05"
               value={sensitivity}
               onChange={e => setSensitivity(parseFloat(e.target.value))}
-              disabled
-              style={{ width: '100%', accentColor: '#a855f7', opacity: 0.5, cursor: 'not-allowed' }}
+              style={{ width: '100%', accentColor: '#a855f7' }}
             />
             <div className="flex justify-between text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
-              <span>Fewer detections</span>
-              <span>More detections</span>
+              <span>Fewer false triggers</span>
+              <span>Catches quieter speech</span>
             </div>
-          </div>
-          <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
-            <AlertTriangle size={10} className="inline mr-1" />
-            Not active in this build. No wake phrase is currently detected — this UI is reserved for when the engine ships.
           </div>
         </>
       )}
@@ -437,7 +515,39 @@ export const VoiceSection: React.FC = () => {
       {!hasNativeModule && (
         <div className="text-[9px] p-2 rounded" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}>
           <AlertTriangle size={10} className="inline mr-1" />
-          Native wake word module isn't loaded on this build, so real detection can't be tested here. You can preview what the log UI looks like with clearly-labeled fake data below.
+          Live testing needs the Android app. You can preview the log with clearly labeled fake data below.
+        </div>
+      )}
+
+      {/* Live confidence meter (only while a test is running) */}
+      {testing && (
+        <div>
+          <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--gia-muted)' }}>
+            <span>Say &ldquo;{activeKeyword?.label ?? 'Hey Jarvis'}&rdquo;</span>
+            <span>{Math.round(liveScore * 100)}%</span>
+          </div>
+          <div
+            className="relative h-2 rounded-full overflow-hidden"
+            style={{ background: 'var(--gia-bg-2)' }}
+            role="meter"
+            aria-label="Wake word confidence"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(liveScore * 100)}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.min(100, liveScore * 100)}%`,
+                background: liveScore >= threshold ? '#34d399' : '#a855f7',
+                transition: reduceMotion ? 'none' : 'width 120ms linear',
+              }}
+            />
+            <div className="absolute top-0 bottom-0" style={{ left: `${threshold * 100}%`, width: 2, background: 'var(--gia-text, white)', opacity: 0.7 }} />
+          </div>
+          <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+            The marker is where a detection fires. Testing replaces background listening until you stop.
+          </p>
         </div>
       )}
 
@@ -445,13 +555,13 @@ export const VoiceSection: React.FC = () => {
       <div className="flex gap-2">
         <button
           onClick={testWakeWord}
-          disabled={testing || !hasNativeModule}
-          title={!hasNativeModule ? 'Native wake word module not available on this build' : undefined}
+          disabled={!hasNativeModule}
+          title={!hasNativeModule ? 'Needs the Android app' : undefined}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: testing ? 'var(--gia-bg-2)' : '#a855f7', color: testing ? 'var(--gia-muted)' : 'white' }}
+          style={{ background: testing ? 'var(--gia-bg-2)' : '#a855f7', color: testing ? 'var(--gia-text, white)' : 'white' }}
         >
           {testing ? <Square size={11} /> : <Play size={11} />}
-          {testing ? 'Testing...' : 'Test Wake Word'}
+          {testing ? 'Stop test' : 'Test Wake Word'}
         </button>
         {!hasNativeModule && (
           <button

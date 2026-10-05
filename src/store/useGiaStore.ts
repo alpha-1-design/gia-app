@@ -347,6 +347,8 @@ interface GiaState {
   nativeWakeWord: boolean;
   nativeSensitivity: number;
   wakeWordAccessKey: string;
+  /** Bundled on-device wake phrase id (e.g. "hey_jarvis"); empty = first available. */
+  nativeWakeKeyword: string;
   useWhisper: boolean;
   setUseWhisper: (v: boolean) => void;
   customInstructions: string;
@@ -430,6 +432,7 @@ interface GiaState {
   setNativeWakeWord: (on: boolean) => void;
   setNativeSensitivity: (val: number) => void;
   setWakeWordAccessKey: (key: string) => void;
+  setNativeWakeKeyword: (id: string) => void;
   setSharedData: (data: Record<string, unknown>) => void;
   updateSharedData: (data: Record<string, unknown>) => void;
   createSession: () => string;
@@ -594,12 +597,12 @@ export const useGiaStore = create<GiaState>()(
       keepListening: (() => { try { return localStorage.getItem('gia-keep-listening') === 'true'; } catch { return false; } })(),
       autoStartWakeWord: (() => { try { return localStorage.getItem('gia-auto-start-wake-word') === 'true'; } catch { return false; } })(),
       voiceLanguage: (() => { try { return localStorage.getItem('gia-voice-language') || 'en-US'; } catch { return 'en-US'; } })(),
-      // Defaults to OFF: GIAWakeWordService.java is a stub that reports
-      // "Wake word detection is disabled in this build" and stops itself, so
-      // defaulting to on made every fresh install start a dead service.
+      // Defaults to OFF: always-on listening holds the microphone and shows a
+      // persistent notification, so it stays opt-in.
       nativeWakeWord: (() => { try { return localStorage.getItem('gia-native-wake-word') === 'true'; } catch { return false; } })(),
       nativeSensitivity: (() => { try { return parseFloat(localStorage.getItem('gia-native-sensitivity') || '0.7'); } catch { return 0.7; } })(),
       wakeWordAccessKey: (() => { try { return localStorage.getItem('gia-wake-word-access-key') || ''; } catch { return ''; } })(),
+      nativeWakeKeyword: (() => { try { return localStorage.getItem('gia-native-wake-keyword') || ''; } catch { return ''; } })(),
       useWhisper: localStorage.getItem('gia-use-whisper') === 'true',
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
@@ -769,6 +772,10 @@ export const useGiaStore = create<GiaState>()(
       setWakeWordAccessKey: (key) => {
         localStorage.setItem('gia-wake-word-access-key', key);
         set({ wakeWordAccessKey: key });
+      },
+      setNativeWakeKeyword: (id) => {
+        localStorage.setItem('gia-native-wake-keyword', id);
+        set({ nativeWakeKeyword: id });
       },
       setUseWhisper: (v) => {
         localStorage.setItem('gia-use-whisper', String(v));
@@ -1179,6 +1186,7 @@ export const useGiaStore = create<GiaState>()(
         nativeWakeWord: s.nativeWakeWord,
         nativeSensitivity: s.nativeSensitivity,
         wakeWordAccessKey: s.wakeWordAccessKey,
+        nativeWakeKeyword: s.nativeWakeKeyword,
         useWhisper: s.useWhisper,
         buildMode: s.buildMode,
         buildSessionId: s.buildSessionId,

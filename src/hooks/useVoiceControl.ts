@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { isNativePlatform } from '../utils/helpers';
 import ttsService from '../services/TTSService';
+import { claimWakeWord } from '../services/wakeWordOwner';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import type { SpeechRecognitionPartialResultEvent, SpeechRecognitionListeningEvent } from '@capgo/capacitor-speech-recognition';
@@ -65,32 +66,13 @@ export interface VoiceControlConfig {
   language?: string;
   nativeWakeWord?: boolean;
   nativeSensitivity?: number;
-  wakeWordAccessKey?: string;
+  /** Bundled on-device keyword id ("hey_jarvis"). Empty = whatever the engine ships first. */
+  nativeKeyword?: string;
 }
 
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}  // Maps the user's configured phrase to the closest supported keyword for the
-  // on-device engine. The native service detects its bundled keyword set
-  // (HEY JARVIS / HEY GIA / ...) and reports back the readable label; this
-  // value is only used as a fallback label and for the web recognizer.
-  function mapWakeWordToBuiltin(wakeWord: string): string {
-    const w = wakeWord.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-    const known: Record<string, string> = {
-      'hey_google': 'HEY_GOOGLE',
-      'ok_google': 'OK_GOOGLE',
-      'hey_siri': 'HEY_SIRI',
-      'alexa': 'ALEXA',
-      'computer': 'COMPUTER',
-      'jarvis': 'JARVIS',
-      'hey_jarvis': 'JARVIS',
-      'picovoice': 'PICOVOICE',
-      'porcupine': 'PORCUPINE',
-      'hey_gia': 'JARVIS',
-      'gia': 'JARVIS',
-    };
-    return known[w] || 'JARVIS';
-  }
+}
 
 export function useVoiceControl(config: VoiceControlConfig = {}) {
   const {
@@ -104,7 +86,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     language = 'en-US',
     nativeWakeWord = false,
     nativeSensitivity = 0.7,
-    wakeWordAccessKey = '',
+    nativeKeyword = '',
   } = config;
 
   const [isListening, setIsListening] = useState(false);
@@ -118,6 +100,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const listeningLoopRef = useRef(false);
   const wakeWordRegexRef = useRef(new RegExp(`\\b${escapeRegex(wakeWord)}\\b`, 'i'));
   const nativeListenerRef = useRef<{ remove: () => void } | null>(null);
+  const nativeErrorListenerRef = useRef<{ remove: () => void } | null>(null);
+  const releaseWakeClaimRef = useRef<(() => void) | null>(null);
   const restartCountRef = useRef(0);
   const listenOnceCountRef = useRef(0);
   const partialListenerRef = useRef<{ remove: () => void } | null>(null);
@@ -151,6 +135,12 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
       try { nativeListenerRef.current.remove(); } catch { /* ignore */ }
       nativeListenerRef.current = null;
     }
+    if (nativeErrorListenerRef.current) {
+      try { nativeErrorListenerRef.current.remove(); } catch { /* ignore */ }
+      nativeErrorListenerRef.current = null;
+    }
+    releaseWakeClaimRef.current?.();
+    releaseWakeClaimRef.current = null;
 
     if (partialListenerRef.current) {
       try { partialListenerRef.current.remove(); } catch { /* ignore */ }
@@ -191,7 +181,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   const thresholdRef = useRef(confidenceThreshold);
   const langRef = useRef(language);
   const onDirectCommandRef = useRef(config.onDirectCommand);
-  const accessKeyRef = useRef(wakeWordAccessKey);
+  const nativeKeywordRef = useRef(nativeKeyword);
   wakeWordRef.current = wakeWord;
   keepListeningRef.current = keepListening;
   onWakeWordRef.current = onWakeWord;
@@ -200,9 +190,10 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
   thresholdRef.current = confidenceThreshold;
   langRef.current = language;
   onDirectCommandRef.current = config.onDirectCommand;
-  accessKeyRef.current = wakeWordAccessKey;
+  nativeKeywordRef.current = nativeKeyword;
 
-  const captureQueryAfterWake = useCallback(async () => {
+  /** `once`: capture a single utterance and return (native wake-word mode) instead of looping. */
+  const captureQueryAfterWake = useCallback(async (once = false) => {
     if (!activeRef.current) return;
     setIsHearing(true);
 
@@ -226,7 +217,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
           }
         }
 
-        if (activeRef.current && keepListeningRef.current) {
+        if (activeRef.current && keepListeningRef.current && !once) {
           timeoutRef.current = setTimeout(captureQueryAfterWake, 1500);
         }
       } else {
@@ -249,7 +240,7 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
         sr.start();
         srRef.current = sr;
 
-        if (keepListeningRef.current) {
+        if (keepListeningRef.current && !once) {
           timeoutRef.current = setTimeout(captureQueryAfterWake, 10000);
         }
       }
@@ -470,23 +461,50 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
     if (!activeRef.current || !isNative) return;
     try {
       const { GIAWakeWord } = await import('../services/GIAWakeWord');
-      const nativeKeyword = mapWakeWordToBuiltin(wakeWordRef.current);
+      const keyword = nativeKeywordRef.current || wakeWordRef.current;
+
+      // One detection = one request. The service has already released the
+      // microphone, so speech recognition can take it; afterwards we either
+      // hand it back (keep listening) or stop (one-shot).
+      let handling = false;
+      const handleDetection = async (kw: string) => {
+        if (!activeRef.current || handling) return;
+        handling = true;
+        try {
+          onWakeWordRef.current?.(kw || keyword);
+          await captureQueryAfterWake(true);
+        } finally {
+          handling = false;
+        }
+        if (!activeRef.current) return;
+        if (keepListeningRef.current) {
+          try { await GIAWakeWord.resume(); } catch (e) { logger.error('[useVoiceControl] Wake word resume failed:', e); }
+        } else {
+          stopListening();
+        }
+      };
+
+      // Subscribe before starting so no detection can slip through.
+      releaseWakeClaimRef.current?.();
+      releaseWakeClaimRef.current = claimWakeWord();
+      nativeListenerRef.current = await GIAWakeWord.addListener('wakeWordDetected', ({ keyword: kw }) => {
+        void handleDetection(kw);
+      });
+      nativeErrorListenerRef.current = await GIAWakeWord.addListener('wakeWordError', ({ error }) => {
+        logger.error('[useVoiceControl] Native wake word error:', error);
+        if (!activeRef.current) return;
+        // The engine stopped. Don't leave the UI claiming to listen.
+        stopListening();
+      });
 
       await GIAWakeWord.startListening({
-        keyword: nativeKeyword,
+        keyword,
         sensitivity: nativeSensitivity,
-        accessKey: accessKeyRef.current || undefined,
       });
 
-      const handle = await GIAWakeWord.addListener('wakeWordDetected', async ({ keyword: kw }) => {
-        if (!activeRef.current) return;
-        onWakeWordRef.current?.(kw || nativeKeyword);
-        captureQueryAfterWake();
-        if (!keepListeningRef.current) {
-          setTimeout(() => stopListening(), 500);
-        }
-      });
-      nativeListenerRef.current = handle;
+      // A detection that woke the app from the background arrives before JS is attached.
+      const pending = await GIAWakeWord.getPendingWakeWord();
+      if (pending.detected) void handleDetection(pending.keyword);
 
       setIsListening(true);
     } catch (e) {
@@ -510,9 +528,8 @@ export function useVoiceControl(config: VoiceControlConfig = {}) {
 
     activeRef.current = true;
 
-    // The native wake word engine is a stub in this build (GIAWakeWordService
-    // reports "disabled in this build" and stops itself), so this stays opt-in.
-    // Falling through to the browser recognizer keeps push-to-talk working.
+    // Native wake word is opt-in (always-on mic + persistent notification).
+    // Otherwise we fall through to the speech recognizer, which keeps push-to-talk working.
     const canUseNative = isNative && nativeWakeWord;
     if (manual || !canUseNative) {
       if (isCapacitor) {
