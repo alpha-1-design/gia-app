@@ -48,7 +48,7 @@ export function useVoiceInput(
     voiceLanguage: s.voiceLanguage,
     nativeWakeWord: s.nativeWakeWord,
     nativeSensitivity: s.nativeSensitivity,
-    wakeWordAccessKey: s.wakeWordAccessKey,
+    nativeWakeKeyword: s.nativeWakeKeyword,
   })));
   const keepListeningRef = useRef(voiceSettings.keepListening);
   keepListeningRef.current = voiceSettings.keepListening;
@@ -168,7 +168,7 @@ export function useVoiceInput(
     language: voiceSettings.voiceLanguage,
     nativeWakeWord: voiceSettings.nativeWakeWord,
     nativeSensitivity: voiceSettings.nativeSensitivity,
-    wakeWordAccessKey: voiceSettings.wakeWordAccessKey,
+    nativeKeyword: voiceSettings.nativeWakeKeyword,
   });
 
   const voiceRef = useRef(voiceControl);

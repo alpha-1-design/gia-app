@@ -6,6 +6,8 @@ import {
   Lightbulb, Cloud, Gem, Crown, Flame, Feather, Mic,
   MessageCircle, Music, Camera, Eye, Share2, Link, Award,
   Sun, Moon, Wind, Leaf, Download, Hash, Flag,
+  TrendingUp, AlertTriangle, GitMerge, Navigation2, ShieldCheck,
+  Thermometer, Heart, Handshake, CircleDot,
 } from 'lucide-react';
 
 export const AGENT_ICONS: { name: string; icon: LucideIcon; color: string }[] = [
@@ -51,6 +53,15 @@ export const AGENT_ICONS: { name: string; icon: LucideIcon; color: string }[] = 
   { name: 'Download', icon: Download, color: '#3b82f6' },
   { name: 'Hash', icon: Hash, color: '#a855f7' },
   { name: 'Flag', icon: Flag, color: '#ef4444' },
+  { name: 'TrendingUp', icon: TrendingUp, color: '#34d399' },
+  { name: 'AlertTriangle', icon: AlertTriangle, color: '#f59e0b' },
+  { name: 'GitMerge', icon: GitMerge, color: '#a855f7' },
+  { name: 'Navigation2', icon: Navigation2, color: '#3b82f6' },
+  { name: 'ShieldCheck', icon: ShieldCheck, color: '#34d399' },
+  { name: 'Thermometer', icon: Thermometer, color: '#ef4444' },
+  { name: 'Heart', icon: Heart, color: '#ec4899' },
+  { name: 'Handshake', icon: Handshake, color: '#f59e0b' },
+  { name: 'CircleDot', icon: CircleDot, color: '#6366f1' },
 ];
 
 const ICON_MAP = new Map(AGENT_ICONS.map(i => [i.name, i]));

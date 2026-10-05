@@ -1,31 +1,42 @@
-import type { GIAWakeWordPlugin } from './GIAWakeWord';
-import type { PluginListenerHandle } from '@capacitor/core';
+import { WebPlugin } from '@capacitor/core';
+import type { GIAWakeWordPlugin, WakeWordKeyword, WakeWordStatus } from './GIAWakeWord';
 
-export class GIAWakeWordWeb implements GIAWakeWordPlugin {
+const UNSUPPORTED = 'On-device wake word is only available in the Android app';
+
+/**
+ * Browser/PWA stand-in. Nothing listens in the background here, so every
+ * call reports "not running" instead of pretending to work.
+ */
+export class GIAWakeWordWeb extends WebPlugin implements GIAWakeWordPlugin {
   async startListening(): Promise<void> {
-    console.warn('[GIAWakeWord] Native wake word not available on web');
+    throw this.unavailable(UNSUPPORTED);
   }
 
-  async stopListening(): Promise<void> {
-  }
+  async stopListening(): Promise<void> {}
+  async pause(): Promise<void> {}
+  async resume(): Promise<void> {}
 
   async isListening(): Promise<{ listening: boolean }> {
     return { listening: false };
   }
 
+  async getStatus(): Promise<WakeWordStatus> {
+    return {
+      running: false,
+      paused: false,
+      keyword: '',
+      threshold: 0,
+      lastScore: 0,
+      error: UNSUPPORTED,
+      micPermission: false,
+    };
+  }
+
+  async listKeywords(): Promise<{ keywords: WakeWordKeyword[] }> {
+    return { keywords: [] };
+  }
+
   async getPendingWakeWord(): Promise<{ detected: boolean; keyword: string }> {
     return { detected: false, keyword: '' };
-  }
-
-  async addListener(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _eventName: 'wakeWordDetected',
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _handler: (result: { keyword: string }) => void
-  ): Promise<PluginListenerHandle> {
-    return { remove: async () => {} };
-  }
-
-  async removeAllListeners(): Promise<void> {
   }
 }

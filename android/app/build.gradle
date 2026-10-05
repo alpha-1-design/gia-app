@@ -9,6 +9,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 21
         versionName "2.4.0.14"
+        ndk {
+            // onnxruntime-android ships ~5 MB of native code per ABI. The proot
+            // layer is arm64-only already, so x86 builds were never useful.
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -56,10 +61,8 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    // Wake word engine (sherpa-onnx KeywordSpotter) is deferred to a later
-    // release — see GIAWakeWordService.java for revival instructions.
-    // To re-enable: download the AAR from https://github.com/k2-fsa/sherpa-onnx/releases
-    // into libs/ and add: implementation files('libs/sherpa-onnx-<version>.aar')
+    // Wake word engine: openWakeWord models run on ONNX Runtime (see GIAWakeWordService.java).
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.26.0'
 
     // Jetpack Media for MediaSessionCompat
     implementation "androidx.media:media:1.7.0"
