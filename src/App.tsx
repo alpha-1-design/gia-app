@@ -23,6 +23,7 @@ import { logger } from './utils/logger';
 import { wakeWordIsClaimed } from './services/wakeWordOwner';
 import FloatingOrb from './components/FloatingOrb';
 import LegalGate from './components/LegalGate';
+import FloatingDownload from './components/FloatingDownload';
 import { PermissionPopup } from './components/PermissionPopup';
 import { useShareTarget } from './hooks/useShareTarget';
 import { useClipboardMonitor } from './hooks/useClipboardMonitor';
@@ -930,6 +931,7 @@ const App: React.FC = () => {
       </main>
 
       <FloatingOrb />
+      <FloatingDownload />
       <LegalGate />
 
       {/* Clipboard toast */}

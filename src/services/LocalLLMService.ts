@@ -116,6 +116,8 @@ class LocalLLMService {
   /** Download progress per model. */
   private _progress: Record<string, DownloadProgress> = {};
 
+  private _statusCallbacks: Set<(modelId: string, state: LocalLLMState) => void> = new Set();
+
   /** Callbacks for progress updates. */
   private _progressCallbacks: Set<(modelId: string, progress: DownloadProgress) => void> = new Set();
 
@@ -147,6 +149,12 @@ class LocalLLMService {
   }
 
   // ── Public API ──────────────────────────────────────────────────
+
+  /** Notifies whenever a model's load status changes (loading, ready, error ...). */
+  onStatusChange(cb: (modelId: string, state: LocalLLMState) => void): () => void {
+    this._statusCallbacks.add(cb);
+    return () => { this._statusCallbacks.delete(cb); };
+  }
 
   onProgress(cb: (modelId: string, progress: DownloadProgress) => void): () => void {
     this._progressCallbacks.add(cb);
@@ -349,6 +357,8 @@ class LocalLLMService {
       modelId,
       error,
     };
+    const state = (this._status as Record<string, LocalLLMState>)[modelId];
+    this._statusCallbacks.forEach(cb => { try { cb(modelId, state); } catch { /* a bad listener must not break loading */ } });
   }
 
   private getDownloadedModels(): LocalModelId[] {
