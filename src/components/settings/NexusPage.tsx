@@ -1,212 +1,400 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import {
-  Search, TrendingUp, AlertTriangle, Lightbulb, GitMerge,
-  Compass, Zap, Code2, Navigation2, ShieldCheck, Thermometer,
-  Sun, Heart, BookOpen, Handshake, Brain, GraduationCap, Eye,
-  CircleDot, Share2, Plus, X, Check,
-} from 'lucide-react';
+import { Activity, Brain, CheckCircle2, Clock3, Cpu, GitBranch, Loader2, PlugZap, Save, Server, Sparkles, Trash2, UserRoundPlus, X, XCircle } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+import { AGENT_ROLES } from '../../services/brain/SubAgentManager';
+import { useNexusStore } from '../../store/useNexusStore';
+import { useAgentStore } from '../../store/useAgentStore';
+import { useMCPStore } from '../../store/useMCPStore';
+import MCPManager from '../../services/MCPManager';
+import { useGiaStore } from '../../store/useGiaStore';
+import { resolveAgentIcon } from '../../utils/agentIcons';
 import { SubPageHeader } from './SubPageHeader';
 
-interface AgentDef {
-  name: string;
-  color: string;
-  icon: string;
-  role: string;
-  style: string;
-}
+const STATUS_LABELS = {
+  spawning: 'Starting',
+  running: 'Working',
+  completed: 'Complete',
+  failed: 'Failed',
+} as const;
 
-const AGENTS: AgentDef[] = [
-  { name: 'Atlas',  color: '#a855f7', icon: 'Search',       role: 'Researcher',      style: 'Thorough, detail-oriented. Gather comprehensive data and verify sources.' },
-  { name: 'Nova',   color: '#f59e0b', icon: 'TrendingUp',   role: 'Analyst',         style: 'Critical, logical. Break down problems and identify patterns.' },
-  { name: 'Onyx',   color: '#3b82f6', icon: 'AlertTriangle', role: 'Skeptic',        style: 'Challenge assumptions. Find flaws and edge cases.' },
-  { name: 'Flux',   color: '#ec4899', icon: 'Lightbulb',    role: 'Creative',        style: 'Lateral thinking. Generate novel approaches and connections.' },
-  { name: 'Vex',    color: '#10b981', icon: 'GitMerge',     role: 'Synthesizer',     style: 'Merge ideas. Combine findings into cohesive insights.' },
-  { name: 'Astra',  color: '#6366f1', icon: 'Compass',      role: 'Strategist',      style: 'Big-picture thinking. Prioritize and plan.' },
-  { name: 'Bolt',   color: '#ef4444', icon: 'Zap',          role: 'Critic',          style: 'Sharp but constructive. Find weaknesses and improvements.' },
-  { name: 'Cipher', color: '#14b8a6', icon: 'Code2',        role: 'Technologist',    style: 'Practical, implementation-focused.' },
-  { name: 'Drift',  color: '#f97316', icon: 'Navigation2',  role: 'Explorer',        style: 'Open-ended curiosity. Discover hidden connections.' },
-  { name: 'Ember',  color: '#06b6d4', icon: 'ShieldCheck',  role: 'Validator',       style: 'Fact-check everything. Cross-reference sources.' },
-  { name: 'Frost',  color: '#84cc16', icon: 'Thermometer',  role: 'Realist',         style: 'Practical, grounded. Focus on feasibility.' },
-  { name: 'Glimmer',color: '#d946ef', icon: 'Sun',          role: 'Optimist',        style: 'Focus on opportunities and positive outcomes.' },
-  { name: 'Haven',  color: '#0ea5e9', icon: 'Heart',        role: 'Ethicist',        style: 'Consider implications, fairness, responsibility.' },
-  { name: 'Iris',   color: '#eab308', icon: 'BookOpen',     role: 'Archivist',       style: 'Track history and context. Find relevant patterns.' },
-  { name: 'Jade',   color: '#22d3ee', icon: 'Handshake',    role: 'Diplomat',        style: 'Find common ground. Resolve conflicting viewpoints.' },
-  { name: 'Krypton',color: '#8b5cf6', icon: 'Brain',        role: 'Deep Thinker',    style: 'First-principles reasoning. Drill to fundamentals.' },
-  { name: 'Lumen',  color: '#fb923c', icon: 'GraduationCap', role: 'Teacher',        style: 'Explain clearly. Break complex ideas down.' },
-  { name: 'Mist',   color: '#2dd4bf', icon: 'Eye',          role: 'Intuitionist',    style: 'Quick pattern recognition. Instinctive assessments.' },
-  { name: 'Nyx',    color: '#a78bfa', icon: 'CircleDot',    role: 'Philosopher',     style: 'Question assumptions. Explore deeper meaning.' },
-  { name: 'Orbit',  color: '#fbbf24', icon: 'Share2',       role: 'Connector',       style: 'Link disparate ideas across domains.' },
-];
+const STATUS_COLORS = {
+  spawning: '#fbbf24',
+  running: '#34d399',
+  completed: '#60a5fa',
+  failed: '#f87171',
+} as const;
 
-const AGENT_ICONS: Record<string, React.ReactNode> = {
-  Search: <Search size={15} />, TrendingUp: <TrendingUp size={15} />,
-  AlertTriangle: <AlertTriangle size={15} />, Lightbulb: <Lightbulb size={15} />,
-  GitMerge: <GitMerge size={15} />, Compass: <Compass size={15} />,
-  Zap: <Zap size={15} />, Code2: <Code2 size={15} />,
-  Navigation2: <Navigation2 size={15} />, ShieldCheck: <ShieldCheck size={15} />,
-  Thermometer: <Thermometer size={15} />, Sun: <Sun size={15} />,
-  Heart: <Heart size={15} />, BookOpen: <BookOpen size={15} />,
-  Handshake: <Handshake size={15} />, Brain: <Brain size={15} />,
-  GraduationCap: <GraduationCap size={15} />, Eye: <Eye size={15} />,
-  CircleDot: <CircleDot size={15} />, Share2: <Share2 size={15} />,
-};
+export const NexusPage: React.FC<{ onBack: () => void; onOpenMcp?: () => void }> = ({ onBack, onOpenMcp }) => {
+  const [creatingAgent, setCreatingAgent] = useState(false);
+  const [agentName, setAgentName] = useState('');
+  const [agentPurpose, setAgentPurpose] = useState('');
+  const [agentInstructions, setAgentInstructions] = useState('');
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [connectingServer, setConnectingServer] = useState<string | null>(null);
+  const agents = useAgentStore(state => state.agents);
+  const servers = useMCPStore(state => state.servers);
+  const connections = useMCPStore(state => state.connections);
+  const connectedTools = MCPManager.getConnectedTools();
+  const { activeRun, clearRun } = useNexusStore(useShallow(state => ({
+    activeRun: state.activeRun,
+    clearRun: state.clearRun,
+  })));
+  useEffect(() => {
+    MCPManager.init().catch(error => {
+      console.error('[NexusPage] MCP initialization failed:', error);
+    });
+  }, []);
+  const run = activeRun;
+  const finishedCount = run?.agents.filter(agent => agent.status === 'completed').length ?? 0;
+  const failedCount = run?.agents.filter(agent => agent.status === 'failed').length ?? 0;
+  const activeCount = run?.agents.filter(agent => agent.status === 'spawning' || agent.status === 'running').length ?? 0;
+  const hasLiveRun = !!run && (!run.finishedAt || activeCount > 0 || run.synthesizing);
 
-export const NexusPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(AGENTS.map(a => [a.name, true]))
-  );
-  const [showCustom, setShowCustom] = useState(false);
-  const [customName, setCustomName] = useState('');
-  const [customRole, setCustomRole] = useState('');
-  const [customStyle, setCustomStyle] = useState('');
-  const [customColor, setCustomColor] = useState('#a855f7');
-  const [customs, setCustoms] = useState<AgentDef[]>([]);
+  const connectServer = async (serverId: string) => {
+    setConnectingServer(serverId);
+    try {
+      await MCPManager.connect(serverId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown connection error';
+      useGiaStore.getState().addNotification(`MCP connection failed: ${message}`);
+    } finally {
+      setConnectingServer(null);
+    }
+  };
 
-  const allAgents = [...AGENTS, ...customs];
+  const disconnectServer = async (serverId: string) => {
+    try {
+      await MCPManager.disconnect(serverId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown disconnection error';
+      useGiaStore.getState().addNotification(`MCP disconnection failed: ${message}`);
+    }
+  };
 
-  function addCustom() {
-    if (!customName.trim() || !customRole.trim()) return;
-    setCustoms(prev => [...prev, {
-      name: customName.trim(), color: customColor, icon: 'Brain',
-      role: customRole.trim(), style: customStyle.trim() || 'No custom style defined.',
-    }]);
-    setCustomName('');
-    setCustomRole('');
-    setCustomStyle('');
-    setShowCustom(false);
-  }
-
-  const activeCount = allAgents.filter(a => enabled[a.name]).length;
+  const saveLocalAgent = () => {
+    if (!agentName.trim() || !agentInstructions.trim()) return;
+    useAgentStore.getState().addAgent({
+      name: agentName.trim(),
+      description: agentPurpose.trim(),
+      systemPrompt: agentInstructions.trim(),
+      icon: 'Bot',
+      tools: selectedTools,
+    });
+    setAgentName('');
+    setAgentPurpose('');
+    setAgentInstructions('');
+    setSelectedTools([]);
+    setCreatingAgent(false);
+  };
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)' }}>
-      <div className="px-4 pt-4 pb-3 shrink-0">
+    <div className="flex h-full flex-col overflow-y-auto" style={{ background: 'var(--gia-bg)' }}>
+      <div className="shrink-0 px-4 pt-4">
         <SubPageHeader title="Nexus" onBack={onBack} />
-        <div className="flex items-center justify-between mt-2 px-1">
-          <p className="text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-            {allAgents.length} agents · {activeCount} active
-          </p>
-          <button
-            onClick={() => setShowCustom(s => !s)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium tap-feedback"
-            style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}
-          >
-            <Plus size={12} />
-            Custom Agent
-          </button>
-        </div>
       </div>
 
-      <div className="px-4 pb-4 space-y-2">
-        {allAgents.map((agent, i) => {
-          const isOn = enabled[agent.name];
-          return (
-            <motion.div
-              key={`${agent.name}-${i}`}
-              layout
-              className="rounded-xl overflow-hidden transition-all"
-              style={{
-                background: isOn ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.15)',
-                border: `1px solid ${isOn ? `${agent.color}15` : 'rgba(255,255,255,0.03)'}`,
-                opacity: isOn ? 1 : 0.4,
-              }}
-            >
-              <div className="flex items-center gap-3 px-3.5 py-3">
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: `${agent.color}15`, border: `1px solid ${agent.color}25` }}
-                >
-                  <span style={{ color: agent.color }}>{AGENT_ICONS[agent.icon] || <Brain size={15} />}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold" style={{ color: isOn ? 'var(--gia-text)' : 'rgba(148,163,184,0.5)' }}>
-                      {agent.name}
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: `${agent.color}12`, color: agent.color }}>
-                      {agent.role}
-                    </span>
-                  </div>
-                  <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
-                    {agent.style}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setEnabled(p => ({ ...p, [agent.name]: !isOn }))}
-                  className="w-10 h-6 rounded-full relative shrink-0 transition-all tap-feedback"
-                  style={{
-                    background: isOn ? agent.color : 'rgba(255,255,255,0.08)',
-                    border: `1px solid ${isOn ? 'transparent' : 'rgba(255,255,255,0.1)'}`,
-                  }}
-                >
-                  <div
-                    className="w-4 h-4 rounded-full absolute top-0.5 transition-all"
-                    style={{
-                      background: isOn ? '#fff' : 'rgba(148,163,184,0.4)',
-                      left: isOn ? 'calc(100% - 18px)' : '2px',
-                      boxShadow: isOn ? `0 0 6px ${agent.color}60` : 'none',
-                    }}
-                  />
-                </button>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Custom agent creator */}
-      {showCustom && (
-        <div
-          className="fixed inset-0 z-50 flex items-end"
-          onClick={() => setShowCustom(false)}
+      <main className="space-y-4 px-4 pb-6 pt-2">
+        <section
+          className="overflow-hidden rounded-2xl border p-4"
+          style={{
+            background: 'linear-gradient(145deg, rgba(16,185,129,0.11), rgba(99,102,241,0.07) 58%, rgba(15,23,42,0.2))',
+            borderColor: 'rgba(16,185,129,0.2)',
+          }}
         >
-          <div
-            className="w-full rounded-t-2xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--gia-surface-2)',
-              border: '1px solid var(--gia-border)',
-              borderBottom: 'none',
-              boxShadow: '0 -4px 24px rgba(0,0,0,0.3)',
-            }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--gia-border)' }}>
-              <span className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Create Custom Agent</span>
-              <button onClick={() => setShowCustom(false)} className="p-1 rounded-lg hover:bg-zinc-800"><X size={16} style={{ color: 'var(--gia-muted)' }} /></button>
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border" style={{ background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.25)' }}>
+              <GitBranch size={20} style={{ color: '#34d399' }} />
             </div>
-            <div className="p-4 space-y-3">
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--gia-muted-2)' }}>Name</p>
-                <input value={customName} onChange={e => setCustomName(e.target.value)} placeholder="e.g. Echo" className="w-full bg-transparent text-[13px] px-3 py-2 rounded-lg outline-none" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }} />
-              </div>
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--gia-muted-2)' }}>Role</p>
-                <input value={customRole} onChange={e => setCustomRole(e.target.value)} placeholder="e.g. Debugger" className="w-full bg-transparent text-[13px] px-3 py-2 rounded-lg outline-none" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }} />
-              </div>
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--gia-muted-2)' }}>Thinking Style</p>
-                <textarea value={customStyle} onChange={e => setCustomStyle(e.target.value)} placeholder="Describe how this agent thinks..." rows={2} className="w-full bg-transparent text-[13px] px-3 py-2 rounded-lg outline-none resize-none" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }} />
-              </div>
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--gia-muted-2)' }}>Color</p>
-                  <input type="color" value={customColor} onChange={e => setCustomColor(e.target.value)} className="w-8 h-8 rounded-lg border-0 cursor-pointer" style={{ background: 'transparent' }} />
-                </div>
-                <button
-                  onClick={addCustom}
-                  disabled={!customName.trim() || !customRole.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-medium ml-auto tap-feedback disabled:opacity-30"
-                  style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}
-                >
-                  <Check size={13} />
-                  Create Agent
-                </button>
-              </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: '#34d399' }}>Sub-agent coordination</p>
+              <h2 className="mt-1 text-base font-bold" style={{ color: 'var(--gia-text)' }}>Nexus</h2>
+              <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
+                GIA can split complex work across specialist agents, then combine their findings into one response.
+              </p>
             </div>
           </div>
-        </div>
-      )}
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <RunFact icon={<Brain size={13} />} label="Specialists" value={`${AGENT_ROLES.length}`} />
+            <RunFact icon={<Activity size={13} />} label="Standard run" value="Up to 4 tasks" />
+            <RunFact icon={<Cpu size={13} />} label="Extended run" value="Up to 8 tasks" />
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border" style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}>
+          <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: 'var(--gia-border)' }}>
+            <div className="flex items-center gap-2">
+              <Activity size={15} style={{ color: hasLiveRun ? '#34d399' : 'var(--gia-muted)' }} />
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Run monitor</h3>
+            </div>
+            {run && (
+              <span className="flex items-center gap-1.5 text-[10px] font-medium" style={{ color: hasLiveRun ? '#34d399' : 'var(--gia-muted)' }}>
+                {hasLiveRun ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                {hasLiveRun ? 'Live' : 'Last run'}
+              </span>
+            )}
+          </div>
+
+          {!run ? (
+            <div className="flex flex-col items-center px-5 py-7 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: 'rgba(148,163,184,0.08)', color: 'var(--gia-muted)' }}>
+                <GitBranch size={20} />
+              </div>
+              <p className="mt-3 text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>No delegation running</p>
+              <p className="mt-1 max-w-xs text-xs leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
+                When GIA delegates a task from Chat, the agents, their live progress, and results will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3">
+              <div className="mb-3 flex items-start justify-between gap-3 px-1">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>
+                    {run.isGodMode ? 'Extended run' : 'Standard run'}
+                    <span className="font-normal" style={{ color: 'var(--gia-muted)' }}> · {run.agents.length} specialists</span>
+                  </p>
+                  <p className="mt-1 flex items-center gap-1 text-[10px]" style={{ color: 'var(--gia-muted)' }}>
+                    <Clock3 size={11} />
+                    Started {new Date(run.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </p>
+                </div>
+                {!hasLiveRun && (
+                  <button type="button" onClick={clearRun} aria-label="Clear last sub-agent run" className="rounded-lg p-2" style={{ color: 'var(--gia-muted)' }}>
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <RunCount label="Working" count={activeCount} color="#34d399" />
+                <RunCount label="Done" count={finishedCount} color="#60a5fa" />
+                <RunCount label="Failed" count={failedCount} color="#f87171" />
+              </div>
+              <div className="space-y-2">
+                {run.agents.map(agent => {
+                  const color = STATUS_COLORS[agent.status];
+                  return (
+                    <article key={agent.id} className="rounded-xl border p-3" style={{ background: 'rgba(255,255,255,0.015)', borderColor: `${agent.color}25` }}>
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full" style={{ background: color, boxShadow: agent.status === 'running' ? `0 0 10px ${color}80` : undefined }} />
+                        <span className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{agent.name}</span>
+                        <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{agent.role}</span>
+                        <span className="ml-auto text-[9px] font-medium" style={{ color }}>{STATUS_LABELS[agent.status]}</span>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
+                        {agent.currentActivity || agent.task}
+                      </p>
+                      {agent.error && (
+                        <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-relaxed" style={{ color: '#f87171' }}>
+                          <XCircle size={12} className="mt-0.5 shrink-0" />{agent.error}
+                        </p>
+                      )}
+                      {agent.result && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[10px] font-medium" style={{ color: '#60a5fa' }}>View findings</summary>
+                          <p className="mt-2 whitespace-pre-wrap text-[11px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{agent.result}</p>
+                        </details>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+              {run.synthesizing && (
+                <p className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-[11px]" style={{ background: 'rgba(168,85,247,0.08)', color: '#c4b5fd' }}>
+                  <Sparkles size={13} /> GIA is combining the specialist findings…
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border" style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}>
+          <div className="flex items-start gap-3 border-b px-4 py-3.5" style={{ borderColor: 'var(--gia-border)' }}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
+              <PlugZap size={17} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>External tools & data</h3>
+              <p className="mt-0.5 text-[10px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
+                Connect MCP servers here. Specialists can use connected tools when an agent profile includes them; GIA still applies its normal approvals.
+              </p>
+            </div>
+            {onOpenMcp && (
+              <button type="button" onClick={onOpenMcp} className="shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium" style={{ borderColor: 'var(--gia-border)', color: 'var(--gia-text)' }}>
+                Manage
+              </button>
+            )}
+          </div>
+          <div className="space-y-2 p-3">
+            {servers.length === 0 ? (
+              <div className="rounded-xl border border-dashed px-3 py-4 text-center" style={{ borderColor: 'var(--gia-border)' }}>
+                <Server size={16} className="mx-auto" style={{ color: 'var(--gia-muted)' }} />
+                <p className="mt-2 text-[11px]" style={{ color: 'var(--gia-muted)' }}>No MCP servers configured yet.</p>
+              </div>
+            ) : servers.map(server => {
+              const status = connections[server.id]?.status ?? 'disconnected';
+              const toolCount = connections[server.id]?.toolCount ?? 0;
+              return (
+                <div key={server.id} className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.015)', borderColor: status === 'connected' ? 'rgba(52,211,153,0.18)' : 'var(--gia-border)' }}>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: status === 'connected' ? '#34d399' : status === 'error' ? '#f87171' : 'rgba(148,163,184,0.45)' }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-medium" style={{ color: 'var(--gia-text)' }}>{server.name}</p>
+                    <p className="text-[9px]" style={{ color: status === 'error' ? '#f87171' : 'var(--gia-muted-2)' }}>
+                      {status === 'connected' ? `${toolCount} tools available` : status === 'error' ? connections[server.id]?.error || 'Connection failed' : status}
+                    </p>
+                  </div>
+                  {status === 'connected' ? (
+                    <button type="button" onClick={() => void disconnectServer(server.id)} className="rounded-lg px-2 py-1 text-[9px]" style={{ color: 'var(--gia-muted)' }}>Disconnect</button>
+                  ) : (
+                    <button type="button" disabled={connectingServer === server.id} onClick={() => void connectServer(server.id)} className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[9px] font-medium disabled:opacity-50" style={{ borderColor: 'rgba(96,165,250,0.2)', color: '#93c5fd' }}>
+                      {connectingServer === server.id ? <Loader2 size={10} className="animate-spin" /> : <PlugZap size={10} />}
+                      Connect
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {connectedTools.length > 0 && (
+              <p className="px-1 pt-1 text-[9px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>
+                {connectedTools.length} connected MCP tool{connectedTools.length === 1 ? '' : 's'} can be assigned to a local agent.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border" style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}>
+          <div className="flex items-start justify-between gap-3 border-b px-4 py-3.5" style={{ borderColor: 'var(--gia-border)' }}>
+            <div>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Your local agents</h3>
+              <p className="mt-0.5 text-[10px]" style={{ color: 'var(--gia-muted)' }}>Saved on this device and available for future Nexus tasks.</p>
+            </div>
+            <button type="button" onClick={() => setCreatingAgent(value => !value)} className="flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[10px] font-semibold" style={{ background: 'rgba(168,85,247,0.1)', borderColor: 'rgba(168,85,247,0.24)', color: '#d8b4fe' }}>
+              {creatingAgent ? <X size={12} /> : <UserRoundPlus size={13} />}
+              {creatingAgent ? 'Cancel' : 'Create agent'}
+            </button>
+          </div>
+          {creatingAgent && (
+            <div className="space-y-3 border-b p-3.5" style={{ borderColor: 'var(--gia-border)', background: 'rgba(168,85,247,0.025)' }}>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1 text-[9px] font-medium" style={{ color: 'var(--gia-muted)' }}>
+                  Agent name
+                  <input value={agentName} onChange={event => setAgentName(event.target.value)} placeholder="e.g. Release Scout" className="w-full rounded-xl border px-3 py-2 text-[11px] outline-none" style={{ background: 'rgba(0,0,0,0.16)', borderColor: 'var(--gia-border)', color: 'var(--gia-text)' }} />
+                </label>
+                <label className="space-y-1 text-[9px] font-medium" style={{ color: 'var(--gia-muted)' }}>
+                  Specialty
+                  <input value={agentPurpose} onChange={event => setAgentPurpose(event.target.value)} placeholder="What should this agent focus on?" className="w-full rounded-xl border px-3 py-2 text-[11px] outline-none" style={{ background: 'rgba(0,0,0,0.16)', borderColor: 'var(--gia-border)', color: 'var(--gia-text)' }} />
+                </label>
+              </div>
+              <label className="block space-y-1 text-[9px] font-medium" style={{ color: 'var(--gia-muted)' }}>
+                Instructions
+                <textarea value={agentInstructions} onChange={event => setAgentInstructions(event.target.value)} rows={4} placeholder="Describe how this agent should approach its work. Keep it specific, not restrictive." className="w-full resize-y rounded-xl border px-3 py-2 text-[11px] leading-relaxed outline-none" style={{ background: 'rgba(0,0,0,0.16)', borderColor: 'var(--gia-border)', color: 'var(--gia-text)' }} />
+              </label>
+              {connectedTools.length > 0 && (
+                <fieldset>
+                  <legend className="mb-1.5 text-[9px] font-medium" style={{ color: 'var(--gia-muted)' }}>Assign connected MCP tools</legend>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {connectedTools.map(tool => (
+                      <label key={tool.id} className="flex min-w-0 items-start gap-2 rounded-lg border p-2 text-[9px]" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--gia-border)', color: 'var(--gia-muted)' }}>
+                        <input type="checkbox" checked={selectedTools.includes(tool.id)} onChange={() => setSelectedTools(current => current.includes(tool.id) ? current.filter(id => id !== tool.id) : [...current, tool.id])} className="mt-0.5 accent-violet-500" />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium" style={{ color: 'var(--gia-text)' }}>{tool.name}</span>
+                          <span className="line-clamp-2">{tool.description || tool.serverId}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>Tool calls remain subject to GIA’s permissions and approvals.</p>
+                <button type="button" disabled={!agentName.trim() || !agentInstructions.trim()} onClick={saveLocalAgent} className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-40" style={{ background: 'linear-gradient(110deg, #7c3aed, #4f46e5)' }}>
+                  <Save size={12} /> Save locally
+                </button>
+              </div>
+            </div>
+          )}
+          {agents.length > 0 ? (
+            <div className="grid gap-2 p-3 sm:grid-cols-2">
+              {agents.map(agent => {
+                const AgentIcon = resolveAgentIcon(agent.icon);
+                return (
+                  <article key={agent.id} className="flex min-w-0 items-start gap-2.5 rounded-xl border p-3" style={{ borderColor: 'rgba(168,85,247,0.17)', background: 'linear-gradient(130deg, rgba(168,85,247,0.06), rgba(255,255,255,0.01))' }}>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'rgba(168,85,247,0.12)', color: '#c4b5fd' }}><AgentIcon size={15} /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-semibold" style={{ color: 'var(--gia-text)' }}>{agent.name}</p>
+                      <p className="mt-0.5 line-clamp-2 text-[9px]" style={{ color: 'var(--gia-muted)' }}>{agent.description || 'Custom local specialist'}</p>
+                      <p className="mt-1 text-[8px]" style={{ color: 'var(--gia-muted-2)' }}>{agent.tools.length} assigned tool{agent.tools.length === 1 ? '' : 's'} · saved on this device</p>
+                    </div>
+                    <span className="rounded-full border px-1.5 py-0.5 text-[8px]" style={{ borderColor: 'rgba(52,211,153,0.16)', color: '#6ee7b7' }}>Local</span>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-4 py-5 text-center">
+              <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>No custom agents yet. Create one to give GIA a reusable specialty.</p>
+            </div>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-2 flex items-center justify-between px-1">
+            <div>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Specialist roster</h3>
+              <p className="mt-0.5 text-[10px]" style={{ color: 'var(--gia-muted)' }}>Personas GIA assigns automatically based on the task</p>
+            </div>
+            <span className="rounded-lg px-2 py-1 text-[10px]" style={{ background: 'rgba(16,185,129,0.08)', color: '#34d399' }}>{AGENT_ROLES.length} available</span>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {AGENT_ROLES.map((agent, index) => {
+              const SpecialistIcon = resolveAgentIcon(agent.icon);
+              return (
+              <motion.article
+                key={agent.name}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.28, delay: Math.min(index % 4, 3) * 0.035 }}
+                className="group relative flex items-start gap-3 overflow-hidden rounded-2xl border p-3.5 transition-colors"
+                style={{
+                  background: `linear-gradient(125deg, ${agent.color}0b, var(--gia-surface) 48%)`,
+                  borderColor: `${agent.color}25`,
+                }}
+              >
+                <div className="absolute -right-7 -top-8 h-20 w-20 rounded-full blur-2xl transition-opacity group-hover:opacity-90" style={{ background: `${agent.color}18`, opacity: 0.45 }} />
+                <div className="relative mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" style={{ background: `${agent.color}14`, borderColor: `${agent.color}30`, color: agent.color, boxShadow: `inset 0 0 18px ${agent.color}0d` }}>
+                  <SpecialistIcon size={17} strokeWidth={1.8} />
+                </div>
+                <div className="relative min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{agent.name}</span>
+                    <span className="rounded px-1.5 py-0.5 text-[9px]" style={{ background: `${agent.color}12`, color: agent.color }}>{agent.role}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{agent.style}</p>
+                </div>
+                <span className="relative mt-1 rounded-full border px-2 py-1 text-[8px] uppercase tracking-wider" style={{ borderColor: `${agent.color}20`, color: 'var(--gia-muted-2)' }}>Nexus</span>
+              </motion.article>
+              );
+            })}
+          </div>
+        </section>
+
+        <p className="px-1 text-[10px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>
+          Each delegated task is assigned to one specialist. GIA may launch up to 4 distinct tasks in a standard run or 8 in extended mode. Local agents and their tool selections are stored on this device; external MCP servers must be connected and their tool calls follow GIA’s approval flow.
+        </p>
+      </main>
     </div>
   );
 };
+
+const RunFact: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
+  <div className="rounded-xl border px-2 py-2" style={{ background: 'rgba(15,23,42,0.25)', borderColor: 'rgba(255,255,255,0.06)' }}>
+    <div className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--gia-muted)' }}>{icon}{label}</div>
+    <p className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--gia-text)' }}>{value}</p>
+  </div>
+);
+
+const RunCount: React.FC<{ label: string; count: number; color: string }> = ({ label, count, color }) => (
+  <span className="rounded-md px-2 py-1 text-[9px] font-medium" style={{ color, background: `${color}12` }}>
+    {count} {label}
+  </span>
+);

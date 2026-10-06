@@ -15,6 +15,7 @@ import SettingsModule from './modules/SettingsModule';
 import ErrorBoundary from './components/ErrorBoundary';
 import ApiKeyInputPanel from './components/ApiKeyInputPanel';
 import { SourcesPanel } from './components/SourcesPanel';
+import InAppBrowserPanel from './components/browser/InAppBrowserPanel';
 import AppNavigation from './components/AppNavigation';
 import BiometricService from './services/BiometricService';
 import { useProviderStore } from './store/useProviderStore';
@@ -1037,7 +1038,7 @@ const App: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-[160]"
           >
             <EngineRoom />
           </motion.div>
@@ -1126,6 +1127,7 @@ const App: React.FC = () => {
         }}
       />
       <SourcesPanel />
+      <InAppBrowserPanel />
       <ApiKeyInputPanel />
     </div>
   );

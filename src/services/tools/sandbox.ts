@@ -2,6 +2,8 @@ import SandboxService from '../SandboxService';
 import terminalService from '../TerminalService';
 import CapabilityService from '../CapabilityService';
 import CapabilityPolicyService from '../CapabilityPolicyService';
+import { useGiaStore } from '../../store/useGiaStore';
+import { useCredentialStore } from '../../store/useCredentialStore';
 import type { Tool } from './types';
 
 const sandboxExec: Tool = {
@@ -19,7 +21,7 @@ const sandboxExec: Tool = {
   },
   execute: async (args) => {
     const command = String(args.command || '');
-    const workdir = args.workdir ? String(args.workdir) : undefined;
+    const workdir = args.workdir ? String(args.workdir) : useGiaStore.getState().activeProjectPath || '/workspace';
     const timeout = args.timeout ? Number(args.timeout) : undefined;
 
     if (!command) return { success: false, content: '', error: 'command is required' };
@@ -121,12 +123,12 @@ const sandboxInstall: Tool = {
 const sandboxClone: Tool = {
   id: 'sandbox_clone',
   name: 'sandbox_clone',
-  description: 'Clone a git repository into the sandbox workspace. Uses git clone --depth 1 for speed.',
+  description: 'Clone a public git repository into /workspace/projects and make it the active Build project. Uses git clone --depth 1 for speed.',
   schema: {
     type: 'object',
     properties: {
       repo: { type: 'string', description: 'Git repository URL (https:// or git://)' },
-      dest: { type: 'string', description: 'Destination directory name (optional, defaults to repo name)' },
+      dest: { type: 'string', description: 'Project folder name under /workspace/projects (optional, defaults to repo name)' },
     },
     required: ['repo'],
   },
@@ -141,11 +143,16 @@ const sandboxClone: Tool = {
     }
 
     try {
-      const result = await SandboxService.clone(repo, dest);
+      const token = useCredentialStore.getState().getCredential('github')?.value;
+      const result = await SandboxService.clone(repo, dest, token);
       if (result.exitCode !== 0) {
         return { success: false, content: result.stdout, error: result.stderr || `Exit code ${result.exitCode}` };
       }
-      return { success: true, content: `Cloned ${repo} successfully\n${result.stdout}` };
+      const projectName = dest || repo.replace(/\/+$/, '').split(/[/:]/).pop()?.replace(/\.git$/i, '');
+      if (!projectName) return { success: false, content: result.stdout, error: 'The repository cloned, but its project folder could not be determined.' };
+      const projectPath = `/workspace/projects/${projectName}`;
+      useGiaStore.getState().setActiveProjectPath(projectPath);
+      return { success: true, content: `Cloned ${repo} into ${projectPath} and made it the active Build project.\n${result.stdout}` };
     } catch (e) {
       return { success: false, content: '', error: e instanceof Error ? e.message : String(e) };
     }

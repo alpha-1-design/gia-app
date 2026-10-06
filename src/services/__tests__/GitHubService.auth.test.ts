@@ -39,4 +39,26 @@ describe('GitHubService authentication', () => {
       { headers: { Accept: 'application/vnd.github+json' } },
     );
   });
+
+  it('searches public and accessible private repositories with the saved token', async () => {
+    credentialStore.getState().setCredential({
+      serviceId: 'github',
+      label: 'GitHub',
+      kind: 'token',
+      value: 'secret-token',
+    });
+    const repo = { id: 1, full_name: 'owner/project' };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ items: [repo] }), { status: 200 }),
+    );
+
+    await expect(githubService.searchRepositories('project')).resolves.toEqual([repo]);
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.github.com/search/repositories?q=project&per_page=10&sort=updated');
+    const headers = options.headers as Record<string, string>;
+    expect(headers).toHaveProperty('Authorization');
+    expect(typeof headers.Authorization).toBe('string');
+    expect(headers.Authorization.length).toBeGreaterThan(0);
+    expect(headers).toHaveProperty('Accept', 'application/vnd.github+json');
+  });
 });

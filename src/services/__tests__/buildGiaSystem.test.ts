@@ -8,6 +8,7 @@ const mockGiaState = {
   customInstructions: '',
   pinnedMemories: [] as string[],
   handsOff: false,
+  activeProjectPath: null as string | null,
   sessions: [] as unknown[],
 };
 
@@ -113,6 +114,18 @@ describe('buildGiaSystem', () => {
     expect(result).toContain('terminal_run');
   });
 
+  it('routes Build mode project files through the sandbox workspace', () => {
+    mockGetState.gia = {
+      ...mockGiaState,
+      sharedData: { currentMode: 'build' },
+    };
+
+    const result = buildGiaSystem();
+    expect(result).toContain('Use `sandbox_fs` for files and folders in the sandbox or active project.');
+    expect(result).toContain('writing a nested file creates its parent folders');
+    expect(result).toContain('Not for Build project source files.');
+  });
+
   it('includes user name when provided', () => {
     mockGetState.gia = {
       ...mockGiaState,
@@ -153,6 +166,22 @@ describe('buildGiaSystem', () => {
     const result = buildGiaSystem();
     expect(result).toContain('Coding');
     expect(result).toContain('best practices');
+    expect(result).toContain('Installed skill catalog');
+    expect(result).toContain('skill-1');
+    expect(result).toContain('Before answering, planning, or using task tools on EVERY user message');
+  });
+
+  it('uses the current detailed instructions for an installed built-in skill', () => {
+    mockGetState.gia = {
+      ...mockGiaState,
+      activeSkillId: 'gia-security',
+      skills: [{ id: 'gia-security', name: 'Security Auditor', description: 'Audit code', systemPrompt: 'STALE SKILL TEXT: This is an outdated short prompt.' }],
+    };
+
+    const result = buildGiaSystem();
+    expect(result).toContain('Authorized defensive assessment');
+    expect(result).toContain('Do not test or access systems outside that scope.');
+    expect(result).not.toContain('STALE SKILL TEXT');
   });
 
   it('uses "the user" when no name is provided', () => {
@@ -219,5 +248,17 @@ describe('buildGiaSystem', () => {
   it('includes suggestion block format', () => {
     const result = buildGiaSystem();
     expect(result).toContain('```suggestions');
+  });
+
+  it('adds the active project path to Build Mode instructions', () => {
+    mockGetState.gia = {
+      ...mockGiaState,
+      activeProjectPath: '/workspace/projects/demo',
+      sharedData: { currentMode: 'build' },
+    };
+
+    const result = buildGiaSystem();
+    expect(result).toContain('The active repository is `/workspace/projects/demo`');
+    expect(result).toContain('projects/demo/src/App.tsx');
   });
 });

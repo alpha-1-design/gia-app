@@ -46,7 +46,10 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
   };
   const enableTools = useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson;
   if (enableTools) {
-    body.tools = ctx.buildAnthropicTools();
+    const tools = ctx.buildAnthropicTools();
+    body.tools = req.allowedToolIds
+      ? tools.filter(tool => req.allowedToolIds?.includes(tool.name))
+      : tools;
   }
   if (req.forceJson) {
     body.stop_sequences = ["\n```\n"];

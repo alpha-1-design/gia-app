@@ -7,37 +7,9 @@ export interface BrowserResult {
   screenshot?: string;
 }
 
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
-];
-
-function pickUserAgent(): string {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
-
 function randomDelay(ms: number): Promise<void> {
   const jitter = Math.random() * 200;
   return new Promise(r => setTimeout(r, ms + jitter));
-}
-
-function stealthHeaders(): Record<string, string> {
-  return {
-    'User-Agent': pickUserAgent(),
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-User': '?1',
-    'Upgrade-Insecure-Requests': '1',
-  };
 }
 
 function rewriteHTML(html: string, baseUrl: string): string {
@@ -71,8 +43,6 @@ class BrowserRunner {
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
   private proxyUrl = '';
   private initialized = false;
-  private cookieStore: Record<string, string> = {};
-
   private init() {
     if (this.initialized) return;
     this.initialized = true;
@@ -110,18 +80,13 @@ class BrowserRunner {
     await randomDelay(300);
 
     onProgress?.('Fetching page…');
-    const headers: Record<string, string> = {
-      ...stealthHeaders(),
-    };
     const domain = new URL(url).hostname;
-    if (this.cookieStore[domain]) {
-      headers['Cookie'] = this.cookieStore[domain];
-    }
 
     const res = await fetch(effectiveUrl, {
-      headers,
+      headers: { Accept: 'text/html,application/xhtml+xml' },
       signal: AbortSignal.timeout(15000),
       redirect: 'follow',
+      credentials: 'omit',
     });
 
     if (!res.ok) {
@@ -129,15 +94,6 @@ class BrowserRunner {
       if (res.status === 429) throw new Error(`Rate limited (429) — ${domain} is throttling requests.`);
       if (res.status === 0) throw new Error('CORS blocked. Configure a CORS proxy in Settings → Browser Automation.');
       throw new Error(`HTTP ${res.status} from ${domain}`);
-    }
-
-    // Capture Set-Cookie headers
-    const setCookie = res.headers.get('set-cookie');
-    if (setCookie) {
-      const match = setCookie.match(/^([^=]+)=([^;]+)/);
-      if (match) {
-        this.cookieStore[domain] = `${match[1]}=${match[2]}`;
-      }
     }
 
     onProgress?.('Reading response…');
@@ -189,10 +145,6 @@ class BrowserRunner {
     });
 
     return result;
-  }
-
-  clearCookies() {
-    this.cookieStore = {};
   }
 
   abort() {

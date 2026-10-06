@@ -521,6 +521,7 @@ export function useChatState() {
   return {
     input, setInput,
     loading: gen.loading, streamingMsgId: gen.streamingMsgId, streamingMsgIds: gen.streamingMsgIds,
+    providerStatuses: gen.providerStatuses,
     showAgentMention, setShowAgentMention, agentMentionQuery,
     handleAgentMentionSelect,
     voiceEnabled, setVoiceEnabled, showHistory, setShowHistory,

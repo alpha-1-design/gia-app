@@ -1,4 +1,4 @@
-# GIA v2.4.0.14 — User Manual
+# GIA v2.4.0.15 Beta — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,21 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🧪 What's New in v2.4.0.15 Beta
+
+This is a beta release. Some features are experimental, Android-only, or dependent on provider and device support.
+
+| Change | Description |
+|-----|-------------|
+| **On-device wake word (Android beta)** | Adds an OpenWakeWord-based “Hey Jarvis” listener using on-device models. It is native Android functionality and is not available in the web build. |
+| **Voice notes and assistant orb** | Adds voice-note capture and transcription flows plus a floating orb for assistant status and quick access. Microphone permissions and supported device services are required. |
+| **Build Studio** | Adds starter prompts and a visual style carousel to help begin app and website projects. |
+| **GitHub project workflow** | Search repositories, optionally configure a GitHub token for private access, clone a repository, and work in its project workspace. |
+| **Experimental in-app browser** | Opens web pages and Build previews inside GIA. Page reading and interaction are still in progress and may be limited by the platform or the target site. |
+| **Collaboration and planning** | Adds visible collaborative-provider activity and improves structured output handling in Analyst, Exam, and Planner. |
+| **Integrations and visual cards** | Adds an Integration Orbit hub and weather/calendar visuals for supported features. |
+| **Terminal and settings reliability** | Improves sandbox installation and package handling, settings navigation, and app reliability. |
 
 ## 🧠 What's New in v2.4.0.14
 

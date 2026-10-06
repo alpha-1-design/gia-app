@@ -56,7 +56,7 @@ export const ReliabilitySection: React.FC = () => {
       <div className="mt-1 space-y-0.5">
         <ToggleRow
           label="Multi-Provider Collaboration"
-          desc="All connected providers work together on the same prompt — results are synthesized"
+          desc="Checks up to 3 cloud endpoints, skips unreachable providers, then synthesizes replies. Sends your prompt to connected providers; local AI is excluded."
           icon={<Users size={13} style={{ color: multiProvider ? '#34d399' : 'var(--gia-muted)' }} />}
           enabled={multiProvider} onToggle={setMultiProvider}
         />

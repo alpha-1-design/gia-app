@@ -22,6 +22,7 @@ const ApiKeyInputPanel: React.FC = () => {
   if (!pendingApiKeyRequest) return null;
 
   const { providerId, description, label, kind = 'api_key', connectorId } = pendingApiKeyRequest;
+  const isGitHubToken = (connectorId || providerId) === 'github' && kind === 'token';
 
   const handleSave = async () => {
     if (!apiKey.trim()) {
@@ -44,6 +45,16 @@ const ApiKeyInputPanel: React.FC = () => {
         setPendingApiKeyRequest(null);
         setApiKey('');
         useGiaStore.getState().addNotification(`API key saved for ${providerId}`);
+      } else if (serviceId === 'github' && kind === 'token') {
+        credentialStore.getState().setCredential({
+          serviceId,
+          label: label || 'GitHub',
+          kind,
+          value: apiKey.trim(),
+        });
+        setPendingApiKeyRequest(null);
+        setApiKey('');
+        useGiaStore.getState().addNotification('GitHub token saved');
       } else if (connectorId && connectorManager.get(connectorId)) {
         credentialStore.getState().setCredential({
           serviceId,
@@ -97,7 +108,7 @@ const ApiKeyInputPanel: React.FC = () => {
                 <Key size={16} style={{ color: '#a855f7' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-zinc-100">API Key Required</p>
+                <p className="text-[13px] font-semibold text-zinc-100">{isGitHubToken ? 'GitHub Token Required' : 'API Key Required'}</p>
                 <p className="text-[10px] text-zinc-500 truncate">{description}</p>
               </div>
               <button onClick={handleCancel} className="text-zinc-600 hover:text-zinc-400 p-1" aria-label="Close">
@@ -110,7 +121,8 @@ const ApiKeyInputPanel: React.FC = () => {
                 type="password"
                 value={apiKey}
                 onChange={(e) => { setApiKey(e.target.value); setError(null); }}
-                placeholder={kind === 'token' ? 'Paste token…' : 'Enter API key…'}
+                placeholder={isGitHubToken ? 'Paste GitHub fine-grained token…' : kind === 'token' ? 'Paste token…' : 'Enter API key…'}
+                aria-label={isGitHubToken ? 'GitHub access token' : 'API key'}
                 className="w-full px-3 py-2 rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 style={{
                   background: 'var(--gia-surface-2)',
@@ -135,7 +147,7 @@ const ApiKeyInputPanel: React.FC = () => {
                     border: '1px solid rgba(168,85,247,0.3)',
                   }}
                 >
-                  {saving ? 'Saving...' : 'Save Key'}
+                  {saving ? 'Saving...' : isGitHubToken ? 'Save Token' : 'Save Key'}
                 </button>
                 <button
                   onClick={handleCancel}

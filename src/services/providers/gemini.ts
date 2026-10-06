@@ -35,7 +35,12 @@ export async function callGeminiNative(req: BrainRequest, ctx: BrainContext): Pr
     generationConfig: { temperature: req.temperature ?? 0.7, maxOutputTokens: req.maxTokens ?? 2048 }
   };
   if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
-    body.tools = [{ function_declarations: ctx.buildGeminiTools() }];
+    const declarations = ctx.buildGeminiTools();
+    body.tools = [{
+      function_declarations: req.allowedToolIds
+        ? declarations.filter(declaration => req.allowedToolIds?.includes(declaration.name))
+        : declarations,
+    }];
   }
   if (req.useExtendedThinking) {
     (body.generationConfig as { temperature?: number }).temperature = undefined;

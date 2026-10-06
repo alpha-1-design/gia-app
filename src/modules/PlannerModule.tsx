@@ -8,7 +8,8 @@ import AmbientInput from '../components/AmbientInput';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { getIntervalMs, formatNextRun } from '../utils/helpers';
 import { genId } from '../utils/id';
-import { generateWithRetry } from '../utils/generateWithRetry';
+import { buildRetryPrompt, generateWithRetry } from '../utils/generateWithRetry';
+import { normalizePlanOutput } from './normalizePlanOutput';
 
 interface PlanStep { id: string; title: string; description: string; done: boolean; priority: 'high'|'medium'|'low'; eta?: string }
 const PRIORITY_COLORS = {
@@ -133,8 +134,8 @@ const PlannerModule: React.FC = () => {
     setLoading(true); setError(''); setIntentState('thinking');
     try {
       const { data: parsed, wasRepaired } = await generateWithRetry<{ steps: Omit<PlanStep, 'done'>[]; title: string }>(
-        () => GiaBrain.generate({
-          prompt: text,
+        retry => GiaBrain.generate({
+          prompt: buildRetryPrompt(text, retry),
           systemPrompt: `You are a strategic planner. Break this goal into clear, actionable steps. Respond with valid JSON:
 {"title":"Concise plan title","steps":[{"id":"1","title":"Step title","description":"Specific actionable description","priority":"high|medium|low","eta":"e.g. Day 1, Week 2"}]}
 Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only JSON.`,
@@ -143,13 +144,10 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
           temperature: 0.45,
           maxTokens: 1500,
         }),
-        { moduleName: 'PlannerModule', maxRetries: 2 }
+        { moduleName: 'PlannerModule', maxRetries: 2, transform: value => normalizePlanOutput(value, text) }
       );
       if (wasRepaired) {
         logger.warn('[PlannerModule] AI response was repaired by OutputValidator');
-      }
-      if (!parsed.steps || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
-        throw new Error('AI returned an invalid response format. Please try again.');
       }
       setPlanTitle(parsed.title ?? '');
       setSteps(parsed.steps.map((s: Omit<PlanStep,'done'>) => ({ ...s, done: false })));
@@ -162,7 +160,7 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
         const fallback = generateFallbackPlan(text);
         setPlanTitle(fallback.title);
         setSteps(fallback.steps.map(s => ({ ...s, done: false })));
-        setError('');
+        setError('AI is unavailable offline. This is a generic template plan; customize it for your goal.');
         setIntentState('responding');
         timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
       } else {

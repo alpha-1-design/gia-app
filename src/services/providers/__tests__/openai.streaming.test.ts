@@ -4,15 +4,19 @@ vi.mock('../../../store/useProviderStore', () => ({
   useProviderStore: {
     getState: () => ({
       activeProvider: 'opencode',
-      providers: { opencode: { apiKey: 'test-key', model: 'deepseek-v4-flash-free' } },
+      providers: {
+        opencode: { apiKey: 'test-key', model: 'deepseek-v4.1-flash', baseUrl: 'https://api.opencode.example/v1' },
+        openrouter: { apiKey: 'router-key', model: 'google/gemma-3-27b-it:free', baseUrl: 'https://api.openrouter.example/v1' },
+      },
     }),
   },
 }));
 
 vi.mock('../../ProviderRegistry', () => ({
   providerRegistry: {
-    getBaseUrl: () => 'https://api.opencode.example',
-    getLabel: () => 'OpenCode Zen',
+    getBaseUrl: (id: string) => id === 'openrouter' ? 'https://api.openrouter.default/v1' : 'https://api.opencode.default/v1',
+    getLabel: (id: string) => id === 'openrouter' ? 'OpenRouter' : 'OpenCode Zen',
+    getProvider: (id: string) => ({ id, baseUrl: id === 'openrouter' ? 'https://api.openrouter.default/v1' : 'https://api.opencode.default/v1' }),
   },
 }));
 
@@ -99,6 +103,20 @@ describe('callOpenAICompat — streaming', () => {
     expect(res.text).toBe('Hello there');
   });
 
+  it('uses the requested provider and its configured base URL instead of the active provider', async () => {
+    const promise = callOpenAICompat(
+      { prompt: 'hi', providerId: 'openrouter', onStream: () => {} },
+      ctx,
+    );
+
+    await Promise.resolve();
+    expect(FakeXHR.instances[0].url).toBe('https://api.openrouter.example/v1/chat/completions');
+    FakeXHR.instances[0].pushSSE(['{"choices":[{"delta":{"content":"routed"}}]}']);
+    FakeXHR.instances[0].finish();
+
+    await expect(promise).resolves.toMatchObject({ provider: 'openrouter', text: 'routed' });
+  });
+
   it('retries through the CORS proxy when the direct streaming request fails before any bytes arrive', async () => {
     const received: string[] = [];
     const promise = callOpenAICompat(
@@ -114,7 +132,7 @@ describe('callOpenAICompat — streaming', () => {
     await Promise.resolve();
 
     expect(FakeXHR.instances.length).toBe(2);
-    expect(proxyUrlMock).toHaveBeenCalledWith('https://api.opencode.example/chat/completions');
+    expect(proxyUrlMock).toHaveBeenCalledWith('https://api.opencode.example/v1/chat/completions');
 
     const second = FakeXHR.instances[1];
     second.pushSSE(['{"choices":[{"delta":{"content":"recovered"}}]}']);

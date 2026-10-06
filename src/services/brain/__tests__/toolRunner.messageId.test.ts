@@ -73,4 +73,42 @@ describe('executeToolBlocks — messageId attribution', () => {
     expect(protocols.length).toBeGreaterThan(0);
     expect(protocols.every(p => p.messageId === undefined)).toBe(true);
   });
+
+  it('blocks tools outside a delegated specialist allowlist before proposing execution', async () => {
+    const state = { history: [], currentPrompt: '', clarificationAttempts: 0 };
+    await executeToolBlocks(
+      toolBlock(TEST_TOOL),
+      state,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['web_search'],
+    );
+
+    expect(state.history).toContainEqual(expect.objectContaining({
+      role: 'user',
+      content: expect.stringContaining(`BLOCKED: ${TEST_TOOL} is not available`),
+    }));
+    expect(useProtocolStore.getState().consoleProtocols).toHaveLength(0);
+  });
+
+  it('blocks batched sub-agent calls outside a delegated specialist allowlist', async () => {
+    const state = { history: [], currentPrompt: '', clarificationAttempts: 0 };
+    await executeToolBlocks(
+      toolBlock('sub_agent_call', { prompt: 'Attempt nested delegation' }),
+      state,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['web_search'],
+    );
+
+    expect(state.history).toContainEqual(expect.objectContaining({
+      role: 'user',
+      content: expect.stringContaining('BLOCKED: sub_agent_call is not available'),
+    }));
+    expect(state.currentPrompt).toContain('Some failed');
+  });
 });

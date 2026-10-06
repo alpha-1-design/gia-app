@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ProviderMonitor from '../ProviderMonitor';
+import { providerRegistry } from '../ProviderRegistry';
+import { corsProxy } from '../CorsProxy';
 
 const mockProviderState = {
   providers: {
     openai: { enabled: true, apiKey: 'sk-test', model: 'gpt-4o' },
     anthropic: { enabled: true, apiKey: 'sk-ant', model: 'claude-3' },
+    gemini: { enabled: true, apiKey: 'gem-test', model: 'gemini-2.5-flash' },
   },
 };
 
@@ -21,6 +24,7 @@ describe('ProviderMonitor', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -117,5 +121,35 @@ describe('ProviderMonitor', () => {
     ProviderMonitor.recordSuccess('anthropic', 'claude-3', 200);
     const all = ProviderMonitor.getAllHealth();
     expect(all).toHaveLength(2);
+  });
+
+  it('probes Anthropic with its required API headers', async () => {
+    await providerRegistry.ensureLoaded();
+    const fetchSpy = vi.spyOn(corsProxy, 'fetch').mockResolvedValue({ ok: true, status: 200 } as Response);
+
+    const health = await ProviderMonitor.testProvider('anthropic');
+
+    expect(fetchSpy).toHaveBeenCalledWith('https://api.anthropic.com/v1/models', expect.objectContaining({
+      headers: expect.objectContaining({
+        'x-api-key': 'sk-ant',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      }),
+    }));
+    expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
+    expect(health.online).toBe(true);
+  });
+
+  it('probes Gemini using the v1beta models endpoint and API-key header', async () => {
+    await providerRegistry.ensureLoaded();
+    const fetchSpy = vi.spyOn(corsProxy, 'fetch').mockResolvedValue({ ok: true, status: 200 } as Response);
+
+    const health = await ProviderMonitor.testProvider('gemini');
+
+    expect(fetchSpy).toHaveBeenCalledWith('https://generativelanguage.googleapis.com/v1beta/models', expect.objectContaining({
+      headers: expect.objectContaining({ 'x-goog-api-key': 'gem-test' }),
+    }));
+    expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
+    expect(health.online).toBe(true);
   });
 });

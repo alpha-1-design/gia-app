@@ -178,8 +178,14 @@ async function executeSingleTool(
   signal?: AbortSignal,
   sourcesAcc?: string[],
   messageId?: string,
+  allowedToolIds?: string[],
 ): Promise<{ result?: string; observations: string[] }> {
   const observations: string[] = [];
+
+  if (allowedToolIds && !allowedToolIds.includes(toolCall.id)) {
+    observations.push(`BLOCKED: ${toolCall.id} is not available to this delegated specialist. Use only the tools explicitly listed in your instructions.`);
+    return { observations };
+  }
 
   // Rate limiting: check per-tool and global limits
   if (!toolRateLimiter.consume(toolCall.id)) {
@@ -429,6 +435,7 @@ export async function executeToolBlocks(
   signal?: AbortSignal,
   sourcesAcc?: string[],
   messageId?: string,
+  allowedToolIds?: string[],
 ): Promise<{ didExecute: boolean; result?: string }> {
   const toolCalls = extractToolCalls(text);
   if (!toolCalls.length) {
@@ -453,8 +460,16 @@ export async function executeToolBlocks(
     AnalyticsTracker.trackToolClaimed(tc.id);
   }
 
-  const groups = getIndependentGroups(toolCalls);
-  const allObservations: string[] = [];
+  const blockedCalls = allowedToolIds
+    ? toolCalls.filter((call) => !allowedToolIds.includes(call.id))
+    : [];
+  const executableCalls = allowedToolIds
+    ? toolCalls.filter((call) => allowedToolIds.includes(call.id))
+    : toolCalls;
+  const groups = getIndependentGroups(executableCalls);
+  const allObservations = blockedCalls.map(
+    (call) => `BLOCKED: ${call.id} is not available to this delegated specialist. Use only the tools explicitly listed in your instructions.`,
+  );
 
   for (const group of groups) {
     if (signal?.aborted) break;
@@ -469,6 +484,7 @@ export async function executeToolBlocks(
       const tasks = group.map((call) => ({
         provider: (call.args.provider as string) || defaultSubAgentProvider(),
         prompt: (call.args.prompt as string) || '',
+        agent: call.args.agent as string | undefined,
       }));
       onThought?.(`Spawning ${group.length} sub-agents in parallel${isGodMode ? ' [GOD MODE]' : ''}...`);
       await manager.runAll(tasks, signal);
@@ -484,7 +500,7 @@ export async function executeToolBlocks(
     if (group.length === 1) {
       const call = group[0];
       try {
-        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId);
+        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId, allowedToolIds);
         allObservations.push(...observations);
         if (result === '__CLARIFICATION__') {
           const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
@@ -508,7 +524,7 @@ export async function executeToolBlocks(
       try {
         onThought?.(`⚡ Running ${group.length} tools in parallel...`);
         const results = await Promise.all(
-          group.map((call) => executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId))
+          group.map((call) => executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId, allowedToolIds))
         );
 
         for (const { result, observations } of results) {

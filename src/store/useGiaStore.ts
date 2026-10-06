@@ -44,7 +44,7 @@ export interface Message {
   content: string;
   error?: boolean;
   timestamp: number;
-  attachments?: { name: string; type: string; content: string; preview?: string }[];
+  attachments?: { name: string; type: string; content: string; preview?: string; error?: string }[];
   artifacts?: Artifact[];
   sources?: (string | { url: string; title?: string })[];
   model?: string;
@@ -295,6 +295,16 @@ export interface Clarification {
   fields?: ClarificationField[];
 }
 
+interface InAppBrowserState {
+  open: boolean;
+  mode: 'reader' | 'preview';
+  url: string;
+  title: string;
+  content: string;
+  error: string;
+  loading: boolean;
+}
+
 interface GiaState {
   currentModule: Module;
   intentState: IntentState;
@@ -485,9 +495,13 @@ interface GiaState {
   setShowProtocols: (show: boolean) => void;
   buildMode: boolean;
   setBuildMode: (v: boolean) => void;
+  activeProjectPath: string | null;
+  setActiveProjectPath: (path: string | null) => void;
   buildSessionId: string | null;
   buildPreviewUrl: string | null;
   setBuildPreview: (url: string | null) => void;
+  inAppBrowser: InAppBrowserState;
+  setInAppBrowserState: (state: Partial<InAppBrowserState>) => void;
   sandboxEnvReady: boolean | null;
   setSandboxEnvReady: (v: boolean | null) => void;
   longRunningMode: boolean;
@@ -639,18 +653,32 @@ export const useGiaStore = create<GiaState>()(
       deepLinkQueue: [],
       liveFileEdit: null,
       buildMode: false,
+      activeProjectPath: null,
       buildSessionId: null,
       buildPreviewUrl: null,
+      inAppBrowser: { open: false, mode: 'reader', url: '', title: '', content: '', error: '', loading: false },
       sandboxEnvReady: null,
       longRunningMode: (() => { try { return localStorage.getItem('gia-long-running') === 'true'; } catch { return false; } })(),
       autoModelUnload: (() => { try { return localStorage.getItem('gia-auto-model-unload') !== 'false'; } catch { return true; } })(),
       fullScreenMode: false,
 
       setBuildMode: (v) => set((s) => ({ buildMode: v, buildSessionId: v ? s.activeSessionId : s.buildSessionId })),
+      setActiveProjectPath: (path) => set({ activeProjectPath: path }),
       setBuildPreview: (url) => set({ buildPreviewUrl: url }),
+      setInAppBrowserState: (browserState) => set((s) => ({
+        inAppBrowser: { ...s.inAppBrowser, ...browserState },
+      })),
       setSandboxEnvReady: (v) => set({ sandboxEnvReady: v }),
       setModule: (module) => set((s) => {
-        if (s.currentModule === module) return {};
+        if (s.currentModule === module) {
+          if (module === 'chat' && s.buildMode) {
+            return {
+              buildMode: false,
+              sharedData: { ...s.sharedData, currentMode: 'code' },
+            };
+          }
+          return {};
+        }
         // Fire-and-forget: dynamic import avoids a circular dependency, since
         // HapticService itself reads this store's hapticFeedback flag.
         import('../services/HapticService').then(m => m.default.selection());
@@ -668,14 +696,30 @@ export const useGiaStore = create<GiaState>()(
         const history = s.moduleHistory[s.moduleHistory.length - 1] === prevModule
           ? s.moduleHistory
           : [...s.moduleHistory, prevModule].slice(-20);
-        return { currentModule: module, moduleHistory: history, sharedData: { ...s.sharedData, lastModuleSwitch: contextPayload } };
+        const enteringBuild = module === 'build';
+        return {
+          currentModule: module,
+          moduleHistory: history,
+          buildMode: enteringBuild,
+          sharedData: {
+            ...s.sharedData,
+            currentMode: enteringBuild ? 'build' : 'code',
+            lastModuleSwitch: contextPayload,
+          },
+        };
       }),
       goBack: () => {
         const s = get();
         if (s.moduleHistory.length === 0) return false;
         const prev = s.moduleHistory[s.moduleHistory.length - 1];
         import('../services/HapticService').then(m => m.default.selection());
-        set((st) => ({ currentModule: prev, moduleHistory: st.moduleHistory.slice(0, -1) }));
+        const enteringBuild = prev === 'build';
+        set((st) => ({
+          currentModule: prev,
+          moduleHistory: st.moduleHistory.slice(0, -1),
+          buildMode: enteringBuild,
+          sharedData: { ...st.sharedData, currentMode: enteringBuild ? 'build' : 'code' },
+        }));
         return true;
       },
       setShowEngine: (v) => set({ showEngine: v }),
@@ -1126,7 +1170,12 @@ export const useGiaStore = create<GiaState>()(
           // back to Chat rather than leaving the user stranded on a module
           // whose entry in the nav dropdown just disappeared.
           if (hidden && s.currentModule === id) {
-            return { hiddenModules, currentModule: 'chat' as Module };
+            return {
+              hiddenModules,
+              currentModule: 'chat' as Module,
+              buildMode: false,
+              sharedData: { ...s.sharedData, currentMode: 'code' },
+            };
           }
           return { hiddenModules };
         });
@@ -1137,12 +1186,12 @@ export const useGiaStore = create<GiaState>()(
     }),
     {
       name: 'gia-store-v3',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => idbStorage),
       migrate: (persistedState: unknown, version: number) => {
-        if (version < 3 && persistedState && typeof persistedState === 'object') {
+        if (persistedState && typeof persistedState === 'object') {
           const state = persistedState as Record<string, unknown>;
-          if (Array.isArray(state.sessions)) {
+          if (version < 3 && Array.isArray(state.sessions)) {
             state.sessions = state.sessions.map((sess: unknown) => {
               if (!sess || typeof sess !== 'object') return sess;
               const s = sess as Record<string, unknown>;
@@ -1171,6 +1220,13 @@ export const useGiaStore = create<GiaState>()(
               }
               return s;
             });
+          }
+          if (version < 4) {
+            state.buildMode = false;
+            if (state.sharedData && typeof state.sharedData === 'object') {
+              const sharedData = state.sharedData as Record<string, unknown>;
+              if (sharedData.currentMode === 'build') sharedData.currentMode = 'code';
+            }
           }
         }
         return persistedState as Record<string, unknown>;
@@ -1212,15 +1268,19 @@ export const useGiaStore = create<GiaState>()(
         wakeWordAccessKey: s.wakeWordAccessKey,
         nativeWakeKeyword: s.nativeWakeKeyword,
         useWhisper: s.useWhisper,
-        buildMode: s.buildMode,
         buildSessionId: s.buildSessionId,
         buildPreviewUrl: s.buildPreviewUrl,
+        activeProjectPath: s.activeProjectPath,
       }),
       onRehydrateStorage: () => (state) => {
         // A stream interrupted by a crash / tab close can persist a message
         // with thinking:true forever. Nothing is generating on reload, so any
         // in-flight flag is stale — clear it so the UI doesn't show a dead spinner.
         if (!state) return;
+        // Build Mode is transient. The persisted module always reopens as Chat,
+        // so restoring its build flag would reopen Chat with Build instructions.
+        state.buildMode = false;
+        if (state.sharedData.currentMode === 'build') state.sharedData = { ...state.sharedData, currentMode: 'code' };
         const clearThinking = (sess: typeof state.sessions[number]) => ({
           ...sess,
           messages: sess.messages.map((m) =>

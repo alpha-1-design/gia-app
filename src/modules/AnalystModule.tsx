@@ -12,7 +12,8 @@ import {
 } from 'recharts';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { isNativePlatform } from '../utils/helpers';
-import { generateWithRetry } from '../utils/generateWithRetry';
+import { buildRetryPrompt, generateWithRetry } from '../utils/generateWithRetry';
+import { normalizeAnalysisOutput } from './analyst/normalizeAnalysisOutput';
 
 interface DataPoint { label: string; value: number; color?: string; [key: string]: unknown }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
@@ -36,17 +37,6 @@ function loadSavedAnalysis(): { data: DataPoint[]; summary: string; narrative: s
 function saveAnalysis(query: string, data: DataPoint[], summary: string, narrative: string): void {
   try { localStorage.setItem(ANALYST_STORAGE_KEY, JSON.stringify({ query: query.slice(0, 100), data, summary, narrative })); } catch { /* ignore */ }
 }
-
-const FALLBACK_DATA: Record<string, { data: DataPoint[]; summary: string; narrative: string }> = {
-  default: {
-    data: [
-      { label: 'Q1', value: 100 }, { label: 'Q2', value: 135 }, { label: 'Q3', value: 120 },
-      { label: 'Q4', value: 160 }, { label: 'Current', value: 145 },
-    ],
-    summary: 'Trend shows steady growth with minor Q3 dip',
-    narrative: 'Based on the available data, there is a general upward trend with a slight seasonal correction in Q3. The current period shows strong recovery and continued momentum.',
-  },
-};
 
 const AnalystModule: React.FC = () => {
   const saved = React.useMemo(() => loadSavedAnalysis(), []);
@@ -91,8 +81,8 @@ const AnalystModule: React.FC = () => {
       const prompt = fileData ? `Analyze this data:\n\n${fileData.slice(0,8000)}\n\nUser: ${text}` : text;
       
       const { data: parsed } = await generateWithRetry<{ data: DataPoint[]; summary?: string; narrative?: string; columns?: string[] }>(
-        () => GiaBrain.generate({
-          prompt,
+        retry => GiaBrain.generate({
+          prompt: buildRetryPrompt(prompt, retry),
           systemPrompt: `You are a data analyst and insight engine. Respond with valid JSON only:
 {"summary":"One punchy insight sentence","narrative":"2-3 sentences of deeper analysis","data":[{"label":"Name","value":42}],"columns":["Label","Value"]}
 Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user wants a table, provide rich rows and columns.`,
@@ -101,12 +91,8 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
           temperature: 0.25,
           maxTokens: 1500,
         }),
-        { moduleName: 'AnalystModule' }
+        { moduleName: 'AnalystModule', transform: normalizeAnalysisOutput }
       );
-      
-      if (!parsed.data || !Array.isArray(parsed.data) || parsed.data.length === 0) {
-        throw new Error('AI returned an invalid response format. Please try again.');
-      }
       const mapped = parsed.data.map((d, i: number) => ({ ...d, color: COLORS[i%COLORS.length] }));
       setData(mapped);
       setSummary(parsed.summary ?? '');
@@ -121,14 +107,8 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       const errMsg = err instanceof Error ? err.message : '';
       const isNetwork = errMsg.includes('No internet') || errMsg.includes('offline');
       if (isNetwork) {
-        const fb = FALLBACK_DATA.default;
-        const mapped = fb.data.map((d, i) => ({ ...d, color: COLORS[i%COLORS.length] }));
-        setData(mapped);
-        setSummary(fb.summary);
-        setNarrative(fb.narrative);
-        setError('');
-        setIntentState('responding');
-        timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
+        setError('No internet connection. Analysis requires an AI provider; no sample data has been substituted.');
+        setIntentState('idle');
       } else {
         setError(errMsg || 'Could not analyze. Try a more specific query.');
         setIntentState('idle');

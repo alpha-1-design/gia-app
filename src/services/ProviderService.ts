@@ -28,16 +28,17 @@ class ProviderService {
       friendlyError,
     };
 
+    const providerReq: BrainRequest = { ...req, providerId };
     if (providerId === 'anthropic') {
-      return callAnthropic(req, ctx);
+      return callAnthropic(providerReq, ctx);
     }
     if (providerId === 'gemini') {
-      return callGeminiNative(req, ctx);
+      return callGeminiNative(providerReq, ctx);
     }
     if (providerId === 'local-llm') {
-      return callLocalLLM(req, ctx);
+      return callLocalLLM(providerReq, ctx);
     }
-    return callOpenAICompat(req, ctx);
+    return callOpenAICompat(providerReq, ctx);
   }
 
   private buildSystemPrompt(prompt: string, moduleSpecific?: string, mode: 'append' | 'replace' = 'append'): string {

@@ -19,6 +19,7 @@ export interface GitHubRepo {
   full_name: string;
   description: string;
   html_url: string;
+  clone_url: string;
   language: string;
   stargazers_count: number;
   forks_count: number;
@@ -72,6 +73,18 @@ class GitHubService {
       page++;
     }
     return repos;
+  }
+
+  async searchRepositories(query: string): Promise<GitHubRepo[]> {
+    const normalized = query.trim();
+    if (!normalized) throw new Error('Enter a repository search query.');
+    if (normalized.length > 256) throw new Error('Repository search query is too long.');
+    const res = await fetch(`${GITHUB_API}/search/repositories?q=${encodeURIComponent(normalized)}&per_page=10&sort=updated`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(`GitHub repository search failed: ${res.status} ${res.statusText}`);
+    const data = await res.json() as { items?: GitHubRepo[] };
+    return data.items || [];
   }
 
   async getRepo(owner: string, repo: string): Promise<GitHubRepo> {

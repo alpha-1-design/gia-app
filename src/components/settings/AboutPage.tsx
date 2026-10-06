@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BarChart3, Trash2, Smartphone, Globe, History, MessageSquare, Send, ExternalLink } from 'lucide-react';
+import { BarChart3, Trash2, Smartphone, Globe, History, MessageSquare, Send, ExternalLink, ShieldCheck, Mic, ScanLine, Sparkles, Plus, ArrowUp } from 'lucide-react';
 import { SubPageHeader } from './SubPageHeader';
 import { useGiaStore } from '../../store/useGiaStore';
 import { isNativePlatform } from '../../utils/helpers';
@@ -131,49 +131,130 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </div>
 
       {/* Phone design preview */}
-      <div className="gia-card p-4" style={{ borderColor: 'rgba(34,211,238,0.2)', background: 'linear-gradient(160deg, rgba(34,211,238,0.06), rgba(139,92,246,0.08))' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-sm font-semibold" style={{ color: '#a5f3fc' }}>The GIA phone experience</p>
-            <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>A calm command center for your device, not another noisy chatbot.</p>
-          </div>
-          <Smartphone size={18} style={{ color: '#67e8f9' }} />
+      <div className="gia-card relative isolate shrink-0 overflow-hidden p-4 sm:p-5" style={{ borderColor: 'rgba(139,92,246,0.24)', background: 'radial-gradient(ellipse at 50% 34%, rgba(99,102,241,0.13), transparent 52%), linear-gradient(155deg, rgba(19,18,35,0.96), rgba(8,10,19,0.98))' }}>
+        <div className="absolute -top-24 left-1/2 -z-10 h-56 w-56 -translate-x-1/2 rounded-full blur-3xl" style={{ background: 'rgba(124,58,237,0.15)' }} />
+        <div className="mb-5 text-center">
+          <p className="text-sm font-semibold tracking-tight" style={{ color: 'var(--gia-text)' }}>GIA, in your pocket</p>
+          <p className="mx-auto mt-1 max-w-xs text-[10px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>A capable assistant that feels at home on your phone—ready when you are, with you in control.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 items-center">
-          <div className="w-[142px] shrink-0 rounded-[24px] p-1.5 shadow-xl" style={{ background: '#090b14', border: '1px solid rgba(165,243,252,0.35)', boxShadow: '0 12px 32px rgba(34,211,238,0.12)' }}>
-            <div className="rounded-[19px] overflow-hidden p-2.5" style={{ minHeight: 220, background: 'linear-gradient(180deg, #111827, #080a12)' }}>
-              <div className="flex items-center justify-between mb-5">
-                <span className="text-[8px] font-bold tracking-[0.18em] text-cyan-200">GIA</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+
+        <div className="mx-auto w-[min(100%,220px)]">
+          <div
+            role="img"
+            aria-label="Concept preview of the GIA mobile app on a phone"
+            className="relative rounded-[36px] p-[7px]"
+            style={{
+              background: 'linear-gradient(145deg, #73718b 0%, #222333 9%, #090a11 34%, #29283a 70%, #77718e 100%)',
+              border: '1px solid rgba(226,232,240,0.3)',
+              boxShadow: '0 30px 70px -28px rgba(0,0,0,0.95), 0 16px 40px -18px rgba(139,92,246,0.48), inset 0 0 0 1px rgba(255,255,255,0.08)',
+            }}
+          >
+            <div className="absolute -right-[3px] top-[104px] h-12 w-[3px] rounded-r-full" style={{ background: 'linear-gradient(#78758c,#272633)' }} />
+            <div className="absolute -left-[3px] top-[92px] h-8 w-[3px] rounded-l-full" style={{ background: 'linear-gradient(#77748a,#272633)' }} />
+            <div className="relative min-h-[382px] overflow-hidden rounded-[30px] px-3.5 pb-3 pt-3" style={{ background: 'radial-gradient(ellipse at 65% 2%, rgba(124,58,237,0.16), transparent 42%), linear-gradient(180deg, #11121c, #090a10 72%)' }}>
+              <div className="absolute left-1/2 top-[7px] z-10 h-[17px] w-[68px] -translate-x-1/2 rounded-full border border-white/[0.04] bg-black" />
+              <div className="flex h-5 items-center justify-between px-1 text-[8px] font-semibold text-zinc-200">
+                <span>9:41</span>
+                <div className="flex items-center gap-1 text-zinc-300">
+                  <span className="text-[7px]">●●●</span><span>⌁</span><span className="h-2 w-3 rounded-[2px] border border-zinc-400 p-[1px]"><span className="block h-full w-2/3 rounded-[1px] bg-emerald-300" /></span>
+                </div>
               </div>
-              <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: 'radial-gradient(circle at 35% 30%, #67e8f9, #8b5cf6 52%, #111827 72%)', boxShadow: '0 0 24px rgba(139,92,246,0.55)' }}>
-                <span className="text-[10px] font-bold text-white">ASK</span>
+
+              <div className="mt-4 flex items-center justify-between border-b border-white/[0.07] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-violet-300/20 bg-gradient-to-br from-violet-400/20 to-indigo-500/10">
+                    <Sparkles size={15} className="text-violet-200" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold tracking-wide text-zinc-100">GIA</p>
+                    <p className="text-[8px] text-zinc-500">Your AI workspace</p>
+                  </div>
+                </div>
+                <div aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-zinc-300">
+                  <Plus size={13} />
+                </div>
               </div>
-              <div className="rounded-xl px-2.5 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                <p className="text-[8px] leading-relaxed text-zinc-300">Ready when you are. I can use your phone, files, and connected services—with your approval.</p>
+
+              <div className="pt-4">
+                <p className="text-[8px] font-medium uppercase tracking-[0.18em] text-violet-300/80">Good morning</p>
+                <p className="mt-1 text-[15px] font-semibold tracking-tight text-white">What’s on your mind?</p>
+                <p className="mt-1 text-[9px] leading-relaxed text-zinc-500">Think it through, make a plan, or get something done.</p>
               </div>
-              <div className="flex gap-1.5">
-                {['Talk', 'Scan', 'Act'].map(action => <span key={action} className="flex-1 text-center rounded-md py-1 text-[7px] text-cyan-100" style={{ background: 'rgba(34,211,238,0.12)' }}>{action}</span>)}
+
+              <div className="relative my-4 overflow-hidden rounded-2xl border border-violet-300/15 bg-gradient-to-br from-violet-500/[0.13] via-indigo-500/[0.07] to-cyan-400/[0.04] p-3">
+                <div className="absolute -right-5 -top-7 h-24 w-24 rounded-full bg-violet-400/10 blur-2xl" />
+                <div className="relative flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-violet-200/25 bg-[radial-gradient(circle_at_35%_30%,#c4b5fd,#8b5cf6_55%,#312e81)] shadow-[0_0_22px_rgba(139,92,246,0.38)]">
+                    <Sparkles size={15} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold text-violet-100">Here when you need me</p>
+                    <p className="mt-0.5 text-[8px] leading-relaxed text-zinc-400">Voice, vision, and your tools—on your terms.</p>
+                  </div>
+                </div>
+                <div className="relative mt-3 flex gap-1.5">
+                  {[
+                    { icon: Mic, label: 'Voice' },
+                    { icon: ScanLine, label: 'See' },
+                    { icon: MessageSquare, label: 'Chat' },
+                  ].map(({ icon: Icon, label }) => (
+                    <div key={label} className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/[0.07] bg-black/20 py-1.5 text-[8px] text-zinc-300">
+                      <Icon size={10} className="text-violet-300" />{label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-2 flex items-center gap-1.5">
+                <span className="text-[8px] font-medium text-zinc-500">RECENT CONVERSATIONS</span>
+                <span className="h-px flex-1 bg-white/[0.07]" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
+                  <div className="h-6 w-1 rounded-full bg-violet-400/70" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[9px] font-medium text-zinc-200">Plan my week</p>
+                    <p className="mt-0.5 text-[8px] text-zinc-600">Continue this conversation</p>
+                  </div>
+                  <span className="text-[11px] text-zinc-600">›</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
+                  <div className="h-6 w-1 rounded-full bg-cyan-300/60" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[9px] font-medium text-zinc-200">Study session</p>
+                    <p className="mt-0.5 text-[8px] text-zinc-600">Continue this conversation</p>
+                  </div>
+                  <span className="text-[11px] text-zinc-600">›</span>
+                </div>
+              </div>
+
+              <div className="absolute inset-x-3.5 bottom-3">
+                <div className="flex items-center gap-2 rounded-2xl border border-white/[0.09] bg-[#171821] px-2.5 py-2 shadow-lg">
+                  <Plus size={12} className="text-zinc-500" />
+                  <span className="flex-1 text-[9px] text-zinc-500">Message GIA…</span>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white">
+                    <ArrowUp size={12} />
+                  </div>
+                </div>
+                <div className="mx-auto mt-2 h-1 w-20 rounded-full bg-white/70" />
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 flex-1 w-full">
-            {[
-              ['Orb assistant', 'Talk, see, and act from anywhere on the phone.'],
-              ['Permission-first', 'GIA pauses and asks before sensitive actions.'],
-              ['Secure connections', 'API keys and service tokens stay in the vault.'],
-              ['Sandbox + Termux', 'Build, inspect, and automate with explicit control.'],
-            ].map(([title, description]) => (
-              <div key={title} className="rounded-xl p-2.5" style={{ background: 'rgba(0,0,0,0.16)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <p className="text-[10px] font-semibold mb-1" style={{ color: 'var(--gia-text)' }}>{title}</p>
-                <p className="text-[9px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>{description}</p>
-              </div>
-            ))}
-          </div>
         </div>
-        <p className="mt-3 text-[10px] leading-relaxed text-center" style={{ color: 'var(--gia-muted-2)' }}>
-          This preview represents the direction: a floating orb, fast actions, visible capability state, and a clear pause whenever GIA needs your permission.
-        </p>
+
+        <div className="mx-auto mt-5 grid max-w-md grid-cols-2 gap-2">
+          {[
+            { icon: Mic, title: 'Voice + vision', description: 'Speak naturally or show GIA what you see.' },
+            { icon: ShieldCheck, title: 'You stay in control', description: 'Sensitive actions pause for your approval.' },
+          ].map(({ icon: Icon, title, description }) => (
+            <div key={title} className="rounded-xl border border-white/[0.07] bg-black/15 p-2.5">
+              <Icon size={14} className="mb-1.5 text-violet-300" />
+              <p className="text-[10px] font-semibold" style={{ color: 'var(--gia-text)' }}>{title}</p>
+              <p className="mt-1 text-[9px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>{description}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-center text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>A concept preview of the GIA mobile experience.</p>
       </div>
 
       {/* Version + changelog */}
@@ -214,8 +295,8 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <button
                 disabled={!feedbackText.trim()}
                 onClick={() => {
-                  const subject = `[GIA ${feedbackType}] v2.4.0.14`;
-                  const body = `${feedbackText.trim()}\n\n---\nGIA version: 2.4.0.14\nPlatform: ${isNativePlatform() ? 'Android/iOS' : 'Web Browser'}`;
+                  const subject = `[GIA ${feedbackType}] v2.4.0.15 Beta`;
+                  const body = `${feedbackText.trim()}\n\n---\nGIA version: 2.4.0.15 Beta\nPlatform: ${isNativePlatform() ? 'Android/iOS' : 'Web Browser'}`;
                   window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                 }}
                 className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40"
@@ -251,7 +332,7 @@ export const AboutPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <span className="text-xs font-semibold">View Changelog</span>
         </button>
         <p className="text-center text-[10px]" style={{ color: 'var(--gia-muted-2)' }}>
-          GIA v2.4.0.14 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+          GIA v2.4.0.15 Beta · Built by Samuel Mensah · Alpha-1 Studio, Ghana
         </p>
       </div>
 

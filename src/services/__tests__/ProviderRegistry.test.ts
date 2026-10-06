@@ -1,27 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
-
-vi.mock('../../utils/logger', () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
-}));
-
-vi.mock('../CorsProxy', () => ({
-  corsProxy: { fetch: mockFetch },
-}));
-
 const { providerRegistry } = await import('../ProviderRegistry');
 
 describe('ProviderRegistry', () => {
   beforeEach(async () => {
-    mockFetch.mockReset();
     // Reset the singleton for isolation
     (providerRegistry as unknown as { providers: Map<string, unknown> }).providers = new Map();
     (providerRegistry as unknown as { models: Map<string, unknown> }).models = new Map();
     (providerRegistry as unknown as { imageModels: Map<string, unknown> }).imageModels = new Map();
     (providerRegistry as unknown as { loaded: boolean }).loaded = false;
-    (providerRegistry as unknown as { loading: null }).loading = null;
     await providerRegistry.init();
   });
 
@@ -32,7 +19,14 @@ describe('ProviderRegistry', () => {
       expect(providerRegistry.getAllIds()).toContain('ollama');
       expect(providerRegistry.getAllIds()).toContain('openai');
       expect(providerRegistry.getAllIds()).toContain('nvidia');
-      expect(providerRegistry.getAllProviders()).toHaveLength(71);
+      expect(providerRegistry.getAllProviders()).toHaveLength(22);
+    });
+
+    it('does not list gateways, placeholders, or unconfigured local servers as providers', () => {
+      expect(providerRegistry.getAllIds()).not.toContain('cloudflare-gateway');
+      expect(providerRegistry.getAllIds()).not.toContain('custom-openai');
+      expect(providerRegistry.getAllIds()).not.toContain('vllm');
+      expect(providerRegistry.getAllIds()).not.toContain('requesty');
     });
 
     it('loads fallback models', () => {
@@ -138,6 +132,13 @@ describe('ProviderRegistry', () => {
       expect(models[0]).toHaveProperty('free');
     });
 
+    it('does not expose fabricated OpenAI or xAI model IDs in fallback catalogs', () => {
+      expect(providerRegistry.getModels('openai').map(model => model.id)).not.toEqual(
+        expect.arrayContaining(['gpt-5.6-sol', 'gpt-5.6-terra']),
+      );
+      expect(providerRegistry.getModels('xai').map(model => model.id)).not.toContain('grok-4.20');
+    });
+
     it('returns empty array for unknown', () => {
       expect(providerRegistry.getModels('unknown')).toEqual([]);
     });
@@ -151,12 +152,5 @@ describe('ProviderRegistry', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('handles remote fetch failure gracefully', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const { providerRegistry: freshRegistry } = await import('../ProviderRegistry');
-      // Re-init for coverage of the error path
-      await freshRegistry.ensureLoaded();
-      expect(freshRegistry.getAllIds()).toContain('openai');
-    });
   });
 });

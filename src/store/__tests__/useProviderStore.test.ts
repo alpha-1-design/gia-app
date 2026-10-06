@@ -16,6 +16,7 @@ const mockProviders: Record<string, { id: string; name: string; needsApiKey: boo
   openai: { id: 'openai', name: 'OpenAI', needsApiKey: true, baseUrl: 'https://api.openai.com/v1', models: [{ id: 'gpt-4o', label: 'GPT-4o', free: false }, { id: 'gpt-4o-mini', label: 'GPT-4o Mini', free: false }] },
   anthropic: { id: 'anthropic', name: 'Anthropic', needsApiKey: true, baseUrl: 'https://api.anthropic.com/v1', models: [{ id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', free: false }] },
   'local-llm': { id: 'local-llm', name: 'Local LLM', needsApiKey: false, baseUrl: 'http://localhost:1234/v1', models: [{ id: 'local-model', label: 'Local Model', free: true }] },
+  opencode: { id: 'opencode', name: 'OpenCode Zen', needsApiKey: true, baseUrl: 'https://opencode.ai/zen/v1', models: [{ id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', free: false }] },
 };
 
 vi.mock('../../services/ProviderRegistry', () => ({
@@ -60,11 +61,25 @@ describe('useProviderStore', () => {
       await useProviderStore.getState().loadProviders();
       const state = useProviderStore.getState();
       expect(state.initialised).toBe(true);
-      expect(Object.keys(state.providers)).toEqual(['openai', 'anthropic', 'local-llm']);
+      expect(Object.keys(state.providers)).toEqual(['openai', 'anthropic', 'local-llm', 'opencode']);
       expect(state.providers.openai).toBeDefined();
       expect(state.providers.openai.apiKey).toBe('');
       expect(state.providers.openai.model).toBe('gpt-4o');
       expect(state.providers.openai.enabled).toBe(false);
+    });
+
+    it('migrates the retired OpenCode Zen model without losing provider settings', async () => {
+      useProviderStore.setState({
+        providers: {
+          opencode: { apiKey: 'zen-key', model: 'deepseek-v4-flash-free', enabled: true },
+        },
+      });
+      await useProviderStore.getState().loadProviders();
+      expect(useProviderStore.getState().providers.opencode).toMatchObject({
+        apiKey: 'zen-key',
+        model: 'deepseek-v4.1-flash',
+        enabled: true,
+      });
     });
 
     it('preserves existing provider config on reload', async () => {

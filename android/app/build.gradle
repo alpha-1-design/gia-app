@@ -7,8 +7,8 @@ android {
         applicationId "com.alpha1studio.gia"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 21
-        versionName "2.4.0.14"
+        versionCode 22
+        versionName "2.4.0.15 Beta"
         ndk {
             // onnxruntime-android ships ~5 MB of native code per ABI. The proot
             // layer is arm64-only already, so x86 builds were never useful.

@@ -1,6 +1,6 @@
 {
-  "version": "2.4.0.14",
-  "updated": "2026-09-26",
+  "version": "2.4.0.15",
+  "updated": "2026-10-06",
   "sections": [
     {
       "id": "start",
@@ -137,7 +137,7 @@
       "blocks": [
         { "type": "p", "text": "GIA has 200+ registered tools across web, files, code, device, security, and integrations. She calls tools by emitting code blocks with a tool ID and JSON arguments, then runs them in a loop." },
         { "type": "ul", "items": [
-          "Web: web_search, web_scrape, read_url, browser_navigate — search the internet and extract content.",
+          "Web: web_search, web_scrape, read_url, browser_navigate — search and read pages in GIA's in-app browser; Android also supports page interaction in the active browser.",
           "Files: filesystem_read, filesystem_write, list_files, zip_project — read, write, and manage files.",
           "Code: terminal_run, code_execution — run shell commands and code snippets.",
           "Device: device_info, vibrate, screen_brightness, get_contacts — interact with your phone.",

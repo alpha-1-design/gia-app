@@ -25,6 +25,16 @@ describe('extractJSON', () => {
     expect(result).toEqual({ key: 'val' });
   });
 
+  it('keeps the root object when it contains nested arrays', () => {
+    const result = extractJSON('Here is the result: {"questions":[{"options":["A","B","C","D"]}]}');
+    expect(result).toEqual({ questions: [{ options: ['A', 'B', 'C', 'D'] }] });
+  });
+
+  it('ignores bracket characters inside JSON strings', () => {
+    const result = extractJSON('{"text":"use [x] and {y} literally","items":[1,2]}');
+    expect(result).toEqual({ text: 'use [x] and {y} literally', items: [1, 2] });
+  });
+
   it('extracts JSON from markdown code block', () => {
     const result = extractJSON('```json\n{"a": 1}\n```');
     expect(result).toEqual({ a: 1 });

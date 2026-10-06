@@ -96,4 +96,18 @@ describe('SkillsMarketplace external registry fetch', () => {
     const skills = await SkillsMarketplace.fetchSkills(true);
     expect(skills.some((s) => s.id === 'smp-ok')).toBe(true);
   });
+
+  it('ships detailed, actionable instructions for every built-in GIA skill', async () => {
+    global.fetch = vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })) as unknown as typeof fetch;
+
+    const skills = await SkillsMarketplace.fetchSkills(true);
+    const giaSkills = skills.filter((skill) => skill.source === 'gia-registry' && skill.author === 'GIA');
+
+    expect(giaSkills.length).toBeGreaterThan(30);
+    expect(giaSkills.every((skill) => skill.version === '1.1.0')).toBe(true);
+    expect(giaSkills.every((skill) => skill.systemPrompt.length > 700)).toBe(true);
+    expect(giaSkills.every((skill) => skill.systemPrompt.includes('## General working standards'))).toBe(true);
+    expect(SkillsMarketplace.getBuiltinSystemPrompt('gia-security')).toContain('Authorized defensive assessment');
+    expect(SkillsMarketplace.getBuiltinSystemPrompt('skill-security')).toContain('Authorized defensive security workflow');
+  });
 });

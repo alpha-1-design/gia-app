@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { Download, Copy, Check, ExternalLink, Compass } from 'lucide-react'
-import { providerIcons } from './ProviderIcons'
+import ProviderIcon from '../../components/ProviderIcon'
 
 type SkillCard = {
   id: string
@@ -14,11 +14,28 @@ type SkillCard = {
 }
 
 const providers = [
-  'OpenAI', 'Anthropic', 'Gemini', 'Mistral',
-  'Groq', 'DeepSeek', 'Cohere', 'Perplexity',
-  'xAI', 'Together', 'Azure', 'Fireworks',
-  'NVIDIA', 'Cerebras', 'OpenRouter', 'AI/ML',
-  'Local', 'GitHub',
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'gemini', label: 'Google Gemini' },
+  { id: 'opencode', label: 'OpenCode Zen' },
+  { id: 'openrouter', label: 'OpenRouter' },
+  { id: 'groq', label: 'Groq' },
+  { id: 'deepseek', label: 'DeepSeek' },
+  { id: 'cerebras', label: 'Cerebras' },
+  { id: 'mistral', label: 'Mistral AI' },
+  { id: 'xai', label: 'xAI' },
+  { id: 'togetherai', label: 'Together AI' },
+  { id: 'huggingface', label: 'Hugging Face' },
+  { id: 'perplexity', label: 'Perplexity' },
+  { id: 'cohere', label: 'Cohere' },
+  { id: 'fireworks', label: 'Fireworks AI' },
+  { id: 'deepinfra', label: 'DeepInfra' },
+  { id: 'ai21', label: 'AI21 Labs' },
+  { id: 'replicate', label: 'Replicate' },
+  { id: 'nvidia', label: 'NVIDIA NIM' },
+  { id: 'ollama', label: 'Ollama' },
+  { id: 'lmstudio', label: 'LM Studio' },
+  { id: 'local-llm', label: 'On-device models' },
 ]
 
 const tools = [
@@ -237,42 +254,31 @@ export function Skills() {
 
         {/* Provider + tool ecosystem */}
         <div className="text-center mb-8">
-          <h3 className="text-xl font-semibold text-zinc-300 mb-2">Works with every major provider</h3>
-          <p className="text-sm text-zinc-600">70+ AI providers · 200+ tool actions · one GIA</p>
+          <h3 className="text-xl font-semibold text-zinc-300 mb-2">Connect to leading AI providers</h3>
+          <p className="text-sm text-zinc-600">22 provider connections · 200+ tool actions · one GIA</p>
         </div>
 
         <div className="flex flex-wrap justify-center gap-3 mb-16">
-          {providers.map((name, i) => {
-            const icon = providerIcons[name]
+          {providers.map(({ id, label }, i) => {
             return (
               <motion.div
-                key={name}
+                key={id}
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.025 }}
                 className="group flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all duration-300 cursor-default"
-                style={{
-                  background: `${icon?.color || '#6b7280'}08`,
-                  borderColor: `${icon?.color || '#6b7280'}15`,
-                }}
+                style={{ background: 'rgba(139, 92, 246, 0.05)', borderColor: 'rgba(139, 92, 246, 0.12)' }}
                 whileHover={{
                   scale: 1.05,
-                  background: `${icon?.color || '#6b7280'}15`,
-                  borderColor: `${icon?.color || '#6b7280'}30`,
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  borderColor: 'rgba(139, 92, 246, 0.24)',
                   transition: { duration: 0.15 },
                 }}
               >
-                <div
-                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-300"
-                  style={{ background: `${icon?.color || '#6b7280'}20` }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill={icon?.color || '#6b7280'}>
-                    <path d={icon?.path || 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z'} />
-                  </svg>
-                </div>
-                <span className="text-sm font-medium transition-colors duration-300" style={{ color: `${icon?.color || '#888'}bb` }}>
-                  {name === 'AI/ML' ? 'AI/ML API' : name}
+                <ProviderIcon provider={id} size={24} />
+                <span className="text-sm font-medium text-zinc-300">
+                  {label}
                 </span>
               </motion.div>
             )

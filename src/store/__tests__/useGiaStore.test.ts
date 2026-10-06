@@ -33,6 +33,7 @@ describe('useGiaStore', () => {
     idCounter = 0;
     useGiaStore.setState({
       currentModule: 'chat',
+      buildMode: false,
       intentState: 'idle',
       showTerminal: false,
       sharedData: {},
@@ -68,6 +69,26 @@ describe('useGiaStore', () => {
     it('setModule changes current module', () => {
       useGiaStore.getState().setModule('planner');
       expect(useGiaStore.getState().currentModule).toBe('planner');
+    });
+
+    it('leaving the dedicated Build module returns to ordinary Chat mode', () => {
+      useGiaStore.getState().setModule('build');
+      expect(useGiaStore.getState().buildMode).toBe(true);
+      useGiaStore.getState().setModule('chat');
+      expect(useGiaStore.getState().currentModule).toBe('chat');
+      expect(useGiaStore.getState().buildMode).toBe(false);
+      expect(useGiaStore.getState().sharedData.currentMode).toBe('code');
+    });
+
+    it('selecting Chat again clears a stale Build Mode toggle', () => {
+      useGiaStore.setState({
+        currentModule: 'chat',
+        buildMode: true,
+        sharedData: { currentMode: 'build' },
+      });
+      useGiaStore.getState().setModule('chat');
+      expect(useGiaStore.getState().buildMode).toBe(false);
+      expect(useGiaStore.getState().sharedData.currentMode).toBe('code');
     });
 
     it('setCurrentTool updates current tool', () => {

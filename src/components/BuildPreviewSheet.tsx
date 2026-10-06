@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, RotateCcw, ExternalLink } from 'lucide-react';
+import GIAInAppBrowser from '../services/GIAInAppBrowser';
+import { useGiaStore } from '../store/useGiaStore';
 
 interface BuildPreviewSheetProps {
   url: string | null;
@@ -10,6 +12,17 @@ interface BuildPreviewSheetProps {
 
 const BuildPreviewSheet: React.FC<BuildPreviewSheetProps> = ({ url, open, onClose }) => {
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const openInBrowser = async () => {
+    if (!url) return;
+    try {
+      await GIAInAppBrowser.openPreview(url);
+    } catch (error) {
+      useGiaStore.getState().addNotification(
+        `Could not open the in-app browser: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -44,7 +57,7 @@ const BuildPreviewSheet: React.FC<BuildPreviewSheetProps> = ({ url, open, onClos
                 <RotateCcw size={14} />
               </button>
               <button
-                onClick={() => window.open(url, '_blank')}
+                onClick={() => void openInBrowser()}
                 className="p-1.5 rounded-lg transition-colors hover:bg-white/10 active:bg-white/15"
                 style={{ color: 'var(--gia-muted-2)' }}
                 aria-label="Open in browser"

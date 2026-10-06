@@ -8,6 +8,8 @@ interface LeftDrawerProps {
   children: React.ReactNode;
   width?: string;
   zIndex?: number;
+  id?: string;
+  topOffset?: number;
 }
 
 // Mirrors BottomSheet's drag-to-dismiss pattern but on the x-axis (see
@@ -19,6 +21,8 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
   children,
   width = '84vw',
   zIndex = 130,
+  id,
+  topOffset = 0,
 }) => {
   const handleDragEnd = (_e: unknown, info: PanInfo) => {
     if (shouldDismissFromLeftDrag(info)) {
@@ -34,7 +38,10 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
         <>
           <motion.div
             className="fixed inset-0 bg-black/55"
-            style={{ zIndex }}
+            style={{
+              zIndex,
+              top: topOffset > 0 ? `calc(env(safe-area-inset-top) + ${topOffset}px)` : undefined,
+            }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -43,6 +50,7 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
           />
           <motion.div
             className="fixed inset-y-0 left-0 overflow-hidden flex flex-col"
+            id={id}
             style={{
               zIndex: zIndex + 1,
               width,
@@ -58,7 +66,8 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
               // relative to the real viewport, not the padded box), so with
               // edge-to-edge status bar overlay this drawer's content would
               // otherwise start underneath/behind it. Pad it directly.
-              paddingTop: 'env(safe-area-inset-top)',
+              top: topOffset > 0 ? `calc(env(safe-area-inset-top) + ${topOffset}px)` : undefined,
+              paddingTop: topOffset > 0 ? 0 : 'env(safe-area-inset-top)',
               paddingBottom: 'env(safe-area-inset-bottom)',
             }}
             initial={{ x: reduceMotion ? 0 : '-100%', opacity: reduceMotion ? 0 : 1 }}

@@ -8,11 +8,13 @@ import { createStreamWatchdog, STREAM_IDLE_TIMEOUT_MS } from './streamWatchdog';
 
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { activeProvider, providers } = useProviderStore.getState();
-  const config = providers[activeProvider];
+  const providerId = req.providerId || activeProvider;
+  const config = providers[providerId];
+  const definition = providerRegistry.getProvider(providerId);
   const effectiveModel = req.modelOverride || config.model;
-  const baseUrl = providerRegistry.getBaseUrl(activeProvider);
-  const label = providerRegistry.getLabel(activeProvider);
-  if (!baseUrl) throw new Error(`Unknown provider: ${activeProvider}`);
+  const baseUrl = (config.baseUrl || definition?.baseUrl || providerRegistry.getBaseUrl(providerId)).replace(/\/+$/, '');
+  const label = providerRegistry.getLabel(providerId);
+  if (!baseUrl) throw new Error(`Unknown provider: ${providerId}`);
   const messages = [
     { role: 'system', content: ctx.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode) },
     ...(await ctx.buildMessages(req))
@@ -28,7 +30,10 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     body.response_format = { type: 'json_object' };
   }
   if (useGiaStore.getState().handsOff && !req._skipNativeSchemas && !req.forceJson) {
-    body.tools = ctx.buildOpenAITools();
+    const tools = ctx.buildOpenAITools();
+    body.tools = req.allowedToolIds
+      ? tools.filter(tool => req.allowedToolIds?.includes((tool.function as { name: string }).name))
+      : tools;
   }
   if (req.useExtendedThinking) {
     const modelLower = effectiveModel.toLowerCase();
@@ -42,13 +47,13 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
   };
-  if (activeProvider === 'openrouter') {
+  if (providerId === 'openrouter') {
     headers['HTTP-Referer'] = 'https://gia.app';
     headers['X-Title'] = 'GIA';
   }
 
   if (req.onStream) {
-    if (req.signal?.aborted) return { text: '', provider: activeProvider, model: effectiveModel };
+    if (req.signal?.aborted) return { text: '', provider: providerId, model: effectiveModel };
 
     const runStream = (url: string) => new Promise<BrainResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -205,7 +210,7 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         } else {
           const wasTruncated = finishReason === 'length';
           const tokenUsage = streamTokenUsage ? { input: streamTokenUsage.prompt_tokens || 0, output: streamTokenUsage.completion_tokens || 0, total: streamTokenUsage.total_tokens || 0 } : undefined;
-          resolve({ text: fullText, provider: activeProvider, model: effectiveModel, finishReason, wasTruncated, tokenUsage });
+          resolve({ text: fullText, provider: providerId, model: effectiveModel, finishReason, wasTruncated, tokenUsage });
         }
       };
 
@@ -324,5 +329,5 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   if (!content?.trim()) throw new Error(ctx.friendlyError(label, `${label} returned empty response`));
   const finishReason = choice?.finish_reason || 'stop';
   const wasTruncated = finishReason === 'length';
-  return { text: content, provider: activeProvider, model: effectiveModel, finishReason, wasTruncated, tokenUsage };
+  return { text: content, provider: providerId, model: effectiveModel, finishReason, wasTruncated, tokenUsage };
 }

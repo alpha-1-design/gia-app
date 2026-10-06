@@ -434,8 +434,10 @@ const MessageRow = memo<MessageRowProps>(({
                   <SourcesBlock sources={msg.sources} />
                 )}
                 {msg.attachments?.filter(a => !a.preview).map(att => (
-                  <div key={att.name} className="mt-2 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--gia-surface-2)' }}>
-                    <Paperclip size={10} /> {att.name}
+                  <div key={att.name} className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px]" style={{ background: 'var(--gia-surface-2)', color: att.error ? '#fca5a5' : 'var(--gia-muted)' }} title={att.error}>
+                    {att.error ? <AlertCircle size={10} /> : <Paperclip size={10} />}
+                    <span>{att.name}</span>
+                    {att.error && <span className="truncate">{att.error}</span>}
                   </div>
                 ))}
               </>

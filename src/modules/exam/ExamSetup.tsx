@@ -5,7 +5,8 @@ import type { ExamSystem, ExamMode, Difficulty, Subject, LearningProfile } from 
 import { ASSESSMENT_FILE_KEY } from './types';
 import GiaBrain from '../../services/GiaBrain';
 import { useGiaStore } from '../../store/useGiaStore';
-import { generateWithRetry } from '../../utils/generateWithRetry';
+import { buildRetryPrompt, generateWithRetry } from '../../utils/generateWithRetry';
+import { normalizeLearningAssessment } from './normalizeExamOutput';
 
 interface ExamSetupProps {
   examSystem: ExamSystem;
@@ -64,8 +65,8 @@ const ExamSetup: React.FC<ExamSetupProps> = ({
         strongAreas: { subject: string; topic: string }[];
         overallScore: number;
       }>(
-        () => GiaBrain.generate({
-          prompt: `Analyze this student's work and build a learning profile:\n\n${assessFile.content}`,
+        retry => GiaBrain.generate({
+          prompt: buildRetryPrompt(`Analyze this student's work and build a learning profile:\n\n${assessFile.content}`, retry),
           systemPrompt: `You are an educational assessment expert. Analyze the submitted work and respond with valid JSON:
 {"weakAreas":[{"subject":"Subject name","topic":"Specific topic","recommendations":["Study tip 1","Study tip 2"]}],"strongAreas":[{"subject":"Subject name","topic":"Topic name"}],"overallScore":65}
 overallScore is 0-100. Be specific with recommendations. Pure JSON, no markdown.`,
@@ -74,18 +75,18 @@ overallScore is 0-100. Be specific with recommendations. Pure JSON, no markdown.
           temperature: 0.3,
           maxTokens: 4000,
         }),
-        { moduleName: 'ExamAssessment' }
+        { moduleName: 'ExamAssessment', transform: normalizeLearningAssessment }
       );
-      if (parsed.weakAreas || parsed.strongAreas) {
-        const profile: LearningProfile = {
-          weakAreas: (parsed.weakAreas || []).map(w => ({ ...w, score: 50, recommendations: w.recommendations || ['Review this topic'] })),
-          strongAreas: (parsed.strongAreas || []).map(s => ({ ...s, score: 80 })),
-          overallScore: parsed.overallScore ?? 50,
-          totalAssessments: 1,
+      {
+        const updatedProfile: LearningProfile = {
+          weakAreas: parsed.weakAreas.map(w => ({ ...w, score: 50, recommendations: w.recommendations.length ? w.recommendations : ['Review this topic'] })),
+          strongAreas: parsed.strongAreas.map(s => ({ ...s, score: 80 })),
+          overallScore: parsed.overallScore,
+          totalAssessments: (profile?.totalAssessments ?? 0) + 1,
           lastUpdated: Date.now(),
         };
-        onProfileUpdate(profile);
-        localStorage.setItem('gia-learning-profile', JSON.stringify(profile));
+        onProfileUpdate(updatedProfile);
+        localStorage.setItem('gia-learning-profile', JSON.stringify(updatedProfile));
 
         // Save assessment file + analysis to localStorage for later reference
         let existing: unknown[] = [];
@@ -95,9 +96,9 @@ overallScore is 0-100. Be specific with recommendations. Pure JSON, no markdown.
           content: assessFile.content,
           timestamp: Date.now(),
           analysis: {
-            weakAreas: profile.weakAreas,
-            strongAreas: profile.strongAreas,
-            overallScore: profile.overallScore,
+            weakAreas: updatedProfile.weakAreas,
+            strongAreas: updatedProfile.strongAreas,
+            overallScore: updatedProfile.overallScore,
           },
         });
         localStorage.setItem(ASSESSMENT_FILE_KEY, JSON.stringify(existing));

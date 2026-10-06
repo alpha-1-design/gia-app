@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.14';
+const VERSION = '2.4.0.15 Beta';
 
 const sections = [
   {
@@ -16,6 +16,15 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
+      'GIA 2.4.0.15 is a beta release: new workflows and Android-native features are still being tested, and feedback is welcome.',
+      'Added an experimental Android on-device wake-word engine with the “Hey Jarvis” phrase. The browser build does not provide native wake-word listening.',
+      'Added voice notes, a live Jarvis Orb status surface, and an Integration Orbit hub for connected services.',
+      'Added Build Studio with a visual style carousel and starter prompts, plus weather and calendar cards for supported assistant output.',
+      'Added a shared in-app browser experiment for reading pages and opening Build previews. Browser navigation and external-site access remain experimental and may be limited by Android or website restrictions.',
+      'Build Mode can discover GitHub repositories, clone a selected repository into the project workspace, and use an optional GitHub token for private repositories.',
+      'Added clearer project-workspace file tools so GIA can create, list, read, and update files in the active repository instead of saving source code to the app Documents folder.',
+      'Added collaborative multi-provider work activity and improved Analyst, Exam, and Planner output handling.',
+      'Build Mode now creates nested project folders when writing files, and its instructions distinguish project workspace files from user-facing downloads.',
       'Smart home control now works on a phone. Discovery and device commands were pointed at the desktop companion server, which does not exist on Android, so they always failed — they now run through the same on-device terminal as the rest of your tools.',
       'A streaming stall guard. If a provider stopped sending data part-way through an answer, nothing timed out and the reply just froze. GIA now watches for silence (30s between chunks, 60s for the very first byte, so a slow start or a long reasoning block is never mistaken for a hang) and tells you what happened instead of hanging.',
       'On-Device Mode — one toggle (composer Tools sheet or Settings → System → Reliability) that runs GIA fully offline: every response from the local model, network tools blocked, cloud transcription refused. Nothing leaves your phone.',
@@ -29,7 +38,7 @@ const sections = [
       'Termux integration with availability checks, explicit command execution, working-directory support, and refusal when Termux is unavailable.',
       'Chat skill creation through the new skill_create tool, plus expanded follow-up suggestions and clarification guidance.',
       'Detailed Alpine and Ubuntu sandbox provisioning with package-manager detection, Debian package mappings, and progress reporting.',
-      'Expanded the built-in provider catalogue from 22 to 71 entries, including hosted APIs, gateways, private endpoints, and local OpenAI-compatible servers.',
+      'Trimmed the built-in provider list to 22 curated cloud and local providers; add custom OpenAI-, Anthropic-, or Gemini-compatible endpoints separately.',
       'Added an About-page phone design preview showing the orb, fast actions, permission-first controls, secure connections, sandbox, and Termux capabilities.',
       'Added an in-app feedback and complaint form that opens a reviewed email to alphariansamuel@gmail.com, plus a GitHub issue shortcut.',
       'Termux commands now return stdout, stderr, exit code, and a job ID to GIA so she can inspect what actually happened before reporting completion.',
@@ -81,7 +90,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.14.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.15 Beta.',
     ],
   },
 ];

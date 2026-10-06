@@ -65,6 +65,7 @@ function execCmd(cmd, opts = {}) {
       timeout: opts.timeout || 30000,
       maxBuffer: 10 * 1024 * 1024,
       ...opts,
+      ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
     });
     let stdout = '', stderr = '';
     child.stdout.on('data', d => stdout += d.toString());
@@ -111,8 +112,10 @@ async function ensureDockerContainer() {
 async function dockerExec(command, opts = {}) {
   const timeout = opts.timeout || 60000;
   const wd = opts.workdir || '/workspace';
-  const cmd = `docker exec -w "${wd}" ${CONTAINER_NAME} sh -c ${JSON.stringify(command)}`;
-  const result = await execCmd(cmd, { timeout });
+  const envKeys = Object.keys(opts.env || {});
+  const envArgs = envKeys.map(key => `-e ${key}`).join(' ');
+  const cmd = `docker exec ${envArgs} -w "${wd}" ${CONTAINER_NAME} sh -c ${JSON.stringify(command)}`;
+  const result = await execCmd(cmd, { timeout, ...(opts.env ? { env: opts.env } : {}) });
   return { stdout: result.stdout.trim(), stderr: result.stderr.trim(), exitCode: result.exitCode };
 }
 
@@ -199,7 +202,7 @@ async function prootExec(command, opts = {}) {
   if (useHostFallback) {
     const cwd = opts.workdir ? path.join(WORKSPACE, opts.workdir.replace(/^\/workspace/, '')) : WORKSPACE;
     const targetCwd = fs.existsSync(cwd) ? cwd : WORKSPACE;
-    const result = await execCmd(command, { timeout, cwd: targetCwd });
+    const result = await execCmd(command, { timeout, cwd: targetCwd, ...(opts.env ? { env: opts.env } : {}) });
     return { stdout: result.stdout.trim(), stderr: result.stderr.trim(), exitCode: result.exitCode };
   }
   const prefix = getProotPrefix(opts.workdir);
@@ -212,7 +215,7 @@ async function prootExec(command, opts = {}) {
     const guestCmd = "export PATH=/bin:/usr/bin:/sbin:/usr/sbin && " + command;
     cmd = `${prefix} /bin/sh -c ${JSON.stringify(guestCmd)}`;
   }
-  const result = await execCmd(cmd, { timeout });
+  const result = await execCmd(cmd, { timeout, ...(opts.env ? { env: opts.env } : {}) });
   return { stdout: result.stdout.trim(), stderr: result.stderr.trim(), exitCode: result.exitCode };
 }
 
@@ -280,6 +283,10 @@ function workspacePath(input) {
   return resolved;
 }
 
+function shellQuote(value) {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
 async function handleExec(req, res) {
   const { command, timeout, workdir } = await parseBody(req);
   if (!command) return sendJSON(res, 400, { error: 'command is required' });
@@ -319,7 +326,7 @@ async function handleInstall(req, res) {
 }
 
 async function handleClone(req, res) {
-  const { repo, dest } = await parseBody(req);
+  const { repo, dest, token } = await parseBody(req);
   if (!repo) return sendJSON(res, 400, { error: 'repo URL is required' });
   if (!/^https?:\/\/[^\s;&|`$]+$|^git@[A-Za-z0-9_.-]+:[^\s;&|`$]+$/.test(repo)) {
     return sendJSON(res, 400, { error: 'repo must be a valid HTTPS or SSH Git URL' });
@@ -327,9 +334,18 @@ async function handleClone(req, res) {
   if (dest !== undefined && (!/^[A-Za-z0-9_.-]+$/.test(dest) || dest === '.' || dest === '..')) {
     return sendJSON(res, 400, { error: 'dest must be a simple workspace directory name' });
   }
+  if (token !== undefined && (typeof token !== 'string' || token.length > 500 || /[\r\n]/.test(token) || !/^https:\/\/github\.com\//i.test(repo))) {
+    return sendJSON(res, 400, { error: 'GitHub credentials are only accepted for HTTPS GitHub repositories.' });
+  }
   try {
     const destPath = dest || repo.split('/').pop().replace('.git', '');
-    const result = await execInSandbox(`GIT_ASKPASS= GIT_TERMINAL_PROMPT=0 git clone --depth 1 ${repo} ${destPath}`, { timeout: 120000 });
+    await execInSandbox('mkdir -p /workspace/projects', { timeout: 5000 });
+    const env = token ? {
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`,
+    } : undefined;
+    const result = await execInSandbox(`GIT_ASKPASS= GIT_TERMINAL_PROMPT=0 git clone --depth 1 ${JSON.stringify(repo)} ${JSON.stringify(`/workspace/projects/${destPath}`)}`, { timeout: 120000, workdir: '/workspace', env });
     sendJSON(res, 200, result);
   } catch (e) { sendJSON(res, 500, { error: e.message }); }
 }
@@ -350,10 +366,12 @@ async function handleFSWrite(req, res) {
   if (!p || content === undefined) return sendJSON(res, 400, { error: 'path and content are required' });
   try {
     const fullPath = workspacePath(p).replace(WORKSPACE, '/workspace');
-    await execInSandbox(`mkdir -p /workspace`, { timeout: 5000 });
+    const parentPath = path.posix.dirname(fullPath);
+    const mkdir = await execInSandbox(`mkdir -p -- ${shellQuote(parentPath)}`, { timeout: 5000 });
+    if (mkdir.exitCode !== 0) return sendJSON(res, 500, { error: mkdir.stderr || 'Could not create the file parent directory.' });
     // Write content via base64 to avoid shell escaping issues
     const encoded = Buffer.from(content).toString('base64');
-    const result = await execInSandbox(`echo "${encoded}" | base64 -d > "${fullPath}"`, { timeout: 10000 });
+    const result = await execInSandbox(`printf '%s' ${shellQuote(encoded)} | base64 -d > ${shellQuote(fullPath)}`, { timeout: 10000 });
     if (result.exitCode !== 0) return sendJSON(res, 500, { error: result.stderr });
     sendJSON(res, 200, { ok: true });
   } catch (e) { sendJSON(res, 500, { error: e.message }); }

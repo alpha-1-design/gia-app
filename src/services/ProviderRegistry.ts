@@ -1,6 +1,3 @@
-import { logger } from '../utils/logger';
-import { corsProxy } from './CorsProxy';
-
 export interface ProviderDef {
   id: string;
   label: string;
@@ -28,7 +25,7 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   { id: 'openai',       label: 'OpenAI',        baseUrl: 'https://api.openai.com/v1',                 defaultModel: 'gpt-4o-mini',      needsApiKey: true,  listingType: 'openai',     aliases: ['oai'], apiKeyUrl: 'https://platform.openai.com/api-keys' },
   { id: 'anthropic',    label: 'Anthropic',     baseUrl: 'https://api.anthropic.com/v1',               defaultModel: 'claude-sonnet-4-6', needsApiKey: true,  listingType: 'anthropic', aliases: ['ant', 'claude'], apiKeyUrl: 'https://console.anthropic.com/settings/keys' },
   { id: 'gemini',       label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com',  defaultModel: 'gemini-2.5-flash', needsApiKey: true,  listingType: 'gemini',    aliases: ['gmi', 'google'], apiKeyUrl: 'https://aistudio.google.com/app/apikey' },
-  { id: 'opencode',     label: 'OpenCode Zen',  baseUrl: 'https://opencode.ai/zen/v1',                 defaultModel: 'deepseek-v4-flash-free',    needsApiKey: true,  listingType: 'openai',     aliases: ['oc', 'zen'] , apiKeyUrl: 'https://opencode.ai/zen' },
+  { id: 'opencode',     label: 'OpenCode Zen',  baseUrl: 'https://opencode.ai/zen/v1',                 defaultModel: 'deepseek-v4.1-flash',    needsApiKey: true,  listingType: 'openai',     aliases: ['oc', 'zen'] , apiKeyUrl: 'https://opencode.ai/zen' },
   { id: 'openrouter',   label: 'OpenRouter',    baseUrl: 'https://openrouter.ai/api/v1',               defaultModel: 'google/gemma-3-27b-it:free', needsApiKey: true, listingType: 'openai', aliases: ['or'], apiKeyUrl: 'https://openrouter.ai/keys' },
   { id: 'groq',         label: 'Groq',          baseUrl: 'https://api.groq.com/openai/v1',            defaultModel: 'llama3-70b-8192',  needsApiKey: true,  listingType: 'openai',     aliases: [] , apiKeyUrl: 'https://console.groq.com/keys' },
   { id: 'deepseek',     label: 'DeepSeek',      baseUrl: 'https://api.deepseek.com/v1',                defaultModel: 'deepseek-chat',    needsApiKey: true,  listingType: 'openai',     aliases: ['ds'] , apiKeyUrl: 'https://platform.deepseek.com/api_keys' },
@@ -50,68 +47,14 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   { id: 'local-llm',    label: 'Local LLM (On-Device)', baseUrl: '',                                    defaultModel: 'Xenova/Qwen2.5-1.5B-Instruct', needsApiKey: false, listingType: 'local', aliases: ['local', 'ondevice'] },
 ];
 
-// Extended catalogue for users who bring their own provider credentials.
-// These entries use OpenAI-compatible routing where the provider exposes it;
-// live model discovery remains optional and falls back to the default model.
-const ADDITIONAL_PROVIDERS: ProviderDef[] = [
-  { id: 'azure-openai', label: 'Azure OpenAI', baseUrl: '', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: ['azure'], apiKeyUrl: 'https://oai.azure.com/portal' },
-  { id: 'vertex-ai', label: 'Google Vertex AI', baseUrl: 'https://us-central1-aiplatform.googleapis.com/v1', defaultModel: 'gemini-2.5-flash', needsApiKey: true, listingType: 'openai', aliases: ['vertex'] , apiKeyUrl: 'https://console.cloud.google.com/apis/credentials' },
-  { id: 'github-models', label: 'GitHub Models', baseUrl: 'https://models.inference.ai.azure.com', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: ['github-ai'] , apiKeyUrl: 'https://github.com/settings/personal-access-tokens' },
-  { id: 'sambanova', label: 'SambaNova Cloud', baseUrl: 'https://api.sambanova.ai/v1', defaultModel: 'Meta-Llama-3.3-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: ['samba'] , apiKeyUrl: 'https://cloud.sambanova.ai/apis' },
-  { id: 'hyperbolic', label: 'Hyperbolic', baseUrl: 'https://api.hyperbolic.xyz/v1', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://hyperbolic.xyz/settings' },
-  { id: 'novita', label: 'Novita AI', baseUrl: 'https://api.novita.ai/v3/openai', defaultModel: 'meta-llama/llama-3.1-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://novita.ai/dashboard/key' },
-  { id: 'moonshot', label: 'Moonshot AI', baseUrl: 'https://api.moonshot.ai/v1', defaultModel: 'kimi-k2-0711-preview', needsApiKey: true, listingType: 'openai', aliases: ['kimi'] , apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys' },
-  { id: 'zhipu', label: 'Zhipu AI (GLM)', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4.5', needsApiKey: true, listingType: 'openai', aliases: ['glm'] , apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
-  { id: 'qwen', label: 'Qwen (DashScope)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus', needsApiKey: true, listingType: 'openai', aliases: ['dashscope'] , apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey' },
-  { id: 'minimax', label: 'MiniMax', baseUrl: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key' },
-  { id: 'baichuan', label: 'Baichuan AI', baseUrl: 'https://api.baichuan-ai.com/v1', defaultModel: 'Baichuan4', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://platform.baichuan-ai.com/console/apikeys' },
-  { id: 'yi', label: '01.AI (Yi)', baseUrl: 'https://api.lingyiwanwu.com/v1', defaultModel: 'yi-large', needsApiKey: true, listingType: 'openai', aliases: ['01ai'] , apiKeyUrl: 'https://platform.lingyiwanwu.com/apikeys' },
-  { id: 'siliconflow', label: 'SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', defaultModel: 'deepseek-ai/DeepSeek-V3', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://cloud.siliconflow.cn/account/ak' },
-  { id: 'stepfun', label: 'StepFun', baseUrl: 'https://api.stepfun.com/v1', defaultModel: 'step-2-16k', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://platform.stepfun.com/interface-key' },
-  { id: 'inflection', label: 'Inflection AI', baseUrl: 'https://api.inflection.ai/v1', defaultModel: 'Pi', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://developers.inflection.ai' },
-  { id: 'aleph-alpha', label: 'Aleph Alpha', baseUrl: 'https://api.aleph-alpha.com', defaultModel: 'luminous-supreme', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://dashboard.aleph-alpha.com' },
-  { id: 'databricks', label: 'Databricks', baseUrl: '', defaultModel: 'databricks-meta-llama-3-3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://docs.databricks.com/en/machine-learning/foundation-models/index.html' },
-  { id: 'watsonx', label: 'IBM watsonx', baseUrl: '', defaultModel: 'meta-llama/llama-3-3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://dataplatform.cloud.ibm.com/docs/content/wsj/analyze-data/fm-api.html' },
-  { id: 'bedrock', label: 'Amazon Bedrock', baseUrl: '', defaultModel: 'anthropic.claude-3-5-sonnet-20241022-v2:0', needsApiKey: true, listingType: 'openai', aliases: ['aws-bedrock'] , apiKeyUrl: 'https://console.aws.amazon.com/iam/home#/security_credentials' },
-  { id: 'friendli', label: 'FriendliAI', baseUrl: 'https://api.friendli.ai/serverless/v1', defaultModel: 'meta-llama-3.1-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://suite.friendli.ai' },
-  { id: 'lepton', label: 'Lepton AI', baseUrl: 'https://llama3-1-70b.lepton.run/api/v1', defaultModel: 'llama3-1-70b', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://dashboard.lepton.ai' },
-  { id: 'lambda', label: 'Lambda Cloud', baseUrl: 'https://api.lambdal.ai/v1', defaultModel: 'hermes-3-llama-3.1-405b', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://cloud.lambdalabs.com/api-keys' },
-  { id: 'nebius', label: 'Nebius AI Studio', baseUrl: 'https://api.studio.nebius.ai/v1', defaultModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://studio.nebius.ai/settings/api-keys' },
-  { id: 'scaleway', label: 'Scaleway AI', baseUrl: 'https://api.scaleway.ai/v1', defaultModel: 'llama-3.3-70b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://console.scaleway.com/project/credentials' },
-  { id: 'nscale', label: 'Nscale', baseUrl: 'https://inference.api.nscale.com/v1', defaultModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://platform.nscale.com' },
-  { id: 'modal', label: 'Modal', baseUrl: '', defaultModel: 'custom-endpoint', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://modal.com/settings' },
-  { id: 'baseten', label: 'Baseten', baseUrl: '', defaultModel: 'custom-endpoint', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://app.baseten.co/settings/keys' },
-  { id: 'cloudflare-ai', label: 'Cloudflare Workers AI', baseUrl: '', defaultModel: '@cf/meta/llama-3.1-8b-instruct', needsApiKey: true, listingType: 'openai', aliases: ['workers-ai'] , apiKeyUrl: 'https://dash.cloudflare.com/profile/api-tokens' },
-  { id: 'cloudflare-gateway', label: 'Cloudflare AI Gateway', baseUrl: '', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://dash.cloudflare.com/profile/api-tokens' },
-  { id: 'volcengine', label: 'Volcengine Ark', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-1-5-pro-32k', needsApiKey: true, listingType: 'openai', aliases: ['doubao'] , apiKeyUrl: 'https://console.volcengine.com/ark' },
-  { id: 'cometapi', label: 'CometAPI', baseUrl: 'https://api.cometapi.com/v1', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://api.cometapi.com/keys' },
-  { id: 'requesty', label: 'Requesty', baseUrl: 'https://router.requesty.ai/v1', defaultModel: 'openai/gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://app.requesty.ai/manage-keys' },
-  { id: 'portkey', label: 'Portkey AI Gateway', baseUrl: 'https://api.portkey.ai/v1', defaultModel: 'gpt-4o-mini', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://app.portkey.ai/api-keys' },
-  { id: 'litellm', label: 'LiteLLM Proxy', baseUrl: 'http://localhost:4000/v1', defaultModel: 'gpt-4o-mini', needsApiKey: false, listingType: 'openai', aliases: ['lite-llm'] },
-  { id: 'vllm', label: 'vLLM Server', baseUrl: 'http://localhost:8000/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
-  { id: 'llamacpp', label: 'llama.cpp Server', baseUrl: 'http://localhost:8080/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: ['llama-cpp'] },
-  { id: 'jan', label: 'Jan (Local)', baseUrl: 'http://localhost:1337/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
-  { id: 'text-generation-webui', label: 'Text Generation WebUI', baseUrl: 'http://localhost:5000/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: ['oobabooga'] },
-  { id: 'koboldcpp', label: 'KoboldCpp', baseUrl: 'http://localhost:5001/v1', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
-  { id: 'tabbyml', label: 'TabbyML', baseUrl: 'http://localhost:8080/v1', defaultModel: 'StarCoder-2-3B', needsApiKey: false, listingType: 'openai', aliases: [] },
-  { id: 'custom-openai', label: 'Custom OpenAI-Compatible', baseUrl: '', defaultModel: 'custom-model', needsApiKey: true, listingType: 'openai', aliases: ['custom'] },
-  { id: 'custom-anthropic', label: 'Custom Anthropic-Compatible', baseUrl: '', defaultModel: 'custom-model', needsApiKey: true, listingType: 'anthropic', aliases: [] },
-  { id: 'custom-gemini', label: 'Custom Gemini-Compatible', baseUrl: '', defaultModel: 'custom-model', needsApiKey: true, listingType: 'gemini', aliases: [] },
-  { id: 'predibase', label: 'Predibase', baseUrl: 'https://serving.app.predibase.com/v1', defaultModel: 'llama-3.1-8b-instruct', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://app.predibase.com/settings/api-keys' },
-  { id: 'sagemaker', label: 'Amazon SageMaker', baseUrl: '', defaultModel: 'custom-endpoint', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://console.aws.amazon.com/iam/home#/security_credentials' },
-  { id: 'ollama-cloud', label: 'Ollama Cloud', baseUrl: 'https://ollama.com/v1', defaultModel: 'llama3.3', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://ollama.com/settings/keys' },
-  { id: 'lmstudio-remote', label: 'LM Studio Remote', baseUrl: '', defaultModel: 'local-model', needsApiKey: false, listingType: 'openai', aliases: [] },
-  { id: 'cohere-command', label: 'Cohere Command', baseUrl: 'https://api.cohere.ai/compatibility/v1', defaultModel: 'command-a-03-2025', needsApiKey: true, listingType: 'openai', aliases: [] , apiKeyUrl: 'https://dashboard.cohere.com/api-keys' },
-  { id: 'google-ai-studio', label: 'Google AI Studio', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.5-flash', needsApiKey: true, listingType: 'openai', aliases: ['ai-studio'] , apiKeyUrl: 'https://aistudio.google.com/app/apikey' },
-];
-
 // Curated fallback catalogs — used when live model listing is unavailable
 // (some providers block browser CORS, or have no public models endpoint).
 // Only well-established, verified model IDs are included.
 const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
   opencode: [
-    { id: 'deepseek-v4-flash-free',    label: 'DeepSeek V4 Flash',   free: true,  context: '64k',  tools: true, vision: true  },
-    { id: 'gpt-4o-mini',               label: 'GPT-4o Mini',         free: false, context: '128k', tools: true, vision: true  },
+    { id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', free: false, context: '64k', tools: true, vision: true },
+    { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', free: false, context: '64k', tools: true, vision: true },
+    { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', free: false, context: '64k', tools: true, vision: true },
   ],
   openrouter: [
     { id: 'google/gemma-3-27b-it:free',         label: 'Gemma 3 27B',     free: true,  context: '96k',  tools: true, vision: true  },
@@ -124,8 +67,6 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
     { id: 'anthropic/claude-3.5-sonnet',        label: 'Claude 3.5 Sonnet', free: false, context: '200k', tools: true, vision: true  },
   ],
   openai: [
-    { id: 'gpt-5.6-sol',   label: 'GPT-5.6 Sol',   free: false, context: '1M', tools: true, vision: true },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', free: false, context: '1M', tools: true, vision: true },
     { id: 'gpt-5.5',       label: 'GPT-5.5',       free: false, context: '1M', tools: true, vision: true },
     { id: 'gpt-5.4',       label: 'GPT-5.4',       free: false, context: '1M', tools: true, vision: true },
     { id: 'gpt-5.4-mini',  label: 'GPT-5.4 Mini',  free: false, context: '1M', tools: true, vision: true },
@@ -177,7 +118,6 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
   xai: [
     { id: 'grok-4.5',    label: 'Grok 4.5',    free: false, context: '500k', tools: true, vision: true },
     { id: 'grok-4.3',    label: 'Grok 4.3',    free: false, context: '1M',   tools: true, vision: true },
-    { id: 'grok-4.20',   label: 'Grok 4.20',   free: false, context: '2M',   tools: true, vision: true },
     { id: 'grok-3',      label: 'Grok 3',      free: false, context: '131k', tools: true, vision: false },
     { id: 'grok-2',      label: 'Grok 2',      free: false, context: '128k', tools: true, vision: false },
   ],
@@ -260,14 +200,9 @@ class ProviderRegistry {
   private models: Map<string, StaticModelOption[]> = new Map();
   private imageModels: Map<string, string> = new Map();
   private loaded = false;
-  private loading: Promise<void> | null = null;
 
   async init(): Promise<void> {
-    // Start with fallback
     for (const def of FALLBACK_PROVIDERS) {
-      this.providers.set(def.id, def);
-    }
-    for (const def of ADDITIONAL_PROVIDERS) {
       this.providers.set(def.id, def);
     }
     for (const [id, models] of Object.entries(FALLBACK_MODELS)) {
@@ -276,51 +211,10 @@ class ProviderRegistry {
     for (const [id, model] of Object.entries(FALLBACK_IMAGE_MODELS)) {
       this.imageModels.set(id, model);
     }
-
-    // Try remote config — enrich (not replace) fallback
-    this.loading = this.fetchRemote();
-    try {
-      await this.loading;
-    } catch { /* remote config unavailable, fallback only */ }
     this.loaded = true;
-    this.loading = null;
-  }
-
-  private async fetchRemote(): Promise<void> {
-    const configUrl = 'https://opencode.ai/api/providers';
-    try {
-      const res = await corsProxy.fetch(configUrl, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) return;
-      const data: {
-        providers?: ProviderDef[];
-        models?: Record<string, StaticModelOption[]>;
-        imageModels?: Record<string, string>;
-      } = await res.json();
-
-      if (data.providers) {
-        for (const def of data.providers) {
-          this.providers.set(def.id, def);
-        }
-      }
-      if (data.models) {
-        for (const [id, modelList] of Object.entries(data.models)) {
-          this.models.set(id, modelList);
-        }
-      }
-      if (data.imageModels) {
-        for (const [id, model] of Object.entries(data.imageModels)) {
-          this.imageModels.set(id, model);
-        }
-      }
-    } catch (e) {
-      logger.warn('[ProviderRegistry] Remote config fetch failed, using fallback:', e);
-    }
   }
 
   async ensureLoaded(): Promise<void> {
-    if (!this.loaded && this.loading) {
-      await this.loading;
-    }
     if (!this.loaded) {
       await this.init();
     }

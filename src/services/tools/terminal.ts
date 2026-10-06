@@ -2,6 +2,7 @@ import { z } from 'zod';
 import terminalService, { getSmartTimeout } from '../TerminalService';
 import SandboxService from '../SandboxService';
 import CodeRunner from '../CodeRunner';
+import { useGiaStore } from '../../store/useGiaStore';
 import type { Tool, ToolContext } from './types';
 
 function formatZodError(issues: z.ZodIssue[]): string {
@@ -99,6 +100,7 @@ const terminalRun: Tool = {
     }
 
     const { command, language, workdir, timeout } = parsed.data;
+    const effectiveWorkdir = workdir || useGiaStore.getState().activeProjectPath || '/workspace';
     const effectiveTimeout = getSmartTimeout(command, timeout);
     const shellCommand = buildShellCommand(command, language);
     const errors: string[] = [];
@@ -107,7 +109,7 @@ const terminalRun: Tool = {
     ctx?.onProgress?.(0.1, 'Running in terminal…');
     ctx?.onThought?.(`💻 Running: ${shellCommand.slice(0, 80)}...`);
     try {
-      const result = await terminalService.exec(shellCommand, workdir, undefined, effectiveTimeout);
+      const result = await terminalService.exec(shellCommand, effectiveWorkdir, undefined, effectiveTimeout);
 
       // exitCode -1 + sessionId 'mock' = plugin not available (web fallback)
       if (!(result.exitCode === -1 && result.sessionId === 'mock')) {
@@ -138,7 +140,7 @@ _Exit code: ${result.exitCode}_`,
     try {
       const available = await SandboxService.ensureAvailable();
       if (available) {
-        const result = await SandboxService.exec(shellCommand, { timeout, workdir });
+        const result = await SandboxService.exec(shellCommand, { timeout, workdir: effectiveWorkdir });
         ctx?.onProgress?.(1, 'Done');
         const parts: string[] = [];
         if (result.stdout) parts.push(result.stdout);

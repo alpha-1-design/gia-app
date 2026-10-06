@@ -15,13 +15,13 @@ function formatZodError(issues: z.ZodIssue[]): string {
 const browserClickTool: Tool = {
   id: 'browser_click',
   name: 'browser_click',
-  description: 'Click an element on a web page by CSS selector. Requires a server-side Playwright browser. Use after browser_navigate to interact with the loaded page.',
+  description: 'Click an element by CSS selector in the active Android in-app browser. The web browser is read-only. Use browser_navigate first.',
   schema: {
     type: 'object',
     properties: {
-      url: { type: 'string', description: 'URL of the page (will navigate if different from current)' },
+      url: { type: 'string', description: 'URL of the active page for context' },
       selector: { type: 'string', description: 'CSS selector for the element to click (e.g. "button.submit", "#login", "a[href=/dashboard]")' },
-      waitMs: { type: 'number', description: 'Milliseconds to wait after click (default: 1000)' },
+      waitMs: { type: 'number', description: 'Milliseconds to wait for page changes after the click (default: 500)' },
     },
     required: ['url', 'selector'],
   },
@@ -29,7 +29,7 @@ const browserClickTool: Tool = {
     const schema = z.object({
       url: z.string().url(),
       selector: z.string().min(1).max(500),
-      waitMs: z.number().min(0).max(30000).default(1000),
+      waitMs: z.number().min(0).max(5000).default(500),
     });
     const parsed = schema.safeParse(args);
     if (!parsed.success) return { success: false, content: '', error: formatZodError(parsed.error.issues) };
@@ -39,20 +39,8 @@ const browserClickTool: Tool = {
     ctx?.onThought?.(`🖱️ Clicking "${selector}" on ${new URL(url).hostname}...`);
 
     try {
-      const serverUrl = localStorage.getItem('gia-playwright-server') || 'http://localhost:3091';
-      const res = await fetch(`${serverUrl}/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'click',
-          url,
-          selector,
-          options: { wait: waitMs },
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const result = await res.json();
+      const browser = (await import('../GIAInAppBrowser')).default;
+      const result = await browser.click(selector, waitMs);
       ctx?.onProgress?.(1, 'Done');
       ctx?.onThought?.('✅ Click successful');
       return {
@@ -60,41 +48,9 @@ const browserClickTool: Tool = {
         content: `Clicked "${selector}"\n**URL:** ${result.url || url}\n**Title:** ${result.title || '(unknown)'}${result.text ? `\n\n${result.text.slice(0, 3000)}` : ''}`,
       };
     } catch (e) {
-      // Fallback: try sandbox server
-      try {
-        const { default: SandboxService } = await import('../SandboxService');
-        const available = await SandboxService.ensureAvailable();
-        if (available) {
-          const safeSelector = selector.replace(/'/g, "\u0027");
-          const script = `node -e "
-const { chromium } = require('playwright');
-(async () => {
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage();
-  await page.goto('${url}', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.click('${safeSelector}');
-  await page.waitForTimeout(${waitMs});
-  const text = await page.evaluate(() => document.body.innerText.slice(0, 3000));
-  const title = await page.title();
-  console.log(JSON.stringify({ success: true, text, title, url: page.url() }));
-  await browser.close();
-})();
-"`;
-          const result = await SandboxService.exec(script, { timeout: 30000 });
-          if (result.stdout) {
-            const data = JSON.parse(result.stdout);
-            ctx?.onProgress?.(1, 'Done');
-            ctx?.onThought?.('✅ Click successful via sandbox');
-            return {
-              success: true,
-              content: `Clicked "${selector}"\n**URL:** ${data.url || url}\n**Title:** ${data.title || ''}${data.text ? `\n\n${data.text.slice(0, 3000)}` : ''}`,
-            };
-          }
-        }
-      } catch { /* fall through */ }
       const msg = e instanceof Error ? e.message : 'Click failed';
       ctx?.onThought?.(`❌ ${msg}`);
-      return { success: false, content: '', error: `${msg}\n\nRequires a Playwright server. Set one up with: node server/browse_web.js` };
+      return { success: false, content: '', error: msg };
     }
   },
 };
@@ -102,7 +58,7 @@ const { chromium } = require('playwright');
 const browserFillTool: Tool = {
   id: 'browser_fill',
   name: 'browser_fill',
-  description: 'Fill a form input on a web page by CSS selector. Clicks the field, clears it, and types the value.',
+  description: 'Fill a form input by CSS selector in the active Android in-app browser. The web browser is read-only.',
   schema: {
     type: 'object',
     properties: {
@@ -128,21 +84,8 @@ const browserFillTool: Tool = {
     ctx?.onThought?.(`📝 Filling "${selector}" on ${new URL(url).hostname}...`);
 
     try {
-      const serverUrl = localStorage.getItem('gia-playwright-server') || 'http://localhost:3091';
-      const res = await fetch(`${serverUrl}/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'fill',
-          url,
-          selector,
-          value,
-          options: { submit },
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const result = await res.json();
+      const browser = (await import('../GIAInAppBrowser')).default;
+      const result = await browser.fill(selector, value, submit);
       ctx?.onProgress?.(1, 'Done');
       ctx?.onThought?.('✅ Form filled');
       return {
@@ -159,7 +102,7 @@ const browserFillTool: Tool = {
 const browserScrollTool: Tool = {
   id: 'browser_scroll',
   name: 'browser_scroll',
-  description: 'Scroll a web page in a direction. Useful for reading long pages or reaching bottom content.',
+  description: 'Scroll the active Android in-app browser page. The web browser is read-only.',
   schema: {
     type: 'object',
     properties: {
@@ -182,15 +125,8 @@ const browserScrollTool: Tool = {
     ctx?.onThought?.(`📜 Scrolling ${direction}...`);
 
     try {
-      const serverUrl = localStorage.getItem('gia-playwright-server') || 'http://localhost:3091';
-      const res = await fetch(`${serverUrl}/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'scroll', url, direction, amount }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const result = await res.json();
+      const browser = (await import('../GIAInAppBrowser')).default;
+      const result = await browser.scroll(direction, amount);
       ctx?.onThought?.('✅ Scrolled');
       return {
         success: true,

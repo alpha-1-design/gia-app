@@ -2,38 +2,16 @@ import { logger } from './logger';
 
 export function extractJSON<T = unknown>(text: string): T {
   const cleaned = text
-    .replace(/```json|```/g, '')
     .replace(/```tool[\s\S]*?```/g, '')
+    .replace(/```(?:json)?/gi, '')
     .trim();
 
-  // Strategy 1: find first { and last } or first [ and last ]
-  const firstArray = cleaned.indexOf('[');
-  const lastArray = cleaned.lastIndexOf(']');
-  const firstObj = cleaned.indexOf('{');
-  const lastObj = cleaned.lastIndexOf('}');
-
-  let start = -1;
-  let end = -1;
-
-  if (firstArray !== -1 && lastArray > firstArray) {
-    start = firstArray;
-    end = lastArray + 1;
-  } else if (firstObj !== -1 && lastObj > firstObj) {
-    start = firstObj;
-    end = lastObj + 1;
-  } else if (firstObj !== -1 && lastObj === -1) {
-    start = firstObj;
-    end = cleaned.length;
-  } else if (firstArray !== -1 && lastArray === -1) {
-    start = firstArray;
-    end = cleaned.length;
-  } else {
+  const jsonCandidate = findFirstJsonValue(cleaned);
+  if (!jsonCandidate) {
     // Strategy 2: try parsing the whole thing
     try { return JSON.parse(cleaned); } catch (e) { logger.error('[helpers] JSON parse failed (strategy 2):', e); }
     throw new Error('No valid JSON found');
   }
-
-  const jsonCandidate = cleaned.slice(start, end);
 
   // Strategy 3: try direct parse
   try { return JSON.parse(jsonCandidate); } catch (e) {
@@ -104,6 +82,39 @@ export function extractJSON<T = unknown>(text: string): T {
 
     throw e;
   }
+}
+
+function findFirstJsonValue(text: string): string | null {
+  const objectStart = text.indexOf('{');
+  const arrayStart = text.indexOf('[');
+  const start = objectStart < 0 ? arrayStart
+    : arrayStart < 0 ? objectStart
+      : Math.min(objectStart, arrayStart);
+  if (start < 0) return null;
+
+  const closers: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      closers.push('}');
+    } else if (char === '[') {
+      closers.push(']');
+    } else if (char === '}' || char === ']') {
+      if (closers.pop() !== char) return text.slice(start);
+      if (closers.length === 0) return text.slice(start, i + 1);
+    }
+  }
+  return text.slice(start);
 }
 
 function repairTruncatedJSON(json: string): string {

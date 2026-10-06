@@ -1,6 +1,7 @@
 import { delegateTask } from './subAgent';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useNexusStore } from '../../store/useNexusStore';
+import { useAgentStore } from '../../store/useAgentStore';
 
 export interface SubAgentIdentity {
   id: string;
@@ -14,6 +15,7 @@ export interface SubAgentIdentity {
 export interface SubAgentTask {
   provider: string;
   prompt: string;
+  agent?: string;
 }
 
 export interface SubAgentProgress {
@@ -110,9 +112,28 @@ export class SubAgentManager {
   async runAll(tasks: SubAgentTask[], signal?: AbortSignal): Promise<SubAgentProgress[]> {
     this.agents.clear();
 
-    const combinedPrompt = tasks.map(t => t.prompt).join('\n');
     const agentCount = this.isGodMode ? GOD_MODE_AGENT_COUNT : DEFAULT_AGENT_COUNT;
-    const selected = selectAgents(combinedPrompt, Math.min(agentCount, tasks.length));
+    if (tasks.length > agentCount) {
+      emit('error', `Nexus received ${tasks.length} delegated tasks but this run supports ${agentCount}; the remaining ${tasks.length - agentCount} task(s) were not started.`);
+    }
+    const selected = tasks.slice(0, agentCount).map(task => {
+      const requested = task.agent?.trim().toLowerCase();
+      const requestedRole = requested && AGENT_ROLES.find(role => role.name.toLowerCase() === requested);
+      if (requestedRole) return requestedRole;
+      const localAgent = requested && useAgentStore.getState().agents.find(agent =>
+        agent.id.toLowerCase() === requested || agent.name.toLowerCase() === requested
+      );
+      if (localAgent) {
+        return {
+          name: localAgent.name,
+          color: '#a78bfa',
+          icon: localAgent.icon || 'Bot',
+          role: 'Local specialist',
+          style: localAgent.description || 'User-created local agent',
+        };
+      }
+      return selectAgents(task.prompt, 1)[0];
+    });
 
     const identities: SubAgentIdentity[] = selected.map(def => ({
       id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -192,7 +213,26 @@ export class SubAgentManager {
     emit('tool', `[${identity.name}] ${identity.role} — starting...`);
     useNexusStore.getState().updateAgent(this.runId, identity.id, { status: 'running', currentActivity: 'Starting…' });
 
-    const enrichedPrompt = `You are a sub-agent named ${identity.name} with the role of ${identity.role}.\n\nYour thinking style: ${identity.style}\n\nYour task:\n${task.prompt}\n\nProvide your findings based on your unique perspective. Be thorough.${this.isGodMode ? '\n\nYou are operating in GOD MODE. Go deeper than usual. Challenge every assumption. Leave no stone unturned.' : ''}`;
+    const enrichedPrompt = `SPECIALIST ASSIGNMENT
+Name: ${identity.name}
+Role: ${identity.role}
+Perspective: ${identity.style}
+
+TASK
+${task.prompt}
+
+WORKING RULES
+- Complete only this assignment; do not invent facts or work that was not done.
+- Use the allowed read-only tools when current web evidence or supplied files are needed.
+- Keep evidence separate from interpretation. Cite source URLs or file paths returned by tools.
+- If another assignment may overlap, focus on this role's distinct perspective rather than repeating generic advice.
+- If you cannot verify something, say so and identify what is missing.
+
+REPORT FORMAT
+## Findings
+## Evidence
+## Caveats and unknowns
+## Confidence${this.isGodMode ? '\n\nUse the same evidence standard, but examine assumptions, counterarguments, and edge cases more deeply.' : ''}`;
 
     try {
       const result = await delegateTask(task.provider, enrichedPrompt, signal, identity.name, (statusMsg) => {

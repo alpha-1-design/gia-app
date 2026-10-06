@@ -23,7 +23,7 @@ let lastExport: string | null = null;
 
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
-  mk('info', '║         GIA ENGINE ROOM  v2.4.0.14        ║'),
+  mk('info', '║      GIA ENGINE ROOM  v2.4.0.15 BETA      ║'),
   mk('info', '║  10 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
@@ -507,7 +507,11 @@ const EngineRoom: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 shrink-0" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowTerminal(false)} className="flex items-center gap-2 text-zinc-400 hover:text-zinc-100 transition-colors">
+          <button
+            onClick={() => setShowTerminal(false)}
+            aria-label="Back from Engine Room"
+            className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-2 text-zinc-400 hover:text-zinc-100 transition-colors"
+          >
             <ArrowLeft size={16} /><span className="text-xs">Back</span>
           </button>
           <div className="w-px h-4 bg-zinc-700" />

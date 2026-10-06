@@ -19,10 +19,29 @@ const DEFAULT_SANDBOX_URL = typeof window !== 'undefined' && window.location?.or
   ? '/api/sandbox'
   : 'http://localhost:3081';
 
-/** Parent directory of a sandbox path ('' when there is none). Mirrors how
- *  tools address files: absolute /workspace/... paths land under the mounted
- *  workspace; bare filenames land in the guest's cwd (remote /workspace,
- *  native /root). */
+export const PROJECTS_DIRECTORY = '/workspace/projects';
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function workspacePath(path: string | undefined): string {
+  if (!path || path === '.') return '/workspace';
+  const normalized = path.replace(/\\/g, '/');
+  if (normalized.split('/').includes('..')) throw new Error('Workspace paths cannot traverse parent directories.');
+  if (normalized.startsWith('/')) return normalized;
+  return `/workspace/${normalized.replace(/^\/+/, '')}`;
+}
+
+function repositoryName(repo: string): string {
+  const name = repo.replace(/\/+$/, '').split(/[/:]/).pop()?.replace(/\.git$/i, '');
+  if (!name || !/^[A-Za-z0-9_.-]+$/.test(name) || name === '.' || name === '..') {
+    throw new Error('Could not determine a safe project folder name from that repository URL.');
+  }
+  return name;
+}
+
+/** Parent directory of a sandbox path, or '' when there is no parent. */
 function sandboxParent(path: string): string {
   const idx = path.lastIndexOf('/');
   if (idx <= 0) return '';
@@ -95,7 +114,7 @@ class SandboxService {
 
   get available(): boolean | null { return this._available; }
 
-  async exec(command: string, options?: { timeout?: number; workdir?: string }): Promise<SandboxResult> {
+  async exec(command: string, options?: { timeout?: number; workdir?: string; env?: Record<string, string> }): Promise<SandboxResult> {
     if (!this.usingNativeFallback) {
       const available = await this.ensureAvailable();
       if (!available) {
@@ -103,10 +122,10 @@ class SandboxService {
       }
     }
     if (this.usingNativeFallback) {
-      const result = await terminalService.exec(command, options?.workdir, undefined, options?.timeout);
+      const result = await terminalService.exec(command, workspacePath(options?.workdir), options?.env, options?.timeout);
       return { stdout: result.output, stderr: '', exitCode: result.exitCode };
     }
-    const data = await this.postJSON('/exec', { command, timeout: options?.timeout, workdir: options?.workdir }) as SandboxResult;
+    const data = await this.postJSON('/exec', { command, timeout: options?.timeout, workdir: workspacePath(options?.workdir) }) as SandboxResult;
     return data;
   }
 
@@ -119,17 +138,37 @@ class SandboxService {
     return data;
   }
 
-  async clone(repo: string, dest?: string): Promise<SandboxResult> {
-    if (this.usingNativeFallback) {
-      return this.exec(`git clone ${repo}${dest ? ` ${dest}` : ''}`);
+  async clone(repo: string, dest?: string, token?: string): Promise<SandboxResult> {
+    if (!/^https?:\/\/[^\s;&|`$]+$|^git@[A-Za-z0-9_.-]+:[^\s;&|`$]+$|^ssh:\/\/git@[A-Za-z0-9_.-]+\/[^\s;&|`$]+$/.test(repo)) {
+      throw new Error('Repository must be a valid HTTPS or SSH Git URL.');
     }
-    const data = await this.postJSON('/clone', { repo, dest }) as SandboxResult;
+    const projectName = dest || repositoryName(repo);
+    if (!/^[A-Za-z0-9_.-]+$/.test(projectName) || projectName === '.' || projectName === '..') {
+      throw new Error('Project folder name must contain only letters, numbers, dots, dashes, or underscores.');
+    }
+    const cloneUrl = repo.startsWith('git@github.com:')
+      ? `https://github.com/${repo.slice('git@github.com:'.length)}`
+      : repo.startsWith('ssh://git@github.com/')
+        ? `https://github.com/${repo.slice('ssh://git@github.com/'.length)}`
+        : repo;
+    const isGitHub = /^https:\/\/github\.com\//i.test(cloneUrl);
+    if (token && (token.length > 500 || /[\r\n]/.test(token))) throw new Error('GitHub token is malformed.');
+    const gitEnv = token && isGitHub ? {
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+      GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${btoa(`x-access-token:${token}`)}`,
+    } : undefined;
+
+    if (this.usingNativeFallback) {
+      return this.exec(`mkdir -p ${shellQuote(PROJECTS_DIRECTORY)} && GIT_ASKPASS= GIT_TERMINAL_PROMPT=0 git clone --depth 1 ${shellQuote(cloneUrl)} ${shellQuote(`${PROJECTS_DIRECTORY}/${projectName}`)}`, { workdir: '/workspace', env: gitEnv });
+    }
+    const data = await this.postJSON('/clone', { repo: cloneUrl, dest: projectName, token: gitEnv ? token : undefined }) as SandboxResult;
     return data;
   }
 
   async readFile(path: string): Promise<string> {
     if (this.usingNativeFallback) {
-      const result = await terminalService.exec(`cat -- "${path.replace(/"/g, '\\"')}"`);
+      const result = await terminalService.exec(`cat -- ${shellQuote(workspacePath(path))}`, '/workspace');
       if (result.exitCode !== 0) throw new Error(result.output || `Failed to read ${path}`);
       return result.output;
     }
@@ -147,11 +186,12 @@ class SandboxService {
       // gap out directly). mkdir the parent dir first so nested writes and
       // /workspace/<file> tool paths work on a fresh rootfs, mirroring the
       // remote server's auto-provisioning at sandbox-server.cjs:338.
-      const parent = sandboxParent(path);
-      const mkdir = parent ? `mkdir -p -- "${parent.replace(/"/g, '\\"')}" && ` : '';
+      const target = workspacePath(path);
+      const parent = sandboxParent(target);
+      const mkdir = parent ? `mkdir -p -- ${shellQuote(parent)} && ` : '';
       // Base64 round-trip avoids any quoting/escaping issues with the shell heredoc.
       const b64 = btoa(unescape(encodeURIComponent(content)));
-      const result = await terminalService.exec(`${mkdir}echo '${b64}' | base64 -d > "${path.replace(/"/g, '\\"')}"`);
+      const result = await terminalService.exec(`${mkdir}echo '${b64}' | base64 -d > ${shellQuote(target)}`, '/workspace');
       if (result.exitCode !== 0) throw new Error(result.output || `Failed to write ${path}`);
       return;
     }
@@ -160,7 +200,7 @@ class SandboxService {
 
   async delete(path: string): Promise<void> {
     if (this.usingNativeFallback) {
-      const result = await terminalService.exec(`rm -rf -- "${path.replace(/"/g, '\\"')}"`);
+      const result = await terminalService.exec(`rm -rf -- ${shellQuote(workspacePath(path))}`, '/workspace');
       if (result.exitCode !== 0) throw new Error(result.output || `Failed to delete ${path}`);
       return;
     }
@@ -169,15 +209,15 @@ class SandboxService {
 
   async list(path?: string): Promise<SandboxFileEntry[]> {
     if (this.usingNativeFallback) {
-      const target = path || '.';
-      const result = await terminalService.exec(`ls -lA --time-style=+ -- "${target.replace(/"/g, '\\"')}"`);
+      const target = workspacePath(path);
+      const quotedTarget = shellQuote(target);
+      const command = `for item in ${quotedTarget}/* ${quotedTarget}/.[!.]* ${quotedTarget}/..?*; do [ -e "$item" ] || continue; name=$(basename "$item"); if [ -d "$item" ]; then printf 'd\\t0\\t%s\\n' "$name"; else size=$(wc -c < "$item"); printf 'f\\t%s\\t%s\\n' "$size" "$name"; fi; done`;
+      const result = await terminalService.exec(command, '/workspace');
       if (result.exitCode !== 0) throw new Error(result.output || `Failed to list ${target}`);
-      return result.output.split('\n').slice(1).filter(Boolean).map(line => {
-        const parts = line.trim().split(/\s+/);
-        const mode = parts[0] || '';
-        const size = Number(parts[4]) || 0;
-        const name = parts.slice(5).join(' ');
-        return { name, isDir: mode.startsWith('d'), size, mode };
+      return result.output.split('\n').filter(Boolean).map(line => {
+        const [kind, rawSize, ...nameParts] = line.split('\t');
+        const name = nameParts.join('\t');
+        return { name, isDir: kind === 'd', size: Number(rawSize) || 0, mode: kind || '' };
       });
     }
     const p = path ? `?path=${encodeURIComponent(path)}` : '';

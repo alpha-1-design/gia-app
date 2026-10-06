@@ -142,7 +142,7 @@ const readUrlTool: Tool = {
 
 const browserNavigateTool: Tool = {
   id: 'browser_navigate', name: 'browser_navigate',
-  description: 'Full browser page navigation — fetches the page, renders JavaScript, and extracts rendered text content. Supports both static and dynamic (SPA) pages. Set a CORS proxy in Settings for cross-origin pages.',
+  description: 'Open a page in GIA\'s shared in-app browser. Android loads the live interactive page; the web fallback extracts read-only text and may use configured web readers or text proxies when CORS blocks direct access.',
   schema: {
     type: 'object',
     properties: {
@@ -153,15 +153,13 @@ const browserNavigateTool: Tool = {
   execute: async ({ url }, ctx?: ToolContext) => {
     try {
       if (!url || typeof url !== 'string') return { success: false, content: '', error: 'URL is required' };
-      ctx?.onProgress?.(0.1, 'Preparing browser...');
+      ctx?.onProgress?.(0.1, 'Opening in-app browser...');
       ctx?.onThought?.(`🌐 Navigating to ${new URL(url).hostname}...`);
-      const BrowserRunner = (await import('../BrowserRunner')).default;
+      const browser = (await import('../GIAInAppBrowser')).default;
       useGiaStore.getState().addNotification(`🌐 Navigating to ${new URL(url).hostname}…`);
       ctx?.onProgress?.(0.3, 'Navigating...');
-      ctx?.onThought?.('Loading page in browser...');
-      const result = await BrowserRunner.navigate(url, (status) => {
-        useGiaStore.getState().addNotification(`🌐 ${status}`);
-      });
+      ctx?.onThought?.('Loading page in the in-app browser...');
+      const result = await browser.navigate(url);
       ctx?.onProgress?.(0.7, 'Extracting content...');
       ctx?.onThought?.(`Page loaded — extracting ${result.text.length} chars of content...`);
       const snippet = result.text.slice(0, 2000);
@@ -171,11 +169,11 @@ const browserNavigateTool: Tool = {
         : '';
       ctx?.onProgress?.(1, 'Done');
       ctx?.onThought?.('✅ Browser navigation complete');
-      return { success: true, content: `${title}${snippet}${summary}` };
+      return { success: true, content: `${title}**URL:** ${result.url}\n\n${snippet}${summary}` };
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === 'AbortError') return { success: false, content: '', error: 'Cancelled' };
       const msg = e instanceof Error ? e.message : 'Browser navigation failed';
-      if (msg.includes('CORS')) return { success: false, content: '', error: `${msg}\n\nConfigure a CORS proxy in Settings → Browser Automation or use read_url for static pages.` };
+      if (msg.includes('CORS')) return { success: false, content: '', error: `${msg}\n\nThe web browser is read-only and some sites block browser-based reading. Try read_url for supported static pages.` };
       return { success: false, content: '', error: msg };
     }
   }

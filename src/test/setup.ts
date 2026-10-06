@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom';
 
+class MockIntersectionObserver {
+  constructor() {}
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+  takeRecords = vi.fn((): IntersectionObserverEntry[] => []);
+}
+
+vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+
 // Mock IndexedDB
 class MockIDBObjectStore {
   constructor() {}

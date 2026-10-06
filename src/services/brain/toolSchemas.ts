@@ -554,12 +554,12 @@ export const toolSchemas: Record<string, { description: string; required: string
     }
   },
   sub_agent_call: {
-    description: 'Delegate a task to a specialized Nexus sub-agent. Sub-agents have full tool access and run concurrently — split heavy or parallelizable work (chunked file analysis, multi-topic research) across several calls. Their results are returned to you for synthesis.',
+    description: 'Delegate one focused task to a built-in Nexus specialist or a locally saved custom agent. Specialists use their configured tools through GIA’s normal permission and approval flow. Use separate calls only for distinct parallel workstreams; findings are returned for synthesis.',
     required: ['prompt'],
     properties: {
-      prompt: { type: 'string', description: 'Clear, self-contained description of the task for the sub-agent to complete' },
+      prompt: { type: 'string', description: 'Self-contained objective, relevant context, and a distinct workstream. Request only the work this specialist should perform.' },
       provider: { type: 'string', description: 'Optional provider id for the sub-agent (defaults to the active provider)' },
-      agent: { type: 'string', description: 'Optional persona name (e.g. "Onyx", "Atlas") — the sub-agent embodies that specialist' },
+      agent: { type: 'string', description: 'Optional built-in persona or locally saved agent name (e.g. "Onyx", "Atlas", or a custom agent). If omitted, Nexus selects a specialist from the task.' },
     }
   },
 };

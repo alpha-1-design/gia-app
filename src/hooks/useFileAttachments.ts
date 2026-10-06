@@ -2,8 +2,16 @@ import { useState, useCallback, useRef } from 'react';
 import PDFService from '../services/PDFService';
 import RAGService from '../services/RAGService';
 import { knowledgeGraphService } from '../services/KnowledgeGraphService';
+import { logger } from '../utils/logger';
 
-export type Attachment = { name: string; type: string; content: string; preview?: string };
+export type Attachment = { name: string; type: string; content: string; preview?: string; error?: string };
+
+const OFFICE_FILE_EXTENSIONS = /\.(?:docx|xlsx|pptx|odt|ods)$/i;
+const TEXT_FILE_EXTENSIONS = new Set([
+  'txt', 'md', 'markdown', 'csv', 'tsv', 'log', 'json', 'jsonl', 'xml', 'yaml', 'yml',
+  'html', 'htm', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'py', 'java', 'kt',
+  'c', 'h', 'cpp', 'hpp', 'rs', 'go', 'sh', 'bat', 'sql', 'toml', 'ini', 'conf',
+]);
 
 // Pasting a long block of text (e.g. logs, an article, a big code dump)
 // straight into the composer used to just dump the raw text into the input.
@@ -32,53 +40,104 @@ export function useFileAttachments() {
   const addFiles = useCallback(async (files: File[], isImage = false) => {
     setProcessingFiles(true);
     const newAtts: Attachment[] = [];
-    for (const file of files) {
-      setProcessingFileName(file.name);
-      await new Promise<void>((resolve) => {
-        const reader = new FileReader();
-        const onError = () => { newAtts.push({ name: file.name, type: file.type || 'application/octet-stream', content: `Failed to read file: ${file.name}` }); resolve(); };
-        if (isImage || file.type.startsWith('image/')) {
-          reader.onload = () => { newAtts.push({ name: file.name, type: file.type, content: '', preview: reader.result as string }); resolve(); };
-          reader.onerror = onError;
-          reader.readAsDataURL(file);
-        } else if (file.type === 'application/pdf') {
-          reader.onload = async () => {
-            try {
-              const text = await PDFService.extractTextFromBase64(reader.result as string);
-              newAtts.push({ name: file.name, type: file.type, content: text });
-              if (text && text.length > 20) {
-                knowledgeGraphService.extractFromDocument(file.name, text, `doc-${Date.now()}`);
-                const id = `rag-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-                const title = file.name.replace(/\.[^/.]+$/, '');
-                try { await RAGService.indexDocument(id, title, text); } catch { /* ignore RAG errors */ }
-              }
-            } catch {
-              newAtts.push({ name: file.name, type: file.type, content: 'Failed to extract PDF text.' });
-            }
-            resolve();
-          };
-          reader.onerror = onError;
-          reader.readAsDataURL(file);
-        } else {
-          reader.onload = () => {
-            const text = reader.result as string;
-            newAtts.push({ name: file.name, type: file.type || 'text/plain', content: text });
-            if (text && text.length > 20) {
-              knowledgeGraphService.extractFromDocument(file.name, text, `doc-${Date.now()}`);
-              const id = `rag-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-              const title = file.name.replace(/\.[^/.]+$/, '');
-              RAGService.indexDocument(id, title, text).catch(() => {/* ignore */});
-            }
-            resolve();
-          };
-          reader.onerror = onError;
-          reader.readAsText(file);
-        }
+    const indexText = (fileName: string, text: string) => {
+      if (text.length <= 20) return;
+      const id = `rag-${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const title = fileName.replace(/\.[^/.]+$/, '');
+      void knowledgeGraphService.extractFromDocument(fileName, text, `doc-${Date.now()}`).catch(error => {
+        logger.warn('[useFileAttachments] Could not add document to the knowledge graph:', error);
       });
+      void RAGService.indexDocument(id, title, text).catch(error => {
+        logger.warn('[useFileAttachments] Could not index document for search:', error);
+      });
+    };
+
+    try {
+      for (const file of files) {
+        setProcessingFileName(file.name);
+        if (isImage || file.type.startsWith('image/')) {
+          try {
+            const preview = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Image preview was not readable.'));
+              reader.onerror = () => reject(reader.error || new Error('Image file could not be read.'));
+              reader.readAsDataURL(file);
+            });
+            newAtts.push({ name: file.name, type: file.type, content: '', preview });
+          } catch (error) {
+            newAtts.push({
+              name: file.name,
+              type: file.type || 'application/octet-stream',
+              content: '',
+              error: error instanceof Error ? error.message : `Failed to read ${file.name}.`,
+            });
+          }
+          continue;
+        }
+
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          try {
+            const text = await PDFService.extractText(file);
+            newAtts.push({ name: file.name, type: file.type || 'application/pdf', content: text });
+            indexText(file.name, text);
+          } catch (error) {
+            newAtts.push({
+              name: file.name,
+              type: file.type || 'application/pdf',
+              content: '',
+              error: error instanceof Error ? error.message : 'PDF text extraction failed.',
+            });
+          }
+          continue;
+        }
+
+        if (OFFICE_FILE_EXTENSIONS.test(file.name)) {
+          newAtts.push({
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            content: '',
+            error: 'Office documents cannot be parsed directly from Chat yet. Export this file as PDF or plain text and attach it again.',
+          });
+          continue;
+        }
+
+        const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+        const isTextFile = file.type.startsWith('text/')
+          || ['application/json', 'application/xml', 'application/javascript'].includes(file.type)
+          || TEXT_FILE_EXTENSIONS.has(extension);
+        if (!isTextFile) {
+          newAtts.push({
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            content: '',
+            error: 'This file type is binary and cannot be previewed as text. Attach a PDF, image, or text-based file instead.',
+          });
+          continue;
+        }
+
+        try {
+          const text = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('File contents were not readable.'));
+            reader.onerror = () => reject(reader.error || new Error('File could not be read.'));
+            reader.readAsText(file);
+          });
+          newAtts.push({ name: file.name, type: file.type || 'text/plain', content: text });
+          indexText(file.name, text);
+        } catch (error) {
+          newAtts.push({
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            content: '',
+            error: error instanceof Error ? error.message : `Failed to read ${file.name}.`,
+          });
+        }
+      }
+      setAttachments(prev => [...prev, ...newAtts]);
+    } finally {
+      setProcessingFileName('');
+      setProcessingFiles(false);
     }
-    setAttachments(prev => [...prev, ...newAtts]);
-    setProcessingFileName('');
-    setProcessingFiles(false);
   }, []);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, isImage = false) => {

@@ -38,7 +38,12 @@ const ProfileDrawer: React.FC = () => {
   const visibleModules = MODULES.filter((m) => m.id !== 'settings' && !hiddenModules.includes(m.id));
 
   return (
-    <LeftDrawer open={showLeftDrawer} onClose={() => setShowLeftDrawer(false)}>
+    <LeftDrawer
+      open={showLeftDrawer}
+      onClose={() => setShowLeftDrawer(false)}
+      id="app-navigation-drawer"
+      topOffset={56}
+    >
       {/* Profile */}
       <button
         onClick={() => goTo('profile-identity')}

@@ -10,7 +10,7 @@ vi.mock('../../services/GiaBrain', () => ({
 
 vi.mock('../../services/PDFService', () => ({
   default: {
-    extractTextFromBase64: vi.fn(async () => 'Extracted PDF text'),
+    extractText: vi.fn(async () => 'Extracted PDF text'),
   },
 }));
 
@@ -62,6 +62,45 @@ describe('useFileAttachments', () => {
     expect(result.current.attachments).toHaveLength(1);
     expect(result.current.attachments[0].content).toBe('');
     expect(result.current.attachments[0].preview).toBeTruthy();
+  });
+
+  it('extracts PDFs from bytes and stores readable text', async () => {
+    const file = createMockFile('report.pdf', 'application/pdf', '%PDF fake');
+    const { result } = renderHook(() => useFileAttachments());
+    await act(async () => {
+      await result.current.addFiles([file]);
+    });
+    expect(result.current.attachments[0]).toMatchObject({
+      name: 'report.pdf',
+      content: 'Extracted PDF text',
+    });
+    const PDFService = await import('../../services/PDFService');
+    expect(PDFService.default.extractText).toHaveBeenCalledWith(file);
+  });
+
+  it('keeps PDF extraction failures visible instead of sending them as extracted content', async () => {
+    const PDFService = await import('../../services/PDFService');
+    vi.mocked(PDFService.default.extractText).mockRejectedValueOnce(new Error('PDF is encrypted.'));
+    const file = createMockFile('private.pdf', 'application/pdf', '%PDF fake');
+    const { result } = renderHook(() => useFileAttachments());
+    await act(async () => {
+      await result.current.addFiles([file]);
+    });
+    expect(result.current.attachments[0]).toMatchObject({
+      name: 'private.pdf',
+      content: '',
+      error: 'PDF is encrypted.',
+    });
+  });
+
+  it('does not decode Office binaries as text', async () => {
+    const file = createMockFile('report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'binary');
+    const { result } = renderHook(() => useFileAttachments());
+    await act(async () => {
+      await result.current.addFiles([file]);
+    });
+    expect(result.current.attachments[0].content).toBe('');
+    expect(result.current.attachments[0].error).toMatch(/export this file as PDF or plain text/i);
   });
 
   it('removeAttachment removes by index', async () => {

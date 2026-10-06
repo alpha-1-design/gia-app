@@ -6,7 +6,8 @@ import {
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
   Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench, WifiOff,
-  Maximize2, ChevronRight, Mic, Settings as SettingsIcon,
+  Maximize2, ChevronRight, Mic, Settings as SettingsIcon, MessageCircle,
+  FolderGit2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -15,6 +16,7 @@ import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
 import GiaIcon from '../components/GiaIcon';
+import GiaMascot from '../components/GiaMascot';
 import giaTools from '../services/GiaTools';
 import SandboxEnvService from '../services/SandboxEnvService';
 import MessageList from '../components/MessageList';
@@ -33,15 +35,18 @@ import ToolsCatalogSheet from '../components/chat/ToolsCatalogSheet';
 import ProviderIcon from '../components/ProviderIcon';
 import { BranchView } from '../components/chat/BranchView';
 import { SummaryBanner } from '../components/chat/SummaryBanner';
+import RecentChats from '../components/chat/RecentChats';
 import AgentMentionPicker from '../components/AgentMentionPicker';
 import { useProviderStore } from '../store/useProviderStore';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
+import { CollaborationActivity } from '../components/chat/CollaborationActivity';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { BuildStudio } from '../components/BuildStudio';
 import { VoiceNoteBar } from '../components/VoiceNoteBar';
 import { useVoiceNote } from '../hooks/useVoiceNote';
 import { LiveFileEditor } from '../components/LiveFileEditor';
-import { HorseSpiritBackdrop } from '../components/HorseSpiritBackdrop';
+import ProjectWorkspacePanel from '../components/build/ProjectWorkspacePanel';
+import GIAInAppBrowser from '../services/GIAInAppBrowser';
 
 const QUICK_STARTS = [
   { icon: GraduationCap, label: 'Exam Prep', prompt: 'Quiz me on WASSCE past questions for', color: '#a855f7', category: 'study' },
@@ -65,6 +70,7 @@ interface ChatModuleProps {
 const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const {
     input, setInput, loading, streamingMsgId, streamingMsgIds, voiceEnabled,
+    providerStatuses,
     showHistory, setShowHistory, historySearch, setHistorySearch, attachments,
     processingFiles, processingFileName,
     showScrollBtn, undoMsg, showSkillPicker,
@@ -98,6 +104,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
 
   const buildModeStore = useGiaStore((s) => s.buildMode);
   const buildMode = forceBuild ?? buildModeStore;
+  const setModule = useGiaStore((s) => s.setModule);
   const generationState = useGiaStore((s) => s.generationState);
   // generationState tracks generation across module/session switches but
   // previously had no reader anywhere in the UI -- so if you started a
@@ -162,6 +169,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const voiceNote = useVoiceNote();
   const reduceMotionPref = useGiaStore(st => st.reduceMotion);
   const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
+  const [showProjectWorkspace, setShowProjectWorkspace] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
 
@@ -341,53 +349,49 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
         {messages.length === 0 && !buildMode && (
           <div className="relative flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
-            {!providerConnected && <div className="absolute inset-0 -z-10"><HorseSpiritBackdrop /></div>}
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}>
-              <GiaIcon size={30} animate={false} color="#a855f7" />
-            </div>
+            {providerConnected
+              ? <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}><GiaIcon size={30} animate={false} color="#a855f7" /></div>
+              : <GiaMascot />}
             <div>
-              <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>{userProfile.name ? `Hey ${userProfile.name}` : greeting.emoji + ' ' + greeting.text}</p>
-              <p className="text-xs mt-1 max-w-[240px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{providerConnected ? 'Your personal AI workspace. Ask anything, attach files, or pick a quick start below.' : 'No AI provider connected. Use the on-device local LLM or connect a provider in Settings.'}</p>
-              {!messages.length && (
+              <p className="text-base font-semibold" style={{ color: 'var(--gia-text)' }}>
+                {providerConnected
+                  ? userProfile.name ? `Hey ${userProfile.name}` : greeting.emoji + ' ' + greeting.text
+                  : 'No AI provider connected'}
+              </p>
+              <p className="text-xs mt-1 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
+                {providerConnected
+                  ? 'Your personal AI workspace. Ask anything, attach files, or pick a quick start below.'
+                  : 'Choose an option below to start chatting: set up Local AI or connect a provider.'}
+              </p>
+              {providerConnected && !messages.length && (
                 <p className="text-[10px] mt-2 animate-fade-in" style={{ color: 'var(--gia-muted-2)' }}>
                   {tip.emoji} {tip.text}
                 </p>
-            )}
-          </div>
-            {!providerConnected && (
-            <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
-              <button onClick={() => setShowLocalAIFlow(true)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
-                <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.2)' }}><Zap size={14} style={{ color: '#a855f7' }} /></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Use Local AI (Free)</p>
-                  <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>GIA works offline with on-device intelligence</p>
-                </div>
-              </button>
-              <button onClick={() => setShowModelSwitcher(true)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600/50">
-                <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(113,113,122,0.2)' }}><Bot size={14} style={{ color: '#a1a1aa' }} /></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Connect AI Provider</p>
-                  <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>OpenRouter, Anthropic, Gemini, or any API</p>
-                </div>
-              </button>
-              {QUICK_STARTS.slice(0, 1).map((qs) => (
-                <motion.button
-                  key={qs.label}
-                  onClick={() => setInput(qs.prompt)}
-                  whileHover={{ scale: 1.02, borderColor: `${qs.color}60` }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback"
-                  style={{ background: `linear-gradient(135deg, ${qs.color}08, ${qs.color}02)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 0 12px ${qs.color}08` }}
-                >
-                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={14} style={{ color: qs.color }} /></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
-                    <p className="text-[10px] truncate" style={{ color: qs.color }}>{qs.prompt}</p>
-                  </div>
-                </motion.button>
-              ))}
+              )}
             </div>
+            {!providerConnected && (
+              <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
+                <button onClick={() => setShowLocalAIFlow(true)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-violet-900/30 border border-violet-500/20 hover:border-violet-400/40">
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.2)' }}><Zap size={14} style={{ color: '#a855f7' }} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Use Local AI (Free)</p>
+                    <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>Set up an on-device model to chat offline</p>
+                  </div>
+                </button>
+                <button onClick={() => setShowModelSwitcher(true)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600/50">
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(113,113,122,0.2)' }}><Bot size={14} style={{ color: '#a1a1aa' }} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>Connect AI Provider</p>
+                    <p className="text-[10px] truncate" style={{ color: 'var(--gia-muted-2)' }}>OpenRouter, Anthropic, Gemini, or any API</p>
+                  </div>
+                </button>
+              </div>
             )}
+            <RecentChats
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onResume={setActiveSession}
+            />
             {providerConnected && (
             <div className="grid grid-cols-1 gap-3 w-full max-w-xs mt-1 max-h-[52vh] overflow-y-auto pb-1 pr-0.5">
               {QUICK_STARTS.map((qs, i) => (
@@ -415,7 +419,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
 
         <div className="w-full sm:px-1.5 space-y-2 sm:space-y-3">
-        {!providerConnected && !loading && (
+        {!providerConnected && !loading && messages.length > 0 && (
           <div onClick={() => setShowModelSwitcher(true)} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Tap to connect a provider — OpenRouter, Anthropic, Gemini & more</p>
@@ -428,6 +432,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           </div>
         )}
 
+        <CollaborationActivity providers={providerStatuses} />
         <AgentSwarmDashboard />
 
         <MessageList
@@ -617,15 +622,52 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               <Mic size={11} /> Voice note
             </button>
             <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
-            <button type="button" onClick={() => {
-              if (forceBuild) return;
+            <button
+              type="button"
+              aria-label={buildMode ? 'Switch to Chat mode' : 'Switch to Build mode'}
+              title={buildMode ? 'Switch to Chat mode' : 'Switch to Build mode'}
+              onClick={() => {
+              if (forceBuild) {
+                setModule('chat');
+                return;
+              }
               const next = !buildModeStore;
               setBuildMode(next);
               useGiaStore.getState().updateSharedData({ currentMode: next ? 'build' : 'code' });
-            }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: buildMode ? '#f9731620' : 'var(--gia-surface)', border: `1px solid ${buildMode ? '#f9731640' : 'var(--gia-border)'}`, color: buildMode ? '#f97316' : 'var(--gia-muted)', fontWeight: 500 }}>
-              <Hammer size={11} />
-              Build
+            }}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
+              style={{
+                background: buildMode && !forceBuild ? '#f9731620' : 'var(--gia-surface)',
+                border: `1px solid ${buildMode && !forceBuild ? '#f9731640' : 'var(--gia-border)'}`,
+                color: buildMode && !forceBuild ? '#f97316' : 'var(--gia-muted)',
+                fontWeight: 500,
+              }}
+            >
+              {buildMode ? <MessageCircle size={11} /> : <Hammer size={11} />}
+              {buildMode ? 'Chat' : 'Build'}
             </button>
+            <button
+              type="button"
+              aria-label="Open in-app browser"
+              onClick={() => {
+                void GIAInAppBrowser.open().catch((error) => {
+                  useGiaStore.getState().addNotification(
+                    `Could not open the in-app browser: ${error instanceof Error ? error.message : 'unknown error'}`,
+                  );
+                });
+              }}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
+              style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)', fontWeight: 500 }}
+            >
+              <Globe size={11} />
+              Browser
+            </button>
+            {buildMode && (
+              <button type="button" onClick={() => setShowProjectWorkspace(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: showProjectWorkspace ? '#f9731620' : 'var(--gia-surface)', border: `1px solid ${showProjectWorkspace ? '#f9731640' : 'var(--gia-border)'}`, color: showProjectWorkspace ? '#fb923c' : 'var(--gia-muted)', fontWeight: 500 }}>
+                <FolderGit2 size={11} />
+                Project
+              </button>
+            )}
             {buildMode && (
               <button type="button" onClick={() => setShowPreviewSheet(true)} disabled={!buildPreviewUrl} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: buildPreviewUrl ? '#22c55e15' : 'var(--gia-surface)', border: `1px solid ${buildPreviewUrl ? '#22c55e40' : 'var(--gia-border)'}`, color: buildPreviewUrl ? '#22c55e' : 'var(--gia-muted)', fontWeight: 500 }}>
                 {buildPreviewUrl && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />}
@@ -747,6 +789,10 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
       </AnimatePresence>
       <BuildPreviewSheet url={buildPreviewUrl} open={showPreviewSheet} onClose={() => setShowPreviewSheet(false)} />
+      {showProjectWorkspace && createPortal(
+        <ProjectWorkspacePanel onClose={() => setShowProjectWorkspace(false)} />,
+        document.body,
+      )}
       {showKnowledge && <KnowledgePanel onClose={() => setShowKnowledge(false)} />}
       {showFileManager && <FileManager onClose={() => setShowFileManager(false)} />}
       {showBranchView && activeSession && (

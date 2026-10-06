@@ -28,6 +28,7 @@ import { NexusPage } from '../components/settings/NexusPage';
 import { MicalPage } from '../components/settings/MicalPage';
 import { CapabilityCenterPage } from '../components/settings/CapabilityCenterPage';
 import { TerminalPage } from '../components/settings/TerminalPage';
+import SettingsScrollControls from '../components/settings/SettingsScrollControls';
 import { SkillsMarketplaceUI } from '../components/settings/SkillsMarketplaceSection';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { DashboardModule } from './DashboardModule';
@@ -150,7 +151,7 @@ const SettingsModule: React.FC = () => {
   if (settingsPage === 'about') return sub('About', <AboutPage onBack={() => setSettingsPage('main')} />);
   if (settingsPage === 'dashboard') return sub('Dashboard', <DashboardModule onBack={() => setSettingsPage('main')} />);
   if (settingsPage === 'neura') return sub('Neura', <NeuraPage onBack={() => setSettingsPage('main')} />);
-  if (settingsPage === 'nexus') return sub('Nexus', <NexusPage onBack={() => setSettingsPage('main')} />);
+  if (settingsPage === 'nexus') return sub('Nexus', <NexusPage onBack={() => setSettingsPage('main')} onOpenMcp={() => setSettingsPage('mcp')} />);
   if (settingsPage === 'mical' || settingsPage === 'sandbox') return sub('Mical', <MicalPage onBack={() => setSettingsPage('main')} />);
   if (settingsPage === 'skills-marketplace') return sub('Skills Marketplace', (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
@@ -556,7 +557,7 @@ const SettingsModule: React.FC = () => {
 
       {/* Version */}
       <p className="text-center text-[10px] pb-4 pt-2" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.4.0.14 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        GIA v2.4.0.15 Beta · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
 
       <ConfirmDialog
@@ -572,6 +573,7 @@ const SettingsModule: React.FC = () => {
         }}
         onCancel={() => setConfirmChats(false)}
       />
+      <SettingsScrollControls scrollRef={mainScrollRef} />
     </div>
   );
 };

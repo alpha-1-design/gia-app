@@ -47,7 +47,11 @@ const steps = [
 ]
 
 const phoneReleaseHighlights = [
-  'Phone-first Android experience with native device controls',
+  'Beta: Android on-device “Hey Jarvis” wake-word engine',
+  'Build Studio, starter prompts, and a visual style carousel',
+  'Voice notes, live assistant orb, and Integration Orbit hub',
+  'GitHub repository discovery and workspace-based project editing',
+  'Experimental in-app browser for web reading and Build previews',
   'Secure credential vault with Android Keystore support',
   'Alpine apk and Ubuntu apt-get sandbox provisioning',
   'Termux integration with explicit user approval',
@@ -94,15 +98,16 @@ export function Download() {
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-400/20 text-violet-200 text-[10px] font-bold uppercase tracking-widest mb-4">
                 <Smartphone size={12} />
-                Phone release · v2.4.0.14
+                Phone beta · v2.4.0.15
               </div>
               <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">
                 A real assistant for your Android device.
               </h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                GIA v2.4.0.14 makes terminal Full Install actually finish, fixes the Packages tab, and makes chat replies full width
-                together. It can ask before sensitive actions, request credentials without exposing
-                them in chat, and keep execution inside the configured workspace.
+                GIA v2.4.0.15 Beta brings voice notes, an on-device wake-word experiment, Build Studio,
+                GitHub project workflows, and an experimental in-app browser. Terminal and workspace
+                reliability improvements are included too. Beta features are still being tested;
+                availability varies between Android and web.
               </p>
             </div>
             <div className="grid sm:grid-cols-2 gap-3 min-w-0 lg:max-w-xl">
@@ -119,7 +124,7 @@ export function Download() {
             <span className="text-zinc-700">·</span>
             <span>Android APK available from GitHub Releases</span>
             <a href="https://github.com/alpha-1-design/gia-app/releases" target="_blank" rel="noopener noreferrer" className="text-violet-300 hover:text-violet-200 font-semibold transition-colors">
-              View v2.4.0.14 release →
+              View v2.4.0.15 Beta release →
             </a>
           </div>
         </motion.div>

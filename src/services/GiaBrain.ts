@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger';
 import { useProviderStore } from '../store/useProviderStore';
 import { useGiaStore } from '../store/useGiaStore';
-import { BrainRequest, BrainResponse } from './providers/types';
+import { BrainRequest, BrainResponse, CollaborativeProviderStatus } from './providers/types';
 import { setSystemContext } from './buildGiaSystem';
 import { selectBestModel } from './brain/modelUtils';
 import { extractMemories } from './brain/memoryExtractor';
@@ -91,7 +91,15 @@ class GiaBrain {
       }
 
       const toolState = { history, currentPrompt, clarificationAttempts };
-      const toolResult = await ToolExecutionService.execute(text, toolState, req.onThought, req.signal, sourcesAcc, req.messageId);
+      const toolResult = await ToolExecutionService.execute(
+        text,
+        toolState,
+        req.onThought,
+        req.signal,
+        sourcesAcc,
+        req.messageId,
+        req.allowedToolIds,
+      );
 
       currentPrompt = toolState.currentPrompt;
       clarificationAttempts = toolState.clarificationAttempts;
@@ -132,7 +140,7 @@ class GiaBrain {
     throw new Error('Max agentic iterations reached.');
   }
 
-  async generateCollaborative(req: BrainRequest, onProviderStatus?: (status: { provider: string; model: string; status: 'thinking' | 'responding' | 'done' | 'error' }) => void): Promise<BrainResponse> {
+  async generateCollaborative(req: BrainRequest, onProviderStatus?: (status: CollaborativeProviderStatus) => void): Promise<BrainResponse> {
     return CollaborativeGenerationService.generate(req, onProviderStatus);
   }
 }

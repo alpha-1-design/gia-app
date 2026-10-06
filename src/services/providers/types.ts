@@ -25,6 +25,8 @@ export interface BrainRequest {
   _skipNativeSchemas?: boolean;
   forceJson?: boolean;
   providerId?: string;
+  /** Restrict this generation to a fixed set of tools at schema and execution time. */
+  allowedToolIds?: string[];
   /** Chat message id the assistant's reply (and any tool calls it makes)
    *  belongs to. Passed explicitly through to executeToolBlocks so tool
    *  proposal cards attach to the right message even when more than one
@@ -41,6 +43,15 @@ export interface BrainRequest {
    *  mid-stream. Without it, resilience still works but can't survive a
    *  full app restart. */
   checkpointKey?: string;
+}
+
+export type CollaborativeProviderPhase = 'checking' | 'thinking' | 'researching' | 'responding' | 'synthesizing' | 'done' | 'error';
+
+export interface CollaborativeProviderStatus {
+  provider: string;
+  model: string;
+  status: CollaborativeProviderPhase;
+  activity?: string;
 }
 
 export interface TokenUsage {
@@ -68,6 +79,6 @@ export interface BrainContext {
   retryFetch(url: string, options: RequestInit, retries?: number): Promise<Response>;
   friendlyError(label: string, e: unknown): string;
   buildOpenAITools(): { type: string; function: { name: string; description: string; parameters: Record<string, unknown> } }[];
-  buildAnthropicTools(): { type: string; function: { name: string; description: string; input_schema: Record<string, unknown> } }[];
-  buildGeminiTools(): { functionDeclarations: { name: string; description: string; parameters: Record<string, unknown> } }[];
+  buildAnthropicTools(): { name: string; description: string; input_schema: Record<string, unknown> }[];
+  buildGeminiTools(): { name: string; description: string; parameters: Record<string, unknown> }[];
 }

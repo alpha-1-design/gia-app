@@ -9,7 +9,8 @@ import ExamResult from './exam/ExamResult';
 import ExamReference from './exam/ExamReference';
 import type { ExamSystem, ExamMode, Difficulty, Question, QuizResult, Subject, LearningProfile } from './exam/types';
 import { SUBJECTS_STORAGE_KEY, DEFAULT_SUBJECTS } from './exam/types';
-import { generateWithRetry } from '../utils/generateWithRetry';
+import { buildRetryPrompt, generateWithRetry } from '../utils/generateWithRetry';
+import { normalizeExamQuestions, normalizeExamSubjects } from './exam/normalizeExamOutput';
 import { getFallbackQuestions, loadCachedQuestions, saveQuestionsToCache } from './exam/FallbackQuestions';
 
 const TIMER_SECONDS_PER_QUESTION = 60;
@@ -82,8 +83,8 @@ const ExamModule: React.FC = () => {
   const fetchSubjects = useCallback(async () => {
     try {
       const { data: parsed } = await generateWithRetry<{ subjects: Subject[] }>(
-        () => GiaBrain.generate({
-          prompt: `List the main subjects for ${examSystem} exams in West Africa.`,
+        retry => GiaBrain.generate({
+          prompt: buildRetryPrompt(`List the main subjects for ${examSystem} exams in West Africa.`, retry),
           systemPrompt: `You are an expert in West African education. Respond with valid JSON only:
 {"subjects":[{"name":"Subject Name","topics":["Topic 1","Topic 2","Topic 3","Topic 4","Topic 5"]}]}
 Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
@@ -92,7 +93,7 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
           temperature: 0.3,
           maxTokens: 2000,
         }),
-        { moduleName: 'ExamModule', maxRetries: 2 }
+        { moduleName: 'ExamModule', maxRetries: 2, transform: normalizeExamSubjects }
       );
       if (parsed.subjects && parsed.subjects.length > 0) {
         setSubjects(parsed.subjects);
@@ -135,8 +136,8 @@ Include 6-10 subjects with 4-6 topics each. Pure JSON, no markdown.`,
         ? `\nThe student needs practice on: ${currentProfile.weakAreas.map(w => `${w.topic} (${w.subject})`).join(', ')}. Generate questions targeting these weak areas first.`
         : '';
       const { data: parsed } = await generateWithRetry<{ questions: Question[] }>(
-        () => GiaBrain.generate({
-          prompt: `Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.${weakContext}`,
+        retry => GiaBrain.generate({
+          prompt: buildRetryPrompt(`Generate ${questionCount} ${modeDesc} for ${examSystem} ${subject}${topicContext} at ${difficulty} difficulty.${weakContext}`, retry),
           systemPrompt: `You are a ${examSystem} exam expert. Generate accurate, exam-standard questions. Respond with valid JSON:
 {"questions":[{"id":"1","question":"Question text?","options":["A. Option","B. Option","C. Option","D. Option"],"correctAnswer":0,"explanation":"Why this is correct","topic":"Topic name"}]}
 correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accuracy required. Pure JSON, no markdown.`,
@@ -145,11 +146,13 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
           temperature: 0.4,
           maxTokens: 3000,
         }),
-        { moduleName: 'ExamModule', maxRetries: 2, onRetry: (attempt, err) => setRetryStatus(`Retry ${attempt + 1}/3: ${err}`) }
+        {
+          moduleName: 'ExamModule',
+          maxRetries: 2,
+          transform: value => normalizeExamQuestions(value, questionCount, topic || subject),
+          onRetry: (attempt, err) => setRetryStatus(`Retry ${attempt + 1}/3: ${err}`),
+        }
       );
-      if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
-        throw new Error('AI returned an invalid response format. Please try again.');
-      }
       const qs = parsed.questions.map((q) => ({ ...q, id: genId() }));
       setQuestions(qs);
       saveQuestionsToCache(subject, qs);

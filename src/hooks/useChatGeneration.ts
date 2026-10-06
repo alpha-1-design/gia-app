@@ -17,6 +17,7 @@ import InputGuardrails from '../services/InputGuardrails';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { giaCoreServices } from '../services/GIACoreServices';
 import HapticService from '../services/HapticService';
+import type { CollaborativeProviderStatus } from '../services/providers/types';
 import type { Message } from '../store/useGiaStore';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -84,7 +85,7 @@ export function useChatGeneration() {
   const [streamingMsgIds, setStreamingMsgIds] = useState<Set<string>>(new Set());
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
   const [liveSegments, setLiveSegments] = useState<Record<string, MessageSegment[]>>({});
-  const [providerStatuses, setProviderStatuses] = useState<{ provider: string; model: string; status: 'thinking' | 'responding' | 'done' | 'error' }[]>([]);
+  const [providerStatuses, setProviderStatuses] = useState<CollaborativeProviderStatus[]>([]);
   const activeStreamsRef = useRef<Set<string>>(new Set());
 
   // Sync streaming state with store generationState (survives module switches)
@@ -188,7 +189,7 @@ export function useChatGeneration() {
 
   const handleSend = useCallback(async (
     input: string,
-    attachments: { name: string; type: string; content?: string; preview?: string }[],
+    attachments: { name: string; type: string; content?: string; preview?: string; error?: string }[],
     setInput: (v: string) => void,
     setAttachments: (v: unknown[]) => void,
     agentInfo?: { id: string; name: string; icon: string; task?: string }[],
@@ -235,7 +236,7 @@ export function useChatGeneration() {
 
     const userMsg: Message = {
       id: genId(), role: 'user', content: userContent, timestamp: Date.now(),
-      attachments: sentAttachments.length > 0 ? sentAttachments as { name: string; type: string; content: string; preview?: string }[] : undefined,
+      attachments: sentAttachments.length > 0 ? sentAttachments as { name: string; type: string; content: string; preview?: string; error?: string }[] : undefined,
       ...(agentInfo?.length === 1 ? { agentId: agentInfo[0].id, agentName: agentInfo[0].name, agentIcon: agentInfo[0].icon, agentTask: agentInfo[0].task || userContent } : {}),
     };
 
@@ -268,7 +269,11 @@ export function useChatGeneration() {
       const fileContext = sentAttachments
         .filter(a => !a.type.startsWith('image/'))
         .map(a => {
+          if (a.error) return `\n[FILE UNAVAILABLE: ${a.name}]\n${a.error}`;
           const content = a.content || '';
+          if (!content && a.name.toLowerCase().endsWith('.pdf')) {
+            return `\n[NO SELECTABLE TEXT: ${a.name}]\nNo text was extracted from this PDF. It may be scanned or image-only; OCR is not available.`;
+          }
           const truncated = content.length > maxFileLen;
           const body = truncated ? content.slice(0, maxFileLen) : content;
           const sizeNote = truncated
@@ -281,7 +286,7 @@ export function useChatGeneration() {
         .join('\n\n');
       const imgContext = sentAttachments
         .filter(a => a.type.startsWith('image/'))
-        .map(a => `[Image: ${a.name}]`)
+        .map(a => a.error ? `[Image unavailable: ${a.name} — ${a.error}]` : `[Image: ${a.name}]`)
         .join('\n');
       prompt = `${fileContext}\n\n${imgContext}\n\nUSER: ${text}`;
     }
@@ -372,9 +377,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       streamKey = `${sessionId}:${asstId}`;
 
       const multiProviderEnabled = useGiaStore.getState().multiProvider;
-      const { providers: allProviders } = await import('../store/useProviderStore').then(m => m.useProviderStore.getState());
-      const connectedCount = Object.values(allProviders).filter(cfg => cfg.enabled && cfg.apiKey).length;
-      const useCollaborative = multiProviderEnabled && connectedCount >= 2;
+      const useCollaborative = multiProviderEnabled;
 
       if (useCollaborative) {
         setProviderStatuses([]);

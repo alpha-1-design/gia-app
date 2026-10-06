@@ -107,6 +107,9 @@ export const useProviderStore = create<GiaProviderState>()(
                 baseUrl: providerRegistry.getProvider(id)?.baseUrl,
               };
             }
+            if (id === 'opencode' && providers[id].model === 'deepseek-v4-flash-free') {
+              providers[id] = { ...providers[id], model: providerRegistry.getDefaultModel(id) };
+            }
             if (!availableModels[id] || availableModels[id].length === 0) {
               availableModels[id] = providerRegistry.getModels(id);
             }

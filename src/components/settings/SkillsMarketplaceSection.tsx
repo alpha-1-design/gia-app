@@ -202,6 +202,10 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
                   </span>
                 </div>
                 <p className="text-[10px] leading-relaxed mb-2" style={{ color: 'var(--gia-muted)' }}>{skill.description}</p>
+                <div className="rounded-lg p-2 mb-2" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+                  <p className="text-[9px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--gia-muted)' }}>Instructions GIA follows</p>
+                  <p className="text-[10px] leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto" style={{ color: 'var(--gia-text)' }}>{skill.systemPrompt}</p>
+                </div>
                 {skill.tools.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-2">
                     {skill.tools.map(tool => (
@@ -387,14 +391,17 @@ export const SkillsMarketplaceUI: React.FC<SkillsMarketplaceProps> = ({ mode, on
             </select>
             <textarea
               className="w-full text-[10px] px-2.5 py-1.5 rounded-lg mb-2 resize-none"
-              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)', minHeight: '60px' }}
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border-2)', color: 'var(--gia-text)', minHeight: '140px' }}
               value={customPrompt}
               onChange={e => setCustomPrompt(e.target.value)}
-              placeholder="System prompt — how should GIA behave with this skill?"
+              placeholder="Write a detailed playbook: role and scope, step-by-step workflow, quality checks, safety boundaries, and expected response format."
             />
+            <p className="text-[9px] leading-relaxed mb-2" style={{ color: 'var(--gia-muted)' }}>
+              Give GIA actionable instructions, not just a role label. Include the tasks it handles, how it should approach them, what to verify, and what it should never assume or do. ({customPrompt.length}/300 characters minimum)
+            </p>
             <button
               onClick={handleCreateCustom}
-              disabled={!customName.trim() || !customPrompt.trim()}
+              disabled={!customName.trim() || customPrompt.trim().length < 300}
               className="text-[9px] px-3 py-1.5 rounded-lg font-medium flex items-center gap-1 disabled:opacity-40"
               style={{ background: '#a855f720', color: '#a855f7' }}
             >

@@ -228,7 +228,7 @@ class ProviderMonitorImpl {
     const { providers } = useProviderStore.getState();
     const config = providers[providerId];
 
-    if (!def || !config?.enabled) {
+    if (!def || !config?.enabled || (def.needsApiKey && !config.apiKey.trim())) {
       const empty = this.emptyStats(providerId, '');
       empty.lastError = 'Provider not configured';
       return this.getHealthObject(providerId, '', empty);
@@ -240,11 +240,26 @@ class ProviderMonitorImpl {
     const start = performance.now();
     try {
       // Ping the provider's /models endpoint as a health check
-      const baseUrl = config?.baseUrl || def.baseUrl;
+      const baseUrl = (config.baseUrl || def.baseUrl).replace(/\/+$/, '');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const modelsUrl = def.listingType === 'gemini'
+        ? `${baseUrl.endsWith('/v1beta') ? baseUrl : `${baseUrl}/v1beta`}/models`
+        : `${baseUrl}/models`;
+      if (def.listingType === 'anthropic') {
+        headers['x-api-key'] = config.apiKey;
+        headers['anthropic-version'] = '2023-06-01';
+        headers['anthropic-dangerous-direct-browser-access'] = 'true';
+      } else if (def.listingType === 'gemini') {
+        headers['x-goog-api-key'] = config.apiKey;
+      }
+      if (def.headers) Object.assign(headers, def.headers);
       if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
 
-      const res = await corsProxy.fetch(`${baseUrl}/models`, {
+      if (def.listingType === 'anthropic' || def.listingType === 'gemini') {
+        delete headers.Authorization;
+      }
+
+      const res = await corsProxy.fetch(modelsUrl, {
         headers,
         signal: AbortSignal.timeout(8000),
       });

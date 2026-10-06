@@ -24,15 +24,17 @@ const USER_AGENTS = [
 const UA = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
 function withTimeout(ms: number, parent?: AbortController): AbortSignal {
-  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    return AbortSignal.timeout(ms);
-  }
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), ms);
   if (parent) {
-    parent.signal.addEventListener('abort', () => {
+    const abortFromParent = () => {
       clearTimeout(id);
-      ctrl.abort();
+      ctrl.abort(parent.signal.reason);
+    };
+    if (parent.signal.aborted) abortFromParent();
+    else parent.signal.addEventListener('abort', abortFromParent, { once: true });
+    ctrl.signal.addEventListener('abort', () => {
+      parent.signal.removeEventListener('abort', abortFromParent);
     }, { once: true });
   }
   return ctrl.signal;
@@ -255,7 +257,7 @@ class FallbackWebSearch {
       if (parentAbort?.signal.aborted) return [];
       const res = await fetch(
         `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5`,
-        { headers: { 'User-Agent': 'GIA/2.4.0.14' }, signal: withTimeout(5000, parentAbort) },
+        { headers: { 'User-Agent': 'GIA/2.4.0.15' }, signal: withTimeout(5000, parentAbort) },
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -297,7 +299,6 @@ class FallbackWebSearch {
         () => this.scrapeViaJina(url, maxChars, globalAbort),
         () => this.scrapeDirect(url, maxChars, globalAbort),
         () => this.scrapeViaProxy(url, maxChars, globalAbort),
-        () => this.scrapeViaScreenshot(url),
       ];
 
       let lastError = '';
@@ -338,12 +339,7 @@ class FallbackWebSearch {
   private async scrapeViaJina(url: string, maxChars: number, parentAbort?: AbortController): Promise<ScrapeResult> {
     if (parentAbort?.signal.aborted) throw new Error('Aborted');
     const res = await fetch(`https://r.jina.ai/${url}`, {
-      headers: {
-        'User-Agent': UA(),
-        'Accept': 'text/plain',
-        'X-Return-Format': 'text',
-        'X-With-Generated-Alt': 'true',
-      },
+      headers: { Accept: 'text/plain' },
       signal: withTimeout(20000, parentAbort),
     });
     if (!res.ok) throw new Error(`Jina returned ${res.status}`);
@@ -355,7 +351,7 @@ class FallbackWebSearch {
   private async scrapeDirect(url: string, maxChars: number, parentAbort?: AbortController): Promise<ScrapeResult> {
     if (parentAbort?.signal.aborted) throw new Error('Aborted');
     const res = await fetch(url, {
-      headers: { 'User-Agent': UA(), 'Accept': 'text/html,*/*' },
+      headers: { Accept: 'text/html,*/*' },
       signal: withTimeout(10000, parentAbort),
     });
     if (!res.ok) throw new Error(`Direct fetch returned ${res.status}`);
@@ -372,15 +368,19 @@ class FallbackWebSearch {
   }
 
   private async scrapeViaProxy(url: string, maxChars: number, parentAbort?: AbortController): Promise<ScrapeResult> {
-    for (const buildProxy of CORS_PROXIES) {
+    const proxyAbort = new AbortController();
+    const abortFromParent = () => proxyAbort.abort(parentAbort?.signal.reason);
+    if (parentAbort?.signal.aborted) abortFromParent();
+    else parentAbort?.signal.addEventListener('abort', abortFromParent, { once: true });
+    const attempts = CORS_PROXIES.map(async (buildProxy) => {
       try {
-        if (parentAbort?.signal.aborted) throw new Error('Aborted');
+        if (proxyAbort.signal.aborted) throw new Error('Aborted');
         const proxyUrl = buildProxy(url);
         const res = await fetch(proxyUrl, {
-          headers: { 'User-Agent': UA(), 'Accept': 'text/html,*/*' },
-          signal: withTimeout(15000, parentAbort),
+          headers: { Accept: 'text/html,*/*' },
+          signal: withTimeout(8000, proxyAbort),
         });
-        if (!res.ok) continue;
+        if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
         const html = await res.text();
         const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || url;
         const main = html.match(/<article[^>]*>[\s\S]*?<\/article>/i)?.[0]
@@ -394,20 +394,29 @@ class FallbackWebSearch {
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, maxChars);
-        if (content.length > 100) return { url, title, content, source: 'proxy' };
-      } catch { continue; }
+        if (content.length <= 100) throw new Error('Proxy returned no readable content');
+        return { url, title, content, source: 'proxy' };
+      } catch (error) {
+        throw error instanceof Error ? error : new Error('Proxy request failed');
+      }
+    });
+    try {
+      const firstSuccess = new Promise<ScrapeResult>((resolve, reject) => {
+        let failures = 0;
+        attempts.forEach((attempt) => {
+          attempt.then(resolve, () => {
+            failures += 1;
+            if (failures === attempts.length) reject(new Error('All proxies failed'));
+          });
+        });
+      });
+      return await firstSuccess;
+    } catch {
+      throw new Error('All proxies failed');
+    } finally {
+      proxyAbort.abort();
+      parentAbort?.signal.removeEventListener('abort', abortFromParent);
     }
-    throw new Error('All proxies failed');
-  }
-
-  private async scrapeViaScreenshot(url: string): Promise<ScrapeResult> {
-    const imgUrl = `https://api.screenshotmachine.com/?key=free&url=${encodeURIComponent(url)}&dimension=1280x720&format=png`;
-    return {
-      url,
-      title: `Screenshot of ${url}`,
-      content: `![Screenshot of ${url}](${imgUrl})\n\n*A screenshot was captured since text extraction failed. The image shows the visual rendering of the page at ${url}.*`,
-      source: 'screenshot',
-    };
   }
 
   async searchAndFormat(query: string): Promise<string> {
