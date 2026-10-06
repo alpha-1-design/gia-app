@@ -667,7 +667,10 @@ ${currentMode === 'plan' ? `You are in **PLAN mode**. You may analyze, research,
 - When the dev server is running, print its full URL verbatim in your final message (this is how the in-app Preview opens)
 - You have full tool access — use filesystem_write, terminal_run, sandbox_exec, build_project as needed
 - Be efficient — write files in parallel when possible (multiple filesystem_write in one message)
-- Show your progress: "Step 3/7: Writing components..." etc.` :
+- Show your progress: "Step 3/7: Writing components..." etc.
+- If the request ends with a "Style:" line, follow that design direction closely — it is the user's chosen look
+- **UI quality bar:** mobile-first and responsive; dark theme on true black (#000) by default with a working light option; every button, form and toggle must actually work; give every screen loading, empty and error states; keep tap targets at least 44px; use semantic HTML, labels and visible focus; wrap localStorage access in try/catch
+- **Display and data:** show structured data as clean cards, tables or charts instead of raw dumps. Any JSON you generate or store must be strictly valid (no comments, no trailing commas) — run it through JSON.parse in your test step. When an app reads JSON the user supplies, validate it and show a readable error with the position of the problem` :
   `You are in **CODE mode** (full access). Use any and all tools needed to complete the task. Be thorough and efficient.`}
 
 **IMPORTANT — Skills override mode restrictions.** Regardless of which mode you are in, you MUST always check if the user's request matches an installed skill. If a skill applies, follow its instructions completely. Skills are your highest priority — they define HOW you do things, not WHETHER you do them. A skill's system prompt and tool instructions take precedence over mode restrictions. If a skill requires a tool that mode would normally block, use it anyway — the skill is the user's explicit instruction.

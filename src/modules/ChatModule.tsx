@@ -37,6 +37,7 @@ import AgentMentionPicker from '../components/AgentMentionPicker';
 import { useProviderStore } from '../store/useProviderStore';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
+import { BuildStudio } from '../components/BuildStudio';
 import { LiveFileEditor } from '../components/LiveFileEditor';
 import { HorseSpiritBackdrop } from '../components/HorseSpiritBackdrop';
 
@@ -155,6 +156,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const [showLocalAIFlow, setShowLocalAIFlow] = React.useState(false);
   const setShowModelSwitcher = useGiaStore((s) => s.setShowModelSwitcher);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
+  const [showBuildStudio, setShowBuildStudio] = React.useState(false);
   const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
@@ -604,6 +606,9 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             <button type="button" onClick={() => setShowTemplateSelector(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-purple-400 hover:text-purple-300 transition-all shrink-0">
               <LayoutTemplate size={11} /> Templates
             </button>
+            <button type="button" onClick={() => setShowBuildStudio(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-orange-400 hover:text-orange-300 transition-all shrink-0">
+              <Hammer size={11} /> Studio
+            </button>
             <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
             <button type="button" onClick={() => {
               if (forceBuild) return;
@@ -729,6 +734,16 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
       <TemplateSelector
         isOpen={showTemplateSelector}
         onClose={() => setShowTemplateSelector(false)}
+      />
+      <BuildStudio
+        isOpen={showBuildStudio}
+        onClose={() => setShowBuildStudio(false)}
+        onPick={() => {
+          if (!forceBuild && !buildModeStore) {
+            setBuildMode(true);
+            useGiaStore.getState().updateSharedData({ currentMode: 'build' });
+          }
+        }}
       />
     </div>
   );
