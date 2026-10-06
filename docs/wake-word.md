@@ -33,6 +33,19 @@ Any `<name>.onnx` classifier placed in `android/app/src/main/assets/wakeword/` i
 automatically and appears in Settings -> Voice. A trailing `_v0.1` is stripped from the label.
 Train one with the openWakeWord Colab/CLI (it needs only synthetic speech) for "Hey GIA".
 
+## Training "Hey GIA" (planned)
+
+Training needs a GPU notebook and several GB of data that this repo's CI cannot fetch, so it is
+done once, off-device, and only the resulting `.onnx` file is committed:
+
+1. Open the openWakeWord training notebook (Google Colab, free GPU).
+2. Set the target phrase to `hey gia` (also train a couple of spellings people say: "hey gee-eye-ay").
+3. Let it synthesise positive clips with many voices, add the negative/noise sets it downloads, train.
+4. Download `hey_gia.onnx`, copy it to `android/app/src/main/assets/wakeword/hey_gia_v0.1.onnx`.
+5. Rebuild. It appears in Settings > Voice automatically, and because you trained it, it carries
+   no non-commercial licence from the bundled Hey Jarvis model.
+6. Test false accepts for an hour of TV and conversation before shipping; raise the threshold if needed.
+
 ## Licensing - read before monetising
 
 The shared feature models are Apache 2.0. The **pre-trained classifiers** (including

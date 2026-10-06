@@ -277,7 +277,7 @@ export const VoiceSection: React.FC = () => {
               </div>
             )}
             <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-              This list is the phrases the engine was trained on. A custom &ldquo;Hey GIA&rdquo; needs its own trained model &mdash; see docs/wake-word.md.
+              For now GIA answers to &ldquo;Hey Jarvis&rdquo; &mdash; that is the phrase the on-device model was trained on. A custom &ldquo;Hey GIA&rdquo; voice is coming in a later update.
             </p>
           </div>
 

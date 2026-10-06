@@ -4,6 +4,34 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-10-06
+
+### On-device wake word (openWakeWord) and a UI pass
+
+**Wake word.** Replaced the stubbed `GIAWakeWordService` with a real streaming openWakeWord engine on ONNX Runtime (`OpenWakeWordEngine`, `OrtBackend`). Verified frame-for-frame against the Python reference pipeline on a synthetic clip. Ships the "Hey Jarvis" model for now; the Settings screen says so plainly. A custom "Hey GIA" model is planned (see `docs/wake-word.md`). Bundled classifier is CC BY-NC-SA, so train our own before monetising.
+
+**Bugs fixed**
+- `App.tsx` wake-word auto-start ignored the saved keyword/sensitivity and the on/off toggle; it also started a second speech recogniser alongside `useVoiceControl`.
+- Plugin passed `Float`/`Boolean` into `putExtra`, which picks the Serializable overload and silently drops the value on the service side.
+- 9 built-in agent icons fell back to the generic Bot icon.
+- `WorkLog` step timers were re-faked on every render.
+- Long text pasted through the Android keyboard never became a `.txt` attachment (IME paste fires no `paste` event). Now detected as a one-shot insertion.
+
+**New**
+- `JarvisOrb` / `FloatingOrb`: draggable orb that shows listening, thinking, speaking, or the tool being run. Toggle in Settings > Power.
+- `FloatingDownload`: neon progress ring for local model downloads (aggregated across files, never shows 100% early), completion notification.
+- `LegalGate`: privacy policy and terms must be accepted on first run, and again when `LEGAL_VERSION` changes. (Plain-language drafts; have them reviewed before launch.)
+- `weather` and `calendar` visual types, documented in the system prompt.
+- Build Studio: 3D style carousel (10 styles) and 10 starter prompts; BUILD prompt now has a UI quality bar and strict-JSON rules.
+- Voice notes: recording bar with timer and live waveform; transcribed with cloud STT or Whisper.
+- Connections page: orbit overview that jumps to each section.
+
+**Branches.** Merged PR #48, the dompurify bump, the issues tracker, `fix/assistant-message-full-width` (already contained), and the website and terminal branches (kept main's newer side on conflicts). Release branches left alone: their versions are already in main.
+
+**Not verified on a device:** the Android Java (no SDK in the sandbox), real-world wake word accuracy, voice note recording in the WebView.
+
+---
+
 ## 2026-09-23
 
 ### Release hardening — sandbox, daemon, and validation
