@@ -43,7 +43,7 @@
     "esbuild": "^0.28.0",
     "happy-dom": "^20.11.1",
     "jszip": "^3.10.1",
-    "katex": "^0.16.47",
+    "katex": "^0.18.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.471.0",
     "mermaid": "^11.16.1",
