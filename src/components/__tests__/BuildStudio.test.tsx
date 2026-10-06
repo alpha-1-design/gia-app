@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { BuildStudio } from '../BuildStudio';
-import { angleForIndex, shortestDelta } from '../StyleCarousel';
+import { angleForIndex, shortestDelta } from '../../utils/carousel';
 import { BUILD_STARTERS, BUILD_STYLES, composeBuildPrompt, findBuildStyle } from '../../config/buildStyles';
 import { useGiaStore } from '../../store/useGiaStore';
 

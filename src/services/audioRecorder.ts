@@ -7,12 +7,17 @@ export class AudioRecorder {
 
   get isRecording() { return this._isRecording; }
 
+  /** The live microphone stream, for level metering. Null when not recording. */
+  get stream(): MediaStream | null { return this.mediaRecorder?.stream ?? null; }
+
   async start(): Promise<void> {
     if (this._isRecording) return;
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.chunks = [];
-    this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    // Not every WebView supports webm; fall back rather than failing to record.
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => typeof MediaRecorder.isTypeSupported !== 'function' || MediaRecorder.isTypeSupported(t));
+    this.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     this.mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.chunks.push(e.data);
     };
@@ -43,7 +48,7 @@ export class AudioRecorder {
         if (this.stopTimeout) clearTimeout(this.stopTimeout);
         this.stopTimeout = null;
         this.stopReject = null;
-        const blob = new Blob(this.chunks, { type: 'audio/webm' });
+        const blob = new Blob(this.chunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
         this.mediaRecorder?.stream.getTracks().forEach(t => t.stop());
         this.mediaRecorder = null;
         this.chunks = [];

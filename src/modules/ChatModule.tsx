@@ -6,7 +6,7 @@ import {
   Brain, ChevronDown, Sparkles, GraduationCap, Code2,
   BookOpen, Zap, Undo2, Search, Headphones, GitBranch,
   Eye, Loader2, Upload, LayoutTemplate, Languages, Hammer, RotateCcw, Archive, Radar, SlidersHorizontal, Wrench, WifiOff,
-  Maximize2, ChevronRight, Settings as SettingsIcon,
+  Maximize2, ChevronRight, Mic, Settings as SettingsIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
@@ -38,6 +38,8 @@ import { useProviderStore } from '../store/useProviderStore';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { BuildStudio } from '../components/BuildStudio';
+import { VoiceNoteBar } from '../components/VoiceNoteBar';
+import { useVoiceNote } from '../hooks/useVoiceNote';
 import { LiveFileEditor } from '../components/LiveFileEditor';
 import { HorseSpiritBackdrop } from '../components/HorseSpiritBackdrop';
 
@@ -157,6 +159,8 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const setShowModelSwitcher = useGiaStore((s) => s.setShowModelSwitcher);
   const [showTemplateSelector, setShowTemplateSelector] = React.useState(false);
   const [showBuildStudio, setShowBuildStudio] = React.useState(false);
+  const voiceNote = useVoiceNote();
+  const reduceMotionPref = useGiaStore(st => st.reduceMotion);
   const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
 
   const { greeting, tip } = useProactiveMessage();
@@ -609,6 +613,9 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             <button type="button" onClick={() => setShowBuildStudio(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-orange-400 hover:text-orange-300 transition-all shrink-0">
               <Hammer size={11} /> Studio
             </button>
+            <button type="button" onClick={() => { void voiceNote.start(); }} disabled={voiceNote.state !== 'idle'} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-rose-400 hover:text-rose-300 transition-all shrink-0 disabled:opacity-40">
+              <Mic size={11} /> Voice note
+            </button>
             <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
             <button type="button" onClick={() => {
               if (forceBuild) return;
@@ -703,7 +710,25 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           />
         </div>
 
+        {voiceNote.error && (
+          <p role="alert" className="text-[11px] px-3 pb-2" style={{ color: '#f87171' }}>
+            {voiceNote.error}
+            <button type="button" onClick={voiceNote.clearError} className="ml-2 underline">Dismiss</button>
+          </p>
+        )}
+        {voiceNote.state !== 'idle' ? (
+          <VoiceNoteBar
+            state={voiceNote.state}
+            elapsed={voiceNote.elapsed}
+            levels={voiceNote.levels}
+            status={voiceNote.status}
+            reduceMotion={reduceMotionPref}
+            onCancel={voiceNote.cancel}
+            onSend={() => { void voiceNote.finish().then(text => { if (text) sendText(text); }); }}
+          />
+        ) : (
         <AmbientInput value={input} onChange={handleInputChange} onLargeInsert={(text) => { void addFiles([new File([text], `pasted-text-${Date.now()}.txt`, { type: 'text/plain' })]); }} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={buildMode ? 'Describe what to build…' : webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} prefix={buildMode ? <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium shrink-0 mr-1"><Hammer size={10} />Build</span> : undefined} />
+        )}
       </div>
 
       <AnimatePresence>

@@ -7,10 +7,13 @@ import { GatewaySection } from './GatewaySection';
 import { BrowserSection } from './BrowserSection';
 import { SearchSection } from './SearchSection';
 import { CredentialVaultSection } from './CredentialVaultSection';
+import { IntegrationOrbit } from './IntegrationOrbit';
 
 export const ConnectionsPage: React.FC<{ onBack: () => void }> = ({ onBack }) => (
   <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}>
     <SubPageHeader title="Connections" onBack={onBack} />
+
+    <IntegrationOrbit />
 
     <div className="px-3 py-3 rounded-xl text-xs leading-relaxed" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)', color: 'var(--gia-muted)' }}>
       <p className="font-semibold mb-2" style={{ color: '#f59e0b' }}>About this panel</p>
@@ -31,16 +34,16 @@ export const ConnectionsPage: React.FC<{ onBack: () => void }> = ({ onBack }) =>
       <PlugZap size={14} style={{ color: '#f59e0b' }} />
       <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Integrations</span>
     </div>
-    <ConnectorsSection />
-    <CredentialVaultSection />
-    <SocialSection />
-    <GatewaySection />
+    <div id="conn-connectors"><ConnectorsSection /></div>
+    <div id="conn-vault"><CredentialVaultSection /></div>
+    <div id="conn-social"><SocialSection /></div>
+    <div id="conn-gateway"><GatewaySection /></div>
 
     <div className="flex items-center gap-2 px-1 mt-2">
       <Share2 size={14} style={{ color: '#3b82f6' }} />
       <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Tools</span>
     </div>
-    <BrowserSection />
-    <SearchSection />
+    <div id="conn-browser"><BrowserSection /></div>
+    <div id="conn-search"><SearchSection /></div>
   </div>
 );

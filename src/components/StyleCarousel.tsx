@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import type { BuildStyle } from '../config/buildStyles';
+import { angleForIndex, shortestDelta } from '../utils/carousel';
 
 interface Props {
   styles: BuildStyle[];
@@ -13,16 +14,6 @@ const CARD_W = 104;
 const CARD_H = 140;
 const AUTO_SPEED = 10;          // degrees per second
 const TAP_SLOP = 6;             // px of movement that still counts as a tap
-
-/** Where the ring must rotate to bring card `index` to the front. */
-export function angleForIndex(index: number, count: number): number {
-  return -(index * 360) / count;
-}
-
-/** Shortest signed rotation from `from` to `to`, so the ring never spins the long way round. */
-export function shortestDelta(from: number, to: number): number {
-  return ((((to - from) % 360) + 540) % 360) - 180;
-}
 
 function cardStyle(s: BuildStyle, selected: boolean): React.CSSProperties {
   return {
