@@ -7,6 +7,7 @@ import { WorkLog } from './WorkLog';
 import { SegmentedReasoning } from './SegmentedReasoning';
 import TaskProgress from './TaskProgress';
 import GiaIcon from './GiaIcon';
+import GiaMascot from './GiaMascot';
 import OrbAvatar from './OrbAvatar';
 import { useGiaStore } from '../store/useGiaStore';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -21,6 +22,7 @@ import ProtocolApprovalCard from './ProtocolCard';
 import { useProtocolStore } from '../store/useProtocolStore';
 import InlineClarificationForm from './chat/InlineClarificationForm';
 import type { Message, ThinkingPhase, Clarification } from '../store/useGiaStore';
+import { StreamingCursor } from './chat/StreamingCursor';
 
 const AgentBadge: React.FC<{ agentName?: string; agentIcon?: string; agentTask?: string }> = ({ agentName, agentIcon, agentTask }) => {
   const color = resolveAgentColor(agentIcon || 'Bot');
@@ -222,10 +224,20 @@ const MessageRow = memo<MessageRowProps>(({
     return n && n.role === 'assistant' ? n.id : undefined;
   }, [messagesRef, msg.id, sheetMsgId]); // eslint-disable-line react-hooks/exhaustive-deps -- recompute when the sheet opens
 
-  const avatarNode = (
-      <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={msg.agentId ? { background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` } : { background: msg.role === 'user' ? 'linear-gradient(135deg, #a855f7, #7c3aed)' : msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: msg.role === 'assistant' ? '1px solid var(--gia-border)' : 'none' }}>
-        {msg.agentId ? <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} /> : msg.role === 'user' ? <User size={13} className="text-white" /> : msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : msg.thinking ? extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div> : <GiaIcon size={14} animate={false} color="var(--gia-muted)" />}
+  const avatarNode = msg.agentId ? (
+      <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: `${resolveAgentColor(msg.agentIcon || 'Bot')}20`, border: `1px solid ${resolveAgentColor(msg.agentIcon || 'Bot')}40` }}>
+        <OrbAvatar color={resolveAgentColor(msg.agentIcon || 'Bot')} size={18} animate={false} icon={React.createElement(resolveAgentIcon(msg.agentIcon || 'Bot'))} />
       </div>
+  ) : msg.role === 'user' ? (
+      <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)' }}>
+        <User size={13} className="text-white" />
+      </div>
+  ) : msg.error || msg.thinking ? (
+      <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-0.5" style={{ background: msg.error ? 'rgba(239,68,68,0.15)' : 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+        {msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div>}
+      </div>
+  ) : (
+      <div className="w-8 h-8 shrink-0 mt-0.5" aria-hidden="true"><GiaMascot size={32} /></div>
   );
 
   return (
@@ -318,19 +330,6 @@ const MessageRow = memo<MessageRowProps>(({
                     )}
                   </div>
                 )}
-                {msg.thinking && isStreaming && msg.content && (
-                  <div className="mb-2">
-                    <WorkLog
-                      thoughts={thoughts}
-                      isLive={!!liveThought}
-                      isExpanded={showThoughts.has(msg.id)}
-                      onToggle={toggleThoughts}
-                      currentTool={currentTool}
-                      thinkingPhase={thinkingPhase}
-                      startTime={msg.timestamp}
-                    />
-                  </div>
-                )}
                 {(() => {
                   if (segs && segs.length > 0) {
                     // New path: render the real think -> tool -> think
@@ -379,9 +378,7 @@ const MessageRow = memo<MessageRowProps>(({
                   <div className="token-reveal">
                     <MarkdownRenderer content={msg.content} sources={msg.sources} isStreaming={isStreaming} />
                     {isStreaming && msg.content && loading && (
-                      extThinking
-                        ? <GiaIcon size={13} animate color="#a855f7" className="ml-1" speed={1.3} />
-                        : <span className="stream-cursor ml-0.5">▋</span>
+                      <StreamingCursor phase={thinkingPhase} currentTool={currentTool} />
                     )}
                     {expandedMsgs.has(msg.id) && (
                       <button onClick={() => setExpandedMsgs(prev => { const n = new Set(prev); n.delete(msg.id); return n; })} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>

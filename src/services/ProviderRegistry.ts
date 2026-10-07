@@ -1,3 +1,5 @@
+import { appConfig } from '../config/appConfig';
+
 export interface ProviderDef {
   id: string;
   label: string;
@@ -44,7 +46,7 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   // Local providers
   { id: 'ollama',       label: 'Ollama (Local)',       baseUrl: 'http://localhost:11434/v1',             defaultModel: 'llama3.2',         needsApiKey: false, listingType: 'ollama',     aliases: ['ol'] },
   { id: 'lmstudio',     label: 'LM Studio (Local)',    baseUrl: 'http://localhost:1234/v1',              defaultModel: 'local-model',      needsApiKey: false, listingType: 'openai',     aliases: ['lms'] },
-  { id: 'local-llm',    label: 'Local LLM (On-Device)', baseUrl: '',                                    defaultModel: 'Xenova/Qwen2.5-1.5B-Instruct', needsApiKey: false, listingType: 'local', aliases: ['local', 'ondevice'] },
+  { id: 'local-llm',    label: 'Local LLM (On-Device)', baseUrl: '',                                    defaultModel: appConfig.model.defaultLocalModel, needsApiKey: false, listingType: 'local', aliases: ['local', 'ondevice'] },
 ];
 
 // Curated fallback catalogs — used when live model listing is unavailable
@@ -182,9 +184,9 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
     { id: 'local-model', label: 'Loaded Model', free: true, context: '?', tools: true, vision: false },
   ],
   'local-llm': [
-    { id: 'Xenova/Qwen2.5-0.5B-Instruct', label: 'Qwen2.5 0.5B (Lightning)', free: true, context: '32k', tools: true, vision: false },
-    { id: 'Xenova/Qwen2.5-1.5B-Instruct', label: 'Qwen2.5 1.5B (Balanced)',  free: true, context: '32k', tools: true, vision: false },
-    { id: 'Xenova/Qwen2.5-3B-Instruct',   label: 'Qwen2.5 3B (Ultra)',       free: true, context: '32k', tools: true, vision: false },
+    { id: 'onnx-community/Qwen2.5-0.5B-Instruct', label: 'Qwen2.5 0.5B (Lightning)', free: true, context: '32k', tools: true, vision: false },
+    { id: 'onnx-community/Qwen2.5-1.5B-Instruct', label: 'Qwen2.5 1.5B (Balanced)',  free: true, context: '32k', tools: true, vision: false },
+    { id: 'Xenova/TinyLlama-1.1B-Chat-v1.0',       label: 'TinyLlama 1.1B (Lite)',    free: true, context: '32k', tools: true, vision: false },
   ],
 };
 

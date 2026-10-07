@@ -22,6 +22,7 @@ import {
   Bot,
   Zap,
   Waves,
+  ExternalLink,
 } from 'lucide-react';
 import { SpiritWaveBackdrop } from './SpiritWaveBackdrop';
 import { idbStorage } from '../store/idb-storage';
@@ -508,35 +509,46 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
 
         <div className="flex-1 overflow-y-auto space-y-2">
           {allProviders.map((def) => (
-            <button
-              key={def.id}
-              onClick={() => handleProviderSelect(def.id)}
-              disabled={busy}
-              className={clsx(
-                'w-full text-left p-4 rounded-lg border transition-colors',
-                'hover:border-indigo-500 hover:bg-zinc-800/50',
-                wizard.provider === def.id
-                  ? 'border-indigo-500 bg-zinc-800/60'
-                  : 'border-zinc-700 bg-zinc-900'
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-bold text-sm">
-                    {def.label.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">{def.label}</p>
-                    <p className="text-xs text-zinc-500">{def.listingType}</p>
-                  </div>
-                </div>
-                {def.needsApiKey ? (
-                  <Wifi size={14} className="text-zinc-600" />
-                ) : (
-                  <WifiOff size={14} className="text-zinc-600" />
+            <div key={def.id} className="space-y-1">
+              <button
+                onClick={() => handleProviderSelect(def.id)}
+                disabled={busy}
+                className={clsx(
+                  'w-full text-left p-4 rounded-lg border transition-colors',
+                  'hover:border-indigo-500 hover:bg-zinc-800/50',
+                  wizard.provider === def.id
+                    ? 'border-indigo-500 bg-zinc-800/60'
+                    : 'border-zinc-700 bg-zinc-900'
                 )}
-              </div>
-            </button>
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-bold text-sm">
+                      {def.label.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-zinc-200">{def.label}</p>
+                      <p className="text-xs text-zinc-500">{def.listingType}</p>
+                    </div>
+                  </div>
+                  {def.needsApiKey ? (
+                    <Wifi size={14} className="text-zinc-600" />
+                  ) : (
+                    <WifiOff size={14} className="text-zinc-600" />
+                  )}
+                </div>
+              </button>
+              {def.needsApiKey && def.apiKeyUrl && (
+                <a
+                  href={def.apiKeyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 pl-4"
+                >
+                  Get API key <ExternalLink size={11} />
+                </a>
+              )}
+            </div>
           ))}
 
           {/* Custom provider form */}
@@ -615,6 +627,8 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
       wizard.setStep('test-connection');
     };
 
+    const keyUrl = providerRegistry.getProvider(wizard.provider)?.apiKeyUrl;
+
     return (
       <div className="flex-1 w-full max-w-lg mx-auto flex flex-col px-6 py-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
@@ -631,6 +645,17 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
           <p className="text-sm text-zinc-400 text-center">
             Enter your API key for <span className="text-zinc-200 font-medium">{providerRegistry.getLabel(wizard.provider)}</span>
           </p>
+
+          {keyUrl && (
+            <a
+              href={keyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300"
+            >
+              Need a key? Open the {providerRegistry.getLabel(wizard.provider)} API key page <ExternalLink size={11} />
+            </a>
+          )}
 
           <div className="relative">
             <input

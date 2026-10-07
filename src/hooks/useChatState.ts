@@ -11,7 +11,7 @@ import { useFileAttachments } from './useFileAttachments';
 import type { Attachment } from './useFileAttachments';
 import { useChatGeneration } from './useChatGeneration';
 import { useChatMessages } from './useChatMessages';
-import { processSlashCommand } from '../services/SlashCommands';
+import { processSlashCommand, SlashCommandMeta } from '../services/SlashCommands';
 import AnalyticsService from '../services/AnalyticsService';
 import { AudioRecorder } from '../services/audioRecorder';
 import WhisperService from '../services/WhisperService';
@@ -36,6 +36,8 @@ export function useChatState() {
   const [historySearch, setHistorySearch] = useState('');
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
   const [showThoughts, setShowThoughts] = useState<Set<string>>(new Set());
   const [showKnowledge, setShowKnowledge] = useState(false);
@@ -219,7 +221,22 @@ export function useChatState() {
     if (newFeatureState !== undefined) AnalyticsService.trackFeature(feature, newFeatureState);
   }, [setWebSearch, setDeepSearch, setExtThinking, setHandsOff, setLocalVision, setLocalTranslate, setVoiceEnabled, webSearch, deepSearch, extThinking, handsOff, localVision, localTranslate, voiceEnabled, voiceRef, setInput, addNotification, onDeviceMode, setOnDeviceMode]);
 
-  useEffect(() => { if (!activeSessionId) createSession(); }, [activeSessionId, createSession]);
+  // Only once the persisted snapshot has rehydrated (otherwise every reload
+  // races the async IndexedDB read, prepends a fresh empty "New Chat", and
+  // they pile up in History). Prefer resuming the most recent session; only
+  // create a brand-new one when there is genuinely nothing to resume.
+  const hasHydrated = useGiaStore((s) => s.hasHydrated);
+  useEffect(() => {
+    if (!hasHydrated) return;
+    const state = useGiaStore.getState();
+    if (state.activeSessionId && state.sessions.some(s => s.id === state.activeSessionId)) return;
+    const latest = state.sessions[0];
+    if (latest) {
+      state.setActiveSession(latest.id);
+    } else {
+      state.createSession();
+    }
+  }, [hasHydrated, activeSessionId, createSession]);
 
   // Desktop notification + response time tracking
   useEffect(() => {
@@ -395,7 +412,19 @@ export function useChatState() {
 
   const handleInputChange = useCallback((value: string) => {
     setInput(value);
-    if (value === '/') setShowSkillPicker(true);
+    // Slash commands: typing "/" (and any "/word" before a space) opens a
+    // commands + skills menu instead of dumping a spent slash into the chat.
+    if (value.startsWith('/')) {
+      const query = value.slice(1);
+      if (!query.includes(' ')) {
+        setShowSlashMenu(true);
+        setSlashQuery(query);
+      } else {
+        setShowSlashMenu(false);
+      }
+    } else {
+      setShowSlashMenu(false);
+    }
 
     // Detect @-mention for agents
     const atIdx = value.lastIndexOf('@');
@@ -434,36 +463,53 @@ export function useChatState() {
     genRef.current.handleSend(t, [], setInput, v => setAttachmentsRef.current(v as Attachment[]));
   }, [setInput]);
 
+  // Run a slash command typed out (or picked from the slash menu). Mirrors the
+  // old inline handling: echo any result message into the chat and apply the
+  // side-effect the command asks for.
+  const runSlash = useCallback((raw: string): boolean => {
+    const result = processSlashCommand(raw);
+    if (!result.handled) return false;
+    if (result.message) {
+      const state = useGiaStore.getState();
+      const sid = state.activeSessionId || state.createSession();
+      state.addMessage(sid, {
+        id: Math.random().toString(36).slice(2),
+        role: 'assistant',
+        content: result.message,
+        timestamp: Date.now(),
+      });
+    }
+    if (result.action === 'clear') { setInput(''); return true; }
+    if (result.action === 'show-skills') { setShowSkillPicker(true); setInput(''); return true; }
+    setInput('');
+    return true;
+  }, [setInput, setShowSkillPicker]);
+
+  // Pick a command from the slash menu. Arg-taking commands just fill the
+  // composer so the user can finish typing; everything else runs immediately.
+  const handleSlashPickCommand = useCallback((cmd: SlashCommandMeta) => {
+    setShowSlashMenu(false);
+    setSlashQuery('');
+    if (cmd.args) {
+      setInput(`/${cmd.name} `);
+    } else {
+      runSlash(`/${cmd.name}`);
+    }
+  }, [setShowSlashMenu, setSlashQuery, setInput, runSlash]);
+
+  const handleSlashPickSkill = useCallback((skillId: string) => {
+    setShowSlashMenu(false);
+    setSlashQuery('');
+    setSkill(skillId);
+    setInput('');
+    addNotification(`Skill active: ${skills.find(s => s.id === skillId)?.name ?? ''}`);
+  }, [setShowSlashMenu, setSlashQuery, setSkill, setInput, addNotification, skills]);
+
   const handleSend = useCallback(() => {
+    setShowSlashMenu(false);
     // ── Slash commands ──────────────────────────────────────
     if (input.trim().startsWith('/')) {
-      const result = processSlashCommand(input);
-      if (result.handled) {
-        if (result.message) {
-          const state = useGiaStore.getState();
-          const sid = state.activeSessionId || state.createSession();
-          state.addMessage(sid, {
-            id: Math.random().toString(36).slice(2),
-            role: 'assistant',
-            content: result.message,
-            timestamp: Date.now(),
-          });
-        }
-        if (result.action === 'clear') {
-          setInput('');
-          return;
-        }
-        if (result.action === 'show-skills') {
-          setShowSkillPicker(true);
-          setInput('');
-          return;
-        }
-        setInput('');
-        return;
-      }
-      setShowSkillPicker(true);
-      setInput('');
-      return;
+      if (runSlash(input)) return;
     }
 
     const editAsstId = editingAssistIdRef.current;
@@ -510,7 +556,7 @@ export function useChatState() {
 
     gen.handleSend(input, attachments, setInput, v => setAttachments(v as Attachment[]), mentionedAgents, cleanedInput || input);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, attachments, gen.handleSend, setAttachments]);
+  }, [input, attachments, gen.handleSend, setAttachments, runSlash, setShowSlashMenu]);
 
   const handleEditResend = useCallback((msgId: string) => {
     editingAssistIdRef.current = msgId;
@@ -530,6 +576,8 @@ export function useChatState() {
     showScrollBtn, setShowScrollBtn,
     undoMsg: msgOps.undoMsg, setUndoMsg: msgOps.setUndoMsg,
     showSkillPicker, setShowSkillPicker,
+    showSlashMenu, setShowSlashMenu, slashQuery,
+    handleSlashPickCommand, handleSlashPickSkill,
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
     liveThoughts: gen.liveThoughts, setLiveThoughts: gen.setLiveThoughts,
     liveSegments: gen.liveSegments, setLiveSegments: gen.setLiveSegments,

@@ -3,10 +3,8 @@ import { logger } from '../utils/logger';
 // ── Types ───────────────────────────────────────────────────────────
 
 export type LocalModelId =
-  | 'Xenova/Qwen2.5-0.5B-Instruct'
-  | 'Xenova/Qwen2.5-1.5B-Instruct'
-  | 'Xenova/Qwen2.5-3B-Instruct'
-  | 'Xenova/SmolLM2-360M-Instruct'
+  | 'onnx-community/Qwen2.5-0.5B-Instruct'
+  | 'onnx-community/Qwen2.5-1.5B-Instruct'
   | 'Xenova/TinyLlama-1.1B-Chat-v1.0';
 
 export interface LocalLLMMeta {
@@ -55,43 +53,27 @@ export interface LocalLLMGenerateResult {
 
 export const LOCAL_LLM_MODELS: LocalLLMMeta[] = [
   {
-    id: 'Xenova/Qwen2.5-0.5B-Instruct',
+    id: 'onnx-community/Qwen2.5-0.5B-Instruct',
     label: 'Qwen2.5 0.5B (Lightning)',
     description: 'Fastest and lightest. The safe choice for low-RAM phones — simple chat, Q&A, and short writing. Best battery life.',
-    downloadSize: '~1 GB',
-    ramEstimate: '~1.2 GB',
+    downloadSize: '~0.5 GB',
+    ramEstimate: '~0.7 GB',
     parameters: '0.5B',
   },
   {
-    id: 'Xenova/Qwen2.5-1.5B-Instruct',
+    id: 'onnx-community/Qwen2.5-1.5B-Instruct',
     label: 'Qwen2.5 1.5B (Balanced)',
-    description: 'Best quality-size trade-off. Handles complex instructions, reasoning, and creative writing. Needs ~3 GB free RAM.',
-    downloadSize: '~3 GB',
-    ramEstimate: '~3 GB',
+    description: 'Best quality-size trade-off. Handles complex instructions, reasoning, and creative writing. Needs ~1.5 GB free RAM.',
+    downloadSize: '~1.2 GB',
+    ramEstimate: '~1.3 GB',
     parameters: '1.5B',
-  },
-  {
-    id: 'Xenova/Qwen2.5-3B-Instruct',
-    label: 'Qwen2.5 3B (Ultra)',
-    description: 'Most capable local model. Better at following complex instructions and reasoning tasks. Flagship phones only — needs ~6 GB free RAM.',
-    downloadSize: '~6 GB',
-    ramEstimate: '~6 GB',
-    parameters: '3B',
-  },
-  {
-    id: 'Xenova/SmolLM2-360M-Instruct',
-    label: 'SmolLM2 360M (Ultra-Lite)',
-    description: 'Smallest option, for very low-end devices or when other models will not fit. Short answers, basic chat only.',
-    downloadSize: '~0.8 GB',
-    ramEstimate: '~0.9 GB',
-    parameters: '360M',
   },
   {
     id: 'Xenova/TinyLlama-1.1B-Chat-v1.0',
     label: 'TinyLlama 1.1B (Lite)',
-    description: 'A lighter 1B-class alternative to Qwen 1.5B. Useful when 3 GB is tight but 0.5B feels too limited.',
-    downloadSize: '~2.2 GB',
-    ramEstimate: '~2.2 GB',
+    description: 'A lighter 1B-class alternative to Qwen 1.5B. Useful when RAM is tight but 0.5B feels too limited.',
+    downloadSize: '~0.7 GB',
+    ramEstimate: '~0.8 GB',
     parameters: '1.1B',
   },
 ];

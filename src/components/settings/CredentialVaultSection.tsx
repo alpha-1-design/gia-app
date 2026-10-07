@@ -1,11 +1,12 @@
 import React from 'react';
 import { KeyRound, Trash2 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useCredentialStore } from '../../store/useCredentialStore';
 import connectorManager from '../../services/connectors/ConnectorManager';
 import { useProviderStore } from '../../store/useProviderStore';
 
 export const CredentialVaultSection: React.FC = () => {
-  const credentials = useCredentialStore(s => Object.values(s.credentials));
+  const credentials = useCredentialStore(useShallow(s => Object.values(s.credentials)));
   const removeCredential = useCredentialStore(s => s.removeCredential);
   const remove = (serviceId: string) => {
     connectorManager.clearCredential(serviceId);

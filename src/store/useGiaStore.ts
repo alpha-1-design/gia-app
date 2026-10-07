@@ -4,6 +4,7 @@ import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 import { useMemoryStore } from './useMemoryStore';
 import type { MessageSegment } from '../utils/streamParser';
+import { appConfig, prefOrDefault } from '../config/appConfig';
 
 export type { MessageSegment };
 
@@ -318,6 +319,8 @@ interface GiaState {
   sessions: ChatSession[];
   archivedSessions: ChatSession[];
   activeSessionId: string | null;
+  /** True once the persisted snapshot has been restored from storage. */
+  hasHydrated: boolean;
   scheduledTasks: ScheduledTask[];
   userProfile: UserProfile;
   notifications: { id: string; message: string; ts: number }[];
@@ -540,6 +543,7 @@ export const useGiaStore = create<GiaState>()(
       sessions: [],
       archivedSessions: [],
       activeSessionId: null,
+      hasHydrated: false,
       scheduledTasks: [],
       userProfile: { name: '', bio: '', goals: '', profilePictureUri: '' },
       notifications: [],
@@ -632,7 +636,7 @@ export const useGiaStore = create<GiaState>()(
       customInstructions: (() => { try { return localStorage.getItem('gia-custom-instructions') || ''; } catch { return ''; } })(),
       pinnedMemories: (() => { try { return JSON.parse(localStorage.getItem('gia-pinned-memories') || '[]'); } catch { return []; } })(),
       theme: 'obsidian-aurora',
-      reduceMotion: (() => { try { return localStorage.getItem('gia-reduce-motion') === 'true'; } catch { return false; } })(),
+      reduceMotion: prefOrDefault('gia-reduce-motion', appConfig.ui.reduceMotionDefault),
       hiddenModules: [],
       connectionStatus: navigator.onLine ? 'online' : 'offline',
       providerConnected: false,
@@ -640,7 +644,7 @@ export const useGiaStore = create<GiaState>()(
       voiceState: 'off',
       legalAcceptedVersion: '',
       buildStyleId: 'neon-glass',
-      showFloatingOrb: (() => { try { return localStorage.getItem('gia-floating-orb') !== 'false'; } catch { return true; } })(),
+      showFloatingOrb: prefOrDefault('gia-floating-orb', appConfig.ui.floatingOrbDefault),
       generationState: { active: false, module: null, sessionId: null, messageId: null },
       generationControllers: new Map(),
       showCircleSearch: false,
@@ -1289,6 +1293,13 @@ export const useGiaStore = create<GiaState>()(
         });
         state.sessions = state.sessions.map(clearThinking);
         state.archivedSessions = (state.archivedSessions || []).map(clearThinking);
+        // A persisted activeSessionId can point at a session that no longer
+        // exists (wipe, migration, torn write). Pointing anywhere valid beats
+        // auto-creating a fresh empty "New Chat" on every reload.
+        if (!state.sessions.some((s) => s.id === state.activeSessionId)) {
+          state.activeSessionId = state.sessions[0]?.id ?? null;
+        }
+        state.hasHydrated = true;
       },
     }
   )

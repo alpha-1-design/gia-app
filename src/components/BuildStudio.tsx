@@ -31,7 +31,7 @@ export const BuildStudio: React.FC<Props> = ({ isOpen, onClose, onPick }) => {
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-4">
+        <div className="overflow-y-auto flex-1 px-4 pt-6 pb-4">
           <StyleCarousel
             styles={BUILD_STYLES}
             selectedId={style.id}

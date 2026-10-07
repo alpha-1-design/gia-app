@@ -9,6 +9,14 @@ export type SlashCommandResult = {
 
 export type Giamode = 'code' | 'plan' | 'ask' | 'build';
 
+export interface SlashCommandMeta {
+  name: string;
+  description: string;
+  aliases: string[];
+  /** Command takes an argument, so picking it just fills the composer. */
+  args?: boolean;
+}
+
 const COMMANDS: Record<string, { description: string; alias?: string[] }> = {
   help:     { description: 'Show all available commands', alias: ['?'] },
   clear:    { description: 'Clear current conversation', alias: ['cls'] },
@@ -22,6 +30,15 @@ const COMMANDS: Record<string, { description: string; alias?: string[] }> = {
   export:   { description: 'Export current chat as markdown', alias: [] },
   model:    { description: 'Switch model or show current model', alias: [] },
 };
+
+export function getSlashCommands(): SlashCommandMeta[] {
+  return Object.entries(COMMANDS).map(([name, info]) => ({
+    name,
+    description: info.description,
+    aliases: info.alias ?? [],
+    args: name === 'mode' || name === 'model',
+  }));
+}
 
 function countTokens(text: string): number {
   if (!text) return 0;

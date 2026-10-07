@@ -1,0 +1,12 @@
+{
+  "app": {
+    "name": "GIA"
+  },
+  "ui": {
+    "floatingOrbDefault": false,
+    "reduceMotionDefault": false
+  },
+  "model": {
+    "defaultLocalModel": "onnx-community/Qwen2.5-1.5B-Instruct"
+  }
+}

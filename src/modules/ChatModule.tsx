@@ -24,6 +24,8 @@ import ComposerToolsSheet from '../components/ComposerToolsSheet';
 import UseLocalAIFlow from '../components/chat/UseLocalAIFlow';
 import AmbientInput from '../components/AmbientInput';
 import SkillPicker from '../components/SkillPicker';
+import SlashCommandMenu from '../components/SlashCommandMenu';
+import { getSlashCommands } from '../services/SlashCommands';
 import BuildPreviewSheet from '../components/BuildPreviewSheet';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 import FileManager from '../components/FileManager';
@@ -38,6 +40,7 @@ import { SummaryBanner } from '../components/chat/SummaryBanner';
 import RecentChats from '../components/chat/RecentChats';
 import AgentMentionPicker from '../components/AgentMentionPicker';
 import { useProviderStore } from '../store/useProviderStore';
+import { CarouselRing } from '../components/CarouselRing';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { CollaborationActivity } from '../components/chat/CollaborationActivity';
 import { TemplateSelector } from '../components/TemplateSelector';
@@ -55,6 +58,13 @@ const QUICK_STARTS = [
   { icon: Sparkles, label: 'Summarize URL', prompt: 'Summarize this URL: https://', color: '#10b981', category: 'tools' },
   { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b', category: 'productivity' },
 ];
+
+const hexToRgb = (hex: string): string => {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const num = parseInt(v, 16);
+  return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
+};
 
 const LOCALHOST_RE = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|(10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(192\.168\.\d{1,3}\.\d{1,3})|(172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}))(:\d+)?(\/[^\s<]*)?/i;
 const extractLocalhostUrl = (text: string): string | null => {
@@ -96,12 +106,14 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
     handleDragOver, handleDrop, handleFile, removeAttachment, addFiles,
     copyMessage, scrollToBottom, handleScroll, exportChat,
     setShowSkillPicker, setShowTools,
+    showSlashMenu, setShowSlashMenu, slashQuery, handleSlashPickCommand, handleSlashPickSkill,
     showBranchView, setShowBranchView,
     clarification, setClarification,
     showAgentMention, agentMentionQuery, handleAgentMentionSelect,
     liveFileEdit, setLiveFileEdit,
   } = useChatState();
 
+  const reduceMotion = useGiaStore((s) => s.reduceMotion);
   const buildModeStore = useGiaStore((s) => s.buildMode);
   const buildMode = forceBuild ?? buildModeStore;
   const setModule = useGiaStore((s) => s.setModule);
@@ -322,7 +334,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
 
       <div ref={scrollRef} onScroll={handleScroll} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop} className="flex-1 overflow-y-auto pt-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight + 120}px` }}>
         {messages.length === 0 && buildMode && (
-          <div className="flex flex-col items-center justify-center h-full gap-5 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
+          <div className="flex flex-col items-center justify-center min-h-full gap-5 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             <div className="w-20 h-20 rounded-3xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.25), rgba(234,88,12,0.1))', border: '1px solid rgba(249,115,22,0.3)', boxShadow: '0 0 40px rgba(249,115,22,0.25)' }}>
               <Hammer size={38} style={{ color: '#f97316' }} />
             </div>
@@ -348,7 +360,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           </div>
         )}
         {messages.length === 0 && !buildMode && (
-          <div className="relative flex flex-col items-center justify-center h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
+          <div className="relative flex flex-col items-center justify-center min-h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             {providerConnected
               ? <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}><GiaIcon size={30} animate={false} color="#a855f7" /></div>
               : <GiaMascot />}
@@ -393,27 +405,24 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               onResume={setActiveSession}
             />
             {providerConnected && (
-            <div className="grid grid-cols-1 gap-3 w-full max-w-xs mt-1 max-h-[52vh] overflow-y-auto pb-1 pr-0.5">
-              {QUICK_STARTS.map((qs, i) => (
-                  <motion.button
-                    key={qs.label}
-                    onClick={() => setInput(qs.prompt)}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.07, type: 'spring', stiffness: 200, damping: 20 }}
-                    whileHover={{ scale: 1.02, borderColor: `${qs.color}60`, boxShadow: `0 0 20px ${qs.color}15` }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left transition-all shrink-0"
-                    style={{ background: `linear-gradient(135deg, ${qs.color}0a, ${qs.color}03)`, border: `1px solid ${qs.color}20`, backdropFilter: 'blur(8px)', boxShadow: `0 4px 16px -4px ${qs.color}12` }}
-                  >
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${qs.color}20`, border: `1px solid ${qs.color}30`, backdropFilter: 'blur(4px)' }}><qs.icon size={15} style={{ color: qs.color }} /></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{qs.label}</p>
-                      <p className="text-[10px] truncate mt-0.5" style={{ color: qs.color, opacity: 0.7 }}>{qs.prompt}</p>
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
+            <div className="w-full max-w-xs mt-1">
+              <CarouselRing
+                items={QUICK_STARTS.map(qs => ({
+                  id: qs.label,
+                  label: qs.label,
+                  tagline: qs.prompt,
+                  color: hexToRgb(qs.color),
+                  icon: <qs.icon size={22} style={{ color: qs.color }} />,
+                }))}
+                selectedId=""
+                onSelect={id => setInput(QUICK_STARTS.find(q => q.label === id)?.prompt ?? '')}
+                round
+                width={76}
+                height={76}
+                autoSpin={!reduceMotion}
+                keepSpinning
+              />
+            </div>
             )}
           </div>
         )}
@@ -785,6 +794,17 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               addNotification(`Skill active: ${skills.find((s: { id: string; name: string }) => s.id === skillId)?.name}`);
             }}
             onClose={() => setShowSkillPicker(false)}
+          />
+        )}
+        {showSlashMenu && (
+          <SlashCommandMenu
+            commands={getSlashCommands()}
+            skills={skills}
+            activeSkillId={activeSkillId || 'core-general'}
+            query={slashQuery}
+            onPickCommand={handleSlashPickCommand}
+            onPickSkill={handleSlashPickSkill}
+            onClose={() => setShowSlashMenu(false)}
           />
         )}
       </AnimatePresence>

@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 
 type MascotAction = 'idle' | 'lookDown' | 'lookUp' | 'tiltLeft' | 'tiltRight' | 'spin' | 'driftLeft' | 'driftRight';
 
-const GiaMascot: React.FC = () => {
+const GiaMascot: React.FC<{ size?: number; className?: string }> = ({ size = 112, className = '' }) => {
   const prefersReducedMotion = useReducedMotion();
   const shouldAnimate = !prefersReducedMotion;
   const [action, setAction] = React.useState<MascotAction>('idle');
@@ -62,7 +62,8 @@ const GiaMascot: React.FC = () => {
     <div
       role="img"
       aria-label="GIA mascot, a friendly robot sitting on a glowing orb"
-      className="w-28 h-28"
+      className={className}
+      style={{ width: size, height: size }}
     >
       <svg viewBox="0 0 120 120" className="w-full h-full" fill="none" aria-hidden="true">
         <defs>

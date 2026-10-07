@@ -12,56 +12,67 @@ interface JarvisOrbProps {
 }
 
 interface Motion {
-  speed: number;      // particle orbit speed multiplier
-  density: number;    // share of the particle pool that is visible
-  pulse: number;      // core pulse rate and depth
-  ringSpeed: number;
-  energy: number;     // brightness of core and glow
+  speed: number;      // shell rotation speed
+  density: number;    // share of the node pool that is visible
+  pulse: number;      // breathing rate and depth
+  energy: number;     // glow and node brightness
 }
 
 const STATES: Record<OrbState, Motion> = {
-  idle:      { speed: 0.6, density: 0.55, pulse: 0.8, ringSpeed: 0.7, energy: 0.8 },
-  listening: { speed: 1.2, density: 0.8,  pulse: 1.3, ringSpeed: 1.3, energy: 1.0 },
-  thinking:  { speed: 2.0, density: 0.9,  pulse: 1.7, ringSpeed: 2.2, energy: 1.1 },
-  speaking:  { speed: 1.5, density: 1.0,  pulse: 2.0, ringSpeed: 1.6, energy: 1.2 },
-  acting:    { speed: 2.4, density: 1.0,  pulse: 2.3, ringSpeed: 2.8, energy: 1.3 },
+  idle:      { speed: 0.5, density: 0.8,  pulse: 0.9, energy: 0.8 },
+  listening: { speed: 1.0, density: 0.85, pulse: 1.3, energy: 0.95 },
+  thinking:  { speed: 1.7, density: 0.92, pulse: 1.9, energy: 1.05 },
+  speaking:  { speed: 1.4, density: 1.0,  pulse: 2.2, energy: 1.15 },
+  acting:    { speed: 2.2, density: 1.0,  pulse: 2.6, energy: 1.25 },
 };
 
-interface Particle {
-  theta: number;      // longitude
-  phi: number;        // latitude
-  r: number;          // orbit radius, in sphere radii
-  w: number;          // angular velocity (rad/s)
+interface Node {
+  theta: number;      // shell longitude (Fibonacci distributed)
+  phi: number;        // shell latitude
+  r: number;          // shell radius offset, in sphere radii
+  drift: number;      // slow independent motion factor
+  twinkle: number;    // personal "life" phase
   size: number;
-  twinkle: number;
-  hue: 0 | 1;         // 0 cyan, 1 violet
-  rank: number;       // 0..1, particle shows when rank < density
+  hue: 0 | 1;         // 0 cyan, 1 violet accent
+  rank: number;       // 0..1, node shows when rank < density
 }
 
 const MAX_DPR = 2;
 const CYAN = '0, 240, 255';
 const VIOLET = '192, 132, 252';
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
-function makeParticles(count: number): Particle[] {
-  return Array.from({ length: count }, (_, i) => ({
-    theta: Math.random() * Math.PI * 2,
-    phi: Math.acos(2 * Math.random() - 1),
-    r: 1.1 + Math.random() * 1.15,
-    w: (0.15 + Math.random() * 0.5) * (Math.random() < 0.5 ? 1 : -1),
-    size: 0.5 + Math.random() * 1.5,
-    twinkle: Math.random() * Math.PI * 2,
-    hue: Math.random() > 0.55 ? 0 : 1,
-    rank: i / count,
-  }));
+/**
+ * Evenly spread "many dots" on a Fibonacci sphere so there are no poles or
+ * seams to catch the eye. Each node drifts a little on its own and the whole
+ * shell breathes together.
+ */
+function makeNodes(count: number): Node[] {
+  return Array.from({ length: count }, (_, i) => {
+    const off = (i + 0.5) / count;
+    const phi = Math.acos(1 - 2 * off);
+    const theta = i * GOLDEN_ANGLE;
+    return {
+      theta,
+      phi,
+      r: 0.92 + Math.random() * 0.16,
+      drift: (0.05 + Math.random() * 0.12) * (Math.random() < 0.5 ? 1 : -1),
+      twinkle: Math.random() * Math.PI * 2,
+      size: 0.7 + Math.random() * 1.4,
+      hue: i % 7 === 0 ? 1 : 0,
+      rank: i / count,
+    };
+  });
 }
 
 function lerp(a: number, b: number, k: number) { return a + (b - a) * k; }
 
 /**
- * Glass sphere with a bright cyan core, tilted rings and an orbiting particle
- * field. Particles behind the sphere are drawn under it and those in front are
- * drawn over it, so it reads as 3D. State changes ease between settings and
- * never reset the particles.
+ * A living sphere of dots. Nodes sit on a calm shell that rotates slowly and
+ * moves as one breathing field; depth (back nodes smaller and dimmer, a soft
+ * luminous core and a whisper of rim light) makes it read as a round glass orb.
+ * On larger orbs faint lines link nearby nodes so it can also read as a
+ * constellation. State changes ease between settings and never reset the nodes.
  */
 const JarvisOrb: React.FC<JarvisOrbProps> = ({ state = 'idle', size = 280, className = '', paused = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,16 +91,19 @@ const JarvisOrb: React.FC<JarvisOrbProps> = ({ state = 'idle', size = 280, class
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const c = size / 2;
-    // Rings reach 2.2 R and particles ~2.25 R; keep both inside the canvas.
-    const R = size * 0.2;
-    // Small orbs need far fewer particles; they would just be a smear.
-    const particles = makeParticles(Math.max(24, Math.round(150 * Math.min(1, size / 280) + 20)));
+    const R = size * 0.24;
+    const nodes = makeNodes(Math.round(size * 1.4 + 220));
+    const link = size >= 120;                 // node-to-node lines on larger orbs
+    const linkDist = R * 0.52;
+    const linkDist2 = linkDist * linkDist;
 
     const cur: Motion = { ...STATES[stateRef.current] };
     let t = 0;
     let last = 0;
     let raf = 0;
     let running = false;
+
+    interface Dot { x: number; y: number; r: number; a: number; hue: 0 | 1; x3: number; y3: number; z3: number }
 
     const draw = (dt: number) => {
       const target = STATES[stateRef.current];
@@ -99,98 +113,96 @@ const JarvisOrb: React.FC<JarvisOrbProps> = ({ state = 'idle', size = 280, class
 
       ctx.clearRect(0, 0, size, size);
 
-      // Outer glow
-      const glow = ctx.createRadialGradient(c, c, R * 0.4, c, c, size * 0.5);
-      glow.addColorStop(0, `rgba(${CYAN}, ${0.16 * cur.energy})`);
-      glow.addColorStop(0.55, `rgba(${VIOLET}, ${0.07 * cur.energy})`);
+      // One shared breathing field drives glow, node life and the core rhythm.
+      const breathing = 0.5 + 0.5 * Math.sin(t * (1.6 + cur.pulse * 0.9));
+
+      // Calm halo: cyan light with a faint violet warmth at the edges.
+      const glow = ctx.createRadialGradient(c, c, R * 0.3, c, c, size * 0.5);
+      glow.addColorStop(0, `rgba(${CYAN}, ${(0.10 * cur.energy * (0.75 + 0.25 * breathing)).toFixed(3)})`);
+      glow.addColorStop(0.55, `rgba(${CYAN}, ${(0.04 * cur.energy).toFixed(3)})`);
+      glow.addColorStop(0.8, `rgba(${VIOLET}, ${(0.025 * cur.energy).toFixed(3)})`);
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, size, size);
 
-      // Particles: rotate around the vertical axis, then project.
-      const spin = t * 0.25 * cur.speed;
-      const front: { x: number; y: number; a: number; s: number; hue: 0 | 1 }[] = [];
-      const back: typeof front = [];
-      for (const p of particles) {
-        if (p.rank > cur.density) continue;
-        p.theta += p.w * dt * cur.speed;
-        const th = p.theta + spin;
-        const rr = R * p.r;
-        const x = rr * Math.sin(p.phi) * Math.cos(th);
-        const z = rr * Math.sin(p.phi) * Math.sin(th);
-        const y = rr * Math.cos(p.phi);
-        const persp = 1 / (1 - z / (size * 1.6));
-        const depth = (z / rr + 1) / 2;   // 0 back .. 1 front
-        const a = (0.25 + 0.65 * depth) * (0.6 + 0.4 * Math.sin(t * 2 + p.twinkle));
-        const dot = { x: c + x * persp, y: c + y * persp, a: a * Math.min(1, cur.energy), s: p.size * (0.6 + 0.6 * depth) * (size / 280 + 0.35), hue: p.hue };
-        (z >= 0 ? front : back).push(dot);
+      const spin = t * 0.22 * cur.speed;
+      const dots: Dot[] = [];
+
+      for (const n of nodes) {
+        if (n.rank > cur.density) continue;
+        const long = n.theta + spin + n.drift * t;
+        const sr = R * n.r;
+        const x3 = sr * Math.sin(n.phi) * Math.cos(long);
+        const z3 = sr * Math.sin(n.phi) * Math.sin(long);
+        const y3 = sr * Math.cos(n.phi);
+        const persp = 1 / (1 - z3 / (size * 1.7));
+        const depth = (z3 / sr + 1) / 2;            // 0 back .. 1 front
+        const life = 0.4 + 0.6 * breathing * (0.5 + 0.5 * Math.sin(t * 2 * cur.pulse + n.twinkle));
+        const a = (0.16 + 0.72 * depth) * life * Math.min(1, cur.energy);
+        const r = n.size * (size / 280 + 0.4) * (0.55 + 0.6 * depth);
+        dots.push({ x: c + x3 * persp, y: c + y3 * persp, r, a, hue: n.hue, x3, y3, z3 });
       }
-      const paint = (dots: typeof front) => {
-        for (const d of dots) {
+
+      const paint = (list: Dot[]) => {
+        for (const d of list) {
           ctx.beginPath();
-          ctx.arc(d.x, d.y, d.s, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${d.hue === 0 ? CYAN : VIOLET}, ${d.a})`;
+          ctx.arc(d.x, d.y, Math.max(0.25, d.r), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${d.hue === 0 ? CYAN : VIOLET}, ${d.a.toFixed(3)})`;
           ctx.fill();
         }
       };
-      paint(back);
 
-      // Rings
-      for (let i = 0; i < 3; i++) {
-        const rr = R * (1.4 + i * 0.4);
-        const rot = t * cur.ringSpeed * (0.35 + i * 0.22) * (i % 2 === 0 ? 1 : -1);
-        const tilt = 0.4 + i * 0.2;
-        ctx.save();
-        ctx.translate(c, c);
-        ctx.rotate(rot);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rr, rr * Math.cos(tilt), 0, 0, Math.PI * 2);
-        ctx.strokeStyle = i === 1 ? `rgba(${CYAN}, 0.5)` : `rgba(${VIOLET}, ${0.4 - i * 0.07})`;
-        ctx.lineWidth = Math.max(0.75, (1.5 - i * 0.3) * (size / 280 + 0.4));
-        ctx.stroke();
-        if (i === 0) {
-          ctx.setLineDash([6, 10]);
-          ctx.strokeStyle = 'rgba(128, 255, 255, 0.3)';
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-        ctx.restore();
-      }
-
-      // Glass body
-      const glass = ctx.createRadialGradient(c - R * 0.3, c - R * 0.35, 0, c, c, R);
-      glass.addColorStop(0, 'rgba(180, 240, 255, 0.26)');
-      glass.addColorStop(0.45, 'rgba(100, 180, 255, 0.12)');
-      glass.addColorStop(0.85, 'rgba(40, 80, 160, 0.09)');
-      glass.addColorStop(1, 'rgba(20, 40, 80, 0.2)');
-      ctx.beginPath();
-      ctx.arc(c, c, R, 0, Math.PI * 2);
-      ctx.fillStyle = glass;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(150, 220, 255, 0.45)';
-      ctx.lineWidth = Math.max(0.75, 1.5 * (size / 280 + 0.3));
-      ctx.stroke();
-
-      // Core
-      const beat = 1 + Math.sin(t * 3.2 * cur.pulse) * 0.07 * cur.pulse;
-      const cr = R * 0.4 * beat;
-      const halo = ctx.createRadialGradient(c, c, 0, c, c, cr * 2.3);
-      halo.addColorStop(0, `rgba(255, 255, 255, ${Math.min(1, 0.9 * cur.energy)})`);
-      halo.addColorStop(0.2, `rgba(${CYAN}, ${Math.min(1, 0.85 * cur.energy)})`);
-      halo.addColorStop(0.55, `rgba(0, 180, 255, ${0.35 * cur.energy})`);
+      // Soft luminous core behind the shell so the volume reads as glass.
+      const coreR = R * (0.55 + 0.18 * breathing * cur.pulse);
+      const halo = ctx.createRadialGradient(c, c, 0, c, c, coreR);
+      halo.addColorStop(0, `rgba(255,255,255, ${(0.06 * cur.energy).toFixed(3)})`);
+      halo.addColorStop(0.45, `rgba(${CYAN}, ${(0.07 * cur.energy).toFixed(3)})`);
       halo.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.beginPath();
-      ctx.arc(c, c, cr * 2.3, 0, Math.PI * 2);
+      ctx.arc(c, c, coreR, 0, Math.PI * 2);
       ctx.fillStyle = halo;
       ctx.fill();
 
-      // Highlight
-      ctx.beginPath();
-      ctx.arc(c - R * 0.28, c - R * 0.32, R * 0.17, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
-      ctx.fill();
+      // Back half of the shell first, so nodes pass behind the sphere.
+      paint(dots.filter(d => d.z3 < 0));
 
-      paint(front);
+      // Faint links between nearby front nodes (constellation feel on large orbs).
+      if (link) {
+        ctx.lineWidth = Math.max(0.4, 0.8 * (size / 280 + 0.3));
+        ctx.lineCap = 'round';
+        for (let i = 0; i < dots.length; i++) {
+          const p = dots[i];
+          if (p.z3 < 0) continue;
+          for (let j = i + 1; j < Math.min(dots.length, i + 14); j++) {
+            const q = dots[j];
+            if (q.z3 < 0) continue;
+            const dx = p.x3 - q.x3, dy = p.y3 - q.y3, dz = p.z3 - q.z3;
+            if (dx * dx + dy * dy + dz * dz > linkDist2) continue;
+            const f = (p.z3 + q.z3) / (2 * R);      // 0 back .. 1 front
+            ctx.strokeStyle = `rgba(${CYAN}, ${(0.04 + 0.16 * f).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(q.x, q.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Front half over the lines and core.
+      paint(dots.filter(d => d.z3 >= 0));
+
+      // Soft sheen on the upper-left + a subtle rim light.
+      const sheen = ctx.createRadialGradient(c - R * 0.35, c - R * 0.4, 0, c - R * 0.35, c - R * 0.4, R * 0.7);
+      sheen.addColorStop(0, `rgba(255,255,255, ${(0.10 * cur.energy).toFixed(3)})`);
+      sheen.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.beginPath();
+      ctx.arc(c, c, R * 0.92, Math.PI * 1.1, Math.PI * 1.45);
+      ctx.strokeStyle = `rgba(255,255,255, ${(0.16 * cur.energy).toFixed(3)})`;
+      ctx.lineWidth = Math.max(0.5, 1 * (size / 280 + 0.3));
+      ctx.stroke();
     };
 
     const frame = (now: number) => {
