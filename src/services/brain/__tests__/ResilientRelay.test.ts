@@ -4,7 +4,7 @@ import { useProviderStore } from '../../../store/useProviderStore';
 import { providerRegistry } from '../../ProviderRegistry';
 
 function baseConfig(overrides: Partial<{ apiKey: string; model: string; enabled: boolean }> = {}) {
-  return { apiKey: 'key', model: 'deepseek-v4-flash-free', enabled: true, ...overrides };
+  return { apiKey: 'key', model: 'deepseek-v4-flash', enabled: true, ...overrides };
 }
 
 describe('ResilientRelay — model routing', () => {
@@ -41,12 +41,12 @@ describe('ResilientRelay — model routing', () => {
 
   describe('pickFallbackModel', () => {
     it('finds another model offered by the same provider', () => {
-      const model = pickFallbackModel('opencode', 'deepseek-v4-flash-free', []);
-      expect(model).toBe('gpt-4o-mini');
+      const model = pickFallbackModel('opencode', 'deepseek-v4-flash', []);
+      expect(model).toBe('deepseek-v4.1-flash');
     });
 
     it('excludes already-tried models', () => {
-      const model = pickFallbackModel('opencode', 'deepseek-v4-flash-free', ['gpt-4o-mini']);
+      const model = pickFallbackModel('opencode', 'deepseek-v4-flash', ['deepseek-v4.1-flash', 'deepseek-v4-pro']);
       expect(model).toBeNull();
     });
   });
@@ -58,11 +58,11 @@ describe('ResilientRelay — model routing', () => {
         activeProvider: 'opencode',
       });
 
-      const fallback = pickFallback('opencode', 'deepseek-v4-flash-free', ['opencode'], ['deepseek-v4-flash-free']);
+      const fallback = pickFallback('opencode', 'deepseek-v4-flash', ['opencode'], ['deepseek-v4-flash']);
       expect(fallback).not.toBeNull();
       expect(fallback!.sameProvider).toBe(true);
       expect(fallback!.provider).toBe('opencode');
-      expect(fallback!.model).toBe('gpt-4o-mini');
+      expect(fallback!.model).toBe('deepseek-v4.1-flash');
     });
 
     it('with multiple providers connected, still fails over to another model on the SAME provider (never crosses providers)', () => {
@@ -74,11 +74,11 @@ describe('ResilientRelay — model routing', () => {
         activeProvider: 'opencode',
       });
 
-      const fallback = pickFallback('opencode', 'deepseek-v4-flash-free', ['opencode'], ['deepseek-v4-flash-free']);
+      const fallback = pickFallback('opencode', 'deepseek-v4-flash', ['opencode'], ['deepseek-v4-flash']);
       expect(fallback).not.toBeNull();
       expect(fallback!.sameProvider).toBe(true);
       expect(fallback!.provider).toBe('opencode');
-      expect(fallback!.model).toBe('gpt-4o-mini');
+      expect(fallback!.model).toBe('deepseek-v4.1-flash');
     });
 
     it('returns null when a single provider has no other models left to try', () => {
@@ -87,7 +87,7 @@ describe('ResilientRelay — model routing', () => {
         activeProvider: 'opencode',
       });
       const fallback = pickFallback(
-        'opencode', 'gpt-4o-mini', ['opencode'], ['deepseek-v4-flash-free', 'gpt-4o-mini'],
+        'opencode', 'deepseek-v4.1-flash', ['opencode'], ['deepseek-v4.1-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'],
       );
       expect(fallback).toBeNull();
     });
