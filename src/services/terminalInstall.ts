@@ -182,6 +182,39 @@ export function tailOutput(output: string | undefined, lines = 2, maxLen = 220):
   return parts.slice(-lines).join(' | ').slice(-maxLen);
 }
 
+/**
+ * apk run under proot exits non-zero for errors that don't stop the package
+ * from being unpacked — typically "ERROR: N errors updating directory
+ * permissions", because proot bind-mounts host directories (/dev, /tmp, /mnt…)
+ * that Android won't let apk chmod, plus trigger scripts (busybox, ca-
+ * certificates) that fail the same way. The exit code then says "failed" while
+ * the package is installed and works. Callers use this to re-check the real
+ * state instead of reporting a failure that didn't happen.
+ */
+export function mentionsProotPermissionErrors(output: string | undefined): boolean {
+  return /errors? updating directory permissions/i.test(output ?? '');
+}
+
+/**
+ * After an install command reported failure, decide whether the package is
+ * nonetheless installed and runnable. Returns the package-database verdict, not
+ * the exit code.
+ */
+export async function confirmPackageInstalled(exec: ExecFn, os: DistroOs, pkg: string): Promise<boolean> {
+  const name = toDistroPackage(pkg, os);
+  const r = await exec(checkCommand(os, [name]), 30000).catch(() => null);
+  if (!r || !parseInstalledPackageNames(r.output).has(name)) return false;
+  const { broken } = await verifyBinaries(exec, [pkg]);
+  return broken.length === 0;
+}
+
+/** Alpine only: packages whose installed version is older than the index offers. */
+async function upgradablePackages(exec: ExecFn): Promise<string[] | null> {
+  const r = await exec("apk version -l '<' 2>/dev/null | tail -n +2", 30000).catch(() => null);
+  if (!r) return null;
+  return r.output.split('\n').map(l => l.trim()).filter(Boolean);
+}
+
 export interface FullInstallDeps {
   os: DistroOs;
   exec: ExecFn;
@@ -255,6 +288,17 @@ export async function runUpdatePackages(deps: FullInstallDeps): Promise<UpdatePa
     return { ok: false, summary: 'No response from the terminal', warnings };
   }
   if (r.exitCode !== 0) {
+    // apk under proot reports permission/trigger errors as failure even when
+    // every upgrade was applied. Check whether anything is still out of date.
+    const remaining = os === 'alpine' ? await upgradablePackages(exec) : null;
+    if (remaining !== null && remaining.length === 0) {
+      warnings.push(mentionsProotPermissionErrors(out)
+        ? 'Some directory permissions could not be changed (normal inside the on-device sandbox)'
+        : 'apk reported errors, but all packages are up to date');
+      progress('Done!');
+      log('[packages] Updated — apk warnings ignored, nothing left to upgrade');
+      return { ok: true, summary: 'Updated (with harmless sandbox warnings)', warnings };
+    }
     return { ok: false, summary: `Update failed: ${tailOutput(out) || `exit code ${r.exitCode}`}`, warnings };
   }
 

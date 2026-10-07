@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseInstalledPackageNames, toDistroPackage, tailOutput, runFullInstall,
   selectReachableMirror, verifyBinaries, runUpdatePackages, ALPINE_MIRRORS,
+  confirmPackageInstalled, mentionsProotPermissionErrors,
   type ExecFn,
 } from '../terminalInstall';
 
@@ -240,5 +241,44 @@ describe('runFullInstall', () => {
     const r = await runFullInstall({ os: 'alpine', exec, sleep: noSleep, packages: ['git'] });
     expect(r.failed).toHaveLength(1);
     expect(r.warnings.join(' ')).toContain('no response from terminal');
+  });
+});
+
+
+describe('proot permission errors are not install failures', () => {
+  const PERM = 'ERROR: 2 errors updating directory permissions\nExecuting busybox-1.37.0-r14.trigger\n5 errors; 406 MiB in 99 packages';
+
+  it('detects the apk directory-permission error', () => {
+    expect(mentionsProotPermissionErrors(PERM)).toBe(true);
+    expect(mentionsProotPermissionErrors('ERROR: unable to select packages')).toBe(false);
+    expect(mentionsProotPermissionErrors(undefined)).toBe(false);
+  });
+
+  it('confirmPackageInstalled trusts the package database, not the exit code', async () => {
+    const present: ExecFn = async cmd => (cmd.startsWith('apk info -e') ? { output: 'nano\n', exitCode: 0 } : { output: '', exitCode: 0 });
+    const absent: ExecFn = async () => ({ output: '', exitCode: 1 });
+    expect(await confirmPackageInstalled(present, 'alpine', 'nano')).toBe(true);
+    expect(await confirmPackageInstalled(absent, 'alpine', 'nano')).toBe(false);
+  });
+
+  it('update with permission errors succeeds when nothing is left to upgrade', async () => {
+    const exec: ExecFn = async cmd => {
+      if (cmd.startsWith('apk upgrade')) return { output: PERM, exitCode: 1 };
+      if (cmd.startsWith("apk version")) return { output: '', exitCode: 0 };
+      return { output: 'ok', exitCode: 0 };
+    };
+    const r = await runUpdatePackages({ os: 'alpine', exec, sleep: noSleep, onLog: noLog });
+    expect(r.ok).toBe(true);
+    expect(r.warnings.join(' ')).toMatch(/directory permissions/);
+  });
+
+  it('update still fails when packages remain out of date', async () => {
+    const exec: ExecFn = async cmd => {
+      if (cmd.startsWith('apk upgrade')) return { output: PERM, exitCode: 1 };
+      if (cmd.startsWith("apk version")) return { output: 'busybox-1.37.0-r8 < 1.37.0-r14', exitCode: 0 };
+      return { output: 'ok', exitCode: 0 };
+    };
+    const r = await runUpdatePackages({ os: 'alpine', exec, sleep: noSleep, onLog: noLog });
+    expect(r.ok).toBe(false);
   });
 });
