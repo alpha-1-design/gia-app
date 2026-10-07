@@ -12,9 +12,10 @@ import {
   ChevronDown, ChevronRight, Zap, Settings, Box,
 } from 'lucide-react';
 import { useSandboxSetup } from '../hooks/useSandboxSetup';
-import { runFullInstall, runUpdatePackages, parseInstalledPackageNames, tailOutput } from '../services/terminalInstall';
+import ShellPanel from './ShellPanel';
+import { runFullInstall, runUpdatePackages, parseInstalledPackageNames, tailOutput, confirmPackageInstalled } from '../services/terminalInstall';
 
-type Tab = 'system' | 'packages' | 'workspace' | 'mcp';
+type Tab = 'system' | 'shell' | 'packages' | 'workspace' | 'mcp';
 
 // ---------------------------------------------------------------------------
 // Package categories (Kai-style grouped sections)
@@ -253,10 +254,14 @@ export default function SandboxSetupPanel() {
     setPkgError(null);
     const r = await installPackage(pkg);
     if (!r || r.exitCode !== 0) {
-      setPkgError(`Couldn't install ${pkg}: ${tailOutput(r?.output) || 'no response from terminal'}`);
+      // A non-zero exit isn't proof of failure under proot — check the package database.
+      const actuallyInstalled = r ? await confirmPackageInstalled(execCommand, setupStatus?.os === 'ubuntu' ? 'ubuntu' : 'alpine', pkg) : false;
+      if (!actuallyInstalled) {
+        setPkgError(`Couldn't install ${pkg}: ${tailOutput(r?.output) || 'no response from terminal'}`);
+      }
     }
     await refreshInstalled();
-  }, [installPackage, refreshInstalled]);
+  }, [installPackage, refreshInstalled, execCommand, setupStatus?.os]);
 
   const handleRemove = useCallback(async (pkg: string) => {
     await removePackage(pkg);
@@ -297,6 +302,7 @@ export default function SandboxSetupPanel() {
       <div className="flex border-b border-white/10">
         {([
           { id: 'system' as Tab, icon: Cpu, label: 'System' },
+          { id: 'shell' as Tab, icon: Terminal, label: 'Shell' },
           { id: 'packages' as Tab, icon: Package, label: 'Packages' },
           { id: 'workspace' as Tab, icon: FolderOpen, label: 'Files' },
           { id: 'mcp' as Tab, icon: Zap, label: 'MCPs' },
@@ -522,6 +528,8 @@ export default function SandboxSetupPanel() {
         )}
 
         {/* ═══════ PACKAGES TAB ═══════ */}
+        {tab === 'shell' && <ShellPanel />}
+
         {tab === 'packages' && (
           <>
             {pkgError && (

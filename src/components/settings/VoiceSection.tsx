@@ -26,6 +26,10 @@ interface ServiceStatus {
   error?: string;
 }
 
+function formatMB(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
 export const VoiceSection: React.FC = () => {
   const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');
   const [keepListening, setKeepListening] = useState(() => localStorage.getItem('gia-keep-listening') === 'true');
@@ -38,6 +42,21 @@ export const VoiceSection: React.FC = () => {
   const [useWhisper, setUseWhisper] = useState(() => localStorage.getItem('gia-use-whisper') === 'true');
   const [whisperStatus, setWhisperStatus] = useState(WhisperService.status);
   const [whisperLoading, setWhisperLoading] = useState(false);
+  const [whisperProgress, setWhisperProgress] = useState(WhisperService.progress);
+  const [whisperError, setWhisperError] = useState(WhisperService.error);
+  const [whisperBytes, setWhisperBytes] = useState(0);
+
+  useEffect(() => {
+    const sync = () => {
+      setWhisperStatus(WhisperService.status);
+      setWhisperProgress(WhisperService.progress);
+      setWhisperError(WhisperService.error);
+    };
+    sync();
+    const unsubscribe = WhisperService.subscribe(sync);
+    WhisperService.getCachedBytes().then(setWhisperBytes);
+    return unsubscribe;
+  }, []);
   const [cloudStt, setCloudStt] = useState<CloudSTTConfig>(() => getCloudSTTConfig());
 
   // ── Diagnostics state ──────────────────────────────────────────────
@@ -201,9 +220,45 @@ export const VoiceSection: React.FC = () => {
         </span>
       </div>
 
+      <div
+        className="rounded-xl p-3 flex flex-col gap-1.5"
+        style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' }}
+        data-testid="openwakeword-card"
+      >
+        <div className="flex items-center gap-2">
+          <Radio size={13} style={{ color: '#a855f7' }} />
+          <span className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>
+            Hey Jarvis &middot; openWakeWord
+          </span>
+          <span
+            className="ml-auto text-[9px] px-2 py-0.5 rounded-full font-medium"
+            style={{
+              background: !hasNativeModule ? 'rgba(239,68,68,0.15)' : nativeWW ? 'rgba(34,197,94,0.15)' : 'var(--gia-bg-2)',
+              color: !hasNativeModule ? '#ef4444' : nativeWW ? '#22c55e' : 'var(--gia-muted)',
+            }}
+          >
+            {!hasNativeModule ? 'Unavailable' : nativeWW ? 'On' : 'Off'}
+          </span>
+        </div>
+        <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
+          GIA&apos;s hands-free wake word runs fully on this phone using openWakeWord with its default
+          &ldquo;Hey Jarvis&rdquo; model. No audio leaves the device.
+          {hasNativeModule
+            ? (nativeWW ? ' Say “Hey Jarvis” any time.' : ' Switch on Background Wake Word below to start it.')
+            : ''}
+        </p>
+        {!hasNativeModule && (
+          <p className="text-[10px]" style={{ color: '#ef4444' }}>
+            {Capacitor.isNativePlatform()
+              ? 'The engine isn’t part of the app version you have installed. Install the latest GIA build to get it.'
+              : (Capacitor.isNativePlatform() ? 'Not in this installed version — install the latest build.' : 'Runs in the Android app only.')}
+          </p>
+        )}
+      </div>
+
       <div>
         <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
-          Wake Word
+          Listen phrase (in-chat speech recognition)
         </label>
         <div className="flex gap-2">
           <input
@@ -347,7 +402,33 @@ export const VoiceSection: React.FC = () => {
         Uses Whisper ONNX model (tiny.en, ~50MB) for on-device speech-to-text. No data leaves your phone.
       </p>
 
-      <div className="flex items-center gap-2">
+      {whisperStatus === 'loading' && (
+        <div className="flex flex-col gap-1">
+          <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'var(--gia-bg-2)' }}>
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${whisperProgress.percent ?? 8}%`,
+                background: '#22c55e',
+                opacity: whisperProgress.percent === null ? 0.5 : 1,
+              }}
+            />
+          </div>
+          <span className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+            {whisperProgress.percent === null
+              ? 'Connecting…'
+              : `${whisperProgress.percent}% · ${formatMB(whisperProgress.loadedBytes)} of ${formatMB(whisperProgress.totalBytes)}`}
+          </span>
+        </div>
+      )}
+
+      {whisperStatus === 'error' && whisperError && (
+        <p className="text-[9px] break-words" style={{ color: '#ef4444' }}>
+          Download failed: {whisperError}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={async () => {
             if (whisperLoading) return;
@@ -355,27 +436,46 @@ export const VoiceSection: React.FC = () => {
             try {
               if (WhisperService.isReady) {
                 await WhisperService.unload();
-                setWhisperStatus('unloaded');
               } else {
                 await WhisperService.loadModel();
-                setWhisperStatus('ready');
               }
             } catch {
-              setWhisperStatus('error');
+              /* WhisperService records the reason; the subscription shows it */
             } finally {
               setWhisperLoading(false);
+              WhisperService.getCachedBytes().then(setWhisperBytes);
             }
           }}
+          disabled={whisperLoading}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-colors"
           style={{
-            background: whisperStatus === 'ready' ? 'rgba(239,68,68,0.15)' : WhisperService.status === 'loading' ? 'var(--gia-bg-2)' : '#22c55e',
+            background: whisperStatus === 'ready' ? 'rgba(239,68,68,0.15)' : whisperLoading ? 'var(--gia-bg-2)' : '#22c55e',
             color: whisperStatus === 'ready' ? '#ef4444' : whisperLoading ? 'var(--gia-muted)' : 'white',
           }}
         >
-          {whisperLoading ? 'Downloading…' : whisperStatus === 'ready' ? 'Unload Model' : 'Download Whisper'}
+          {whisperLoading ? 'Downloading…' : whisperStatus === 'ready' ? 'Unload from memory' : whisperStatus === 'error' ? 'Retry download' : 'Download Whisper'}
         </button>
+
+        {(whisperBytes > 0 || whisperStatus === 'error') && !whisperLoading && (
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Delete the downloaded Whisper model${whisperBytes ? ` (${formatMB(whisperBytes)})` : ''}? You can download it again later.`)) return;
+              try {
+                await WhisperService.deleteModel();
+                setWhisperBytes(0);
+              } catch {
+                /* surfaced via service error state */
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium"
+            style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}
+          >
+            Delete model{whisperBytes > 0 ? ` (${formatMB(whisperBytes)})` : ''}
+          </button>
+        )}
+
         <span className="text-[9px]" style={{ color: whisperStatus === 'ready' ? '#22c55e' : whisperStatus === 'error' ? '#ef4444' : 'var(--gia-muted-2)' }}>
-          {whisperStatus === 'ready' ? '✓ Loaded' : whisperStatus === 'error' ? 'Error' : whisperStatus === 'loading' ? 'Downloading ~50MB…' : 'Not loaded'}
+          {whisperStatus === 'ready' ? '✓ Loaded' : whisperStatus === 'error' ? 'Error' : whisperStatus === 'loading' ? 'Downloading…' : whisperBytes > 0 ? 'Downloaded · not in memory' : 'Not downloaded'}
         </span>
       </div>
 
