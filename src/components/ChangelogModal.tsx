@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.15 Beta';
+const VERSION = '2.4.0.16 Beta';
 
 const sections = [
   {
@@ -16,7 +16,9 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
-      'GIA 2.4.0.15 is a beta release: new workflows and Android-native features are still being tested, and feedback is welcome.',
+      'GIA 2.4.0.16 is a beta release: new workflows and Android-native features are still being tested, and feedback is welcome.',
+      'Root Terminal now has a Shell tab: run commands in the on-device Alpine Linux environment with live output, a Stop button, command history, and a remembered working directory. Full-screen programs such as nano and vim are not supported yet.',
+      'Settings → Voice now shows the “Hey Jarvis” openWakeWord status up front (On, Off, or Unavailable with the reason), and the older in-chat phrase is labelled separately.',
       'Added an experimental Android on-device wake-word engine with the “Hey Jarvis” phrase. The browser build does not provide native wake-word listening.',
       'Added voice notes, a live Jarvis Orb status surface, and an Integration Orbit hub for connected services.',
       'Added Build Studio with a visual style carousel and starter prompts, plus weather and calendar cards for supported assistant output.',
@@ -50,6 +52,8 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
+      'On-device Whisper now shows real download progress, the reason a download failed, and a Retry button. “Delete model” removes the downloaded files (Unload only freed memory before).',
+      'Terminal package install and update no longer report failure when Alpine only complains about directory permissions inside the sandbox; GIA checks what was actually installed or still out of date.',
       'Full Install actually finishes. It ran one `apk add` per package with `--no-cache`, so each of the 21 packages re-fetched the whole index; when a big one (build-base) took long enough to hit the native timeout, the process was killed mid-transaction and left the package manager\'s lock behind — every package after that failed, with no explanation. Installs now run as one batch, clear a stale lock first, retry failures individually, and show the real error instead of a bare list of names.',
       'The Packages tab always showed 0 installed, even right after a successful Full Install, because it compared package names against a prefix that never matched how Alpine lists them. It now reads the list correctly.',
       'Assistant replies were boxed into a narrow 85%-width card with the avatar taking a column beside it, unlike the full-width expanded view. Replies are now full width, with the avatar moved into the header line.',
@@ -90,7 +94,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.15 Beta.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.16 Beta.',
     ],
   },
 ];

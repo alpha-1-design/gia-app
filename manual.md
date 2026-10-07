@@ -1,4 +1,4 @@
-# GIA v2.4.0.15 Beta — User Manual
+# GIA v2.4.0.16 Beta — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -17,6 +17,15 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🆕 What's New in v2.4.0.16 Beta
+
+| Change | Description |
+|-----|-------------|
+| **Linux shell tab** | Settings → Root Terminal & Linux Shell → **Shell** runs commands in the on-device Alpine environment with live output, Stop, history and a remembered folder. Full-screen programs (nano, vim, top) are not supported yet. |
+| **Hey Jarvis status** | Settings → Voice shows whether the on-device openWakeWord “Hey Jarvis” listener is On, Off or Unavailable, and why. |
+| **Whisper download** | Shows a progress bar and failure reason, with Retry and **Delete model** to free the space. |
+| **Package install accuracy** | Alpine permission warnings inside the sandbox no longer make a successful install or update look failed. |
 
 ## 🧪 What's New in v2.4.0.15 Beta
 
