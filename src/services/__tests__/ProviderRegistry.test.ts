@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ModelsDevCatalog } from '../ModelsDevCatalog';
 
 const { providerRegistry } = await import('../ProviderRegistry');
 
@@ -144,6 +145,61 @@ describe('ProviderRegistry', () => {
     });
   });
 
+  describe('applyCatalog', () => {
+    const catalog: ModelsDevCatalog = {
+      openai: {
+        id: 'openai',
+        name: 'OpenAI',
+        models: {
+          'new-model': { id: 'new-model', name: 'New Model', tool_call: true, modalities: { input: ['text', 'image'] }, limit: { context: 128000 }, cost: { input: 0.5 }, release_date: '2026-01-01' },
+        },
+      },
+      google: {
+        id: 'google',
+        name: 'Google',
+        models: {
+          'gemini-x': { id: 'gemini-x', name: 'Gemini X', tool_call: true, modalities: { input: ['text'] }, limit: { context: 1048576 }, cost: { input: 0 }, release_date: '2025-06-01' },
+        },
+      },
+      'not-mapped': {
+        id: 'not-mapped',
+        name: 'Nope',
+        models: { z: { id: 'z', name: 'Z' } },
+      },
+    };
+
+    it('replaces mapped catalogs and derives context/tools/vision/free', () => {
+      const changed = providerRegistry.applyCatalog(catalog);
+      expect(changed).toContain('openai');
+      expect(changed).toContain('gemini');
+      expect(changed).not.toContain('not-mapped');
+
+      const model = providerRegistry.getModels('openai').find((m) => m.id === 'new-model');
+      expect(model).toBeDefined();
+      expect(model!.context).toBe('128k');
+      expect(model!.contextTokens).toBe(128000);
+      expect(model!.vision).toBe(true);
+      expect(model!.tools).toBe(true);
+      expect(model!.free).toBe(false);
+      expect(providerRegistry.getContextTokens('openai', 'new-model')).toBe(128000);
+
+      const gem = providerRegistry.getModels('gemini').find((m) => m.id === 'gemini-x');
+      expect(gem!.context).toBe('1M');
+      expect(gem!.contextTokens).toBe(1048576);
+      expect(gem!.free).toBe(true);
+    });
+
+    it('preserves the provider default model when models.dev no longer lists it', () => {
+      providerRegistry.applyCatalog({
+        openai: { id: 'openai', name: 'OpenAI', models: { 'brand-new': { id: 'brand-new', name: 'Brand New' } } },
+      });
+      const ids = providerRegistry.getModels('openai').map((m) => m.id);
+      expect(ids).toContain('brand-new');
+      expect(ids).toContain('gpt-4o-mini');
+      expect(ids.indexOf('gpt-4o-mini')).toBe(0);
+    });
+  });
+
   describe('ensureLoaded', () => {
     it('does not re-init if already loaded', async () => {
       await providerRegistry.ensureLoaded();
@@ -151,6 +207,5 @@ describe('ProviderRegistry', () => {
       await providerRegistry.ensureLoaded();
       expect(spy).not.toHaveBeenCalled();
     });
-
   });
 });

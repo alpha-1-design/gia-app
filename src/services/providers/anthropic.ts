@@ -37,10 +37,13 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
     return m;
   });
 
+  const systemPrompt = ctx.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode);
   const body: Record<string, unknown> = {
     model: effectiveModel,
     max_tokens: useThinking ? 16000 : (req.maxTokens ?? 2048),
-    system: ctx.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode),
+    // Mark the (large, stable) system prompt as an ephemeral cache breakpoint so
+    // Anthropic can reuse it across turns instead of re-billing the full prompt.
+    system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
     messages,
     stream: !!req.onStream,
   };

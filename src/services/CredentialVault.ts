@@ -42,6 +42,21 @@ class CredentialVault {
     return this.cache.get(serviceId);
   }
 
+  /**
+   * Read a value straight from the native vault (Android EncryptedSharedPrefs),
+   * bypassing the in-memory cache. Used to recover credentials whose
+   * IndexedDB copies were lost (e.g. WebView killed before a write flushed).
+   */
+  async getNative(serviceId: string): Promise<string | undefined> {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    try {
+      const stored = await NativeCredentialVault.get({ serviceId });
+      return stored.value?.trim() ? stored.value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   async set(record: CredentialRecord): Promise<void> {
     this.cache.set(record.serviceId, record);
     if (Capacitor.isNativePlatform()) {

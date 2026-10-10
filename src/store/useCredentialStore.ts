@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { idbStorage } from './idb-storage';
+import { idbStorageWriteThrough } from './idb-storage';
 import credentialVault from '../services/CredentialVault';
 
 export interface CredentialRecord {
@@ -49,7 +49,9 @@ export const useCredentialStore = create<CredentialState>()(
     }),
     {
       name: 'gia-credentials',
-      storage: createJSONStorage(() => idbStorage),
+      // Write-through: same rationale as useProviderStore — credentials must not
+      // sit in a 300 ms debounce when the OS can kill the WebView at any moment.
+      storage: createJSONStorage(() => idbStorageWriteThrough),
       partialize: state => ({ credentials: state.credentials }),
     },
   ),

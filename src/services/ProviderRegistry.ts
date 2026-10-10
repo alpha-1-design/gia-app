@@ -1,4 +1,5 @@
 import { appConfig } from '../config/appConfig';
+import { MODELS_DEV_PROVIDER_MAP, type ModelsDevCatalog, type ModelsDevModel } from './ModelsDevCatalog';
 
 export interface ProviderDef {
   id: string;
@@ -18,6 +19,7 @@ interface StaticModelOption {
   label: string;
   free: boolean;
   context?: string;
+  contextTokens?: number;
   tools?: boolean;
   vision?: boolean;
 }
@@ -197,6 +199,16 @@ const FALLBACK_IMAGE_MODELS: Record<string, string> = {
   nvidia: 'nvidia/sana-4k',
 };
 
+function formatContext(tokens?: number): string | undefined {
+  if (!tokens || tokens <= 0) return undefined;
+  if (tokens >= 1_000_000) {
+    const m = Math.round((tokens / 1_000_000) * 10) / 10;
+    return `${m}M`;
+  }
+  if (tokens >= 1000) return `${Math.round(tokens / 1000)}k`;
+  return `${tokens}`;
+}
+
 class ProviderRegistry {
   private providers: Map<string, ProviderDef> = new Map();
   private models: Map<string, StaticModelOption[]> = new Map();
@@ -256,6 +268,51 @@ class ProviderRegistry {
 
   getModels(id: string): StaticModelOption[] {
     return this.models.get(id) ?? [];
+  }
+
+  /**
+   * Replace curated catalogs with live models.dev metadata (real context
+   * limits, tool/vision capability, pricing) for every provider we can map.
+   * The provider's selected/default model is preserved even if models.dev no
+   * longer lists it, so an existing selection never disappears.
+   */
+  applyCatalog(catalog: ModelsDevCatalog): string[] {
+    const changed: string[] = [];
+    for (const [appId, devId] of Object.entries(MODELS_DEV_PROVIDER_MAP)) {
+      const provider = catalog[devId];
+      if (!provider) continue;
+      const curated = this.models.get(appId) ?? [];
+      const list = Object.values(provider.models)
+        .filter((m): m is ModelsDevModel => !!m && typeof m.id === 'string')
+        .sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))
+        .map((m) => this.toModelOption(m));
+      if (list.length === 0) continue;
+      const defaultModel = this.providers.get(appId)?.defaultModel;
+      if (defaultModel && !list.some((m) => m.id === defaultModel)) {
+        const existing = curated.find((m) => m.id === defaultModel);
+        list.unshift(existing ?? { id: defaultModel, label: defaultModel, free: false });
+      }
+      this.models.set(appId, list);
+      changed.push(appId);
+    }
+    return changed;
+  }
+
+  private toModelOption(model: ModelsDevModel): StaticModelOption {
+    return {
+      id: model.id,
+      label: model.name || model.id,
+      free: model.cost ? model.cost.input === 0 : false,
+      context: formatContext(model.limit?.context),
+      contextTokens: model.limit?.context,
+      tools: model.tool_call ?? false,
+      vision: model.modalities?.input?.includes('image') ?? false,
+    };
+  }
+
+  /** Raw context window (tokens) for a provider+model, when models.dev knows it. */
+  getContextTokens(providerId: string, modelId: string): number | undefined {
+    return this.models.get(providerId)?.find((m) => m.id === modelId)?.contextTokens;
   }
 
   getNeedsApiKey(id: string): boolean {

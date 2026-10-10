@@ -5,6 +5,10 @@ and device-aware workflows. Connect a cloud provider or use a supported local
 model; when collaboration is enabled, GIA can send a request to up to three
 configured cloud providers.
 
+Part of the GIA family: [GIA Cowork](https://github.com/alpha-1-design/gia-cowork)
+(desktop, real shell and screen control) · [GIA CLI](https://github.com/alpha-1-design/gia-cli)
+(terminal coding agent).
+
 ![GIA app icon](docs/screenshots/gia-icon-hero.png)
 
 [![CI](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml/badge.svg)](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml)

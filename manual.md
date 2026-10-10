@@ -10,7 +10,8 @@ You've got GIA in your pocket today. **GIA Desktop is coming** — same brain, b
 
 But we're not stopping at two screens.
 
-- **GIA CLI** — a terminal-native GIA for people who live in the shell, that writes, runs, and ships code with you.
+- **GIA CLI** — a terminal-native GIA for people who live in the shell, that writes, runs, and ships code with you. ([gia-cli](https://github.com/alpha-1-design/gia-cli))
+- **GIA Cowork** — an autonomous desktop workspace with a real shell, real files, and screen control. ([gia-cowork](https://github.com/alpha-1-design/gia-cowork))
 - **GIA Watch** — your assistant on the wrist, surfacing context before you even ask.
 - **GIA Car** — hands-free, eyes-on-the-road GIA that runs your life while you drive.
 - **GIA Phone** — yeah, maybe we build the whole phone one day. Why not.
@@ -22,6 +23,7 @@ They've not seen this one before. They won't see this one coming. GIA isn't a ch
 
 | Change | Description |
 |-----|-------------|
+| **Attachment preview & circle** | Tap an attachment chip in Chat to open a full preview before sending — read text/PDF contents, or circle a region on a photo to send just that part (edge-snapped). **Reset** restores the original; **Remove** deletes it. |
 | **Linux shell tab** | Settings → Root Terminal & Linux Shell → **Shell** runs commands in the on-device Alpine environment with live output, Stop, history and a remembered folder. Full-screen programs (nano, vim, top) are not supported yet. |
 | **Hey Jarvis status** | Settings → Voice shows whether the on-device openWakeWord “Hey Jarvis” listener is On, Off or Unavailable, and why. |
 | **Whisper download** | Shows a progress bar and failure reason, with Retry and **Delete model** to free the space. |

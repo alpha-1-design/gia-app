@@ -21,7 +21,7 @@ const faqs = [
   },
   {
     q: 'Which models and providers are supported?',
-    a: '70+ providers including OpenAI, Anthropic, Gemini, Mistral, Groq, DeepSeek, Cohere, Perplexity, xAI, Together, Azure, local servers, gateways, and custom OpenAI-compatible endpoints. Switch freely, no lock-in.',
+    a: '22 providers including OpenAI, Anthropic, Gemini, Mistral, Groq, DeepSeek, Cohere, Perplexity, xAI, Together, plus local servers (Ollama, LM Studio) and custom OpenAI-compatible endpoints. Switch freely, no lock-in.',
   },
   {
     q: 'What platforms does GIA run on?',

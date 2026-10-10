@@ -184,9 +184,17 @@ export default function SandboxSetupPanel() {
   }, [tab, refreshWorkspaceInfo]);
 
   const refreshInstalled = useCallback(async () => {
-    const result = await listInstalledPackages();
-    if (result && result.exitCode === 0) {
-      setInstalledPkgs(result.output.split('\n').filter(Boolean));
+    // The native plugin rejects every call while the rootfs is missing
+    // (GIATerminalPlugin → call.reject). This runs on a bare tab click for
+    // Packages/Files — it must never become an unhandled rejection, and the
+    // tab has to open regardless.
+    try {
+      const result = await listInstalledPackages();
+      if (result && result.exitCode === 0) {
+        setInstalledPkgs(result.output.split('\n').filter(Boolean));
+      }
+    } catch {
+      // Counts stay stale; the tab itself is unaffected.
     }
   }, [listInstalledPackages]);
 
@@ -638,6 +646,12 @@ export default function SandboxSetupPanel() {
         {/* ═══════ WORKSPACE TAB ═══════ */}
         {tab === 'workspace' && (
           <>
+            {!setupStatus?.installed && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-200/80">
+                The terminal environment isn't set up yet — install it from the
+                System tab, then folder counts and file browsing will show real data.
+              </div>
+            )}
             <div className="text-xs opacity-50 mb-2">
               Your terminal workspace. GIA creates organized folders for different types of work.
             </div>

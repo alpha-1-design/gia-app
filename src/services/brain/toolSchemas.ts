@@ -574,7 +574,24 @@ export function mapSchemaProperty([k, v]: [string, { type: string; description: 
 
 export function getAllToolSchemas(): Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string; items?: { type: string } }> }> {
   const mcpSchemas = GiaTools.getAllToolSchemas() as unknown as Record<string, { description: string; required: string[]; properties: Record<string, { type: string; description: string; items?: { type: string } }> }>;
-  return { ...toolSchemas, ...mcpSchemas };
+  const merged = { ...toolSchemas };
+  for (const [id, schema] of Object.entries(mcpSchemas)) {
+    if (!schema || typeof schema !== 'object') continue;
+    const existing = merged[id];
+    merged[id] = {
+      ...existing,
+      ...schema,
+      description: schema.description || existing?.description || id,
+      required: Array.isArray(schema.required) ? schema.required : (existing?.required ?? []),
+      properties: schema.properties && typeof schema.properties === 'object' ? schema.properties : (existing?.properties ?? {}),
+    };
+  }
+  for (const schema of Object.values(merged)) {
+    if (!schema.description) schema.description = 'Tool available to GIA via the tool protocol';
+    if (!Array.isArray(schema.required)) schema.required = [];
+    if (!schema.properties || typeof schema.properties !== 'object') schema.properties = {};
+  }
+  return merged;
 }
 
 export function buildOpenAITools(): Record<string, unknown>[] {
@@ -588,7 +605,7 @@ export function buildOpenAITools(): Record<string, unknown>[] {
         properties: Object.fromEntries(
           Object.entries(schema.properties).map((entry) => mapSchemaProperty(entry))
         ),
-        required: schema.required.length > 0 ? schema.required : undefined,
+        required: (schema.required ?? []).length > 0 ? schema.required : undefined,
       },
     },
   }));
@@ -603,7 +620,7 @@ export function buildAnthropicTools(): Record<string, unknown>[] {
       properties: Object.fromEntries(
         Object.entries(schema.properties).map((entry) => mapSchemaProperty(entry))
       ),
-      required: schema.required.length > 0 ? schema.required : undefined,
+      required: (schema.required ?? []).length > 0 ? schema.required : undefined,
     },
   }));
 }
@@ -617,7 +634,7 @@ export function buildGeminiTools(): Record<string, unknown>[] {
       properties: Object.fromEntries(
         Object.entries(schema.properties).map((entry) => mapSchemaProperty(entry))
       ),
-      required: schema.required.length > 0 ? schema.required : undefined,
+      required: (schema.required ?? []).length > 0 ? schema.required : undefined,
     },
   }));
 }
@@ -625,7 +642,7 @@ export function buildGeminiTools(): Record<string, unknown>[] {
 export function validateToolArgs(id: string, args: Record<string, unknown>): string | null {
   const schema = getAllToolSchemas()[id];
   if (!schema) return null;
-  for (const key of schema.required) {
+  for (const key of schema.required ?? []) {
     if (args[key] === undefined || args[key] === null || args[key] === '') {
       return `Missing required argument "${key}" for tool "${id}"`;
     }

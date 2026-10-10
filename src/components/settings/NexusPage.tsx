@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Activity, Brain, CheckCircle2, Clock3, Cpu, GitBranch, Loader2, PlugZap, Save, Server, Sparkles, Trash2, UserRoundPlus, X, XCircle } from 'lucide-react';
+import { Activity, Brain, CheckCircle2, Clock3, Cpu, GitBranch, Loader2, PlugZap, Save, Server, Trash2, UserRoundPlus, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { AGENT_ROLES } from '../../services/brain/SubAgentManager';
 import { useNexusStore } from '../../store/useNexusStore';
@@ -10,20 +10,7 @@ import MCPManager from '../../services/MCPManager';
 import { useGiaStore } from '../../store/useGiaStore';
 import { resolveAgentIcon } from '../../utils/agentIcons';
 import { SubPageHeader } from './SubPageHeader';
-
-const STATUS_LABELS = {
-  spawning: 'Starting',
-  running: 'Working',
-  completed: 'Complete',
-  failed: 'Failed',
-} as const;
-
-const STATUS_COLORS = {
-  spawning: '#fbbf24',
-  running: '#34d399',
-  completed: '#60a5fa',
-  failed: '#f87171',
-} as const;
+import { DelegationTree } from '../DelegationTree';
 
 export const NexusPage: React.FC<{ onBack: () => void; onOpenMcp?: () => void }> = ({ onBack, onOpenMcp }) => {
   const [creatingAgent, setCreatingAgent] = useState(false);
@@ -169,40 +156,12 @@ export const NexusPage: React.FC<{ onBack: () => void; onOpenMcp?: () => void }>
                 <RunCount label="Done" count={finishedCount} color="#60a5fa" />
                 <RunCount label="Failed" count={failedCount} color="#f87171" />
               </div>
-              <div className="space-y-2">
-                {run.agents.map(agent => {
-                  const color = STATUS_COLORS[agent.status];
-                  return (
-                    <article key={agent.id} className="rounded-xl border p-3" style={{ background: 'rgba(255,255,255,0.015)', borderColor: `${agent.color}25` }}>
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full" style={{ background: color, boxShadow: agent.status === 'running' ? `0 0 10px ${color}80` : undefined }} />
-                        <span className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{agent.name}</span>
-                        <span className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{agent.role}</span>
-                        <span className="ml-auto text-[9px] font-medium" style={{ color }}>{STATUS_LABELS[agent.status]}</span>
-                      </div>
-                      <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
-                        {agent.currentActivity || agent.task}
-                      </p>
-                      {agent.error && (
-                        <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-relaxed" style={{ color: '#f87171' }}>
-                          <XCircle size={12} className="mt-0.5 shrink-0" />{agent.error}
-                        </p>
-                      )}
-                      {agent.result && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-[10px] font-medium" style={{ color: '#60a5fa' }}>View findings</summary>
-                          <p className="mt-2 whitespace-pre-wrap text-[11px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>{agent.result}</p>
-                        </details>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
-              {run.synthesizing && (
-                <p className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-[11px]" style={{ background: 'rgba(168,85,247,0.08)', color: '#c4b5fd' }}>
-                  <Sparkles size={13} /> GIA is combining the specialist findings…
-                </p>
-              )}
+              <DelegationTree
+                agents={run.agents}
+                isGodMode={run.isGodMode}
+                synthesizing={run.synthesizing}
+                finished={!!run.finishedAt}
+              />
             </div>
           )}
         </section>

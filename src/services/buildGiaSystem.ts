@@ -8,7 +8,6 @@ import { isNativePlatform } from '../utils/helpers';
 import { GIA_VOICE } from '../config/gia-identity';
 import connectorManager from '../services/connectors/ConnectorManager';
 import socialManager from '../services/social/SocialManager';
-import MCPManager from '../services/MCPManager';
 import CapabilityService from '../services/CapabilityService';
 import CapabilityPolicyService from '../services/CapabilityPolicyService';
 import { crossDeviceMesh } from '../services/CrossDeviceMesh';
@@ -16,6 +15,7 @@ import { providerRegistry } from './ProviderRegistry';
 import { appMapDigest } from './AppMap';
 import SkillsMarketplace from './SkillsMarketplace';
 import { useAgentStore } from '../store/useAgentStore';
+import { buildToolReferenceTable } from './brain/toolReference';
 
 let _cachedSystemContext = '';
 
@@ -145,6 +145,13 @@ Your current model (${activeCfg?.model || 'unknown'}) doesn't natively support t
     ? ''
     : '\n\n**Note:** Tools you use will be sent to the user for approval before execution. Propose the tool naturally, and it will be shown to the user for confirmation.';
 
+  const toolTable = supportsImageGen
+    ? buildToolReferenceTable()
+    : buildToolReferenceTable()
+        .split('\n')
+        .filter((line) => !line.includes('| `image_generation` |'))
+        .join('\n');
+
   return `## Tools you can use
 Call a tool by writing a fenced code block with **valid JSON only**:
 
@@ -161,162 +168,7 @@ Call a tool by writing a fenced code block with **valid JSON only**:
 - Do NOT include comments, trailing commas, or extra keys in the JSON
 - If you're unsure about args, use empty object: { "id": "tool_name", "args": {} }
 
-| Tool | What it does | Args | Notes |
-|---|---|---|---|---|
-| \`web_search\` | Search the web (uses Exa/Browserless if configured, falls back to DuckDuckGo/Google/Bing) | \`query\` | Returns sources — cite them |
-| \`read_url\` | Extract clean markdown/text from any web page | \`url\`, \`format\`, \`maxChars\` | CORS proxies, article extraction, up to 60k chars |
-| \`terminal_run\` | Run code in sandbox | \`command\`, \`language\`: python/js/cpp | |
-| \`terminal_background\` | Run a long-lived command in the background (dev server, watcher, download) | \`action\`: start/log/stop, \`command\` (start), \`sessionId\` (log/stop) | On Android this keeps the process alive in the native proot session across tool calls — poll with action=log, kill with action=stop. Prefer this over raw \`nohup ... &\` for dev servers.
-| \`sandbox_fs\` | Read, write, delete, or list files in the sandbox workspace | \`action\`, \`path\`, \`content\` (for write) | Paths are relative to \`/workspace\`; use this for project source files. Writes create parent folders. |
-| \`sandbox_exec\` | Run a command in the Alpine sandbox | \`command\`, \`workdir\`, \`timeout\` | Defaults to the active Build project when one is selected. |
-| \`sandbox_clone\` | Clone a repository into \`/workspace/projects\` and activate it | \`repo\`, \`dest\`? | Use when the user asks to work on an existing repository. |
-| \`filesystem_read\` | Read a file | \`path\` | Mobile only |
-| \`filesystem_write\` | Save a user-facing file | \`path\`, \`content\` | Mobile saves to Documents; browser downloads. Not for Build project source files. |
-| \`list_files\` | List directory | \`path\` (optional) | Mobile only |
-| \`zip_project\` | Bundle existing files into ZIP | \`filename\`, \`files\` or \`paths\` | From device or content |
-| \`build_project\` | Scaffold, build, and package project into ZIP | \`files\`, \`build_command\`, \`language\`, \`output_filename\`, \`entry\` | Full build pipeline |
-| \`install_skill\` | Install a new skill from URL or package | \`source\` (URL/package name), \`name\`, \`id\` | Expands GIA capabilities |
-| \`skill_list\` | List installed skills + which is active | none | See what GIA can specialize in |
-| \`skill_load\` | Load full instructions for an installed skill | \`skillId\` | Load before doing a matching task |
-| \`skill_activate\` | Switch the active skill | \`skillId\` | Adopts its behavior immediately |
-| \`skill_create\` | Create and activate a custom skill | \`name\`, \`description\`, \`category\`, \`systemPrompt\`, \`tools\`? | Authors a reusable skill from chat |
-| \`plugin_list\` | List installed plugins + enabled/disabled status | none | Plugins extend GIA with new tools |
-| \`plugin_install\` | Install a plugin from a URL or manifest JSON | \`url\` (manifest URL) or \`manifest\` (JSON string) | Registered plugin tools become callable immediately |
-| \`plugin_toggle\` | Enable or disable an installed plugin | \`pluginId\`, \`enabled\` (boolean) | Disabled plugins' tools are unregistered |
-| \`plugin_remove\` | Remove an installed plugin | \`pluginId\` | Permanently uninstalls + removes its tools |
-${supportsImageGen ? `| \`image_generation\` | Generate an image | \`prompt\` | Needs image-capable model |\n` : ''}| \`switch_module\` | Navigate to module | \`module\`: chat/build/exam/analyst/writer/planner/settings | |
-| \`toggle_feature\` | Toggle features | \`feature\`: web_search/thinking/hands_off, \`enabled\` | |
-| \`show_notification\` | Toast notification | \`message\` | |
-| \`summarize_conversation\` | Compress history | \`messages\` | saves tokens |
-| \`save_memory\` | Save a fact, preference, or detail to memory | \`key\`, \`value\`, \`category\`, \`tier\`, \`confidence\` | Call proactively when user shares something worth remembering |
-| \`forget_memory\` | Delete memories | \`key\`, \`all\` (true), or \`category\` | |
-| \`request_clarification\` | Ask the user for missing info | \`question\`, \`options\`[], or \`fields\`[] (up to 5-6 questions in one form) | Ask everything you need at once; ask again if still missing info |
-| \`get_environment_info\` | Introspect yourself | none | Version, provider, tools, system |
-| \`get_user_location\` | GPS location | none | Mobile + browser |
-| \`wikipedia\` | Wikipedia article summary | \`query\`, \`maxChars\` | Free, no key needed |
-| \`weather\` | Current weather for any city | \`location\` | Free, no key needed |
-| \`define\` | Dictionary definition | \`word\` | Parts of speech + examples |
-| \`page_info\` | Page metadata (OG tags) | \`url\` | Lightweight, no full fetch |
-| \`github\` | GitHub user/repo/file data | \`action\`, \`username\`, \`repo\`, \`path\` | Ask user for username |
-| \`termux_status\` | Check for the optional Termux app | none | Android only |
-| \`termux_run\` | Start an explicitly requested command in Termux | \`command\`, \`args\`?, \`workdir\`? | Ask before mutating or network actions |
-| \`create_pdf\` | Generate a PDF from title + content | \`title\`, \`content\`, \`filename\`?, \`author\`? | Shows preview -> Save or Download |
-| \`generate_file\` | Generate a real document file (PDF, DOCX, PPTX, or ZIP) from markdown/slides | \`format\` (pdf/docx/pptx/zip), \`filename\`, \`content\` (markdown body) or \`slides\`[], \`title\`? | File is stored in the sandbox and a preview link is shown — view it right in the app |
-| \`browser_navigate\` | Open and read a page in the in-app browser | \`url\` | Android keeps the interactive page open for you and the user; web is read-only |
-| \`browser_click\` | Click a CSS selector in the active browser page | \`url\`, \`selector\` | Android only; navigate first |
-| \`browser_fill\` | Fill a field in the active browser page | \`url\`, \`selector\`, \`value\`, \`submit\`? | Android only; web is read-only |
-| \`browser_scroll\` | Scroll the active browser page | \`url\`, \`direction\`, \`amount\`? | Android only; web is read-only |
-| \`search_places\` | OSM place search | \`query\` | Free Nominatim |
-| \`show_map\` | Interactive map | \`center\`: {lat, lng}, \`markers\`[], \`route\`[] | Include route from get_directions |
-| \`get_directions\` | Turn-by-turn directions | \`origin\`, \`destination\`, \`mode\`: driving/walking/cycling | Shows route + steps on a map |
-| \`export_brain\` | Download brain backup | none | Full JSON export |
-| \`import_brain\` | Restore brain | none | Settings > Brain Export |
-| \`device_info\` | Get device info | none | Battery, OS, model, network |
-| \`device_health\` | Check device health | none | Storage, battery, memory — call proactively to monitor risks |
-| \`screen_brightness\` | Get/set brightness | \`action\`: get/set, \`value\`: 0-1 | Native Android only |
-| \`get_contacts\` | Search contacts | \`query\` (optional), \`maxResults\` | Needs contacts permission |
-| \`open_url\` | Open URL in browser | \`url\` | Any https:// or deep link |
-| \`clipboard\` | Read/write clipboard | \`action\`: read/write, \`text\` (write) | |
-| \`vibrate\` | Vibrate device | \`duration\` ms | |
-| \`share\` | Share content via native share | \`title\`, \`text\`, \`url\` | Opens share sheet |
-| \`send_sms\` | Send SMS directly | \`phone\`, \`message\` | Sends without opening SMS app |
-| \`send_whatsapp\` | Send WhatsApp message | \`phone\` (with country code), \`message\` | Opens WhatsApp pre-filled |
-| \`send_email\` | Compose email | \`to\`, \`subject\`, \`body\` | Opens email client pre-filled |
-| \`make_phone_call\` | Initiate phone call | \`phone\` (with country code) | Opens dialer pre-filled |
-| \`set_alarm\` | Set an alarm | \`hour\` (0-23), \`minute\` (0-59), \`label\`, \`days\`[] | Sets directly via AlarmManager |
-| \`create_goal\` | Create an autonomous goal | \`title\`, \`description\`, \`priority\` | GIA plans & executes autonomously |
-| \`task_create\` | Add a to-do item | \`title\`, \`description\`?, \`priority\`? (low/medium/high/critical), \`tags\`[], \`dueDate\`? | Build & manage to-do lists |
-| \`task_read\` | Read a task by ID or list tasks | \`id\`? or \`status\`? (todo/in_progress/done) | See current tasks |
-| \`task_update\` | Edit a task (mark done, change priority…) | \`id\`, \`title\`?, \`description\`?, \`status\`?, \`priority\`?, \`dueDate\`? | Track progress |
-| \`task_delete\` | Remove a task | \`id\` | Clean up |
-| \`task_move\` | Move a task to another status | \`id\`, \`status\` (todo/in_progress/done) | Organize |
-| \`list_goals\` | List all goals | none | Status, progress, priority |
-| \`goal_progress\` | Goal progress report | \`goalTitle\` | Shows steps & reflections |
-| \`pause_goal\` | Pause/resume/cancel a goal | \`goalTitle\`, \`action\` | Use pause/cancel/resume |
-| \`set_autonomy_config\` | Configure autonomy | \`enabled\`, \`proactivenessLevel\` | Turn ON for background work |
-| \`social_list_platforms\` | List social platforms | none | X, Instagram, Facebook, LinkedIn, TikTok, Telegram |
-| \`social_connect\` | Connect social account | \`platform\`, \`accountName\`, \`accessToken\` (optional) | Link manually or paste API token |
-| \`social_oauth\` | OAuth login popup | \`platform\`, \`clientId\` | Login with your account (PKCE) |
-| \`social_disconnect\` | Disconnect social | \`platform\` | Remove linked account + tokens |
-| \`social_create_post\` | Create a post draft | \`platform\`, \`content\`, \`mediaUrls\`[], \`scheduleTimestamp\` | Draft or schedule |
-| \`social_publish\` | Publish a draft | \`postIndex\` | Real API if tokens exist |
-| \`social_schedule\` | Schedule a post | \`postIndex\`, \`timestamp\` | Set publish time |
-| \`social_list_posts\` | List all posts | \`platform\` (optional), \`status\` (optional) | Filter by status |
-| \`social_delete_post\` | Delete a post | \`postIndex\` | Remove it |
-| \`social_analytics\` | Platform analytics | \`platform\` | Followers, engagement, impressions |
-| \`connector_list\` | List API connectors | none | OpenWeather, NewsAPI, GitHub, Twilio, etc. |
-| \`connector_configure\` | Configure a connector | \`connectorId\`, \`apiKey\`, \`baseUrl\` | Set up with API key |
-| \`connector_call\` | Call via connector | \`connectorId\`, \`endpoint\`, \`method\`, \`body\` | Proxy through connector |
-| \`connector_test\` | Test a connector | \`connectorId\` | Verify configuration |
-| \`connector_raw\` | Raw HTTP request | \`url\`, \`method\`, \`headers\`, \`body\` | Direct API call |
-| \`connector_remove\` | Remove a connector | \`connectorId\` | Delete config + key |
-| \`gateway_add_route\` | Add gateway route | \`name\`, \`path\`, \`targetUrl\`, \`method\` | Create proxy route |
-| \`gateway_list\` | List gateway routes | none | All routes with status |
-| \`gateway_call\` | Call via route | \`routeId\`, \`body\` | Proxy through route |
-| \`gateway_proxy\` | Direct proxy call | \`url\`, \`method\`, \`headers\`, \`body\` | Proxied HTTP request |
-| \`gateway_remove_route\` | Remove a route | \`routeId\` | Delete a gateway route |
-| \`gateway_toggle\` | Enable/disable route | \`routeId\`, \`enabled\` | Toggle route on/off |
-| \`gateway_stats\` | Gateway stats | none | Calls, success rate, avg duration |
-| \`gateway_logs\` | Gateway logs | \`routeId\` (optional), \`limit\` | Recent call history |
-| \`telegram_setup\` | Connect Telegram bot + channel | \`botToken\`, \`channelId\`, \`channelName\` | Token from @BotFather |
-| \`telegram_status\` | Check Telegram config status | none | Shows token + channel |
-| \`telegram_channel_info\` | Get channel info | none | Title, members, description |
-| \`telegram_post\` | Post text to channel | \`text\`, \`parseMode\` (optional), \`silent\` | Supports HTML/Markdown |
-| \`telegram_post_photo\` | Post photo to channel | \`photoUrl\`, \`caption\` (optional) | With optional caption |
-| \`telegram_stats\` | Channel stats | none | Member + admin count |
-| \`telegram_disconnect\` | Remove Telegram config | none | Clears token + channel |
-| \`ssh_connect\` | SSH into a remote machine and execute a command | \`host\`, \`username\`, \`command\`, \`authType\` (password|key), \`password\`?, \`keyName\`?, \`port\`? (22) | First use auto-installs openssh-client in sandbox |
-| \`ssh_add_key\` | Store an SSH private key for key-based auth | \`name\`, \`key\` (PEM content) | Stored locally |
-| \`ssh_list_connections\` | List saved SSH connections and keys | none | |
-| \`ssh_remove_connection\` | Remove a saved SSH connection | \`id\` | |
-| \`db_query\` | Execute SQL query on PostgreSQL/MySQL/SQLite | \`type\`, \`query\`, \`connectionId\`? or \`host\`/\`port\`/\`database\`/\`username\`/\`password\`, \`filePath\`? (sqlite) | Installs DB client in sandbox |
-| \`sub_agent_call\` | Delegate one focused task to a Nexus specialist | \`prompt\`, \`provider\`? (optional), \`agent\`? (optional built-in persona) | Read-only web research and file-reading tools only; separate distinct tasks into concurrent calls |
-| \`db_configure\` | Save a database connection for reuse | \`id\`, \`type\`, \`host\`, \`database\`, \`username\`, \`port\`? | Credentials stored locally |
-| \`db_list_connections\` | List saved database connections | none | |
-| \`db_remove_connection\` | Remove a saved DB connection | \`id\` | |
-| \`ws_connect\` | Connect to a WebSocket endpoint | \`url\`, \`connectionId\`? | Real-time bidirectional |
-| \`ws_send\` | Send a message through WebSocket | \`connectionId\`, \`message\` | |
-| \`ws_receive\` | Read pending WebSocket messages | \`connectionId\` | Non-blocking |
-| \`ws_wait\` | Wait for a WebSocket message | \`connectionId\`, \`timeout\`? (30s) | Blocks until message arrives |
-| \`ws_close\` | Close a WebSocket connection | \`connectionId\` | |
-| \`ws_status\` | Check all WebSocket connections | none | |
-| \`mcp_server_add\` | Add an MCP server | \`name\`, \`transport\` (sse/stdio), \`url\`? (sse), \`command\`?/\`args\`[]? (stdio) | Connect it to unlock its tools |
-| \`mcp_server_list\` | List MCP servers | none | Status + transport |
-| \`mcp_server_remove\` | Remove an MCP server | \`serverId\` | Unregisters its tools |
-| \`mcp_server_test\` | Test MCP server connectivity | \`serverId\` | Verify config |
-| \`file_search\` | Search uploaded files by name, type, tags, or content | \`query\`?, \`type\`?, \`tag\`?, \`limit\`? | Searches persistent file store |
-| \`file_get\` | Retrieve full content of a previously uploaded file | \`id\` (from file_search) | Includes text or image data URL |
-| \`file_list\` | List all uploaded files, optionally filtered | \`source\`?, \`limit\`? | Sorted newest first |
-| \`file_delete\` | Permanently delete an uploaded file | \`id\` | Irreversible |
-| \`file_tag\` | Add or remove tags on a file for organization | \`id\`, \`action\` (add|remove), \`tag\` | Tags are lowercase |
-| \`network_scan\` | Scan TCP ports on a host to detect open services | \`host\`, \`ports\` (e.g. "22,80,443" or "1-1000"), \`timeout\`? | Uses sandbox nmap/nc |
-| \`network_connectivity\` | Test connectivity to an endpoint | \`host\`, \`port\`, \`protocol\`? (tcp|udp), \`timeout\`? | Returns reachable status |
-  | \`network_detect\` | Auto-detect local network services | \`subnet\`? (auto), \`timeout\`? (1s) | Scans full /24 subnet (1-254), probes 35+ common ports on live hosts |
-| \`security_install_tools\` | Install security tools in sandbox | none | iptables, whois, nmap, lsof, tcpdump, bind-tools |
-| \`security_scan\` | Comprehensive security scan of this device | \`deep\`? (boolean) | Processes, ports, connections, auth logs, SUID, cron, temp files |
-| \`security_firewall\` | Block or allow network traffic | \`action\` (block_all|block_incoming|block_outgoing|allow_all|status) | iptables-based, auto-installs if missing |
-| \`security_threat_intel\` | Check IPs/domains/hashes against threat databases | \`targets\` (array, max 10) | AbuseIPDB, VirusTotal, ThreatFox |
-| \`security_trace\` | Geolocate an IP address or domain | \`target\` | Returns city, ISP, coordinates, WHOIS |
-| \`security_quarantine\` | Emergency quarantine — kill threats + block all traffic | \`confirm\` (must be true) | Destructive — call only when threat is confirmed |
-| \`smart_discover\` | Discover smart home devices and smart TVs on local network (UPnP/mDNS) | \`timeout\`?, \`filter_type\`?, \`filter_brand\`? | Scans for TVs, lights, thermostats, speakers, switches |
-| \`smart_cast\` | Cast media URL to a smart TV for playback | \`url\`, \`deviceId\`, \`title\`? | Supports Samsung Tizen, LG webOS, Android TV, DLNA |
-| \`smart_control\` | Send command to smart device (power, volume, input, etc.) | \`deviceId\`, \`command\`, \`level\`?, \`input\`?, \`appId\`?, \`mode\`?, \`color\`? | TVs: power/volume/input/remote keys. Lights: brightness/color. Thermostats: temperature/mode |
-| \`smart_status\` | Get real-time status of a smart device | \`deviceId\` | Power, volume, input, media state for TVs |
-| \`neura_query\` | Query the knowledge graph — ranked by relevance, recency, connectivity | \`query\`, \`maxResults\`? | Recall people, projects, concepts & how they connect |
-| \`neura_related\` | Trace how entities are connected, N degrees deep | \`name\`, \`depth\`? (1-3) | Shows actual connection paths |
-| \`neura_stats\` | Knowledge graph statistics & network density | none | Entities, connections, hubs, growth |
-| \`neura_add\` | Store new knowledge — entity or connection | \`name\`, \`type\`, \`description\`, \`aliases\`?, \`confidence\`? | Auto-links to related knowledge |
-| \`neura_evolve\` | See how the knowledge graph has grown | \`days\`? | New entities, new links, deepening confidence |
-| \`neura_forget\` | Delete a fact/entity from the knowledge graph | \`name\` | Permanent — use when user asks to forget something |
-| \`neura_merge\` | Merge duplicate entities into one | \`keep\`, \`drop\` | Combines aliases, rewires relationships |
-${(() => {
-  const connectedMCPTools: string[] = [];
-  const mcpManager = MCPManager;
-  for (const tool of mcpManager.getConnectedTools()) {
-    connectedMCPTools.push(`| \`${tool.id}\` | [MCP:${tool.serverId}] ${tool.description} | ${JSON.stringify(tool.inputSchema || {})} | MCP tool from ${tool.serverId} |`);
-  }
-  return connectedMCPTools.join('\n');
-})()}
+${toolTable}
 
 ## Tool calling examples
 
@@ -736,8 +588,8 @@ These appear as clickable buttons the user can tap to continue the conversation.
 
 When this is the user's very first message (no prior conversation history), you must run a comprehensive diagnostic and present a dramatic briefing. Call these tools in sequence:
 
-1. \`device_plugin_battery\` — check battery status
-2. \`device_plugin_info\` — get system, storage, and platform info
+1. \`device_health\` — check battery, storage, and system health
+2. \`device_info\` — get system, storage, and platform info
 3. \`web_search\` — search for "current time" to verify internet connectivity
 4. \`media_access\` with action "status" — check media capabilities
 

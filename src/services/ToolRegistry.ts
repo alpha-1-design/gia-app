@@ -1,5 +1,12 @@
 import type { Tool } from './tools/types';
 
+export interface ResolvedToolSchema {
+  description: string;
+  type: 'object';
+  properties: Record<string, unknown>;
+  required: string[];
+}
+
 class ToolRegistry {
   private tools: Map<string, Tool> = new Map();
 
@@ -27,11 +34,16 @@ class ToolRegistry {
     return tool?.schema || null;
   }
 
-  public getAllToolSchemas(): Record<string, NonNullable<Tool['schema']>> {
-    const record: Record<string, NonNullable<Tool['schema']>> = {};
+  public getAllToolSchemas(): Record<string, ResolvedToolSchema> {
+    const record: Record<string, ResolvedToolSchema> = {};
     for (const tool of this.getAll()) {
       if (tool.schema) {
-        record[tool.id] = tool.schema;
+        record[tool.id] = {
+          description: tool.description || '',
+          type: 'object',
+          properties: tool.schema.properties ?? {},
+          required: Array.isArray(tool.schema.required) ? tool.schema.required : [],
+        };
       }
     }
     return record;

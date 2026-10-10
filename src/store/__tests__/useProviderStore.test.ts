@@ -2,13 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('../idb-storage', () => {
   const store = new Map<string, string>();
-  return {
-    idbStorage: {
-      getItem: vi.fn(async (name: string) => store.get(name) ?? null),
-      setItem: vi.fn(async (name: string, value: string) => { store.set(name, value); }),
-      removeItem: vi.fn(async (name: string) => { store.delete(name); }),
-    },
+  const impl = {
+    getItem: vi.fn(async (name: string) => store.get(name) ?? null),
+    setItem: vi.fn(async (name: string, value: string) => { store.set(name, value); }),
+    removeItem: vi.fn(async (name: string) => { store.delete(name); }),
   };
+  return { idbStorage: impl, idbStorageWriteThrough: impl };
 });
 
 // Mock providerRegistry with a minimal set of providers
@@ -30,7 +29,13 @@ vi.mock('../../services/ProviderRegistry', () => ({
     getModels: vi.fn((id: string) => (mockProviders[id]?.models || []).map(m => ({ ...m, tools: true, vision: false }))),
     getDefaultModel: vi.fn((id: string) => mockProviders[id]?.models[0]?.id || ''),
     getNeedsApiKey: vi.fn((id: string) => mockProviders[id]?.needsApiKey ?? true),
+    applyCatalog: vi.fn(() => ['openai']),
   },
+}));
+
+const { mockLoadCatalog } = vi.hoisted(() => ({ mockLoadCatalog: vi.fn() }));
+vi.mock('../../services/ModelsDevCatalog', () => ({
+  loadModelsDevCatalog: mockLoadCatalog,
 }));
 
 vi.mock('../../services/CorsProxy', () => ({
@@ -304,6 +309,26 @@ describe('useProviderStore', () => {
       // local-llm has listingType 'openai' in the mock
       expect(models).toBeDefined();
       expect(Array.isArray(models)).toBe(true);
+    });
+  });
+
+  describe('refreshModelsDevCatalog', () => {
+    it('applies the catalog and refreshes non-live provider lists', async () => {
+      await useProviderStore.getState().loadProviders();
+      mockLoadCatalog.mockResolvedValue({ openai: { id: 'openai', name: 'OpenAI', models: {} } });
+
+      const ok = await useProviderStore.getState().refreshModelsDevCatalog();
+
+      expect(ok).toBe(true);
+      expect(mockLoadCatalog).toHaveBeenCalledWith(false);
+      expect(useProviderStore.getState().availableModels.openai).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'gpt-4o' })]),
+      );
+    });
+
+    it('returns false when no catalog is available', async () => {
+      mockLoadCatalog.mockResolvedValue(null);
+      expect(await useProviderStore.getState().refreshModelsDevCatalog()).toBe(false);
     });
   });
 });

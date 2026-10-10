@@ -48,13 +48,14 @@ describe('AgentSwarmDashboard — session scoping', () => {
     expect(container.textContent).toContain('Nexus');
   });
 
-  it('stacks agent cards vertically at full width instead of a horizontal-scroll strip', () => {
+  it('renders a delegation tree: GIA orchestrator root with one branch per specialist', () => {
     useGiaStore.setState({ activeSessionId: 'session-A' });
     useNexusStore.getState().startRun('run-1', 'session-A', false, [makeAgent('a1'), makeAgent('a2')]);
 
     const { container } = render(<AgentSwarmDashboard />);
-    // The old horizontal-scroll strip class should be gone entirely.
+    // No horizontal-scroll strip — branches connect to a vertical spine instead.
     expect(container.querySelector('.overflow-x-auto')).toBeNull();
+    expect(container.textContent).toContain('orchestrator');
 
     const cards = container.querySelectorAll('[style*="width: 100%"]');
     expect(cards.length).toBeGreaterThanOrEqual(2);

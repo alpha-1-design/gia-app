@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
 const mockGiaState = {
   userProfile: { name: '', bio: '', goals: '' },
@@ -91,8 +91,13 @@ vi.mock('../../config/gia-identity', () => ({
 }));
 
 const { buildGiaSystem } = await import('../buildGiaSystem');
+const { registerAllTools } = await import('../tools');
 
 describe('buildGiaSystem', () => {
+  beforeAll(() => {
+    registerAllTools();
+  });
+
   beforeEach(() => {
     mockGetState = {};
     vi.clearAllMocks();
@@ -108,10 +113,20 @@ describe('buildGiaSystem', () => {
     expect(result).toContain('GIA');
   });
 
-  it('includes tool table with web_search', () => {
+  it('includes tool table generated from the registry', () => {
     const result = buildGiaSystem();
     expect(result).toContain('web_search');
     expect(result).toContain('terminal_run');
+    expect(result).toContain('email_send');
+    expect(result).toContain('sub_agent_call');
+  });
+
+  it('keeps internal-only tools out of the tool table', () => {
+    const result = buildGiaSystem();
+    expect(result).not.toContain('device_plugin_info');
+    expect(result).not.toContain('gateway_daemon_start');
+    expect(result).not.toContain('geolocation_get_current_position');
+    expect(result).not.toContain('share_content');
   });
 
   it('routes Build mode project files through the sandbox workspace', () => {
@@ -123,7 +138,7 @@ describe('buildGiaSystem', () => {
     const result = buildGiaSystem();
     expect(result).toContain('Use `sandbox_fs` for files and folders in the sandbox or active project.');
     expect(result).toContain('writing a nested file creates its parent folders');
-    expect(result).toContain('Not for Build project source files.');
+    expect(result).toContain('Do not use `filesystem_write` for project source');
   });
 
   it('includes user name when provided', () => {

@@ -54,7 +54,7 @@ describe('NexusPage', () => {
 
     expect(screen.getByText('Last run')).toBeInTheDocument();
     expect(screen.getAllByText('Atlas')).toHaveLength(2);
-    expect(screen.getByText('Complete')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Clear last sub-agent run' }));
     expect(screen.getByText('No delegation running')).toBeInTheDocument();
   });
