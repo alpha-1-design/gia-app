@@ -1,6 +1,6 @@
 {
-  "version": "2.4.0.16",
-  "updated": "2026-10-07",
+  "version": "2.4.0.18",
+  "updated": "2026-10-10",
   "sections": [
     {
       "id": "start",
@@ -182,10 +182,10 @@
       "id": "terminal",
       "title": "Terminal & Linux Shell",
       "blocks": [
-        { "type": "p", "text": "GIA includes an on-device Linux terminal powered by Alpine Linux running in proot (no root required). Install it from Settings → Terminal and use it like Kai 9000." },
+        { "type": "p", "text": "GIA includes a battle-tested on-device Linux terminal — Alpine 3.21 (~3MB) or Ubuntu 24.04 (~28MB) via proot, no root required — verified on TECNO KL5 Android 14 arm64 (275 MB → 1129 MB after Full Install, Shell proot + PR_SET_DUMPABLE, apk/apt). Install from Settings → Terminal → System." },
         { "type": "ul", "items": [
-          "Install: Go to Settings → Terminal → System → tap 'Install Terminal'. Downloads ~3MB rootfs from Alpine CDN.",
-          "Full Install: After rootfs, tap 'Full Install' to add Python, Node.js, Git, build tools, and create workspace folders.",
+          "Install: System → Install Alpine (3 mirrors, 3 retries each) or Ubuntu (arm64/24.04.5 flat URL). Rootfs extraction now strips ./ prefix and defers applet symlinks — no more EROFS on /bin/sh.",
+          "Full Install: One-tap batch adds Python 3.12, Node 22, Git, build tools and workspace folders (data/documents/downloads/projects/scripts/tools). Hides after first success; use Update Packages thereafter.",
           "Packages: Browse and install packages from the Packages tab — Languages, Dev Tools, Networking, Data, Media.",
           "Files: Manage workspace folders (projects, downloads, scripts, documents, data, tools).",
           "MCPs: Browse available MCP servers for tool integrations.",
@@ -198,12 +198,13 @@
       "id": "providers",
       "title": "Providers & Models",
       "blocks": [
-        { "type": "p", "text": "GIA connects to 20+ AI providers via their APIs. You bring your own keys — nothing is shared or stored on external servers." },
+        { "type": "p", "text": "GIA connects to 23 AI providers — 22 keyed + Free (Pollinations) with no signup (20/min, 500/day, 60s cooldown) that makes a fresh install chat immediately. You bring your own keys otherwise — nothing is shared or stored externally." },
         { "type": "ul", "items": [
           "OpenAI: GPT-4o, GPT-5.x, o3, o4-mini — industry standard, tool calling, vision.",
           "Anthropic: Claude Opus 4.x, Sonnet 4.x, Haiku 4.x — extended thinking, 200k context.",
           "Google Gemini: Gemini 2.5 Flash/Pro — free tier, 1M context, multimodal.",
           "OpenCode Zen: Curated models including DeepSeek V4 Flash Free — great free option.",
+          "Free (Pollinations): GPT-OSS 20B via https://text.pollinations.ai/openai, no key, rate-limited client-side — the default on fresh installs.",
           "OpenRouter: Gateway to hundreds of models, several free (Gemma, Llama, DeepSeek).",
           "Groq: Ultra-fast inference, all models free, great for quick responses.",
           "HuggingFace: Open-weight models via API.",

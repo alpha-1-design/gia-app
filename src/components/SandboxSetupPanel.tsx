@@ -435,8 +435,8 @@ export default function SandboxSetupPanel() {
               </div>
             ) : null}
 
-            {/* Full Install — only shown after rootfs is ready */}
-            {setupStatus?.installed && !fullInstalling && (
+            {/* Full Install — only until anything is installed; then Update Packages covers it */}
+            {setupStatus?.installed && !fullInstalling && installedPkgs.length === 0 && (
               <button
                 onClick={handleFullInstall}
                 className="w-full bg-violet-600/80 hover:bg-violet-500/80 rounded-xl p-4 flex items-center gap-3 transition-colors"

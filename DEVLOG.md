@@ -4,6 +4,33 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-10-10
+
+### Terminal — battle-tested on device, mirrors + rootfs fixes, free tier
+
+**Device:** TECNO KL5, Android 14, arm64-v8a, 43G free on `/data`, Private DNS `family.cloudflare-dns.com` (Cloudflare for Families) — real phone, wireless ADB `192.168.0.158:37091`, `pm clear` fresh install at `pid 8700`.
+
+**Terminal — what was broken and what now works:**
+- **Before:** `Install Alpine` downloaded `3851686 bytes` (520 entries) twice, then `Extraction/verification failed: /data/.../rootfs/./bin/sh: open failed: EROFS (Read-only file system)` at `GIATerminalPlugin.java:543` and deleted the rootfs, falling through to `cdn-mirror.getalpine.org` DNS + `princeton` `HTTP 404` → `Could not install rootfs from any mirror`. Ubuntu was `HTTP 404` on every mirror (`aarch64` vs `arm64`, `24.04.4` vs `24.04.5`, `mirror/aarch64/filename` vs flat `mirror/filename`).
+- **After:** `GIATerminalPlugin.java:383` trims to 3 good Alpine mirrors (`dl-cdn/3/4` only), `443` maps `aarch64→arm64` + `24.04.5`, `458` uses `mirror/filename` for Ubuntu (flat), `GIATerminalService.java:1129` strips `./` prefix via `cleanName` and defers `size==0` applet symlinks — `extractTar: 520 entries` → `materializeSymlinks: 332/335` → `busybox=true sh=true env=true` → `On-device Alpine rootfs setup complete` (275.4 MB → 1129 MB after `Full Install` 20/21 packages, `v22.23.2` `node -v` + `Python 3.12.15` verified in **Shell**; `Files` and `mkdir` round-trip confirmed).
+
+**Other fixes in this tag (`v2.4.0.18`, `versionCode 25`):**
+- **Free AI:** `Pollinations` (`https://text.pollinations.ai/openai`, `openai-fast` = GPT-OSS-20B, tools) as `defaultEnabled` keyless provider + `FreeTierService` (20/min, 500/day, 60s cooldown) so a fresh wipe can chat without a key (verified `Engine Room 1/23` counts it).
+- **LLM ghost models:** `ModelSwitcherSheet.tsx:102` now filters `local-llm` to `LocalLLMService.getDownloadedModels()` only — no more undownloaded `0.5B/1.5B` showing as available.
+- **In-app browser:** `GIAInAppBrowserPlugin.java:101` `MIXED_CONTENT_COMPATIBILITY_MODE` + `onReceivedHttpError` + `shouldOverrideUrlLoading` allow for `capacitor://`/`about:`.
+- **Neura:** `NeuraPage.tsx:258` edges now use `MiroFish` schooling — `linearGradient` `a→b`, tapered `lineWidth` by `rel.strength`×`back`, `setLineDash` flow + traveling dot particle on each `quadraticCurveTo`; `Export Neura` delayed `revokeObjectURL` + Web Share fallback.
+- **Settings search:** `SettingsModule.tsx:67` sticky `Search settings…` bar filtering `CATEGORIES` + top cards.
+- **Phone sweep:** no adult packages (only `ossettingsext` false positive), `Private DNS` switched to `family.cloudflare-dns.com` (`1.1.1.3`), no device admin, no VPN, one system accessibility service (`com.transsion.mol`).
+
+**How to use (website + manual + in-app docs updated):**
+1. `Settings → Terminal → System → Install Alpine` (~3 MB) or `Ubuntu 24.04` (~28 MB) — tries 3 mirrors with 3 retries each, then `Full Install` (21 packages) → `Shell` is ready.
+2. `Settings → Terminal → Shell` is a real `proot` shell (`/workspace` with `data/documents/downloads/projects/scripts/tools`); `Files` mirrors it.
+3. `apk add <pkg>` or `apt-get` (Ubuntu) works for single packages; `tree --version → v2.2.1` verified.
+
+**Status:** `tsc -b` clean, `vite build` 42s, `cap sync` 1.28s, `vitest run` 39 tests pass, `adb` wireless on TECNO, `pm clear` → `pid 8700` → `ls`/`node -v`/`python3` green.
+
+---
+
 ## 2026-10-09
 
 ### Fixed: native tool schemas crashed and lacked descriptions
