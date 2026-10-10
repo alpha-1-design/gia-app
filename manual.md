@@ -1,4 +1,4 @@
-# GIA v2.4.0.16 Beta — User Manual
+# GIA v2.4.0.17 Beta — User Manual
 
 GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
 
@@ -18,6 +18,13 @@ But we're not stopping at two screens.
 - **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
 
 They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+
+## 🆕 What's New in v2.4.0.17 Beta
+
+| Change | Description |
+|-----|-------------|
+| **Message alignment** | Your sent messages now sit next to your avatar instead of floating at the opposite side of the screen. |
+| **Hey Jarvis reliability** | If GIA hears the wake word while the app is in the background, a high-priority “Tap to talk” alert now appears even when Android blocks GIA from opening itself. If the system stopped the listener while you were away, it restarts when you reopen the app. |
 
 ## 🆕 What's New in v2.4.0.16 Beta
 

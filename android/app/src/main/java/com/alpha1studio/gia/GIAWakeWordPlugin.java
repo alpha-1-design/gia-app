@@ -40,6 +40,7 @@ public class GIAWakeWordPlugin extends Plugin {
     protected void handleOnResume() {
         super.handleOnResume();
         GIAWakeWordService.setAppInForeground(true);
+        GIAWakeWordService.rearmIfNeeded(getContext());
     }
 
     @Override

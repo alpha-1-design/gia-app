@@ -4,6 +4,25 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-10-10
+
+### Release 2.4.0.17 (version, Node/CI, avatar alignment, wake word re-arm)
+**Files:** version strings across `src/`, `package.json`, `package-lock.json`, `android/app/build.gradle`
+(`versionCode` 23 to 24), `README.md`, `manual.md`, `public/docs/gia-docs.json`; `.github/workflows/*.yml`;
+`tsconfig.app.json`; `src/components/MessageList.tsx` + `MessageListAlignment.test.tsx`;
+`GIAWakeWordService.java`, `GIAWakeWordPlugin.java`
+- **Node/CI:** actions moved off Node 20 runtimes (checkout v5, setup-node v5, setup-java v5,
+  upload-artifact v6, action-gh-release v3); project Node 22 to 24; `@types/node` to 24; runners pinned to
+  `ubuntu-24.04` (ubuntu-latest moves to Ubuntu 26 on 2026-10-19). `@types/node` 24 stopped declaring
+  `Array.prototype.at`, exposing four `.at()` calls under `lib: ES2020`; `tsconfig.app.json` lib is now ES2022
+  (typings only, target unchanged).
+- **Avatar:** user messages used `flex-row-reverse` with a left-aligned bubble in a `flex-1` column, so the
+  bubble sat far from the right-pinned avatar. User column is now `items-end`; header `justify-end`.
+- **Wake word:** engine verified against the real models with a Python port (36/36 synthetic detections,
+  clean negatives, no problem after `reset()`, level-independent); no threshold change. Fixed the background
+  "Tap to talk" alert (was on a LOW-importance channel, so it never surfaced) and added re-arm on app resume
+  for a listener the system killed. See `docs/wake-word.md` for the measured noise limits.
+
 ## 2026-10-09
 
 ### Fixed: native tool schemas crashed and lacked descriptions

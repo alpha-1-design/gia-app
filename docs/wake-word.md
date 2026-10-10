@@ -56,7 +56,16 @@ yourself before charging for GIA. See `assets/wakeword/README.md`.
 
 - English phrases only (the upstream training uses English TTS).
 - Android 12+ may refuse to start a microphone foreground service from the background; the
-  service reports this through `wakeWordError`.
+  service reports this through `wakeWordError`. If the listener is enabled but not running when
+  the app returns to the foreground, `GIAWakeWordPlugin.handleOnResume` restarts it from the
+  saved settings (`GIAWakeWordService.rearmIfNeeded`).
+- A detection while the app is in the background posts a "Tap to talk" alert on its own
+  high-importance channel (`GIAWakeWordAlertChannel`); the ongoing listening notification stays low
+  importance. Channel importance cannot be raised after creation, hence the separate id.
+- Accuracy depends on the room: measured with the bundled models on synthetic speech, detection
+  is reliable above about 15 dB signal-to-noise and drops quickly below it (white noise: 5/6 at
+  10 dB, 2/6 at 0 dB; competing speech: 4/6 at 15 dB, 2/6 at 10 dB). Raising the sensitivity slider
+  trades missed detections for false ones; tune it on the device in Settings > Voice.
 - A detection that cold-starts the app is delivered via `getPendingWakeWord()`; only the voice
   control hook polls it today.
 - Not yet verified on a physical device: the Java engine matches the reference Python

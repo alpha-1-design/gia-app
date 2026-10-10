@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.16 Beta';
+const VERSION = '2.4.0.17 Beta';
 
 const sections = [
   {
@@ -16,7 +16,7 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
-      'GIA 2.4.0.16 is a beta release: new workflows and Android-native features are still being tested, and feedback is welcome.',
+      'GIA 2.4.0.17 is a beta release: new workflows and Android-native features are still being tested, and feedback is welcome.',
       'Root Terminal now has a Shell tab: run commands in the on-device Alpine Linux environment with live output, a Stop button, command history, and a remembered working directory. Full-screen programs such as nano and vim are not supported yet.',
       'Settings → Voice now shows the “Hey Jarvis” openWakeWord status up front (On, Off, or Unavailable with the reason), and the older in-chat phrase is labelled separately.',
       'Added an experimental Android on-device wake-word engine with the “Hey Jarvis” phrase. The browser build does not provide native wake-word listening.',
@@ -52,6 +52,8 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
+      'Your own messages now sit right next to your avatar. The bubble was left-aligned in a full-width column while the avatar was pinned to the right edge, so short messages ended up far from it.',
+      'Wake word is more dependable in the background: a “Heard Hey Jarvis” alert now actually pops up when Android blocks GIA from opening itself, and listening restarts automatically when you return to the app if the system stopped it while you were away.',
       'On-device Whisper now shows real download progress, the reason a download failed, and a Retry button. “Delete model” removes the downloaded files (Unload only freed memory before).',
       'Terminal package install and update no longer report failure when Alpine only complains about directory permissions inside the sandbox; GIA checks what was actually installed or still out of date.',
       'Full Install actually finishes. It ran one `apk add` per package with `--no-cache`, so each of the 21 packages re-fetched the whole index; when a big one (build-base) took long enough to hit the native timeout, the process was killed mid-transaction and left the package manager\'s lock behind — every package after that failed, with no explanation. Installs now run as one batch, clear a stale lock first, retry failures individually, and show the real error instead of a bare list of names.',
@@ -94,7 +96,8 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.16 Beta.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.17 Beta.',
+      'Build tooling moved to Node.js 24 and current GitHub Actions releases (the previous ones were deprecated), and CI runners are pinned to Ubuntu 24.04 ahead of the ubuntu-latest change to Ubuntu 26.',
     ],
   },
 ];

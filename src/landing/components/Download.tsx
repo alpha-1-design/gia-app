@@ -98,13 +98,13 @@ export function Download() {
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/15 border border-violet-400/20 text-violet-200 text-[10px] font-bold uppercase tracking-widest mb-4">
                 <Smartphone size={12} />
-                Phone beta · v2.4.0.16
+                Phone beta · v2.4.0.17
               </div>
               <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3">
                 A real assistant for your Android device.
               </h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                GIA v2.4.0.16 Beta brings voice notes, an on-device wake-word experiment, Build Studio,
+                GIA v2.4.0.17 Beta brings voice notes, an on-device wake-word experiment, Build Studio,
                 GitHub project workflows, and an experimental in-app browser. Terminal and workspace
                 reliability improvements are included too. Beta features are still being tested;
                 availability varies between Android and web.
@@ -124,7 +124,7 @@ export function Download() {
             <span className="text-zinc-700">·</span>
             <span>Android APK available from GitHub Releases</span>
             <a href="https://github.com/alpha-1-design/gia-app/releases" target="_blank" rel="noopener noreferrer" className="text-violet-300 hover:text-violet-200 font-semibold transition-colors">
-              View v2.4.0.16 Beta release →
+              View v2.4.0.17 Beta release →
             </a>
           </div>
         </motion.div>
