@@ -123,7 +123,7 @@ export function isRecoverableError(msg: string): boolean {
 export function pickFallbackProvider(exclude: string[]): { provider: string; model: string } | null {
   const { providers } = useProviderStore.getState();
   const candidates = Object.entries(providers)
-    .filter(([id, cfg]) => !exclude.includes(id) && cfg.enabled && (id === 'local-llm' || cfg.apiKey))
+    .filter(([id, cfg]) => !exclude.includes(id) && cfg.enabled && (!providerRegistry.getNeedsApiKey(id) || cfg.apiKey))
     .map(([id, cfg]) => ({ provider: id, model: cfg.model }));
   if (candidates.length === 0) return null;
   return ProviderMonitor.getBestProvider(candidates) || candidates[0];
@@ -132,7 +132,7 @@ export function pickFallbackProvider(exclude: string[]): { provider: string; mod
 /** Number of providers the person has actually connected (enabled + credentialed). */
 export function countConnectedProviders(): number {
   const { providers } = useProviderStore.getState();
-  return Object.entries(providers).filter(([id, cfg]) => cfg.enabled && (id === 'local-llm' || cfg.apiKey)).length;
+  return Object.entries(providers).filter(([id, cfg]) => cfg.enabled && (!providerRegistry.getNeedsApiKey(id) || cfg.apiKey)).length;
 }
 
 /**

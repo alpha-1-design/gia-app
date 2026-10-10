@@ -96,11 +96,11 @@ class ErrorHandlingService {
       // healthiest one first instead of whatever order it happens to appear
       // in the config.
       if (!recovered) {
-        const { providers, getActiveProviders } = useProviderStore.getState();
+        const { getActiveProviders } = useProviderStore.getState();
         const allActive = getActiveProviders();
         const statusRank = (s: string) => (s === 'healthy' ? 0 : s === 'degraded' ? 1 : 2);
         const fallbackProviders = allActive
-          .filter((p) => p.id !== effectiveProvider && providers[p.id]?.apiKey && providers[p.id]?.enabled)
+          .filter((p) => p.id !== effectiveProvider)
           .sort((a, b) => statusRank(ProviderMonitor.getHealth(a.id, a.config.model).status) - statusRank(ProviderMonitor.getHealth(b.id, b.config.model).status));
 
         for (const fb of fallbackProviders) {

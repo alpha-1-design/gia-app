@@ -5,7 +5,7 @@ import {
   Terminal, User, Save, ChevronRight,
   Zap, Smartphone, Sun, Moon, Sparkles,
   UserCircle, PlugZap, Battery, Cpu,   Puzzle, Info,
-  Network, Bot, Activity, Download, CheckCircle, XCircle, Shield, ShieldCheck, Globe, Brain, Laptop,
+  Network, Bot, Activity, Download, CheckCircle, XCircle, Shield, ShieldCheck, Globe, Brain, Laptop, Search,
 } from 'lucide-react';
 import { useGiaStore } from '../store/useGiaStore';
 import { useProviderStore } from '../store/useProviderStore';
@@ -65,6 +65,7 @@ const SettingsModule: React.FC = () => {
   const providers = useProviderStore(s => s.providers);
 
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('main');
+  const [settingsQuery, setSettingsQuery] = useState('');
   // The main list is conditionally unmounted whenever settingsPage switches to
   // a sub-page (see the `if (settingsPage === X) return <SubPage/>` block
   // below), so its scroll container is a brand-new DOM node each time you
@@ -128,6 +129,9 @@ const SettingsModule: React.FC = () => {
   };
 
   const connectedCount = Object.keys(providers).filter(p => providers[p]?.enabled).length;
+  const q = settingsQuery.toLowerCase().trim();
+  const match = (label: string, desc: string, extra = '') => !q || label.toLowerCase().includes(q) || desc.toLowerCase().includes(q) || extra.toLowerCase().includes(q);
+  const filteredCategories = CATEGORIES.filter(c => match(c.label, c.desc, c.sections));
 
   // ── Sub-page routing ──────────────────────────────────────────────
   // Each sub-page gets its own named boundary. A crash on one screen (e.g.
@@ -177,6 +181,18 @@ const SettingsModule: React.FC = () => {
       className="flex flex-col h-full overflow-y-auto"
       style={{ background: 'var(--gia-bg)', padding: '20px 16px', gap: '16px' }}
     >
+      {/* Settings search */}
+      <div className="gia-card p-2 flex items-center gap-2">
+        <Search size={14} style={{ color: 'var(--gia-muted)' }} />
+        <input
+          value={settingsQuery}
+          onChange={e => setSettingsQuery(e.target.value)}
+          placeholder="Search settings… (e.g. terminal, neura, permissions)"
+          className="flex-1 bg-transparent outline-none text-xs"
+          style={{ color: 'var(--gia-text)' }}
+        />
+        {settingsQuery && <button onClick={() => setSettingsQuery('')} className="text-[11px] px-2 py-1 rounded" style={{ color: 'var(--gia-muted)', background: 'var(--gia-surface-2)' }}>Clear</button>}
+      </div>
       {/* Profile (compact) */}
       <div className="gia-card p-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div className="flex items-center justify-between">
@@ -473,7 +489,10 @@ const SettingsModule: React.FC = () => {
         All Settings
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {CATEGORIES.map(cat => (
+        {filteredCategories.length === 0 && q ? (
+          <p className="text-xs text-center py-4 col-span-full" style={{ color: 'var(--gia-muted)' }}>No settings match “{settingsQuery}”</p>
+        ) : (
+          filteredCategories.map(cat => (
           <button key={cat.id} onClick={() => setSettingsPage(cat.id)}
             className="gia-card p-4 flex items-start gap-4 w-full text-left tap-feedback"
             style={{ transition: 'border-color 0.2s' }}>
@@ -490,7 +509,8 @@ const SettingsModule: React.FC = () => {
             </div>
             <ChevronRight size={14} style={{ color: 'var(--gia-muted)', flexShrink: 0, marginTop: 4 }} />
           </button>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Neura + Nexus cards */}

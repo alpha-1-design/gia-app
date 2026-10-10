@@ -68,7 +68,7 @@ interface GiaProviderState {
 
 function getActiveProvidersFromState(providers: Record<string, ProviderConfig>): { id: string; config: ProviderConfig }[] {
   return Object.entries(providers)
-    .filter(([, cfg]) => cfg.enabled && cfg.apiKey && cfg.apiKey.trim().length > 0)
+    .filter(([id, cfg]) => cfg.enabled && (!providerRegistry.getNeedsApiKey(id) || (cfg.apiKey?.trim().length ?? 0) > 0))
     .map(([id, config]) => ({ id, config }));
 }
 
@@ -106,7 +106,7 @@ export const useProviderStore = create<GiaProviderState>()(
               providers[id] = {
                 apiKey: '',
                 model: providerRegistry.getDefaultModel(id),
-                enabled: false,
+                enabled: providerRegistry.getProvider(id)?.defaultEnabled ?? false,
                 baseUrl: providerRegistry.getProvider(id)?.baseUrl,
               };
             }
@@ -125,8 +125,16 @@ export const useProviderStore = create<GiaProviderState>()(
             }
           }
           let activeProvider = s.activeProvider;
-          if (!providers[activeProvider]) {
-            activeProvider = ids[0] || 'opencode';
+          // Onboarding: if the remembered provider can't work yet (needs a key
+          // that isn't set), fall back to a provider that does — a connected
+          // key first, otherwise the keyless free tier — so a fresh install is
+          // usable without pasting an API key.
+          const activeCfg = providers[activeProvider];
+          const activeUsable = !!activeCfg && (!providerRegistry.getNeedsApiKey(activeProvider) || !!activeCfg.apiKey?.trim());
+          if (!activeUsable) {
+            const keyed = ids.find((id) => !!providers[id]?.apiKey?.trim() && providers[id]?.enabled !== false);
+            const keyless = ids.find((id) => !providerRegistry.getNeedsApiKey(id) && providers[id]?.enabled);
+            activeProvider = keyed || keyless || ids[0] || 'opencode';
           }
           return { providers, availableModels, activeProvider, initialised: true };
         });
@@ -224,7 +232,7 @@ export const useProviderStore = create<GiaProviderState>()(
 
         try {
           // Providers without dynamic listing
-          if (listingType === 'huggingface' || listingType === 'local') {
+          if (listingType === 'huggingface' || listingType === 'local' || p === 'pollinations') {
             return markCatalog(providerRegistry.getModels(p));
           }
 

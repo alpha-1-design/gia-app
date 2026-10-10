@@ -384,8 +384,6 @@ public class GIATerminalPlugin extends Plugin {
         "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases",
         "https://dl-3.alpinelinux.org/alpine/v3.21/releases",
         "https://dl-4.alpinelinux.org/alpine/v3.21/releases",
-        "https://cdn-mirror.getalpine.org/alpine/v3.21/releases",
-        "https://mirror.math.princeton.edu/pub/alpine/v3.21/releases",
     };
     private static final String[] UBUNTU_MIRRORS = {
         "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release",
@@ -440,8 +438,10 @@ public class GIATerminalPlugin extends Plugin {
         rootfsDir.mkdirs();
 
         String[] mirrors = isUbuntu ? UBUNTU_MIRRORS : ALPINE_MIRRORS;
+        // Ubuntu uses arm64/amd64, not aarch64/x86_64, and lives flat in the release dir (no arch subdir)
+        String ubuntuArch = "aarch64".equals(arch) ? "arm64" : "x86_64".equals(arch) ? "amd64" : arch;
         String filename = isUbuntu
-            ? "ubuntu-base-24.04.4-base-" + arch + ".tar.gz"
+            ? "ubuntu-base-24.04.5-base-" + ubuntuArch + ".tar.gz"
             : "alpine-minirootfs-3.21.0-" + arch + ".tar.gz";
         Exception lastError = null;
 
@@ -455,7 +455,7 @@ public class GIATerminalPlugin extends Plugin {
         // failure. Now each mirror gets a full download+extract+verify
         // attempt, and a bad result on one mirror moves to the next.
         for (String mirror : mirrors) {
-            String downloadUrl = mirror + "/" + arch + "/" + filename;
+            String downloadUrl = isUbuntu ? mirror + "/" + filename : mirror + "/" + arch + "/" + filename;
             emitProgress("downloading", 0, "Trying " + mirror.replace("https://", "") + "...");
             Log.i(TAG, "Downloading rootfs from: " + downloadUrl);
 

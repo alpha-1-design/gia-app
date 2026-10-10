@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw, ExternalLink } from 'lucide-react';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../../services/ProviderRegistry';
+import LocalLLMService from '../../services/LocalLLMService';
 import { useShallow } from 'zustand/react/shallow';
 import ProviderIcon from '../ProviderIcon';
 import BottomSheet from '../ui/BottomSheet';
@@ -73,8 +74,8 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
 
   const providerIds = providerRegistry.getAllIds();
   const selectedCfg = providers[selected];
-  const selectedConnected = !!selectedCfg?.enabled && !!selectedCfg?.apiKey;
   const selectedNeedsKey = providerRegistry.getNeedsApiKey(selected);
+  const selectedConnected = !!selectedCfg?.enabled && (!selectedNeedsKey || !!selectedCfg?.apiKey);
   // Direct link to the provider's API-key page — users shouldn't have to
   // hunt for where to create a key before they can connect.
   const keyUrl = providerRegistry.getProvider(selected)?.apiKeyUrl;
@@ -99,11 +100,19 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, selected, selectedConnected]);
 
-  const models = selectedConnected
+  const rawModels = selectedConnected
     ? (availableModels[selected] ?? []).length > 0
       ? (availableModels[selected] ?? [])
-      : providerRegistry.getModels(selected)   // never show a blank pane — fall back to the curated catalog
+      : providerRegistry.getModels(selected)
     : providerRegistry.getModels(selected);
+  // For on-device LLM, only show models that are actually on disk — avoids ghost entries
+  const models = selected === 'local-llm'
+    ? rawModels.filter(m => {
+        const downloaded = LocalLLMService.getDownloadedModels() as string[];
+        const loaded = LocalLLMService.getLoadedModel();
+        return downloaded.includes(m.id) || m.id === loaded;
+      })
+    : rawModels;
 
   const handleConnect = () => {
     const key = keyInput.trim();

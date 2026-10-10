@@ -12,6 +12,8 @@ export interface ProviderDef {
   headers?: Record<string, string>;
   aliases?: string[];
   apiKeyUrl?: string;
+  /** Enable this provider by default on first load (e.g. keyless free tiers). */
+  defaultEnabled?: boolean;
 }
 
 interface StaticModelOption {
@@ -31,6 +33,8 @@ const FALLBACK_PROVIDERS: ProviderDef[] = [
   { id: 'gemini',       label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com',  defaultModel: 'gemini-2.5-flash', needsApiKey: true,  listingType: 'gemini',    aliases: ['gmi', 'google'], apiKeyUrl: 'https://aistudio.google.com/app/apikey' },
   { id: 'opencode',     label: 'OpenCode Zen',  baseUrl: 'https://opencode.ai/zen/v1',                 defaultModel: 'deepseek-v4.1-flash',    needsApiKey: true,  listingType: 'openai',     aliases: ['oc', 'zen'] , apiKeyUrl: 'https://opencode.ai/zen' },
   { id: 'openrouter',   label: 'OpenRouter',    baseUrl: 'https://openrouter.ai/api/v1',               defaultModel: 'google/gemma-3-27b-it:free', needsApiKey: true, listingType: 'openai', aliases: ['or'], apiKeyUrl: 'https://openrouter.ai/keys' },
+  // Keyless free tier — no signup, rate-limited client-side (see FreeTierService).
+  { id: 'pollinations', label: 'Free (Pollinations)', baseUrl: 'https://text.pollinations.ai/openai',    defaultModel: 'openai-fast',      needsApiKey: false, listingType: 'openai',     aliases: ['free', 'poll'], defaultEnabled: true },
   { id: 'groq',         label: 'Groq',          baseUrl: 'https://api.groq.com/openai/v1',            defaultModel: 'llama3-70b-8192',  needsApiKey: true,  listingType: 'openai',     aliases: [] , apiKeyUrl: 'https://console.groq.com/keys' },
   { id: 'deepseek',     label: 'DeepSeek',      baseUrl: 'https://api.deepseek.com/v1',                defaultModel: 'deepseek-chat',    needsApiKey: true,  listingType: 'openai',     aliases: ['ds'] , apiKeyUrl: 'https://platform.deepseek.com/api_keys' },
   { id: 'cerebras',     label: 'Cerebras',      baseUrl: 'https://api.cerebras.ai/v1',                defaultModel: 'llama3.1-8b',      needsApiKey: true,  listingType: 'openai',     aliases: [] , apiKeyUrl: 'https://cloud.cerebras.ai' },
@@ -59,6 +63,9 @@ const FALLBACK_MODELS: Record<string, StaticModelOption[]> = {
     { id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', free: false, context: '64k', tools: true, vision: true },
     { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', free: false, context: '64k', tools: true, vision: true },
     { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', free: false, context: '64k', tools: true, vision: true },
+  ],
+  pollinations: [
+    { id: 'openai-fast', label: 'GPT-OSS 20B (Free)', free: true, context: '1M', tools: true, vision: false },
   ],
   openrouter: [
     { id: 'google/gemma-3-27b-it:free',         label: 'Gemma 3 27B',     free: true,  context: '96k',  tools: true, vision: true  },

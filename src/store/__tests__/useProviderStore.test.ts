@@ -11,11 +11,12 @@ vi.mock('../idb-storage', () => {
 });
 
 // Mock providerRegistry with a minimal set of providers
-const mockProviders: Record<string, { id: string; name: string; needsApiKey: boolean; baseUrl: string; models: { id: string; label: string; free: boolean }[] }> = {
+const mockProviders: Record<string, { id: string; name: string; needsApiKey: boolean; baseUrl: string; defaultEnabled?: boolean; models: { id: string; label: string; free: boolean }[] }> = {
   openai: { id: 'openai', name: 'OpenAI', needsApiKey: true, baseUrl: 'https://api.openai.com/v1', models: [{ id: 'gpt-4o', label: 'GPT-4o', free: false }, { id: 'gpt-4o-mini', label: 'GPT-4o Mini', free: false }] },
   anthropic: { id: 'anthropic', name: 'Anthropic', needsApiKey: true, baseUrl: 'https://api.anthropic.com/v1', models: [{ id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', free: false }] },
   'local-llm': { id: 'local-llm', name: 'Local LLM', needsApiKey: false, baseUrl: 'http://localhost:1234/v1', models: [{ id: 'local-model', label: 'Local Model', free: true }] },
   opencode: { id: 'opencode', name: 'OpenCode Zen', needsApiKey: true, baseUrl: 'https://opencode.ai/zen/v1', models: [{ id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', free: false }] },
+  pollinations: { id: 'pollinations', name: 'Free (Pollinations)', needsApiKey: false, baseUrl: 'https://text.pollinations.ai/openai', defaultEnabled: true, models: [{ id: 'openai-fast', label: 'GPT-OSS 20B (Free)', free: true }] },
 };
 
 vi.mock('../../services/ProviderRegistry', () => ({
@@ -24,7 +25,7 @@ vi.mock('../../services/ProviderRegistry', () => ({
     getAllIds: vi.fn(() => Object.keys(mockProviders)),
     getProvider: vi.fn((id: string) => {
       const p = mockProviders[id];
-      return p ? { id: p.id, name: p.name, needsApiKey: p.needsApiKey, baseUrl: p.baseUrl, listingType: 'openai', headers: {} } : undefined;
+      return p ? { id: p.id, name: p.name, needsApiKey: p.needsApiKey, baseUrl: p.baseUrl, defaultEnabled: p.defaultEnabled, listingType: 'openai', headers: {} } : undefined;
     }),
     getModels: vi.fn((id: string) => (mockProviders[id]?.models || []).map(m => ({ ...m, tools: true, vision: false }))),
     getDefaultModel: vi.fn((id: string) => mockProviders[id]?.models[0]?.id || ''),
@@ -66,11 +67,24 @@ describe('useProviderStore', () => {
       await useProviderStore.getState().loadProviders();
       const state = useProviderStore.getState();
       expect(state.initialised).toBe(true);
-      expect(Object.keys(state.providers)).toEqual(['openai', 'anthropic', 'local-llm', 'opencode']);
+      expect(Object.keys(state.providers)).toEqual(['openai', 'anthropic', 'local-llm', 'opencode', 'pollinations']);
       expect(state.providers.openai).toBeDefined();
       expect(state.providers.openai.apiKey).toBe('');
       expect(state.providers.openai.model).toBe('gpt-4o');
       expect(state.providers.openai.enabled).toBe(false);
+    });
+
+    it('defaults to the keyless free provider when no API key is configured', async () => {
+      await useProviderStore.getState().loadProviders();
+      const state = useProviderStore.getState();
+      expect(state.activeProvider).toBe('pollinations');
+      expect(state.providers.pollinations.enabled).toBe(true);
+    });
+
+    it('keeps a connected provider active over the free default', async () => {
+      useProviderStore.setState({ providers: { openai: { apiKey: 'sk-abc', model: 'gpt-4o', enabled: true } }, activeProvider: 'openai' });
+      await useProviderStore.getState().loadProviders();
+      expect(useProviderStore.getState().activeProvider).toBe('openai');
     });
 
     it('migrates the retired OpenCode Zen model without losing provider settings', async () => {
@@ -123,12 +137,11 @@ describe('useProviderStore', () => {
       expect(useProviderStore.getState().getActiveProviders()).toEqual([]);
     });
 
-    it('returns providers that have keys and are enabled', () => {
+    it('returns providers that are enabled and usable (key or keyless)', () => {
       useProviderStore.getState().setProviderKey('openai', 'sk-abc');
       useProviderStore.getState().setProviderKey('local-llm', '');
       const active = useProviderStore.getState().getActiveProviders();
-      expect(active).toHaveLength(1);
-      expect(active[0].id).toBe('openai');
+      expect(active.map((p) => p.id).sort()).toEqual(['local-llm', 'openai']);
     });
   });
 

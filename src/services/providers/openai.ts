@@ -5,6 +5,7 @@ import { useGiaStore } from '../../store/useGiaStore';
 import { corsProxy } from '../CorsProxy';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
 import { createStreamWatchdog, STREAM_IDLE_TIMEOUT_MS } from './streamWatchdog';
+import { freeTier } from '../FreeTierService';
 
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { activeProvider, providers } = useProviderStore.getState();
@@ -15,6 +16,19 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   const baseUrl = (config.baseUrl || definition?.baseUrl || providerRegistry.getBaseUrl(providerId)).replace(/\/+$/, '');
   const label = providerRegistry.getLabel(providerId);
   if (!baseUrl) throw new Error(`Unknown provider: ${providerId}`);
+  // Keyless free providers: enforce a client-side rate limit so the shared
+  // tier stays usable. Over-limit throws a "rate limit" error, which the
+  // failover layer treats as recoverable (fall back to another provider or retry).
+  if (freeTier.isFreeTier(providerId)) {
+    const decision = freeTier.check(providerId);
+    if (!decision.allowed) {
+      const wait = decision.retryAfterMs > 0 ? ` Try again in ${Math.ceil(decision.retryAfterMs / 1000)}s.` : '';
+      const err = new Error(`${label} rate limit: ${decision.reason ?? 'the free tier is busy'}.${wait} Connect your own API key for unlimited use.`) as Error & { retryable?: boolean };
+      err.retryable = false;
+      throw err;
+    }
+    freeTier.record(providerId);
+  }
   const messages = [
     { role: 'system', content: ctx.buildSystemPrompt(req.prompt, req.systemPrompt, req.systemPromptMode) },
     ...(await ctx.buildMessages(req))
@@ -193,6 +207,14 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
 
       xhr.onload = () => {
         watchdog.stop();
+        if (xhr.status >= 400) {
+          if (xhr.status === 429) freeTier.markRateLimited(providerId);
+          const preview = (xhr.responseText || '').slice(0, 200);
+          const err = new Error(ctx.friendlyError(label, `${label} error ${xhr.status}: ${preview}`)) as Error & { retryable?: boolean };
+          err.retryable = false;
+          reject(err);
+          return;
+        }
         onData();
         if (partialLine.trim()) {
           const t = partialLine.trim();
@@ -297,13 +319,14 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     res = await attemptFetch(corsProxy.proxyUrl(`${baseUrl}/chat/completions`));
     usedProxy = true;
   }
-  if (!res.ok && !usedProxy) {
+  if (!res.ok && !usedProxy && res.status !== 429) {
     const errMsg = `${label} error ${res.status}: ${await res.text().catch(() => '')}`;
     logger.warn('[openai] Direct fetch failed, trying CORS proxy:', errMsg);
     const proxiedUrl = corsProxy.proxyUrl(`${baseUrl}/chat/completions`);
     res = await attemptFetch(proxiedUrl);
   }
   if (!res.ok) {
+    if (res.status === 429) freeTier.markRateLimited(providerId);
     const e: { error?: { message?: string } } = await res.json().catch(() => ({}));
     throw new Error(ctx.friendlyError(label, e?.error?.message || `${label} error ${res.status}`));
   }

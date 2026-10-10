@@ -1126,7 +1126,8 @@ public class GIATerminalService extends Service {
                 pendingLongName = null;
             }
 
-            File entryFile = new File(destDir, name);
+            String cleanName = name.startsWith("./") ? name.substring(2) : name;
+            File entryFile = new File(destDir, cleanName);
 
             // Security: prevent tar path traversal
             String canonicalDest = destDir.getCanonicalPath();
@@ -1151,9 +1152,21 @@ public class GIATerminalService extends Service {
                 while (linkEnd < 100 && header[157 + linkEnd] != 0) linkEnd++;
                 if (linkEnd > 0) {
                     String linkTarget = new String(header, 157, linkEnd, "UTF-8");
-                    failedSymlinks.add(new String[]{ name, linkTarget });
+                    failedSymlinks.add(new String[]{ cleanName, linkTarget });
                 }
             } else {
+                // Alpine busybox applets are often symlinks with size 0 but
+                // occasionally tar headers report typeflag '0' instead of '2'.
+                if (size == 0 && isAppletPath(cleanName)) {
+                    int linkEnd = 0;
+                    while (linkEnd < 100 && header[157 + linkEnd] != 0) linkEnd++;
+                    if (linkEnd > 0) {
+                        String linkTarget = new String(header, 157, linkEnd, "UTF-8");
+                        failedSymlinks.add(new String[]{ cleanName, linkTarget });
+                        skipPadding(in, size);
+                        continue;
+                    }
+                }
                 // Regular file (or device/special — written as empty file)
                 entryFile.getParentFile().mkdirs();
                 try (FileOutputStream fout = new FileOutputStream(entryFile)) {

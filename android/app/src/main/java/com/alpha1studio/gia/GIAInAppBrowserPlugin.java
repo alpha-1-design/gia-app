@@ -98,12 +98,15 @@ public class GIAInAppBrowserPlugin extends Plugin {
         settings.setAllowContentAccess(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return !isHttpUrl(request.getUrl().toString());
+                String url = request.getUrl().toString();
+                // Allow http/https and capacitor://, block custom schemes
+                if (isHttpUrl(url) || url.startsWith("capacitor://") || url.startsWith("about:")) return false;
+                return true;
             }
 
             @Override
@@ -128,6 +131,21 @@ public class GIAInAppBrowserPlugin extends Plugin {
                     if (call != null) {
                         pendingNavigation = null;
                         call.reject("The page could not be loaded: " + error.getDescription());
+                    }
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse errorResponse) {
+                if (request.isForMainFrame()) {
+                    int code = errorResponse.getStatusCode();
+                    if (code >= 400) {
+                        PluginCall call = pendingNavigation;
+                        // Don't auto-reject on 4xx for sub-resources; let page finish and then surface
+                        if (call != null && code >= 500) {
+                            pendingNavigation = null;
+                            call.reject("HTTP " + code + " loading " + request.getUrl());
+                        }
                     }
                 }
             }

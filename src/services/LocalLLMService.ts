@@ -343,7 +343,7 @@ class LocalLLMService {
     this._statusCallbacks.forEach(cb => { try { cb(modelId, state); } catch { /* a bad listener must not break loading */ } });
   }
 
-  private getDownloadedModels(): LocalModelId[] {
+  getDownloadedModels(): LocalModelId[] {
     if (typeof localStorage === 'undefined') return [];
     try {
       const value = JSON.parse(localStorage.getItem('gia:local-llm:downloaded') || '[]');

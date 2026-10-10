@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Search, X, Maximize2, Minimize2, Network, TrendingUp, Download, Upload } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { useKnowledgeGraphStore } from '../../store/useKnowledgeGraphStore';
 import { useMemoryStore } from '../../store/useMemoryStore';
 import { SubPageHeader } from './SubPageHeader';
 import type { Entity, Relationship } from '../../types/knowledge';
+import { logger } from '../../utils/logger';
 
 const COLORS: Record<string, string> = {
   person: '#a78bfa', project: '#fbbf24', concept: '#60a5fa',
@@ -255,8 +257,12 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ctx.stroke();
     }
 
-    // ── Edges (pulsing, brighter) ──
+    // ── Edges — MiroFish schooling: gradient, depth-faded, dash flow + traveling particle ──
     const drawn = new Set<string>();
+    const hexToRgb = (h: string) => {
+      const n = parseInt(h.replace('#',''),16);
+      return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+    };
     for (const rel of relationships) {
       const a = proj.find(n => n.id === rel.sourceId);
       const b = proj.find(n => n.id === rel.targetId);
@@ -268,42 +274,73 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       const isSel = selId && (rel.sourceId === selId || rel.targetId === selId);
       const isHl = hl && (hl.has(rel.sourceId) || hl.has(rel.targetId));
 
-      // Per-edge pulse using now + index as phase offset
-      const edgePhase = drawn.size * 0.7;
-      const pulse = Math.sin(now * 0.0025 + edgePhase) * 0.25 + 0.75;
+      const edgePhase = drawn.size * 0.73;
+      const pulse = Math.sin(now * 0.0022 + edgePhase) * 0.22 + 0.78;
 
-      const baseAlpha = isSel ? 0.7 : isHl ? 0.4 : 0.15;
-      const alpha = baseAlpha * pulse;
-      const lw = isSel ? 2 + rel.strength * 2 : isHl ? 0.9 : 0.5;
+      const baseAlpha = isSel ? 0.74 : isHl ? 0.44 : 0.17;
+      const avgDepth = (a.depth + b.depth) / 2;
+      const depthFade = 0.45 + ((avgDepth + SPHERE_R) / (SPHERE_R*2)) * 0.55;
+      const alpha = baseAlpha * pulse * depthFade;
+      const lw = isSel ? 1.9 + rel.strength * 2.1 : isHl ? 1.0 : 0.55 + rel.strength * 0.9;
       const color = EDGE_COLORS[rel.type] || '#94a3b8';
+      const c = hexToRgb(color);
+      const ac = hexToRgb(a.color);
+      const bc = hexToRgb(b.color);
 
-      // Quadratic bezier arc along sphere surface
       const midX = (a.sx + b.sx) / 2;
       const midY = (a.sy + b.sy) / 2;
       const dist = Math.sqrt((b.sx - a.sx) ** 2 + (b.sy - a.sy) ** 2);
-      const bulge = Math.min(dist * 0.25, 40);
+      const bulge = Math.min(dist * 0.28, 44);
       const angle = Math.atan2(b.sy - a.sy, b.sx - a.sx);
       const cpx = midX + Math.cos(angle + Math.PI / 2) * bulge;
       const cpy = midY + Math.sin(angle + Math.PI / 2) * bulge;
 
+      // Gradient from source node color → edge color → target node color (more real)
+      const grad = ctx.createLinearGradient(cx + a.sx, cy + a.sy, cx + b.sx, cy + b.sy);
+      grad.addColorStop(0, `rgba(${ac.r},${ac.g},${ac.b},${alpha})`);
+      grad.addColorStop(0.45, `rgba(${c.r},${c.g},${c.b},${alpha * 0.95})`);
+      grad.addColorStop(1, `rgba(${bc.r},${bc.g},${bc.b},${alpha})`);
+
       ctx.beginPath();
       ctx.moveTo(cx + a.sx, cy + a.sy);
       ctx.quadraticCurveTo(cx + cpx, cy + cpy, cx + b.sx, cy + b.sy);
-
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = grad;
+      ctx.globalAlpha = 1;
       ctx.lineWidth = lw;
+      // Subtle dash flow on non-selected edges — like Miro fish schooling direction
+      if (!isSel) {
+        ctx.setLineDash([7, 5]);
+        ctx.lineDashOffset = -(now * 0.018 + edgePhase * 6) % 12;
+      } else {
+        ctx.setLineDash([]);
+      }
       ctx.stroke();
+      ctx.setLineDash([]);
 
-      // Glow on all edges (pulsing)
+      // Soft outer glow (depth-aware)
       ctx.shadowColor = color;
-      ctx.shadowBlur = isSel ? 12 : isHl ? 4 : 2;
-      ctx.globalAlpha = alpha * 0.5;
+      ctx.shadowBlur = isSel ? 14 : isHl ? 5 : 2.5;
+      ctx.globalAlpha = alpha * 0.45;
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
+
+      // Traveling particle — tiny fish along the bezier (one per edge)
+      const t = ((now * 0.00042 + edgePhase * 0.12) % 1);
+      const inv = 1 - t;
+      const px = inv*inv*(cx + a.sx) + 2*inv*t*(cx + cpx) + t*t*(cx + b.sx);
+      const py = inv*inv*(cy + a.sy) + 2*inv*t*(cy + cpy) + t*t*(cy + b.sy);
+      const pr = isSel ? 2.2 : 1.35;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${alpha * 0.95})`;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = isSel ? 8 : 4;
+      ctx.fill();
+      ctx.shadowBlur = 0;
     }
     ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
 
     // ── Nodes ──
     for (const p of proj) {
@@ -582,15 +619,27 @@ export const NeuraPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       knowledgeGraph: { entities: kg.entities, relationships: kg.relationships, mentions: kg.mentions },
       memories: mem.memories,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const json = JSON.stringify(payload, null, 2);
+    const filename = `gia-neura-${new Date().toISOString().slice(0, 10)}.json`;
+    // Native WebView blocks immediate revoke; delay and try Web Share as fallback
+    if (Capacitor.isNativePlatform() && (navigator as unknown as { canShare?: (d: unknown) => boolean }).canShare?.({ files: [] as never })) {
+      try {
+        const file = new File([json], filename, { type: 'application/json' });
+        await (navigator as unknown as { share: (d: unknown) => Promise<void> }).share({ title: 'Neura Export', text: filename, files: [file] });
+        return;
+      } catch (e) {
+        logger.warn('[Neura] Web Share failed, falling back to download', e);
+      }
+    }
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gia-neura-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function handleImport() {
