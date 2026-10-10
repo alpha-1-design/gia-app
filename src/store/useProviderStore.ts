@@ -1,9 +1,10 @@
 import { logger } from '../utils/logger';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { idbStorage } from './idb-storage';
+import { idbStorageWriteThrough } from './idb-storage';
 import { providerRegistry } from '../services/ProviderRegistry';
 import { corsProxy } from '../services/CorsProxy';
+import { loadModelsDevCatalog } from '../services/ModelsDevCatalog';
 
 export type ProviderType = string;
 
@@ -12,6 +13,7 @@ export interface ModelOption {
   label: string;
   free: boolean;
   context?: string;
+  contextTokens?: number;
   tools?: boolean;
   vision?: boolean;
 }
@@ -57,6 +59,7 @@ interface GiaProviderState {
   getBestProviderForTask: () => { id: string; config: ProviderConfig } | null;
   disconnectProvider: (p: string) => void;
   fetchModels: (p: string) => Promise<ModelOption[]>;
+  refreshModelsDevCatalog: (force?: boolean) => Promise<boolean>;
   loadProviders: () => Promise<void>;
   addPendingTask: (task: Omit<PendingTask, 'id' | 'createdAt' | 'status'>) => string;
   removePendingTask: (id: string) => void;
@@ -164,6 +167,36 @@ export const useProviderStore = create<GiaProviderState>()(
             modelListStatus: { ...s.modelListStatus, [p]: 'catalog' as const },
           };
         }),
+
+      refreshModelsDevCatalog: async (force = false): Promise<boolean> => {
+        const catalog = await loadModelsDevCatalog(force);
+        if (!catalog) return false;
+        const changed = providerRegistry.applyCatalog(catalog);
+        if (changed.length === 0) return false;
+        set((s) => {
+          const availableModels = { ...s.availableModels };
+          for (const id of changed) {
+            const fresh = providerRegistry.getModels(id);
+            const existing = availableModels[id];
+            if (s.modelListStatus[id] === 'live' && existing) {
+              availableModels[id] = existing.map((m) => {
+                const meta = fresh.find((f) => f.id === m.id);
+                if (!meta) return m;
+                return {
+                  ...m,
+                  context: m.context && m.context !== '?' ? m.context : meta.context,
+                  tools: m.tools ?? meta.tools,
+                  vision: m.vision ?? meta.vision,
+                };
+              });
+            } else {
+              availableModels[id] = fresh;
+            }
+          }
+          return { availableModels };
+        });
+        return true;
+      },
 
       fetchModels: async (p): Promise<ModelOption[]> => {
         const { providers } = get();
@@ -328,6 +361,7 @@ export const useProviderStore = create<GiaProviderState>()(
                 label: m.name || m.id,
                 free: isFree,
                 context: m.context_length ? `${Math.round(m.context_length / 1000)}k` : '?',
+                contextTokens: staticDef?.contextTokens ?? m.context_length,
                 tools: staticDef?.tools,
                 vision: staticDef?.vision || /vision|pixtral|llava|vl/i.test(m.id),
               };
@@ -396,7 +430,9 @@ export const useProviderStore = create<GiaProviderState>()(
     }),
     {
       name: 'gia-provider-storage-v2',
-      storage: createJSONStorage(() => idbStorage),
+      // Write-through: provider config includes API keys — never let a debounced
+      // timer hold a key that a killed WebView would lose (see ISSUES.md "API key lost").
+      storage: createJSONStorage(() => idbStorageWriteThrough),
       partialize: (s) => ({ providers: s.providers, activeProvider: s.activeProvider, pendingTasks: s.pendingTasks }),
     }
   )

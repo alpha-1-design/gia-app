@@ -10,6 +10,8 @@ interface RegionSelectorOverlayProps {
   imageSrc: string;
   onSelect: (croppedDataUrl: string) => void;
   onCancel: () => void;
+  confirmLabel?: string;
+  hint?: string;
 }
 
 // --- Edge detection with NMS + adaptive threshold ---
@@ -222,7 +224,7 @@ function drawMilkyBorder(ctx: CanvasRenderingContext2D, path: Point[], animPhase
   ctx.setLineDash([]);
 }
 
-export const RegionSelectorOverlay: React.FC<RegionSelectorOverlayProps> = ({ imageSrc, onSelect, onCancel }) => {
+export const RegionSelectorOverlay: React.FC<RegionSelectorOverlayProps> = ({ imageSrc, onSelect, onCancel, confirmLabel = 'Search this', hint = 'Draw a circle around anything — GIA will snap to edges' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const displayRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -639,7 +641,7 @@ export const RegionSelectorOverlay: React.FC<RegionSelectorOverlayProps> = ({ im
 
                 <div className="flex items-center gap-3 justify-center">
                   <button onClick={handleUse} className="flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-semibold transition-all shadow-lg" style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: 'white' }}>
-                    <Sparkles size={16} /> Search this
+                    <Sparkles size={16} /> {confirmLabel}
                   </button>
                   <button onClick={() => { setShowPreview(false); handleReset(); }} className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--gia-text)' }}>
                     <RotateCcw size={14} /> Redraw
@@ -676,7 +678,7 @@ export const RegionSelectorOverlay: React.FC<RegionSelectorOverlayProps> = ({ im
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
             <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.05)' }}>
               <Scan size={14} className="text-violet-400" />
-              <span className="text-xs text-zinc-400 font-medium">Draw a circle around anything — GIA will snap to edges</span>
+              <span className="text-xs text-zinc-400 font-medium">{hint}</span>
             </div>
           </div>
         )}

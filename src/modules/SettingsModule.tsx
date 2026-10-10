@@ -367,7 +367,7 @@ const SettingsModule: React.FC = () => {
         <ChevronRight size={16} style={{ color: 'var(--gia-muted)' }} />
       </button>
 
-      {/* Provider Capability Matrix — one row per registered provider (70+),
+      {/* Provider Capability Matrix — one row per registered provider (22),
           each computing capability flags from the registry. Rendering this
           unconditionally made it dead weight on every single visit to
           Settings main, whether or not anyone ever looks at it. Collapsed by

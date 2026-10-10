@@ -1,9 +1,15 @@
 import { useSummarizationStore } from '../../store/useSummarizationStore';
 import { useGiaStore } from '../../store/useGiaStore';
+import { useProviderStore } from '../../store/useProviderStore';
+import { providerRegistry } from '../ProviderRegistry';
 import GiaBrain from '../GiaBrain';
 
 const TOKENS_PER_CHAR = 0.25; // Rough estimate
-const SAFETY_MARGIN = 2000; // Leave room for system prompt + response
+const SAFETY_MARGIN = 2000; // Legacy reserve used when the model window is unknown
+// buildGiaSystem() is ~12.5k tokens and is sent on every request but isn't part
+// of `history`, so a real (models.dev) window must reserve room for it plus the
+// response — otherwise a 128k model would summarize too late and overflow.
+const SYSTEM_AND_OUTPUT_RESERVE = 16000;
 
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length * TOKENS_PER_CHAR);
@@ -13,16 +19,39 @@ export function estimateHistoryTokens(history: { role: string; content: string }
   return history.reduce((sum, m) => sum + estimateTokens(m.content) + 10, 0);
 }
 
+/**
+ * Token budget before summarization should kick in. Uses the real context
+ * window for the active provider+model when models.dev knows it, falling back
+ * to the user's configured `contextWindowLimit`.
+ */
+export function getEffectiveContextLimit(): { limit: number; fromModel: boolean } {
+  const configured = useSummarizationStore.getState().contextWindowLimit;
+  try {
+    const { activeProvider, providers } = useProviderStore.getState();
+    const model = providers[activeProvider]?.model;
+    if (activeProvider && model) {
+      const tokens = providerRegistry.getContextTokens(activeProvider, model);
+      if (tokens && tokens > 0) return { limit: tokens, fromModel: true };
+    }
+  } catch {
+    // store/registry unavailable (e.g. early boot) — use the configured limit
+  }
+  return { limit: configured, fromModel: false };
+}
+
 export async function autoSummarizeIfNeeded(
   history: { role: string; content: string }[],
   sessionId: string,
   branchId: string,
   onThought?: (msg: string) => void,
 ): Promise<{ history: { role: string; content: string }[]; wasSummarized: boolean }> {
-  const limit = useSummarizationStore.getState().contextWindowLimit;
+  const { limit, fromModel } = getEffectiveContextLimit();
   const estimated = estimateHistoryTokens(history);
+  const softLimit = fromModel
+    ? Math.max(2000, limit - SYSTEM_AND_OUTPUT_RESERVE)
+    : limit - SAFETY_MARGIN;
 
-  if (estimated < limit - SAFETY_MARGIN) {
+  if (estimated < softLimit) {
     return { history, wasSummarized: false };
   }
 

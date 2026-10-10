@@ -14,6 +14,7 @@
   --gia-surface-3:   #202028;
   --gia-border:      rgba(255,255,255,0.07);
   --gia-border-2:    rgba(255,255,255,0.12);
+  --gia-code-bg:     #0d0d14;
   --gia-text:        #f0f0f5;
   --gia-muted:       #8888a0;
   --gia-muted-2:     #5a5a70;
@@ -58,6 +59,7 @@
   --gia-surface-3:   #d4d4dd;
   --gia-border:      rgba(0,0,0,0.10);
   --gia-border-2:    rgba(0,0,0,0.16);
+  --gia-code-bg:     #e9e9f0;
   --gia-text:        #1b1b2a;
   --gia-muted:       #5a5a70;
   --gia-muted-2:     #87879b;
@@ -767,7 +769,7 @@ body {
   letter-spacing: 0.08em;
 }
 .code-block-body {
-  background: #0d0d14;
+  background: var(--gia-code-bg, #0d0d14);
   padding: 14px;
   overflow-x: auto;
   font-size: 12px;
@@ -779,6 +781,19 @@ body {
 }
 .code-block-body code {
   font-family: inherit;
+}
+.code-block-body.shiki-body {
+  background: var(--gia-code-bg, #0d0d14);
+  padding: 0;
+}
+.code-block-body.shiki-body .shiki {
+  background: transparent !important;
+  font-size: inherit;
+  line-height: inherit;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 14px;
+  white-space: pre;
+  tab-size: 2;
 }
 
 /* Streaming message glow */

@@ -4,6 +4,135 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-10-09
+
+### Fixed: native tool schemas crashed and lacked descriptions
+**Files:** `src/services/ToolRegistry.ts`, `src/services/brain/toolSchemas.ts`, new `toolSchemas.integrity.test.ts`
+- `buildOpenAITools()` / `buildAnthropicTools()` / `buildGeminiTools()` threw
+  `Cannot read properties of undefined (reading 'length')` because 26 merged
+  tool schemas had `required: undefined` (registry `Tool.schema` overrode the
+  hardcoded map). Hands-Off native calling was broken on OpenAI/Anthropic/Gemini.
+- 169 of 201 merged schemas had **no description** — registry schemas don't carry
+  `description`, and the spread let them clobber the curated map. Native tool
+  schemas were being sent with empty descriptions.
+- `validateToolArgs` (`toolRunner.ts`) had the same `schema.required` landmine on
+  the normal text-protocol path.
+- **Fix:** `ToolRegistry.getAllToolSchemas()` now resolves `description` (from
+  `tool.description`) and defaults `required` to `[]`; `getAllToolSchemas()` in
+  `toolSchemas.ts` merges per-key (registry wins where valid, curated map
+  otherwise) and normalizes shape; builders + validator guard with `?? []`.
+- Added a permanent integrity test: every merged schema has a non-empty
+  description, array `required`, object `properties`, and all three native
+  builders never throw.
+
+### Changed: system-prompt tool table is now generated from the registry
+**Files:** new `src/services/brain/toolReference.ts` (+ test), `src/services/buildGiaSystem.ts`
+- Replaced the 146-row hand-written tool table (which hid 83 registered tools —
+  all `calendar_*`, `email_*`, `note_*`, `notifications_*`, `messaging_*`, `rag_*`,
+  `read_pdf`/`read_document`, `screenshot`, `generate_qr`, `play_music`,
+  `set_reminder`, …) with a compact table generated from `ToolRegistry`
+  (~161 rows incl. virtual `sub_agent_call`, ~4.4k tokens).
+- Internal plumbing tools stay out of the model's view:
+  `device_plugin_*`, `gateway_daemon_*`, `geolocation_*`, `clipboard_read/write`,
+  `share_content`, `haptic_*`, and the `notifications_*_permissions` pairs.
+- Connected MCP tools are included via the registry (they register under
+  `mcp__server__tool`), so the old MCP append block was removed — no duplicates.
+- The First-contact protocol now calls the public `device_health`/`device_info`
+  instead of the hidden `device_plugin_*` tools.
+- **Note:** table size is ~neutral vs the old one (completeness was the win).
+  The real token cut is a separate step (native schemas by default for
+  tool-capable models + compact core reference for the text protocol).
+
+**Status:** `tsc --noEmit` clean, `eslint .` clean, full `vitest run`
+**138 files / 1131 tests passing.**
+
+### Changed: code blocks are now Shiki-highlighted and theme-aware
+**Files:** new `src/utils/shikiHighlighter.ts` (+ test) and `src/hooks/useShikiHighlight.ts`, `src/components/CodeBlock.tsx`, `src/styles/globals.css`
+- Replaced the custom regex highlighter (only JS/TS/Python/HTML/CSS, hardcoded Dracula
+  palette that never matched the light theme) with Shiki (the highlighter the CLI uses).
+- **Lazy everything:** `createHighlighterCore` + the pure-JS regex engine load in a
+  dynamic chunk only on the first code block; each language grammar and both themes
+  (`github-dark` / `github-light`) are code-split into per-language chunks (Vite
+  verified — `javascript/typescript/tsx/jsx/…` are separate lazy files, the main
+  bundle is unchanged). No WASM engine, so no CSP/bundle concerns on mobile.
+- **Theme-aware:** the Shiki theme follows the app theme (`data-theme` on `<html>`,
+  observed via `MutationObserver`); the old hardcoded `#0d0d14` block background is
+  now the `--gia-code-bg` token (deep charcoal in dark themes, soft grey in light).
+- **Streaming:** debounced (120ms) + cancelled re-highlight per keystream with a small
+  html cache, so mid-stream code never flash-blanks; the prior regex output renders as
+  an instant fallback until Shiki is ready, then upgrades in place.
+- The old `syntaxHighlight.ts` regex path stays only as that fallback. The grammar set
+  covers the CLI's common languages plus app extras (scss, jsonc, go, rust, java,
+  ruby, php, swift, kotlin, dart, lua, diff) with alias resolution (`sh`, `py`, `md`,
+  `c++`, `c#`, …); unknown languages fall back to plaintext instead of throwing.
+
+**Status:** `tsc` clean, `eslint .` clean, runs **343 tests / 55 files** in
+`src/components` + `src/hooks` + `src/utils`.
+
+### Added: live models.dev model catalogs (context limits, tools, vision, cost)
+**Files:** new `src/services/ModelsDevCatalog.ts` (+ test), `src/services/ProviderRegistry.ts`,
+`src/store/useProviderStore.ts`, `src/App.tsx`
+- The app now pulls `https://models.opencode.ai/api.json` (the same catalog `gia-cli`
+  uses) and enriches its 22 providers with **real** model metadata instead of the
+  hand-curated `FALLBACK_MODELS` — which shipped obsolete IDs (e.g. Groq
+  `llama3-70b-8192`, DeepSeek `deepseek-chat`) and stale context/vision flags.
+- **Offline-first, no cloud dependency:** the payload is trimmed to only the 18
+  mappable providers and the fields the app consumes (5.3 MB → a few hundred KB),
+  then cached in IndexedDB for 24h (`gia.modelsdev.catalog.v1`). A stale cache is
+  served when the network fails; with no cache at all the curated catalogs remain.
+  Endpoint is `access-control-allow-origin: *`, so it is fetched directly (no proxy).
+- Provider ids are mapped (`gemini`→`google`, `fireworks`→`fireworks-ai`); the app's
+  provider list, base URLs, API-key URLs and icons are unchanged. `replicate` has no
+  models.dev entry and the local providers keep their own live listing.
+- `ProviderRegistry.applyCatalog()` derives `context`/`contextTokens`, `tools`,
+  `vision` (from `modalities.input` containing `image`) and `free` (input cost 0),
+  and **preserves the currently selected/default model** even if models.dev dropped it.
+- `useProviderStore.refreshModelsDevCatalog()` applies the catalog at startup and
+  merges metadata into already-live lists without clobbering their IDs/order.
+- New raw `contextTokens` field is exposed on `ModelOption` and via
+  `getContextTokens(provider, model)` — the input the token-phase compaction will use.
+
+**Status:** `tsc` clean, `eslint .` clean, full `vitest run`
+**138 files / 1145 tests passing**, `npm run build` clean.
+
+### Changed: model-aware compaction + Anthropic prompt caching (token phase)
+**Files:** `src/services/brain/contextManager.ts` (+ new test),
+`src/services/providers/anthropic.ts`, `src/services/ProviderRegistry.ts`,
+`src/store/useProviderStore.ts`
+- Auto-summarization no longer triggers against a hard-coded 8 000-token limit.
+  `getEffectiveContextLimit()` now reads the **real context window** for the active
+  provider+model via `providerRegistry.getContextTokens()` (sourced from models.dev
+  in the previous change), falling back to the configured `contextWindowLimit` when
+  the model is unknown — so a 128k model keeps history intact far longer instead of
+  summarizing at ~6k tokens.
+- Because the ~12.5k-token system prompt isn't part of `history`, the model-aware
+  path reserves `SYSTEM_AND_OUTPUT_RESERVE` (16k) before summarizing; the legacy
+  reserve is unchanged for the fallback path so existing behavior is preserved.
+- Anthropic requests now mark the system prompt as an `ephemeral` cache breakpoint
+  (`cache_control`), so the large, stable prompt is reused across turns instead of
+  being re-billed/re-processed every message. OpenAI and Gemini cache implicitly.
+- New `contextTokens` surfaced on `ModelOption` / `getContextTokens()`.
+- Added `src/services/brain/__tests__/contextManager.test.ts` (5 tests).
+
+**Status:** `tsc` clean, `eslint .` clean, full `vitest run`
+**139 files / 1150 tests passing**, `npm run build` clean.
+
+---
+
+## 2026-10-07
+
+### Provider-count copy audit
+
+Marketing and docs claimed 18+, 70+, and (in ISSUES/DEVLOG) 71 providers for
+GIA App — the fallback registry has had 22 entries the whole time (verified
+back to `44030ed6`). Corrected the landing page (Stats, Features, FAQ,
+Comparison), the Engine Room boot banner, the Settings capability-matrix
+comment, `AGENTS.md`, `ISSUES.md`, and `DISCUSSION_DRAFT.md` to say 22.
+GIA Cowork's "71" claims were already accurate; GIA CLI's docs said "75+"
+while its live models.dev registry serves 226 — fixed in that repo.
+
+---
+
 ## 2026-10-06
 
 ### On-device wake word (openWakeWord) and a UI pass
@@ -71,8 +200,8 @@ Android Gradle compilation could not run on the Windows development machine beca
 
 ### Follow-up release UI and provider catalogue
 
-- Expanded the fallback provider catalogue to 71 entries, covering major hosted providers, gateways, cloud platforms, custom-compatible endpoints, and local servers.
-- Updated provider copy across the README and landing page from 18+ to 70+ providers.
+- Documented the fallback provider catalogue — 22 entries, the registry's actual size — covering major hosted providers, gateways, custom-compatible endpoints, and local servers.
+- Updated provider copy across the README and landing page from 18+ to 70+ providers (superseded 2026-10-07: copy corrected to the real count, 22).
 - Fixed the model-switcher regression test timeout by making its remote provider registry dependency deterministic; the focused provider/model-switcher suite passes 25/25.
 - Added a phone design preview to the About page showing the orb, Talk/Scan/Act controls, permission-first behavior, secure credentials, sandbox, and Termux.
 - Added an in-app complaint/feedback form that opens a user-reviewed email to `alphariansamuel@gmail.com`, plus a GitHub issue link.

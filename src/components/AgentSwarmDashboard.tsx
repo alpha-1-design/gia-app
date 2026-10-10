@@ -1,144 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  Search, TrendingUp, AlertTriangle, Lightbulb, GitMerge, Compass, Zap, Code2,
-  Navigation2, ShieldCheck, Thermometer, Sun, Heart, BookOpen, Handshake, Brain,
-  GraduationCap, Eye as EyeIcon, Sparkles, Share2, CheckCircle2, XCircle, Loader2,
-  ChevronDown, ChevronUp, Clock, Layers, Crown, X,
-} from 'lucide-react';
-import { useNexusStore, NexusAgentState } from '../store/useNexusStore';
+import { ChevronDown, ChevronUp, Crown, Layers, X } from 'lucide-react';
+import { useNexusStore } from '../store/useNexusStore';
 import { useGiaStore } from '../store/useGiaStore';
-
-const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
-  Search, TrendingUp, AlertTriangle, Lightbulb, GitMerge, Compass, Zap, Code2,
-  Navigation2, ShieldCheck, Thermometer, Sun, Heart, BookOpen, Handshake, Brain,
-  GraduationCap, Eye: EyeIcon, Sparkles, Share2,
-};
-
-function iconFor(name: string) {
-  return ICONS[name] || Sparkles;
-}
-
-function useLiveTick(active: boolean) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setTick(t => t + 1), 400);
-    return () => clearInterval(id);
-  }, [active]);
-}
-
-const STATUS_META: Record<NexusAgentState['status'], { label: string; color: string }> = {
-  spawning: { label: 'Spawning', color: '#94a3b8' },
-  running: { label: 'Working', color: '#a855f7' },
-  completed: { label: 'Done', color: '#34d399' },
-  failed: { label: 'Failed', color: '#f87171' },
-};
-
-const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; onToggle: () => void }> = ({ agent, expanded, onToggle }) => {
-  const Icon = iconFor(agent.icon);
-  const meta = STATUS_META[agent.status];
-  const isLive = agent.status === 'running' || agent.status === 'spawning';
-  const elapsed = agent.status === 'completed' || agent.status === 'failed'
-    ? agent.duration
-    : Date.now() - agent.startedAt;
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 12, scale: 0.94 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-      className="rounded-2xl overflow-hidden"
-      style={{
-        width: '100%',
-        background: `linear-gradient(160deg, ${agent.color}14, rgba(13,13,18,0.9))`,
-        border: `1px solid ${isLive ? agent.color + '55' : agent.color + '22'}`,
-        boxShadow: isLive ? `0 0 18px ${agent.color}30` : 'none',
-        transition: 'box-shadow 0.3s ease',
-      }}
-    >
-      <button onClick={onToggle} className="w-full text-left p-3 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <div className="relative shrink-0">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: `${agent.color}22`, border: `1px solid ${agent.color}44` }}
-            >
-              <Icon size={15} style={{ color: agent.color }} />
-            </div>
-            {isLive && (
-              <motion.div
-                className="absolute -inset-0.5 rounded-xl"
-                style={{ border: `1.5px solid ${agent.color}` }}
-                animate={{ opacity: [0.9, 0.15, 0.9], scale: [1, 1.12, 1] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-bold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</span>
-              {agent.status === 'completed' && <CheckCircle2 size={10} style={{ color: meta.color }} className="shrink-0" />}
-              {agent.status === 'failed' && <XCircle size={10} style={{ color: meta.color }} className="shrink-0" />}
-              {isLive && <Loader2 size={10} className="animate-spin shrink-0" style={{ color: meta.color }} />}
-            </div>
-            <div className="text-[8.5px] truncate" style={{ color: agent.color, opacity: 0.85 }}>{agent.role}</div>
-          </div>
-          {expanded ? <ChevronUp size={11} style={{ color: 'var(--gia-muted-2)' }} className="shrink-0" /> : <ChevronDown size={11} style={{ color: 'var(--gia-muted-2)' }} className="shrink-0" />}
-        </div>
-
-        <div className="flex items-center gap-1.5 text-[8.5px]" style={{ color: 'var(--gia-muted-2)' }}>
-          <Clock size={9} />
-          <span>{(elapsed / 1000).toFixed(1)}s</span>
-          <span className="opacity-40">•</span>
-          <span style={{ color: meta.color }}>{meta.label}</span>
-        </div>
-
-        {agent.currentActivity && isLive && (
-          <div className="text-[9px] truncate italic" style={{ color: 'var(--gia-muted-2)' }}>
-            {agent.currentActivity}
-          </div>
-        )}
-      </button>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="px-3 pb-3 pt-1 border-t" style={{ borderColor: `${agent.color}22` }}>
-              <div className="text-[8px] font-semibold uppercase tracking-wider mb-1 mt-2" style={{ color: 'var(--gia-muted-2)' }}>Task</div>
-              <div className="text-[9.5px] leading-relaxed mb-2 max-h-16 overflow-y-auto" style={{ color: 'var(--gia-text)', opacity: 0.85 }}>
-                {agent.task || '—'}
-              </div>
-              {agent.status === 'completed' && agent.result && (
-                <>
-                  <div className="text-[8px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#34d399' }}>Findings</div>
-                  <div className="text-[9.5px] leading-relaxed max-h-28 overflow-y-auto whitespace-pre-wrap" style={{ color: 'var(--gia-text)', opacity: 0.85 }}>
-                    {agent.result.slice(0, 600)}{agent.result.length > 600 ? '…' : ''}
-                  </div>
-                </>
-              )}
-              {agent.status === 'failed' && agent.error && (
-                <>
-                  <div className="text-[8px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#f87171' }}>Error</div>
-                  <div className="text-[9.5px] leading-relaxed" style={{ color: '#f87171', opacity: 0.85 }}>
-                    {agent.error}
-                  </div>
-                </>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-};
+import { resolveAgentIcon } from '../utils/agentIcons';
+import { useLiveTick } from '../hooks/useLiveTick';
+import { DelegationTree } from './DelegationTree';
 
 const AgentSwarmDashboard: React.FC = () => {
   const rawActiveRun = useNexusStore(s => s.activeRun);
@@ -150,7 +17,6 @@ const AgentSwarmDashboard: React.FC = () => {
   // new chat) they switched to next.
   const activeRun = rawActiveRun && rawActiveRun.sessionId === (activeSessionId ?? null) ? rawActiveRun : null;
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   const isRunning = !!activeRun && !activeRun.finishedAt;
@@ -229,7 +95,7 @@ const AgentSwarmDashboard: React.FC = () => {
           {collapsed && (
             <div className="flex -space-x-2 mr-1">
               {activeRun.agents.slice(0, 5).map(a => {
-                const Icon = iconFor(a.icon);
+                const Icon = resolveAgentIcon(a.icon);
                 return (
                   <div key={a.id} className="w-6 h-6 rounded-full flex items-center justify-center border-2" style={{ background: `${a.color}30`, borderColor: 'rgba(13,13,18,1)' }}>
                     <Icon size={10} style={{ color: a.color }} />
@@ -263,24 +129,22 @@ const AgentSwarmDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Agent card strip */}
+        {/* Delegation tree — GIA root, spine, one branch per specialist */}
         <AnimatePresence>
           {!collapsed && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden max-h-[60vh]"
+              className="overflow-hidden"
             >
-              <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
-                {activeRun.agents.map(agent => (
-                  <AgentCard
-                    key={agent.id}
-                    agent={agent}
-                    expanded={expandedId === agent.id}
-                    onToggle={() => setExpandedId(id => id === agent.id ? null : agent.id)}
-                  />
-                ))}
+              <div className="max-h-[60vh] overflow-y-auto px-3 pb-3 pt-2">
+                <DelegationTree
+                  agents={activeRun.agents}
+                  isGodMode={activeRun.isGodMode}
+                  synthesizing={activeRun.synthesizing}
+                  finished={!!activeRun.finishedAt}
+                />
               </div>
             </motion.div>
           )}

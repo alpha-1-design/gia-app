@@ -43,6 +43,8 @@ import { useProviderStore } from '../store/useProviderStore';
 import { CarouselRing } from '../components/CarouselRing';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
 import { CollaborationActivity } from '../components/chat/CollaborationActivity';
+import { AttachmentPreviewModal } from '../components/chat/AttachmentPreviewModal';
+import type { Attachment } from '../hooks/useFileAttachments';
 import { TemplateSelector } from '../components/TemplateSelector';
 import { BuildStudio } from '../components/BuildStudio';
 import { VoiceNoteBar } from '../components/VoiceNoteBar';
@@ -81,7 +83,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const {
     input, setInput, loading, streamingMsgId, streamingMsgIds, voiceEnabled,
     providerStatuses,
-    showHistory, setShowHistory, historySearch, setHistorySearch, attachments,
+    showHistory, setShowHistory, historySearch, setHistorySearch, attachments, setAttachments,
     processingFiles, processingFileName,
     showScrollBtn, undoMsg, showSkillPicker,
     expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
@@ -182,6 +184,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const reduceMotionPref = useGiaStore(st => st.reduceMotion);
   const [showPreviewSheet, setShowPreviewSheet] = React.useState(false);
   const [showProjectWorkspace, setShowProjectWorkspace] = React.useState(false);
+  const [previewAttachmentIdx, setPreviewAttachmentIdx] = React.useState<number | null>(null);
 
   const { greeting, tip } = useProactiveMessage();
 
@@ -570,14 +573,24 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           <div className="flex flex-wrap gap-2 mb-2.5">
             {attachments.map((att, idx) => (
               <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] bg-zinc-800 border border-zinc-700/50">
-                {att.preview ? (
-                  <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0">
-                    <img src={att.preview} alt={att.name} className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <Paperclip size={10} className="text-zinc-400 shrink-0" />
-                )}
-                <span className="text-zinc-300 truncate max-w-[100px]">{att.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewAttachmentIdx(idx)}
+                  className="flex items-center gap-1.5 min-w-0"
+                  title="Preview attachment"
+                >
+                  {att.preview ? (
+                    <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0">
+                      <img src={att.preview} alt={att.name} className="w-full h-full object-cover" />
+                      {att.original && (
+                        <span className="absolute inset-x-0 bottom-0 text-[6px] leading-3 text-center" style={{ background: 'rgba(168,85,247,0.85)', color: 'white' }}>edit</span>
+                      )}
+                    </div>
+                  ) : (
+                    <Paperclip size={10} className={att.error ? 'text-rose-400 shrink-0' : 'text-zinc-400 shrink-0'} />
+                  )}
+                  <span className="text-zinc-300 truncate max-w-[100px]">{att.name}</span>
+                </button>
                 <button onClick={() => removeAttachment(idx)} className="text-zinc-600 hover:text-rose-400 ml-0.5">
                   <X size={10} />
                 </button>
@@ -809,6 +822,19 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
       </AnimatePresence>
       <BuildPreviewSheet url={buildPreviewUrl} open={showPreviewSheet} onClose={() => setShowPreviewSheet(false)} />
+      {(() => {
+        if (previewAttachmentIdx === null) return null;
+        const att = attachments[previewAttachmentIdx];
+        if (!att) return null;
+        return (
+          <AttachmentPreviewModal
+            attachment={att}
+            onClose={() => setPreviewAttachmentIdx(null)}
+            onReplace={(next: Attachment) => setAttachments(prev => prev.map((a, i) => (i === previewAttachmentIdx ? next : a)))}
+            onRemove={() => { removeAttachment(previewAttachmentIdx); setPreviewAttachmentIdx(null); }}
+          />
+        );
+      })()}
       {showProjectWorkspace && createPortal(
         <ProjectWorkspacePanel onClose={() => setShowProjectWorkspace(false)} />,
         document.body,

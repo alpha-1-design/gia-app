@@ -151,3 +151,23 @@ export const idbStorage = {
     }
   },
 };
+
+/**
+ * Write-through variant of idbStorage for rare, high-value state (API keys,
+ * credentials, provider config). Bypasses the 300 ms debounce so a save
+ * commits as soon as the transaction runs — a phone backgrounded/killed right
+ * after connecting an API key can't lose it to an unflushed timer. Read-through
+ * for getItem; pending debounced writes for the same key are superseded.
+ */
+export const idbStorageWriteThrough = {
+  getItem: idbStorage.getItem,
+  setItem: async (name: string, value: string): Promise<void> => {
+    const existing = pendingWrites.get(name);
+    if (existing) {
+      clearTimeout(existing.timer);
+      pendingWrites.delete(name);
+    }
+    await writeNow(name, value);
+  },
+  removeItem: idbStorage.removeItem,
+};

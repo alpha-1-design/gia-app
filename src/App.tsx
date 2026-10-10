@@ -19,6 +19,7 @@ import InAppBrowserPanel from './components/browser/InAppBrowserPanel';
 import AppNavigation from './components/AppNavigation';
 import BiometricService from './services/BiometricService';
 import { useProviderStore } from './store/useProviderStore';
+import { healProviderKeys } from './services/credentialRecovery';
 import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
 import { wakeWordIsClaimed } from './services/wakeWordOwner';
@@ -452,7 +453,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Load provider definitions dynamically
-    useProviderStore.getState().loadProviders().catch(e => logger.error('[App] Failed to load providers:', e));
+    useProviderStore.getState().loadProviders()
+      // Heal API keys lost to a WebView kill (the key survives in the native
+      // credential vault even when the debounced IndexedDB write didn't).
+      .then(() => healProviderKeys())
+      // Enrich model catalogs with live models.dev metadata (context limits,
+      // tool/vision support, pricing). Cached 24h in IndexedDB; never blocks.
+      .then(() => useProviderStore.getState().refreshModelsDevCatalog())
+      .catch(e => logger.error('[App] Failed to load providers:', e));
     if (Capacitor.isNativePlatform()) {
       LocalNotifications.requestPermissions().catch(() => {});
     }

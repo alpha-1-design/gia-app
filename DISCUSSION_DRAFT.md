@@ -34,7 +34,7 @@ GIA connects to anything: SSH, PostgreSQL, MySQL, Redis, MongoDB, WebSocket, HTT
 - Auto-installs all security tools via apk
 
 **🤖 Multi-Provider, Local-First**
-18+ providers supported (OpenAI, Anthropic, Gemini, Grok, Groq, DeepSeek, Mistral, Cohere, Together, Perplexity, Fireworks, OpenRouter, LM Studio, Ollama, LocalAI, vLLM, Text Generation WebUI, Custom). Can run fully offline with Local LLM (Qwen2.5 0.5B-3B via Transformers WASM).
+22 providers supported (OpenAI, Anthropic, Gemini, Grok, Groq, DeepSeek, Mistral, Cohere, Together, Perplexity, Fireworks, OpenRouter, LM Studio, Ollama, LocalAI, vLLM, Text Generation WebUI, Custom). Can run fully offline with Local LLM (Qwen2.5 0.5B-3B via Transformers WASM).
 
 ### Tech Stack
 - **Frontend:** React 19, TypeScript, Vite 8, Tailwind CSS v4
@@ -44,7 +44,7 @@ GIA connects to anything: SSH, PostgreSQL, MySQL, Redis, MongoDB, WebSocket, HTT
 - **Charts:** Recharts
 - **Mobile:** Capacitor (Android APK)
 - **Backend:** Alpine Linux sandbox (PRoot, no root needed)
-- **LLM Runtime:** Transformers.js (local) + 18 cloud providers
+- **LLM Runtime:** Transformers.js (local) + 19 cloud providers
 
 ### Looking for Contributors
 We're building the first truly autonomous, on-device AI agent that doesn't need the cloud. Areas we need help with:

@@ -64,6 +64,23 @@ const FALLBACK_HINTS: Record<string, string> = {
   open_url: 'Share the URL via clipboard, send_email, or send_whatsapp instead',
 };
 
+// Tool results are appended into the conversation and re-sent to the provider on
+// every subsequent loop iteration, so an unbounded result (a whole file, a long
+// web page, a huge command output) multiplies the token cost of the turn. Cap
+// what the model is shown, the way the CLI's Truncate tool does, while keeping
+// the full result available to the UI and the tool's own downstream handlers.
+const MAX_OBSERVATION_BYTES = 50 * 1024;
+const MAX_OBSERVATION_LINES = 2000;
+
+export function truncateObservation(content: string): string {
+  const lineCount = content.length === 0 ? 0 : content.split('\n').length;
+  if (content.length <= MAX_OBSERVATION_BYTES && lineCount <= MAX_OBSERVATION_LINES) return content;
+  let clipped = content.slice(0, MAX_OBSERVATION_BYTES);
+  const lines = clipped.split('\n');
+  if (lines.length > MAX_OBSERVATION_LINES) clipped = lines.slice(0, MAX_OBSERVATION_LINES).join('\n');
+  return `${clipped}\n\n[Output truncated — showing the first ${clipped.length.toLocaleString()} of ${content.length.toLocaleString()} characters. Narrow the request (smaller maxChars/limit/range) or use the relevant read/file tool to inspect just the part you need.]`;
+}
+
 const PARALLEL_SAFE_TOOLS = new Set([
   'web_search', 'read_url', 'browser_navigate', 'page_info',
   'filesystem_read', 'list_files',
@@ -386,7 +403,7 @@ async function executeSingleTool(
 
   const hint = FALLBACK_HINTS[toolCall.id];
   const obs = result!.success
-    ? `OBSERVATION: Success\n${result!.content}`
+    ? `OBSERVATION: Success\n${truncateObservation(result!.content)}`
     : `TOOL FAILED: ${toolCall.id} — ${result!.error || 'Unknown error'}. ${hint ? `Try using '${hint}' instead or use a completely different approach.` : 'Use a different approach or tool to achieve the same goal.'} If no alternative works, inform the user about the failure and suggest next steps.`;
   onThought?.(result!.success ? `✅ ${toolCall.id} completed successfully` : `⚠️ ${toolCall.id} failed — trying alternative...`);
 

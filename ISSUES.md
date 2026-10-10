@@ -6,10 +6,12 @@ with GitHub Issues — this is a single running document, updated as items
 land. Each item notes: what's wrong, why, where in the code, and current
 status.
 
-Last updated: 2026-10-05 · Current release: v2.4.0.14 (open PR #48 adds
-terminal mirror pre-check, binary verification, scoped Settings crash
-boundaries, collapsible provider matrix, MCP auto-connect fix, and Update
-Packages)
+Last updated: 2026-10-08 · Current release: v2.4.0.16 (PR #48 merged
+2026-10-06 and verified in the app: terminal mirror pre-check, binary
+verification, scoped Settings crash boundaries, collapsible provider matrix,
+MCP auto-connect fix, and Update Packages). This round added: #18 API key
+loss (fixed in tree), #19 battery drain, #20 stale Terminal tabs, and #5
+Shell-tab update.
 
 ---
 
@@ -118,18 +120,89 @@ command themselves rather than asking GIA to do it, there's no path.
 
 **Fix direction:** add a real interactive shell input to the Terminal
 screen, reusing the same `execCommand` plumbing already used internally
-(`useSandboxSetup.ts`). Not started.
+(`useSandboxSetup.ts`).
+
+**Update 2026-10-08:** largely shipped — the **Shell** tab
+(`src/components/ShellPanel.tsx`, commit `dbf3eb83`, 10 tests) now gives
+the user a real command input with history, live output, cwd tracking and
+a stop button. What remains from this issue: no PTY (nano/vim/top still
+unsupported, documented in the panel), and the web fallback is a message
+only. See also item 20 for the state of the other tabs.
+
+---
+
+### 18. API key lost after app resume (data loss)
+**Symptom (live user report):** connected an API key on the phone, left
+the app, came back to what looked like a fresh app — provider showed **no
+API key connected**, chats intact.
+
+**Root cause:** provider and credential state persist through
+`src/store/idb-storage.ts`, whose `setItem` only *schedules* a write
+(debounced 300 ms). A WebView backgrounded/killed before the timer fired —
+or before the async flush on `visibilitychange`/`appStateChange`
+committed — dropped the write. Chat state survives because it is
+rewritten constantly, while a key is written exactly once. The key itself
+was usually still alive in the native vault
+(`CredentialVault.set` → Android EncryptedSharedPreferences, written
+immediately on save), just not re-read anywhere.
+
+**Fix (in working tree, 2026-10-08):**
+1. `idbStorageWriteThrough` (`src/store/idb-storage.ts`) — write-through,
+   no debounce — now backs `useProviderStore` and `useCredentialStore`;
+   a save commits as soon as the transaction runs.
+2. `src/services/credentialRecovery.ts` — boot-time self-heal: after
+   `loadProviders()` + hydration, any provider with an empty key is
+   re-seeded from the credential store, then the native vault; wired in
+   `App.tsx`. Live keys are never overwritten.
+3. Tests: write-through behavior (`idb-storage.test.ts`), recovery paths
+   (`credentialRecovery.test.ts`, 6 tests) — all mutation-verified.
+
+**Status:** fixed in working tree, not yet committed/PR'd.
+
+---
+
+### 19. Battery drain on phone (live user report)
+**Symptom:** the app eats battery while open/foregrounded.
+
+**Ranked suspects (static audit, 2026-10-08):**
+1. **Indefinite `PARTIAL_WAKE_LOCK`** — `GIACoreService.java:119`
+   acquires with no timeout, `START_STICKY`, 5-min re-acquire watchdog
+   (`:132-148`), re-armed at boot (`BootReceiver`). CPU never suspends.
+   Worse: `MainActivity.java:43-47` calls `webView.resumeTimers()` on
+   pause whenever keep-alive is on — **JS timers deliberately run while
+   backgrounded**.
+2. **Wake-word engine** — `GIAWakeWordService.java:281-317` continuous
+   mic read + ~12.5 ONNX inferences/sec, `START_STICKY`, and the native
+   `enabled=true` pref re-arms it at every boot even though the JS
+   default is off.
+3. **Terminal foreground service** — started from
+   `GIATerminalPlugin.java:39` on every launch with a rootfs present;
+   `stopSelf()` only on error paths, never on idle.
+4. **Telegram polling** — `public/sw.js:256` runs a 3 s interval with a
+   25 s long-poll exactly when no client is open (i.e. backgrounded);
+   `MessagingBridge.ts:214-237` forces the native keep-alive service.
+5. **Eight ungated boot-started intervals** with no `document.hidden`
+   pausing anywhere: `ProactiveEngine.ts:16` (30 s),
+   `AutomationEngine.ts:52` (30 s, `stop()` never called),
+   `useClipboardMonitor.ts:13` (5 s), `KeepaliveService.ts:18` (25 s),
+   `App.tsx:546` (300 s), `GIACoreServices.ts:238` (1 h),
+   `useProactiveMessage.ts:14` (60 s), `unimindClient.ts:199` (60 s).
+
+**Next step:** pause the JS interval set on `document.hidden`, bound the
+wake lock with `acquire(timeout)` + release on idle, add an idle stop for
+the terminal service, and re-check the wake-word sticky pref on boot.
 
 ---
 
 ## 🟡 Open — Architecture / Design Gaps
 
-### 6. Provider/model catalog — 71 providers, unverified accuracy
+### 6. Provider/model catalog — 22 providers, unverified accuracy
 **Claim to investigate:** "most of them were not implemented correctly,"
-added to pad the count from ~21 to 71, similar to how other multi-provider
-CLIs are sometimes criticized for padding provider counts.
+added to pad the count (raised against the larger 71-provider GIA Cowork
+list; this app's own registry has 22 entries), similar to how other
+multi-provider CLIs are sometimes criticized for padding provider counts.
 
-**What was checked:** confirmed all 71 entries in
+**What was checked:** confirmed all 22 entries in
 `src/services/ProviderRegistry.ts` have a real `baseUrl` and route through
 one of a small number of real request-format handlers
 (`src/services/providers/openai.ts`, `gemini.ts`, `anthropic.ts`, plus
@@ -255,6 +328,38 @@ greetings/tips — neither checks the calendar or sends useful nudges
 
 **Fix direction:** native calendar read/write plugin + tools, and extend
 the proactive engine to actually use it. Not started.
+
+---
+
+### 20. Terminal tabs feel stale — MCPs is decorative, Files is static
+**Symptom (live user report):** System / Shell / Packages / Files / MCPs
+tabs "don't do anything, doesn't even open."
+
+**Facts (audit 2026-10-08):** all five tabs *are* wired —
+`SandboxSetupPanel.tsx:312` sets tab state, branches render at `:326 /
+:531 / :533 / :639 / :692` — and nothing is gated on AI/project activity;
+the only gate is `isNative` (`:286`), so on web the tabs never appear at
+all. The "does nothing" impression is accurate for two tabs:
+- **MCPs** (`:692-716`): a hard-coded 8-entry `MCP_CATALOG` (`:102-111`)
+  of label + description + GitHub source link. No install, no
+  enable/disable, no connection to `useMCPStore` or the real MCP manager
+  (`MCPPage.tsx`). Purely decorative.
+- **Files** (`:639-689`): six static folder tiles + a hard-coded path
+  list; no file browser, listing, opening, or editing. Tile counts only
+  refresh when the rootfs is installed, otherwise "Not created yet".
+- Packages `refreshInstalled()` (`:186-191`) has no try/catch — with no
+  rootfs the native call rejects silently and the tab shows zeros.
+- The Settings menu card promises "Manual command shell · **chat with
+  GIA** · packages & root environment" (`SettingsModule.tsx:349-351`),
+  but `TerminalPage.tsx:21` renders only `SandboxSetupPanel` — no chat
+  surface exists there.
+
+**Fix direction:** wire the MCPs tab to the real MCP store (or drop the
+tab — `MCPPage.tsx` already exists in Settings); give Files a real
+read-only browser over the existing `/fs/*` or native fs calls (or drop
+it); surface refresh errors instead of silent zeros; fix the menu copy.
+Also: `src/components/settings/SandboxSubPage.tsx` is defined but never
+imported — dead code, delete.
 
 ---
 

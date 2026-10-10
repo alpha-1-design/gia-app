@@ -3,6 +3,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, Play, RotateCcw, Download, Loader2, AlertCircle } from 'lucide-react';
 import CodeRunner, { CodeRunResult } from '../services/CodeRunner';
 import { highlightSyntax } from '../utils/syntaxHighlight';
+import { useShikiHighlight } from '../hooks/useShikiHighlight';
+
+const CodeBody: React.FC<{ code: string; lang?: string }> = React.memo(({ code, lang }) => {
+  const html = useShikiHighlight(code, lang);
+  if (html) {
+    return <div className="code-block-body shiki-body" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  return <pre className="code-block-body"><code>{highlightSyntax(code, lang || '')}</code></pre>;
+});
 
 interface Props {
   lang: string;
@@ -108,7 +117,7 @@ const CodeBlock: React.FC<Props> = ({ lang, code, showRun = true }) => {
           </button>
         </div>
       </div>
-      <pre className="code-block-body"><code>{highlightSyntax(currentCode, lang)}</code></pre>
+      <CodeBody code={currentCode} lang={lang} />
 
       {result && (
         <div className="border-t" style={{ borderColor: 'var(--gia-border)' }}>

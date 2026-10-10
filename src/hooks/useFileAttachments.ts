@@ -4,7 +4,7 @@ import RAGService from '../services/RAGService';
 import { knowledgeGraphService } from '../services/KnowledgeGraphService';
 import { logger } from '../utils/logger';
 
-export type Attachment = { name: string; type: string; content: string; preview?: string; error?: string };
+export type Attachment = { name: string; type: string; content: string; preview?: string; original?: string; error?: string };
 
 const OFFICE_FILE_EXTENSIONS = /\.(?:docx|xlsx|pptx|odt|ods)$/i;
 const TEXT_FILE_EXTENSIONS = new Set([

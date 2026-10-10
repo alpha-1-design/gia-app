@@ -24,7 +24,11 @@ function makeMockIDB() {
         onsuccess: null,
         onerror: null,
       };
-      queueMicrotask(() => req.onsuccess?.({ result: data.get(key) ?? null }));
+      queueMicrotask(() => {
+        // IDB exposes the value on the request itself once it resolves.
+        req.result = data.get(key) ?? null;
+        req.onsuccess?.({ result: req.result });
+      });
       return req;
     }
     delete(key: string) {
@@ -93,5 +97,46 @@ describe('idb-storage', () => {
     await mod.flushStorage();
     // flushStorage awaits writeNow; after the retry fails the handler fires.
     expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('write-through storage commits immediately, without the debounce window', async () => {
+    vi.useFakeTimers();
+    try {
+      const mock = makeMockIDB();
+      (window as unknown as { indexedDB: unknown }).indexedDB = mock.factory;
+      const mod = await import('../idb-storage');
+
+      await mod.idbStorageWriteThrough.setItem('k', 'v');
+
+      // No flushStorage(), no timer advance — the value must already be durable.
+      expect(mock.data.get('k')).toBe('v');
+      expect(await mod.idbStorageWriteThrough.getItem('k')).toBe('v');
+      // Nothing left to lose.
+      await mod.flushStorage();
+      expect(mock.data.get('k')).toBe('v');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('write-through supersedes a pending debounced write for the same key', async () => {
+    vi.useFakeTimers();
+    try {
+      const mock = makeMockIDB();
+      (window as unknown as { indexedDB: unknown }).indexedDB = mock.factory;
+      const mod = await import('../idb-storage');
+
+      // Debounced write (stale value) is scheduled first…
+      await mod.idbStorage.setItem('k', 'stale');
+      // …then the write-through save lands.
+      await mod.idbStorageWriteThrough.setItem('k', 'fresh');
+      expect(mock.data.get('k')).toBe('fresh');
+
+      // Fire the stale debounce timer — it must not resurrect the old value.
+      await vi.advanceTimersByTimeAsync(500);
+      expect(mock.data.get('k')).toBe('fresh');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

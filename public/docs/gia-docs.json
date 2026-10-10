@@ -40,7 +40,7 @@
       "blocks": [
         { "type": "p", "text": "The core workspace. Talk to GIA with tools, files, memory, and real-time streaming. GIA streams responses token-by-token and runs tools in a loop until the task is complete." },
         { "type": "ul", "items": [
-          "Attachments: Attach files, images, or share from another app. Long pasted text is auto-wrapped as a .txt attachment.",
+          "Attachments: Attach files, images, or share from another app. Long pasted text is auto-wrapped as a .txt attachment. Tap any attachment chip to open a full preview, and circle a region on an image to focus GIA on just that part before sending.",
           "Streaming: Responses appear token-by-token with a thinking panel showing GIA's reasoning.",
           "Tool Calls: GIA can search the web, read/write files, run terminal commands, generate images, and more — all shown as live status cards.",
           "Cloud vs On-Device: Every response is tagged so you always know where it ran.",

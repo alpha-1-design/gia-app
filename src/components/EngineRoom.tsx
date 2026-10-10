@@ -24,7 +24,7 @@ let lastExport: string | null = null;
 const BOOT: Line[] = [
   mk('info', '╔══════════════════════════════════════════╗'),
   mk('info', '║      GIA ENGINE ROOM  v2.4.0.16 BETA      ║'),
-  mk('info', '║  10 Providers · Dynamic Model Fetch      ║'),
+  mk('info', '║  22 Providers · Dynamic Model Fetch      ║'),
   mk('info', '╚══════════════════════════════════════════╝'),
   mk('res', ''),
   mk('res', 'Supported: OpenRouter · Anthropic · OpenAI · Gemini'),
