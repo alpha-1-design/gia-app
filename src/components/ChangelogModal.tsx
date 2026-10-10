@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.17 Beta';
+const VERSION = '2.4.0.17';
 
 const sections = [
   {
@@ -16,7 +16,6 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
-      'GIA 2.4.0.17 is a beta release: new workflows and Android-native features are still being tested, and feedback is welcome.',
       'Root Terminal now has a Shell tab: run commands in the on-device Alpine Linux environment with live output, a Stop button, command history, and a remembered working directory. Full-screen programs such as nano and vim are not supported yet.',
       'Settings → Voice now shows the “Hey Jarvis” openWakeWord status up front (On, Off, or Unavailable with the reason), and the older in-chat phrase is labelled separately.',
       'Added an experimental Android on-device wake-word engine with the “Hey Jarvis” phrase. The browser build does not provide native wake-word listening.',
@@ -96,7 +95,7 @@ const sections = [
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',
       'Landing page and documentation now describe the phone app, Linux desktop companion, sandbox boundaries, credential handling, and release workflow.',
-      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.17 Beta.',
+      'Version references across the app, Android package, documentation, user agent strings, and landing page are now 2.4.0.17.',
       'Build tooling moved to Node.js 24 and current GitHub Actions releases (the previous ones were deprecated), and CI runners are pinned to Ubuntu 24.04 ahead of the ubuntu-latest change to Ubuntu 26.',
     ],
   },

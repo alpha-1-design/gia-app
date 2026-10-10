@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 24
-        versionName "2.4.0.17 Beta"
+        versionName "2.4.0.17"
         ndk {
             // onnxruntime-android ships ~5 MB of native code per ABI. The proot
             // layer is arm64-only already, so x86 builds were never useful.
