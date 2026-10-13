@@ -51,6 +51,15 @@ public class GIAWakeWordService extends Service {
 
     private static final String TAG = "GIAWakeWord";
     private static final String CHANNEL_ID = "GIAWakeWordChannel";
+    /**
+     * The "Heard <phrase> - tap to talk" alert needs its own HIGH-importance
+     * channel. On the ongoing LOW-importance listening channel it never pops up
+     * and its full-screen intent is ignored, so a detection while the app was in
+     * the background (where Android blocks the direct activity launch) was
+     * silently lost. A channel's importance cannot be raised after creation,
+     * hence a new id rather than editing CHANNEL_ID.
+     */
+    private static final String ALERT_CHANNEL_ID = "GIAWakeWordAlertChannel";
     private static final int NOTIFICATION_ID = 1001;
     private static final String ASSET_DIR = "wakeword";
     private static final String MEL_ASSET = "melspectrogram.onnx";
@@ -63,6 +72,8 @@ public class GIAWakeWordService extends Service {
 
     // ── Shared state (read by the Capacitor plugin) ──────────────────────
     private static volatile boolean running = false;
+    /** True from the moment a worker is launched until it is listening (or has died). */
+    private static volatile boolean starting = false;
     private static volatile boolean paused = false;
     private static volatile boolean appInForeground = false;
     private static volatile String activeLabel = "";
@@ -73,6 +84,26 @@ public class GIAWakeWordService extends Service {
     private static volatile GIAWakeWordPlugin pluginRef = null;
 
     public static boolean isRunning() { return running; }
+
+    /**
+     * Restarts the listener when the user left wake word on but the system
+     * stopped the service while the app was away (Android 12+ refuses to
+     * restart a microphone foreground service from the background, so a killed
+     * service otherwise stays dead until the app is reopened). Only call this
+     * while the app is in the foreground, where starting the service is allowed.
+     */
+    static void rearmIfNeeded(Context ctx) {
+        if (running || starting) return;
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (!prefs.getBoolean("enabled", false)) return;   // the user never enabled it, or stopped it
+        if (ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return;
+        try {
+            // No extras: onStartCommand rebuilds the config from the saved preferences.
+            ctx.startForegroundService(new Intent(ctx, GIAWakeWordService.class));
+        } catch (Exception e) {
+            Log.w(TAG, "Could not re-arm wake word on resume", e);
+        }
+    }
     public static boolean isPaused() { return paused; }
     public static String getActiveLabel() { return activeLabel; }
     public static float getActiveThreshold() { return activeThreshold; }
@@ -214,6 +245,7 @@ public class GIAWakeWordService extends Service {
         final Config finalCfg = cfg;
         final AtomicBoolean stopFlag = new AtomicBoolean(false);
         workerStop = stopFlag;
+        starting = true;
         worker = new Thread(() -> runLoop(finalCfg, stopFlag), "GIAWakeWord");
         worker.setPriority(Thread.NORM_PRIORITY + 1);
         worker.start();
@@ -271,6 +303,7 @@ public class GIAWakeWordService extends Service {
             activeLabel = label;
             activeThreshold = engine.getThreshold();
             running = true;
+            starting = false;
             updateNotification("Listening for \"" + label + "\"");
             Log.i(TAG, "Listening for \"" + label + "\" at threshold " + activeThreshold);
 
@@ -324,6 +357,7 @@ public class GIAWakeWordService extends Service {
             if (recorder != null) releaseRecorder(recorder);
             if (backend != null) backend.close();
             running = false;
+            starting = false;
             activeLabel = "";
             if (!stop.get()) stopSelf();   // died on its own: don't leave a dead notification
         }
@@ -364,7 +398,7 @@ public class GIAWakeWordService extends Service {
         if (nm == null) return;
         PendingIntent pi = PendingIntent.getActivity(this, 7, launch,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+        Notification n = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
                 .setContentTitle("Heard \"" + label + "\"")
                 .setContentText("Tap to talk to GIA")
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
@@ -476,6 +510,7 @@ public class GIAWakeWordService extends Service {
     public void onDestroy() {
         stopWorker();
         running = false;
+        starting = false;
         super.onDestroy();
     }
 
@@ -494,8 +529,15 @@ public class GIAWakeWordService extends Service {
                     CHANNEL_ID, "Wake Word Detection", NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("GIA is listening for the wake word");
             channel.setShowBadge(false);
+            NotificationChannel alert = new NotificationChannel(
+                    ALERT_CHANNEL_ID, "Wake Word Alerts", NotificationManager.IMPORTANCE_HIGH);
+            alert.setDescription("Shown when GIA hears the wake word while the app is in the background");
+            alert.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) nm.createNotificationChannel(channel);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+                nm.createNotificationChannel(alert);
+            }
         }
     }
 

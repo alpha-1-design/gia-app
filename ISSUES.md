@@ -6,7 +6,7 @@ with GitHub Issues — this is a single running document, updated as items
 land. Each item notes: what's wrong, why, where in the code, and current
 status.
 
-Last updated: 2026-10-08 · Current release: v2.4.0.16 (PR #48 merged
+Last updated: 2026-10-10 · Current release: v2.4.0.17 (built on v2.4.0.16, whose PR #48 merged
 2026-10-06 and verified in the app: terminal mirror pre-check, binary
 verification, scoped Settings crash boundaries, collapsible provider matrix,
 MCP auto-connect fix, and Update Packages). This round added: #18 API key

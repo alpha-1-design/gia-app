@@ -243,7 +243,7 @@ const MessageRow = memo<MessageRowProps>(({
   return (
     <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
       {msg.role === 'user' && avatarNode}
-      <div className="flex-1 min-w-0 space-y-1">
+      <div className={`flex-1 min-w-0 space-y-1 ${msg.role === 'user' ? 'flex flex-col items-end' : ''}`}>
         {msg.attachments?.some(a => a.preview) && (
           <div className={`flex flex-wrap gap-2 mb-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.attachments.filter(a => a.preview).map((a, ai) => (
@@ -251,7 +251,7 @@ const MessageRow = memo<MessageRowProps>(({
             ))}
           </div>
         )}
-        <div className="flex items-center gap-2 mb-0.5 ml-1">
+        <div className={`flex items-center gap-2 mb-0.5 ${msg.role === 'user' ? 'justify-end mr-1' : 'ml-1'}`}>
           {msg.role !== 'user' && avatarNode}
           <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: msg.agentId ? resolveAgentColor(msg.agentIcon || 'Bot') : msg.role === 'user' ? '#a855f7' : 'var(--gia-muted-2)' }}>
             {msg.agentId ? msg.agentName : msg.role === 'user' ? 'You' : 'GIA'}
