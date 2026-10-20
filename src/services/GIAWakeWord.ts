@@ -67,7 +67,7 @@ export interface GIAWakeWordPlugin {
 }
 
 const GIAWakeWord = registerPlugin<GIAWakeWordPlugin>('GIAWakeWord', {
-  web: () => import('./GIAWakeWord.web').then(m => m.GIAWakeWordWeb),
+  web: () => import('./GIAWakeWord.web').then(m => new m.GIAWakeWordWeb()),
 });
 
 export { GIAWakeWord };

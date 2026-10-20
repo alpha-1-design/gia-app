@@ -10,7 +10,7 @@ describe('ThinkingStatus', () => {
 
   it('renders a generic phase when no tool name', () => {
     const { container } = render(<ThinkingStatus phase="coding" />);
-    expect(container.textContent).toContain('Cooking');
+    expect(container.textContent).toContain('Writing code');
   });
 
   it('renders without crashing when no props', () => {

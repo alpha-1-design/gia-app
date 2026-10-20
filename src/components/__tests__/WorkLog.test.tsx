@@ -25,36 +25,12 @@ describe('WorkLog during a live run (e.g. web search)', () => {
         currentTool="web_search"
       />
     );
-    // The header's phase label rotates through a fixed list of playful,
-    // non-deterministic strings (see displayPhaseLabel in WorkLog.tsx --
-    // cycles by Date.now(), not something worth pinning exact wording to).
-    // What actually matters for this regression: the component renders a
-    // non-empty header row at all while live+collapsed, rather than
-    // rendering nothing (the pre-fix bug returned null unless isExpanded
-    // was true, see the `if (!isExpanded && !isLive) return null` guard).
-    expect(container.querySelector('div')).not.toBeNull();
-    expect(container.textContent?.trim().length).toBeGreaterThan(0);
-  });
-
-  it('does NOT render the detailed step timeline while live but not explicitly expanded', () => {
-    const { container } = render(
-      <WorkLog
-        thoughts={liveWebSearchThoughts}
-        isLive={true}
-        isExpanded={false}
-        onToggle={vi.fn()}
-        currentTool="web_search"
-      />
-    );
-    // The step timeline lives under an AnimatePresence gated on isExpanded;
-    // with isExpanded=false it must not be in the document, regardless of
-    // isLive. This is the exact behavior that was broken.
+    expect(screen.getByText('Searching the web')).toBeInTheDocument();
     expect(container.querySelector('[data-testid="worklog-steps"]')).toBeNull();
-    expect(screen.queryByText(/^Searching the web$/)).toBeNull();
   });
 
   it('does render the detailed step timeline once the user explicitly expands it', () => {
-    render(
+    const { container } = render(
       <WorkLog
         thoughts={liveWebSearchThoughts}
         isLive={true}
@@ -63,8 +39,7 @@ describe('WorkLog during a live run (e.g. web search)', () => {
         currentTool="web_search"
       />
     );
-    // With isExpanded=true (user tapped it open), the step detail should
-    // now be visible -- confirms this isn't just permanently hidden.
-    expect(screen.getByText('Searching the web')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="worklog-steps"]')).not.toBeNull();
+    expect(screen.getAllByText('Searching the web').length).toBeGreaterThan(0);
   });
 });

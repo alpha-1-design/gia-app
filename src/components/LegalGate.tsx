@@ -30,7 +30,7 @@ const LegalGate: React.FC = () => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="legal-title"
-      className="fixed inset-0 z-[100] flex flex-col p-4"
+      className="fixed inset-0 z-[240] flex flex-col p-4"
       style={{ background: 'var(--gia-bg)', paddingTop: 'max(16px, env(safe-area-inset-top))', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
     >
       <h1 id="legal-title" className="text-lg font-semibold mb-1" style={{ color: 'var(--gia-text)' }}>Before you start</h1>

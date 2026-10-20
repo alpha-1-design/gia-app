@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, ChevronUp, Crown, Layers, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Layers, X } from 'lucide-react';
 import { useNexusStore } from '../store/useNexusStore';
 import { useGiaStore } from '../store/useGiaStore';
 import { resolveAgentIcon } from '../utils/agentIcons';
@@ -49,45 +49,28 @@ const AgentSwarmDashboard: React.FC = () => {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
-        className="mx-3 mb-2 rounded-2xl overflow-hidden"
+        className="mx-3 mb-2 overflow-hidden"
         style={{
-          background: activeRun.isGodMode
-            ? 'linear-gradient(135deg, rgba(217,119,6,0.1), rgba(13,13,18,0.96))'
-            : 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(13,13,18,0.96))',
-          border: `1px solid ${activeRun.isGodMode ? 'rgba(217,119,6,0.3)' : 'rgba(168,85,247,0.2)'}`,
-          boxShadow: isRunning ? `0 0 24px ${activeRun.isGodMode ? 'rgba(217,119,6,0.12)' : 'rgba(168,85,247,0.1)'}` : 'none',
+          background: '#000',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 18,
         }}
       >
-        {/* Header bar */}
         <button
           onClick={() => setCollapsed(c => !c)}
           className="w-full flex items-center gap-2.5 px-3.5 py-2.5"
         >
-          <div className="relative shrink-0">
-            <Layers size={15} style={{ color: activeRun.isGodMode ? '#f59e0b' : '#a855f7' }} />
-            {isRunning && (
-              <motion.div
-                className="absolute -inset-1 rounded-full"
-                style={{ background: activeRun.isGodMode ? '#f59e0b' : '#a855f7', opacity: 0.15 }}
-                animate={{ scale: [1, 1.6, 1], opacity: [0.25, 0, 0.25] }}
-                transition={{ duration: 1.8, repeat: Infinity }}
-              />
-            )}
-          </div>
+          <Layers size={15} style={{ color: '#fafafa' }} />
           <div className="flex-1 text-left min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11.5px] font-bold" style={{ color: 'var(--gia-text)' }}>
-                Nexus{activeRun.isGodMode ? ' · GOD MODE' : ''}
-              </span>
-              {activeRun.isGodMode && <Crown size={10} style={{ color: '#f59e0b' }} />}
+            <div className="text-[13px] font-semibold" style={{ color: '#fafafa' }}>
+              Nexus{activeRun.isGodMode ? ' · extended' : ''}
             </div>
-            <div className="text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>
+            <div className="text-[12px]" style={{ color: '#a1a1aa' }}>
               {activeRun.synthesizing
-                ? 'Synthesizing findings…'
+                ? 'Combining findings'
                 : isRunning
-                  ? `${summary?.done}/${summary?.total} agents done${summary && summary.failed > 0 ? ` · ${summary.failed} failed` : ''}`
-                  : `Finished — ${summary?.done}/${summary?.total} succeeded${summary && summary.failed > 0 ? `, ${summary.failed} failed` : ''}`
-              }
+                  ? `${summary?.done ?? 0} of ${summary?.total ?? 0} finished`
+                  : `Finished · ${summary?.done ?? 0} of ${summary?.total ?? 0}`}
             </div>
           </div>
 

@@ -97,12 +97,13 @@ export function useChatGeneration() {
       setStreamingMsgIds(new Set([genState.messageId]));
       generationKeyRef.current = `chat-${genState.sessionId}-${genState.messageId}`;
     }
-    const unsub = useGiaStore.subscribe((s) => {
+    const unsub = useGiaStore.subscribe((s, prev) => {
+      if (s.generationState === prev.generationState) return;
       const gs = s.generationState;
       if (!gs.active || gs.module !== 'chat') {
         setLoading(false);
         setStreamingMsgId(null);
-        setStreamingMsgIds(new Set());
+        setStreamingMsgIds(current => (current.size === 0 ? current : new Set()));
         generationKeyRef.current = null;
       }
     });

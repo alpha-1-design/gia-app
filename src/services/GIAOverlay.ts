@@ -16,7 +16,7 @@ export interface GIAOverlayPlugin {
 }
 
 const GIAOverlay = registerPlugin<GIAOverlayPlugin>('GIAOverlay', {
-  web: () => import('./GIAOverlay.web').then(m => m.GIAOverlayWeb),
+  web: () => import('./GIAOverlay.web').then(m => new m.GIAOverlayWeb()),
 });
 
 export { GIAOverlay };

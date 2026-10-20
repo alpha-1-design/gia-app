@@ -4,6 +4,37 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-10-19
+
+### Stable work status, studio, sub-agents
+**Files:** `src/components/ThinkingStatus.tsx`, `src/components/WorkLog.tsx`, `src/components/chat/StreamingCursor.tsx`, `src/components/MessageList.tsx`, `src/components/BuildStudio.tsx`, `src/components/DelegationTree.tsx`, `src/components/AgentSwarmDashboard.tsx`
+- Think/work status no longer cycles joke lines or fades each letter. One label stays up: the live tool ("Searching the web") or "Thinking", and it remains above the answer after the first token instead of being swapped for a pulsing badge.
+- Build Studio is a stage: style preview, brief, and starter grid that still fills the composer without sending.
+- Nexus sub-agents render as quiet Grok-style threads (name, role, status, elapsed) instead of glowing cards.
+
+---
+
+## 2026-10-17
+
+### No more wrong-screen flash on open
+**Files:** `src/main.tsx`, `src/App.tsx`, `src/store/useGiaStore.ts`, `src/modules/ChatModule.tsx`, `src/modules/AgentsModule.tsx`
+- The HTML splash was removed on the first React frame, before IndexedDB rehydration. Chat (and its "no provider" empty state) painted, then the setup wizard or legal gate covered it. The splash now stays until persisted GIA state and provider keys are in, and Chat is not mounted while the wizard or legal gate is the screen that should be showing.
+- Module switches no longer use `AnimatePresence mode="wait"`, which unmounted the current screen and faded the next one in from opacity 0 — a blank frame between every module.
+- Agents list waits for its own store instead of flashing the empty "unleash your agents" state. Chat waits before announcing that no provider is connected. A failed rehydrate still sets `hasHydrated` so the shell cannot stick on the splash.
+
+---
+
+## 2026-10-16
+
+### Web preview: legal gate, subscription thrash, Capacitor web plugins
+**Files:** `src/App.tsx`, `src/components/LegalGate.tsx`, `src/hooks/useChatGeneration.ts`,
+`src/services/GIA{ForegroundService,ScreenAgent,Update,Intent,Alarm,WakeWord,Overlay,SMS}.ts`
+- **First run:** the setup wizard (`z-200`) painted over the privacy gate (`z-100`), so a new session never saw the policy until the wizard was dismissed. The gate now sits above every other overlay, and the wizard waits until the current legal version is accepted.
+- **Store fan-out:** `longRunningMode` teardown and chat streaming reset ran on every `useGiaStore` update. With long-running off, each notification stopped the foreground service, wake lock, and keepalive. Both subscribers now ignore unrelated updates, and the streaming reset no longer allocates a new `Set` when already idle.
+- **Web plugins:** `registerPlugin({ web })` was given class constructors. Capacitor looks up methods on that object, so prototype methods threw `not implemented on web`. The web factories now return instances.
+
+---
+
 ## 2026-10-10
 
 ### Terminal — battle-tested on device, mirrors + rootfs fixes, free tier

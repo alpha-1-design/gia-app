@@ -6,7 +6,7 @@ export interface GIAAlarmPlugin {
 }
 
 const GIAAlarm = registerPlugin<GIAAlarmPlugin>('GIAAlarm', {
-  web: () => import('./GIAAlarm.web').then(m => m.GIAAlarmWeb),
+  web: () => import('./GIAAlarm.web').then(m => new m.GIAAlarmWeb()),
 });
 
 export { GIAAlarm };

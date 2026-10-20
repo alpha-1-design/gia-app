@@ -70,7 +70,7 @@ export interface ScreenAgentPlugin {
 }
 
 const GIAScreenAgent = registerPlugin<ScreenAgentPlugin>('GIAScreenAgent', {
-  web: () => import('./GIAScreenAgent.web').then(m => m.GIAScreenAgentWeb),
+  web: () => import('./GIAScreenAgent.web').then(m => new m.GIAScreenAgentWeb()),
 });
 
 export { GIAScreenAgent };

@@ -11,7 +11,7 @@ export interface GIASMSPlugin {
 }
 
 const GIASMS = registerPlugin<GIASMSPlugin>('GIASMS', {
-  web: () => import('./GIASMS.web').then(m => m.GIASMSWeb),
+  web: () => import('./GIASMS.web').then(m => new m.GIASMSWeb()),
 });
 
 export { GIASMS };

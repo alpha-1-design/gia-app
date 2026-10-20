@@ -22,7 +22,7 @@ export interface GIAUpdatePlugin {
 }
 
 const GIAUpdate = registerPlugin<GIAUpdatePlugin>('GIAUpdate', {
-  web: () => import('./GIAUpdate.web').then(m => m.GIAUpdateWeb),
+  web: () => import('./GIAUpdate.web').then(m => new m.GIAUpdateWeb()),
 });
 
 export { GIAUpdate };

@@ -14,7 +14,6 @@ import GiaBrain from '../services/GiaBrain';
 import giaTools from '../services/GiaTools';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
-import { resolveAgentIcon } from '../utils/agentIcons';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import OrbAvatar from '../components/OrbAvatar';
 
@@ -184,6 +183,15 @@ const AgentsModule: React.FC = () => {
     agents: s.agents || [],
     removeAgent: s.removeAgent,
   })));
+  const [agentsReady, setAgentsReady] = useState(() => useAgentStore.persist.hasHydrated());
+
+  useEffect(() => {
+    if (useAgentStore.persist.hasHydrated()) {
+      setAgentsReady(true);
+      return;
+    }
+    return useAgentStore.persist.onFinishHydration(() => setAgentsReady(true));
+  }, []);
 
   const [view, setView] = useState<ViewState>('list');
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
@@ -209,7 +217,12 @@ const AgentsModule: React.FC = () => {
   return (
     <AgentErrorBoundary onReset={() => { setView('list'); setChatAgentId(null); }}>
       <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--gia-bg)' }}>
-        {view === 'list' && (
+        {view === 'list' && !agentsReady && (
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-xs" style={{ color: 'var(--gia-muted-2)' }}>Loading agents…</span>
+          </div>
+        )}
+        {view === 'list' && agentsReady && (
           <AgentListView
             agents={safeAgents}
             onOpenChat={openChat}
@@ -458,9 +471,7 @@ const AgentListView: React.FC<{
 
           {/* Core icon */}
           <div className="agent-core-icon relative z-10 mb-6">
-            <div className="w-20 h-20 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(139,92,246,0.08))', border: '1px solid rgba(168,85,247,0.12)' }}>
-              <Sparkles size={36} style={{ color: 'rgba(168,85,247,0.7)' }} />
-            </div>
+            <OrbAvatar color="#a855f7" size={88} face seed="gia-agents" />
           </div>
 
           <div className="relative z-10 text-center">
@@ -501,7 +512,6 @@ const AgentListView: React.FC<{
             <AnimatePresence mode="popLayout">
               {filteredAgents.map((agent) => {
                 const color = getIconColor(agent.icon);
-                const IconComponent = resolveAgentIcon(agent.icon);
 
                 return (
                   <motion.div
@@ -537,9 +547,7 @@ const AgentListView: React.FC<{
 
                     <div className="flex items-start gap-3 relative z-10">
                       {/* Avatar */}
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}15`, border: `1px solid ${color}30` }}>
-                        <OrbAvatar color={color} size={34} animate={false} icon={<IconComponent size={18} />} />
-                      </div>
+                      <OrbAvatar color={color} size={44} face seed={agent.id} />
 
                       {/* Main Info */}
                       <div className="flex-1 min-w-0">
@@ -821,7 +829,6 @@ ${toolSection}
   };
 
   const color = getIconColor(agent.icon);
-  const IconComponent = resolveAgentIcon(agent.icon);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -830,9 +837,7 @@ ${toolSection}
         <button onClick={onBack} className="w-7 h-7 rounded-lg flex items-center justify-center tap-feedback" style={{ color: 'var(--gia-muted)' }}>
           <ChevronLeft size={16} />
         </button>
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}15` }}>
-          <OrbAvatar color={color} size={26} animate={false} icon={<IconComponent size={14} />} />
-        </div>
+        <OrbAvatar color={color} size={32} face seed={agent.id} />
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</h2>
           <div className="flex items-center gap-2 mt-0.5">
@@ -867,9 +872,7 @@ ${toolSection}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${color}08` }}>
-              <OrbAvatar color={color} size={46} animate glow={false} icon={<IconComponent size={22} />} />
-            </div>
+            <OrbAvatar color={color} size={72} face seed={agent.id} />
             <p className="text-xs font-medium" style={{ color: 'var(--gia-muted)' }}>Ask {agent.name} anything</p>
             <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
               {agent.tools && agent.tools.length > 0 ? `${agent.tools.length} tool(s) available` : 'No tools assigned'}
@@ -884,9 +887,9 @@ ${toolSection}
             return (
               <motion.div
                 key={msg.id}
-                initial={{ opacity: 0, y: 12, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                initial={idx === messages.length - 1 ? { opacity: 0, y: 8 } : false}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18 }}
                 className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
@@ -1057,7 +1060,6 @@ const CreateAgentModal: React.FC<{
   };
 
   const currentIconColor = getIconColor(icon);
-  const CurrentIconComponent = resolveAgentIcon(icon);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -1088,20 +1090,16 @@ const CreateAgentModal: React.FC<{
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Avatar Icon</label>
             <div className="flex items-center gap-3 mt-2">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${currentIconColor}15` }}>
-                <OrbAvatar color={currentIconColor} size={34} animate glow={false} icon={<CurrentIconComponent size={18} />} />
-              </div>
+              <OrbAvatar color={currentIconColor} size={48} face seed={icon} />
               <div className="flex-1 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-                {AGENT_ICONS.map(a => {
-                  const AIcon = resolveAgentIcon(a.name);
-                  return (
+                {AGENT_ICONS.map(a => (
                     <button key={a.name} onClick={() => setIcon(a.name)}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center tap-feedback"
-                      style={{ background: icon === a.name ? `${a.color}20` : 'var(--gia-surface-2)', border: icon === a.name ? `1px solid ${a.color}40` : '1px solid var(--gia-border)' }}>
-                      <OrbAvatar color={a.color} size={16} animate={false} glow={icon === a.name} icon={<AIcon size={10} />} />
+                      aria-label={a.name}
+                      className="w-8 h-8 rounded-full flex items-center justify-center tap-feedback"
+                      style={{ background: 'transparent', border: icon === a.name ? `1px solid ${a.color}` : '1px solid transparent' }}>
+                      <OrbAvatar color={a.color} size={26} face animate={false} glow={icon === a.name} seed={a.name} />
                     </button>
-                  );
-                })}
+                  ))}
               </div>
             </div>
           </div>
