@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bell, X, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ClipboardIcon } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
@@ -36,6 +36,7 @@ import { useFirstLaunch } from './hooks/useFirstLaunch';
 import CommandPalette from './components/CommandPalette';
 import type { UpdateInfo } from './services/UpdateService';
 import { beginEdgeSwipe, shouldOpenFromEdgeSwipe, type EdgeSwipeState } from './utils/edgeSwipe';
+import { needsLegalAcceptance } from './utils/legal';
 import './styles/globals.css';
 
 const EngineRoom = lazy(() => import('./components/EngineRoom'));
@@ -100,6 +101,7 @@ async function checkProviderHealth(provider: string, apiKey: string, model: stri
 
 const ModuleView: React.FC = () => {
   const currentModule = useGiaStore(s => s.currentModule);
+  const reduceMotion = useGiaStore(s => s.reduceMotion);
   const Fallback = () => (
     <div className="flex items-center justify-center h-full">
       <div className="flex flex-col items-center gap-2">
@@ -121,18 +123,20 @@ const ModuleView: React.FC = () => {
     agents:    <Suspense fallback={<Fallback />}><ErrorBoundary name="Agents"><AgentsModule /></ErrorBoundary></Suspense>,
   };
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={currentModule}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-        className="h-full w-full"
-      >
-        {components[currentModule] ?? components.chat}
-      </motion.div>
-    </AnimatePresence>
+    <div className="relative h-full w-full">
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={currentModule}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.12 }}
+          className="absolute inset-0"
+        >
+          {components[currentModule] ?? components.chat}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 };
 
@@ -265,7 +269,7 @@ const App: React.FC = () => {
   }, []);
   const [showTaskBoard, setShowTaskBoard] = useState(false);
   const [showNotesPanel, setShowNotesPanel] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
+  const [wizardClosed, setWizardClosed] = useState(false);
   const [updateNotification, setUpdateNotification] = useState<UpdateInfo | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const offsetSyncRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -400,14 +404,6 @@ const App: React.FC = () => {
       return () => document.removeEventListener('paste', handlePaste);
     };
     init();
-
-    // Show Setup Wizard if no provider is configured on first launch
-    const { providers } = useProviderStore.getState();
-    const hasAnyProvider = Object.values(providers).some(p => (p.enabled && p.apiKey) || (!p.enabled && p.apiKey && p.apiKey.length > 0));
-    const wizardCompleted = localStorage.getItem('gia-wizard-completed') === 'true';
-    if (!hasAnyProvider && !wizardCompleted) {
-      setShowSetup(true);
-    }
 
     // Clipboard paste detection (synchronous — cleaned up properly)
     const handlePaste = (e: ClipboardEvent) => {
@@ -652,7 +648,8 @@ const App: React.FC = () => {
         logger.log('[IdleManager] User active — models will reload on next use');
       });
       startLongRunning();
-      const unsubLongRunning = useGiaStore.subscribe((s) => {
+      const unsubLongRunning = useGiaStore.subscribe((s, prev) => {
+        if (s.longRunningMode === prev.longRunningMode) return;
         if (s.longRunningMode) startLongRunning();
         else stopLongRunning();
       });
@@ -848,6 +845,35 @@ const App: React.FC = () => {
     return () => timers.forEach(clearTimeout);
   }, [notifications, clearNotification]);
 
+  const giaHydrated = useGiaStore(s => s.hasHydrated);
+  const legalVersion = useGiaStore(s => s.legalAcceptedVersion);
+  const providers = useProviderStore(s => s.providers);
+  const [providersHydrated, setProvidersHydrated] = useState(() => useProviderStore.persist.hasHydrated());
+  const [bootGiveUp, setBootGiveUp] = useState(false);
+  useEffect(() => {
+    if (useProviderStore.persist.hasHydrated()) {
+      setProvidersHydrated(true);
+      return;
+    }
+    return useProviderStore.persist.onFinishHydration(() => setProvidersHydrated(true));
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setBootGiveUp(true), 3500);
+    return () => clearTimeout(t);
+  }, []);
+  const shellReady = (giaHydrated && providersHydrated) || bootGiveUp;
+  const legalPending = needsLegalAcceptance(legalVersion);
+  const wizardCompleted = typeof window !== 'undefined' && localStorage.getItem('gia-wizard-completed') === 'true';
+  const hasAnyProvider = Object.values(providers).some(p => (p.enabled && !!p.apiKey) || (!p.enabled && !!p.apiKey && p.apiKey.length > 0));
+  const showSetup = shellReady && !wizardClosed && !legalPending && !wizardCompleted && !hasAnyProvider;
+  const showWorkspace = shellReady && !showSetup && !legalPending;
+  useLayoutEffect(() => {
+    if (!shellReady) return;
+    window.dispatchEvent(new Event('gia-shell-ready'));
+  }, [shellReady]);
+
+  if (!shellReady) return null;
+
   if (locked) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 bg-zinc-950 px-8 text-center">
@@ -932,14 +958,15 @@ const App: React.FC = () => {
       </div>
 
 {/* Header */}
-       {!fullScreenMode && <AppNavigation />}
+       {showWorkspace && !fullScreenMode && <AppNavigation />}
 
-       {/* Module content */}
+       {showWorkspace && (
        <main className="flex-1 overflow-hidden relative z-10">
         <ModuleView />
       </main>
+       )}
 
-      <FloatingOrb />
+      {showWorkspace && <FloatingOrb />}
       <FloatingDownload />
       <LegalGate />
 
@@ -1100,18 +1127,18 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {showSetup && (
           <motion.div
             key="setup-wizard"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             className="fixed inset-0 z-[200] w-full h-[100dvh] bg-[var(--gia-bg)] flex flex-col overflow-y-auto"
             style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            <SetupWizard onClose={() => setShowSetup(false)} onComplete={() => setShowSetup(false)} />
+            <SetupWizard onClose={() => setWizardClosed(true)} onComplete={() => setWizardClosed(true)} />
           </motion.div>
         )}
       </AnimatePresence>

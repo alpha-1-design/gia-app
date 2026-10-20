@@ -7,10 +7,33 @@ interface OrbAvatarProps {
   animate?: boolean;
   glow?: boolean;
   icon?: React.ReactNode;
+  /** Glossy head with eyes instead of a flat icon. */
+  face?: boolean;
+  /** Offsets blink and glance so a row of agents doesn't move in lockstep. */
+  seed?: string;
   className?: string;
 }
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function hashSeed(value: string): number {
+  let h = 0;
+  for (let i = 0; i < value.length; i++) h = (h * 33 + value.charCodeAt(i)) | 0;
+  return h;
+}
+
+function BotEye({ cx, cy, iris }: { cx: number; cy: number; iris: string }) {
+  return (
+    <g transform={`translate(${cx} ${cy})`}>
+      <ellipse cx="0" cy="0.35" rx="3.15" ry="2.55" fill="#000" opacity="0.28" />
+      <ellipse cx="0" cy="0" rx="3.05" ry="3.35" fill="#f4f4f5" />
+      <ellipse cx="0" cy="0.15" rx="1.85" ry="2.05" fill={iris} />
+      <circle cx="0.05" cy="0.25" r="1.05" fill="#0a0a0a" />
+      <circle cx="-0.75" cy="-0.95" r="0.48" fill="#fff" />
+      <circle cx="0.55" cy="0.85" r="0.18" fill="#fff" opacity="0.7" />
+    </g>
+  );
+}
 
 const OrbAvatar: React.FC<OrbAvatarProps> = ({
   color = '#a855f7',
@@ -18,6 +41,8 @@ const OrbAvatar: React.FC<OrbAvatarProps> = ({
   animate = true,
   glow = true,
   icon,
+  face = false,
+  seed = '',
   className = '',
 }) => {
   const reactId = React.useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -32,7 +57,8 @@ const OrbAvatar: React.FC<OrbAvatarProps> = ({
     }
   }
 
-  const showIcon = !!icon;
+  const showIcon = !!icon && !face;
+  const drift = Math.abs(hashSeed(seed || resolved)) % 40;
 
   return (
     <div
@@ -88,6 +114,18 @@ const OrbAvatar: React.FC<OrbAvatarProps> = ({
         <circle cx="16" cy="16" r="14" fill={`url(#${id}-core)`} />
         {/* Bright rim */}
         <circle cx="16" cy="16" r="13.5" fill="none" stroke={`url(#${id}-rim)`} strokeWidth="1" />
+
+        {face && (
+          <g className={animate ? 'bot-face' : undefined} style={animate ? { animationDelay: `-${drift / 10}s` } : undefined}>
+            <ellipse cx="16" cy="11.6" rx="6.2" ry="2.1" fill="#000" opacity="0.22" />
+            <g className={animate ? 'bot-eyes' : undefined} style={animate ? { animationDelay: `-${(drift % 17) / 5}s` } : undefined}>
+              <g className={animate ? 'bot-pupils' : undefined} style={animate ? { animationDelay: `-${(drift % 23) / 6}s` } : undefined}>
+                <BotEye cx={11.15} cy={15.7} iris={resolved} />
+                <BotEye cx={20.85} cy={15.7} iris={resolved} />
+              </g>
+            </g>
+          </g>
+        )}
       </svg>
 
       {/* Optional icon centered in the orb */}

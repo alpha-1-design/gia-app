@@ -135,6 +135,11 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const restoreSession = useGiaStore((s) => s.restoreSession);
   const userProfile = useGiaStore((s) => s.userProfile);
   const activeProvider = useProviderStore((s) => s.activeProvider);
+  const [providersReady, setProvidersReady] = React.useState(() => useProviderStore.persist.hasHydrated());
+  React.useEffect(() => {
+    if (useProviderStore.persist.hasHydrated()) return;
+    return useProviderStore.persist.onFinishHydration(() => setProvidersReady(true));
+  }, []);
 
   const toolItems: { key: 'webSearch' | 'deepSearch' | 'extThinking' | 'handsOff' | 'listen' | 'vision' | 'translate' | 'offline'; label: string; icon: React.ComponentType<{ size?: number }>; active: boolean; color: string }[] = [
     { key: 'webSearch', label: 'Web Search', icon: Globe, active: webSearch, color: '#3b82f6' },
@@ -362,7 +367,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             </div>
           </div>
         )}
-        {messages.length === 0 && !buildMode && (
+        {messages.length === 0 && !buildMode && providersReady && (
           <div className="relative flex flex-col items-center justify-center min-h-full gap-4 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
             {providerConnected
               ? <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(124,58,237,0.1))', border: '1px solid rgba(168,85,247,0.2)' }}><GiaIcon size={30} animate={false} color="#a855f7" /></div>
@@ -431,7 +436,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
 
         <div className="w-full sm:px-1.5 space-y-2 sm:space-y-3">
-        {!providerConnected && !loading && messages.length > 0 && (
+        {providersReady && !providerConnected && !loading && messages.length > 0 && (
           <div onClick={() => setShowModelSwitcher(true)} className="px-4 py-3 mx-4 rounded-2xl text-center cursor-pointer transition-opacity hover:opacity-80" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>⚡ No AI provider configured</p>
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>Tap to connect a provider — OpenRouter, Anthropic, Gemini & more</p>

@@ -34,7 +34,7 @@ export interface GIAIntentPlugin {
 }
 
 const GIAIntent = registerPlugin<GIAIntentPlugin>('GIAIntent', {
-  web: () => import('./GIAIntent.web').then(m => m.GIAIntentWeb),
+  web: () => import('./GIAIntent.web').then(m => new m.GIAIntentWeb()),
 });
 
 export { GIAIntent };

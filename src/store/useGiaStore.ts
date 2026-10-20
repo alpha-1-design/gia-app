@@ -1280,7 +1280,10 @@ export const useGiaStore = create<GiaState>()(
         // A stream interrupted by a crash / tab close can persist a message
         // with thinking:true forever. Nothing is generating on reload, so any
         // in-flight flag is stale — clear it so the UI doesn't show a dead spinner.
-        if (!state) return;
+        if (!state) {
+          useGiaStore.setState({ hasHydrated: true });
+          return;
+        }
         // Build Mode is transient. The persisted module always reopens as Chat,
         // so restoring its build flag would reopen Chat with Build instructions.
         state.buildMode = false;

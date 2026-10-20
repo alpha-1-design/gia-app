@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp, Clock, Layers } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import type { NexusAgentState } from '../store/useNexusStore';
 import { resolveAgentIcon } from '../utils/agentIcons';
 import { useLiveTick } from '../hooks/useLiveTick';
@@ -21,63 +21,40 @@ export const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; on
     : Date.now() - agent.startedAt;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 12, scale: 0.94 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-      className="rounded-2xl overflow-hidden"
+    <div
+      className="overflow-hidden"
       style={{
         width: '100%',
-        background: `linear-gradient(160deg, ${agent.color}14, rgba(13,13,18,0.9))`,
-        border: `1px solid ${isLive ? agent.color + '55' : agent.color + '22'}`,
-        boxShadow: isLive ? `0 0 18px ${agent.color}30` : 'none',
-        transition: 'box-shadow 0.3s ease',
+        background: '#0a0a0a',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16,
       }}
     >
-      <button onClick={onToggle} className="w-full text-left p-3 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <div className="relative shrink-0">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: `${agent.color}22`, border: `1px solid ${agent.color}44` }}
-            >
-              <Icon size={15} style={{ color: agent.color }} />
-            </div>
-            {isLive && (
-              <motion.div
-                className="absolute -inset-0.5 rounded-xl"
-                style={{ border: `1.5px solid ${agent.color}` }}
-                animate={{ opacity: [0.9, 0.15, 0.9], scale: [1, 1.12, 1] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-bold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</span>
-              {agent.status === 'completed' && <CheckCircle2 size={10} style={{ color: meta.color }} className="shrink-0" />}
-              {agent.status === 'failed' && <XCircle size={10} style={{ color: meta.color }} className="shrink-0" />}
-              {isLive && <Loader2 size={10} className="animate-spin shrink-0" style={{ color: meta.color }} />}
-            </div>
-            <div className="text-[8.5px] truncate" style={{ color: agent.color, opacity: 0.85 }}>{agent.role}</div>
-          </div>
-          {expanded ? <ChevronUp size={11} style={{ color: 'var(--gia-muted-2)' }} className="shrink-0" /> : <ChevronDown size={11} style={{ color: 'var(--gia-muted-2)' }} className="shrink-0" />}
+      <button onClick={onToggle} className="w-full text-left px-3 py-2.5 flex items-start gap-2.5">
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+          style={{ background: '#18181b' }}
+        >
+          <Icon size={14} style={{ color: '#fafafa' }} />
         </div>
-
-        <div className="flex items-center gap-1.5 text-[8.5px]" style={{ color: 'var(--gia-muted-2)' }}>
-          <Clock size={9} />
-          <span>{(elapsed / 1000).toFixed(1)}s</span>
-          <span className="opacity-40">•</span>
-          <span style={{ color: meta.color }}>{meta.label}</span>
-        </div>
-
-        {agent.currentActivity && isLive && (
-          <div className="text-[9px] truncate italic" style={{ color: 'var(--gia-muted-2)' }}>
-            {agent.currentActivity}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold truncate" style={{ color: '#fafafa' }}>{agent.name}</span>
+            <span className="text-[11px]" style={{ color: agent.status === 'failed' ? '#f87171' : '#a1a1aa' }}>
+              {meta.label}
+            </span>
+            <span className="ml-auto text-[11px] tabular-nums shrink-0" style={{ color: '#71717a' }}>
+              {(elapsed / 1000).toFixed(0)}s
+            </span>
           </div>
-        )}
+          <div className="text-[12px] mt-0.5" style={{ color: '#a1a1aa' }}>{agent.role}</div>
+          {agent.currentActivity && isLive && (
+            <div className="text-[13px] mt-1.5 leading-snug" style={{ color: '#e4e4e7' }}>
+              {agent.currentActivity}
+            </div>
+          )}
+        </div>
+        {expanded ? <ChevronUp size={14} style={{ color: '#71717a' }} className="shrink-0 mt-1" /> : <ChevronDown size={14} style={{ color: '#71717a' }} className="shrink-0 mt-1" />}
       </button>
 
       <AnimatePresence>
@@ -113,7 +90,7 @@ export const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; on
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 };
 
@@ -188,17 +165,7 @@ export const DelegationTree: React.FC<{
             className="relative flex"
           >
             {rail({ last: isLastRow, stubColor: `${agent.color}99`, marker: (
-              <span className="relative flex h-3.5 w-3.5 items-center justify-center rounded-full" style={{ background: `${agent.color}30`, border: `1.5px solid ${agent.color}` }}>
-                {isLive && (
-                  <motion.span
-                    className="absolute inset-0 rounded-full"
-                    style={{ border: `1.5px solid ${agent.color}` }}
-                    animate={{ scale: [1, 1.8], opacity: [0.65, 0] }}
-                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
-                  />
-                )}
-                <span className="h-1 w-1 rounded-full" style={{ background: agent.color }} />
-              </span>
+              <span className="relative flex h-2 w-2 items-center justify-center rounded-full" style={{ background: isLive ? '#fafafa' : '#3f3f46' }} />
             ) })}
             <div className="min-w-0 flex-1 pb-2.5 pl-1">
               <AgentCard

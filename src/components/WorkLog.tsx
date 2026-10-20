@@ -5,8 +5,6 @@ import {
   Brain, ChevronDown, ChevronRight, Sparkles, Database,
   Shield, Send, Network, Image, MapPin, Archive, Activity,
 } from 'lucide-react';
-import { useGiaStore } from '../store/useGiaStore';
-import GiaIcon from './GiaIcon';
 
 interface WorkLogStep {
   id: string;
@@ -70,7 +68,7 @@ function ElapsedTimer({ startedAt, endedAt }: { startedAt: number; endedAt?: num
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (endedAt) { setElapsed(endedAt - startedAt); return; }
-    const iv = setInterval(() => setElapsed(Date.now() - startedAt), 100);
+    const iv = setInterval(() => setElapsed(Date.now() - startedAt), 1000);
     return () => clearInterval(iv);
   }, [startedAt, endedAt]);
   const secs = elapsed / 1000;
@@ -226,8 +224,6 @@ interface WorkLogProps {
 export const WorkLog: React.FC<WorkLogProps> = ({
   thoughts, isLive, isExpanded, onToggle, currentTool, thinkingPhase, startTime,
 }) => {
-  const extThinking = useGiaStore(s => s.extThinking);
-  const buildMode = useGiaStore(s => s.buildMode);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Step timestamps used to be re-faked on every rebuild (Date.now() minus an
   // index), so timers restarted whenever new text arrived. Remember when each
@@ -259,59 +255,12 @@ export const WorkLog: React.FC<WorkLogProps> = ({
   if (!thoughts && !isLive) return null;
   if (!isExpanded && !isLive) return null;
 
-  const phaseLabel = (() => {
-    const labels: Record<string, string> = {
-      gathering: 'Sniffing around', analyzing: 'Squinting at it', coding: 'Cooking',
-      writing: 'Spilling ink', searching: 'Googling stuff', planning: 'Drawing maps',
-      reasoning: 'Big brain time', processing: 'Crunching bytes', idle: 'Ready',
-    };
-    return labels[thinkingPhase || ''] || 'Processing';
-  })();
-
-  const PHASE_EXTRAS = [
-    'Doing stuff or something',
-    'I think I know what I\'m doing',
-    'Pretending to know things',
-    'Following the breadcrumbs',
-    'Thinking hard about thinking',
-    'Loading... just kidding, working',
-    'Convincing the electrons',
-    'Asking the right questions',
-    'Making it up as I go',
-    'Trusting the process',
-    'Vibing and coding',
-    'One sec, almost there',
-    'Consulting the void',
-    'Doing my best impression of useful',
-    'Winging it (successfully)',
-  ];
-
-  const BUILD_EXTRAS = [
-    'Shipping it',
-    'No pressure, just building an app',
-    'Crafting digital excellence',
-    'This is fine',
-    'Building something cool',
-    'Hopefully this works',
-    'Making it rain code',
-    'Engineering (kind of)',
-    'Trust me, I\'m an AI',
-    'Hack hack hack',
-    'Turning caffeine into code (metaphorically)',
-    'Building the future (or at least a webpage)',
-    'Deploying good vibes',
-    'Compiling happiness',
-    '10x developer moment',
-  ];
-
-  const displayPhaseLabel = (() => {
-    const cycle = Math.floor(Date.now() / 1800);
-    if (cycle % 3 === 0) {
-      const extras = buildMode ? BUILD_EXTRAS : PHASE_EXTRAS;
-      return extras[cycle % extras.length];
-    }
-    return phaseLabel;
-  })();
+  const phaseLabels: Record<string, string> = {
+    gathering: 'Reading context', analyzing: 'Analyzing', coding: 'Writing code',
+    writing: 'Writing', searching: 'Searching', planning: 'Planning',
+    reasoning: 'Thinking', processing: 'Working', idle: 'Ready',
+  };
+  const liveLabel = runningStep?.label || phaseLabels[thinkingPhase || ''] || 'Thinking';
 
   return (
     <motion.div
@@ -335,18 +284,13 @@ export const WorkLog: React.FC<WorkLogProps> = ({
         }}
       >
         {isLive ? (
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          >
-            <GiaIcon size={13} animate color={runningStep ? runningStep.color : '#a855f7'} />
-          </motion.div>
+          <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ background: '#fafafa' }} />
         ) : (
-          <Brain size={13} style={{ color: '#f59e0b' }} />
+          <Brain size={13} style={{ color: '#a1a1aa' }} />
         )}
 
-        <span className="text-[10px] font-semibold uppercase tracking-wider flex-1" style={{ color: isLive ? '#a855f7' : '#f59e0b' }}>
-          {isLive ? displayPhaseLabel : 'Reasoning'}
+        <span className="text-[13px] font-medium flex-1 truncate" style={{ color: isLive ? '#fafafa' : '#a1a1aa' }}>
+          {isLive ? liveLabel : 'Thought'}
         </span>
 
         {steps.length > 0 && (
@@ -372,7 +316,7 @@ export const WorkLog: React.FC<WorkLogProps> = ({
           </div>
         )}
 
-        {startTime && <ElapsedTimer startedAt={startTime} endedAt={isLive ? undefined : Date.now()} />}
+        {startTime && isLive && <ElapsedTimer startedAt={startTime} />}
 
         {isExpanded ? <ChevronDown size={11} style={{ color: 'var(--gia-muted)' }} /> : <ChevronRight size={11} style={{ color: 'var(--gia-muted)' }} />}
       </div>
@@ -386,6 +330,7 @@ export const WorkLog: React.FC<WorkLogProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="max-h-64 overflow-y-auto scroll-smooth"
+            data-testid="worklog-steps"
             style={{ padding: '8px 12px 12px' }}
           >
             {steps.length === 0 ? (
@@ -479,20 +424,7 @@ export const WorkLog: React.FC<WorkLogProps> = ({
 
             {/* Live cursor */}
             {isLive && (
-              <div className="flex items-center gap-1 mt-1 ml-5">
-                {extThinking ? (
-                  <GiaIcon size={10} animate color="#a855f7" speed={1.4} />
-                ) : (
-                  <motion.span
-                    className="text-[10px]"
-                    style={{ color: '#a855f7' }}
-                    animate={{ opacity: [1, 0, 1] }}
-                    transition={{ duration: 0.8, repeat: Infinity }}
-                  >
-                    ▋
-                  </motion.span>
-                )}
-              </div>
+              <span className="ml-5 mt-1 inline-block text-[12px] animate-pulse" style={{ color: '#a1a1aa' }}>▋</span>
             )}
           </motion.div>
         )}

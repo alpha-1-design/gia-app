@@ -15,7 +15,7 @@ export interface GIACorePlugin {
 }
 
 const GIACore = registerPlugin<GIACorePlugin>('GIACore', {
-  web: () => import('./GIAForegroundService.web').then(m => m.GIAForegroundServiceWeb),
+  web: () => import('./GIAForegroundService.web').then(m => new m.GIAForegroundServiceWeb()),
 });
 
 class GIAForegroundService {

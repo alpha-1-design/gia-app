@@ -272,11 +272,11 @@ const MessageRow = memo<MessageRowProps>(({
               openSheet(sheetMsgId === msg.id ? null : msg.id);
             }}
           >
-            {msg.thinking && !((isStreaming) && msg.content) ? (
-              <div>
+            {msg.thinking ? (
+              <div className="mb-2">
                 <WorkLog
                   thoughts={thoughts}
-                  isLive={!!liveThought}
+                  isLive={!!liveThought || !!msg.thinking}
                   isExpanded={showThoughts.has(msg.id)}
                   onToggle={toggleThoughts}
                   currentTool={currentTool}
@@ -284,7 +284,8 @@ const MessageRow = memo<MessageRowProps>(({
                   startTime={msg.timestamp}
                 />
               </div>
-            ) : msg.error ? (
+            ) : null}
+            {msg.error ? (
               <div className="flex flex-col gap-2">
                 <p className="text-sm leading-relaxed" style={{ color: '#f87171' }}>{msg.content}</p>
                 <div className="flex items-center gap-2">
@@ -310,15 +311,7 @@ const MessageRow = memo<MessageRowProps>(({
                     <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
                       {formatTimeAgo(msg.timestamp)}
                     </span>
-                    {msg.thinking ? (
-                      <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
-                        Thinking…
-                      </span>
-                    ) : isStreaming ? (
-                      <span className="text-[8px] px-1.5 py-0.5 rounded-full phase-badge" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>
-                        Generating…
-                      </span>
-                    ) : responseTimesRef.current[msg.id] ? (
+                    {responseTimesRef.current[msg.id] && !msg.thinking ? (
                       <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
                         {(responseTimesRef.current[msg.id] / 1000).toFixed(1)}s
                       </span>
