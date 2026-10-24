@@ -41,5 +41,12 @@ jobs:
           packages: ''
       - run: npx cap sync android
       - run: chmod +x android/gradlew
+      - name: Generate fresh gradle wrapper
+        run: |
+          GRADLE_VERSION=$(grep 'distributionUrl' android/gradle/wrapper/gradle-wrapper.properties | sed 's/.*gradle-//;s/-.*//')
+          curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip
+          unzip -o -q /tmp/gradle.zip -d /tmp/gradle
+          cd android && /tmp/gradle/gradle-${GRADLE_VERSION}/bin/gradle wrapper --gradle-version ${GRADLE_VERSION}
+          rm -rf /tmp/gradle /tmp/gradle.zip
       - name: Compile Android Java
         run: cd android && ./gradlew :app:compileDebugJavaWithJavac --no-daemon --stacktrace
