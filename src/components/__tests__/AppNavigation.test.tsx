@@ -11,10 +11,11 @@ describe('App navigation drawer toggle', () => {
       showLeftDrawer: false,
       connectionStatus: 'online',
       providerConnected: false,
+      reduceMotion: true,
     });
   });
 
-  it('animates the GIA mark into a hamburger and toggles the module drawer', async () => {
+  it('shows a persistent menu button and toggles the module drawer', async () => {
     render(
       <>
         <AppNavigation />
@@ -23,17 +24,22 @@ describe('App navigation drawer toggle', () => {
     );
 
     const navigationButton = screen.getByRole('button', { name: 'Open navigation' });
-    expect(navigationButton).toHaveTextContent('GIA');
+    expect(navigationButton.querySelector('.lucide-menu')).not.toBeNull();
+    expect(screen.getByText('GIA')).not.toBeNull();
+    expect(screen.getByLabelText('Current module: Chat')).not.toBeNull();
     expect(document.querySelector('[title="No AI provider connected"]')).not.toBeNull();
     fireEvent.click(navigationButton);
     expect(useGiaStore.getState().showLeftDrawer).toBe(true);
     const closeButton = screen.getByRole('button', { name: 'Close navigation' });
     expect(closeButton).toHaveAttribute('aria-expanded', 'true');
     expect(document.getElementById('app-navigation-drawer')).not.toBeNull();
-    await waitFor(() => expect(closeButton.querySelectorAll('svg line')).toHaveLength(3));
+    await waitFor(() => expect(closeButton.querySelector('.lucide-x')).not.toBeNull());
 
     fireEvent.click(closeButton);
     expect(useGiaStore.getState().showLeftDrawer).toBe(false);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveTextContent('GIA'));
-  });
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Open navigation' }).querySelector('.lucide-menu')).not.toBeNull(),
+      { timeout: 3000 },
+    );
+  }, 15000);
 });

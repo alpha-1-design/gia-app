@@ -1,3 +1,4 @@
+import { CapacitorHttp } from '@capacitor/core';
 import { logger } from '../../utils/logger';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../ProviderRegistry';
@@ -6,6 +7,7 @@ import { corsProxy } from '../CorsProxy';
 import type { BrainRequest, BrainResponse, BrainContext } from './types';
 import { createStreamWatchdog, STREAM_IDLE_TIMEOUT_MS } from './streamWatchdog';
 import { freeTier } from '../FreeTierService';
+import { isNativePlatform } from '../../utils/helpers';
 
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { activeProvider, providers } = useProviderStore.getState();
@@ -16,6 +18,15 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   const baseUrl = (config.baseUrl || definition?.baseUrl || providerRegistry.getBaseUrl(providerId)).replace(/\/+$/, '');
   const label = providerRegistry.getLabel(providerId);
   if (!baseUrl) throw new Error(`Unknown provider: ${providerId}`);
+  // Pollinations' keyless endpoint refuses browser-origin requests ("Missing
+  // Turnstile token"). In local dev route it through the sandbox server, which
+  // forwards the same call without an Origin header. Native Android uses
+  // CapacitorHttp below, which also bypasses the browser origin check.
+  const localDevProxy = providerId === 'pollinations'
+    && !isNativePlatform()
+    && (import.meta.env.DEV
+      || (typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)));
+  const endpoint = (path: string) => localDevProxy ? `/api/pollinations${path}` : `${baseUrl}${path}`;
   // Keyless free providers: enforce a client-side rate limit so the shared
   // tier stays usable. Over-limit throws a "rate limit" error, which the
   // failover layer treats as recoverable (fall back to another provider or retry).
@@ -64,6 +75,68 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   if (providerId === 'openrouter') {
     headers['HTTP-Referer'] = 'https://gia.app';
     headers['X-Title'] = 'GIA';
+  }
+
+  // Android's WebView is a browser as far as Pollinations is concerned, so the
+  // normal XHR path hits the Turnstile wall. CapacitorHttp uses the native HTTP
+  // stack instead: no Origin header, no CORS preflight, no Turnstile. It cannot
+  // stream, so the full answer arrives at once and is handed to onStream.
+  if (providerId === 'pollinations' && isNativePlatform()) {
+    const nativeBody = { ...body, stream: false };
+    const res = await CapacitorHttp.post({
+      url: `${baseUrl}/chat/completions`,
+      headers: { 'Content-Type': 'application/json' },
+      data: nativeBody,
+      connectTimeout: 60_000,
+      readTimeout: 120_000,
+    });
+    if (res.status < 200 || res.status >= 300) {
+      if (res.status === 429) freeTier.markRateLimited(providerId);
+      const payload = res.data as { error?: { message?: string } | string; message?: string } | string;
+      const detail = typeof payload === 'string'
+        ? payload
+        : typeof payload?.error === 'string'
+          ? payload.error
+          : payload?.error?.message || payload?.message || `${label} error ${res.status}`;
+      throw new Error(ctx.friendlyError(label, detail));
+    }
+    const data = (typeof res.data === 'string' ? JSON.parse(res.data) : res.data) as {
+      choices?: Array<{
+        message?: {
+          content?: string;
+          tool_calls?: Array<{ type?: string; function?: { name?: string; arguments?: string } }>;
+        };
+        finish_reason?: string;
+      }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+    };
+    const choice = data.choices?.[0];
+    let content = choice?.message?.content || '';
+    for (const tc of choice?.message?.tool_calls || []) {
+      if (tc.type !== 'function' || !tc.function?.name) continue;
+      try {
+        const args = typeof tc.function.arguments === 'string'
+          ? JSON.parse(tc.function.arguments)
+          : tc.function.arguments;
+        content += `\n\`\`\`tool\n${JSON.stringify({ id: tc.function.name, args })}\n\`\`\`\n`;
+      } catch (e) { logger.error('GIA: failed to parse function args', e); }
+    }
+    if (!content.trim()) throw new Error(ctx.friendlyError(label, `${label} returned an empty response`));
+    try { req.onStream?.(content); } catch { /* UI stream errors must not lose the answer */ }
+    const finishReason = choice?.finish_reason || 'stop';
+    const tokenUsage = data.usage ? {
+      input: data.usage.prompt_tokens || 0,
+      output: data.usage.completion_tokens || 0,
+      total: data.usage.total_tokens || 0,
+    } : undefined;
+    return {
+      text: content,
+      provider: providerId,
+      model: effectiveModel,
+      finishReason,
+      wasTruncated: finishReason === 'length',
+      tokenUsage,
+    };
   }
 
   if (req.onStream) {
@@ -209,6 +282,15 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
         watchdog.stop();
         if (xhr.status >= 400) {
           if (xhr.status === 429) freeTier.markRateLimited(providerId);
+          if (providerId === 'pollinations' && xhr.status === 403) {
+            const err = new Error(ctx.friendlyError(
+              label,
+              'Pollinations now blocks browser requests with a Turnstile check. Use the Android app, run GIA locally, or connect another provider.',
+            )) as Error & { retryable?: boolean };
+            err.retryable = false;
+            reject(err);
+            return;
+          }
           const preview = (xhr.responseText || '').slice(0, 200);
           const err = new Error(ctx.friendlyError(label, `${label} error ${xhr.status}: ${preview}`)) as Error & { retryable?: boolean };
           err.retryable = false;
@@ -286,12 +368,15 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     });
 
     try {
-      return await runStream(`${baseUrl}/chat/completions`);
+      return await runStream(endpoint('/chat/completions'));
     } catch (e) {
       const err = e as Error & { retryable?: boolean };
-      if (err.name === 'AbortError' || !err.retryable) throw err;
+      if (err.name === 'AbortError' || !err.retryable || localDevProxy) throw err;
+      // Public CORS proxies cannot forward a POST that Pollinations will
+      // accept, so don't waste a retry on the free provider.
+      if (providerId === 'pollinations') throw err;
       logger.warn('[openai] Direct streaming request failed, retrying via CORS proxy:', err.message);
-      return await runStream(corsProxy.proxyUrl(`${baseUrl}/chat/completions`));
+      return await runStream(corsProxy.proxyUrl(endpoint('/chat/completions')));
     }
   }
 
@@ -309,24 +394,33 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
   let res: Response;
   let usedProxy = false;
   try {
-    res = await attemptFetch(`${baseUrl}/chat/completions`);
+    res = await attemptFetch(endpoint('/chat/completions'));
   } catch (e) {
     // A CORS / network error makes fetch throw rather than return a non-ok
     // response, so it never reaches the proxy retry below. Retry through the
     // CORS proxy here — the streaming path already does this; non-streaming
     // must too or forceJson/collaborative/image-gen never reach the provider.
+    if (localDevProxy || providerId === 'pollinations') {
+      throw new Error(ctx.friendlyError(label, e));
+    }
     logger.warn('[openai] Direct fetch failed, trying CORS proxy:', (e as Error).message);
-    res = await attemptFetch(corsProxy.proxyUrl(`${baseUrl}/chat/completions`));
+    res = await attemptFetch(corsProxy.proxyUrl(endpoint('/chat/completions')));
     usedProxy = true;
   }
-  if (!res.ok && !usedProxy && res.status !== 429) {
+  if (!res.ok && !usedProxy && res.status !== 429 && !localDevProxy && providerId !== 'pollinations') {
     const errMsg = `${label} error ${res.status}: ${await res.text().catch(() => '')}`;
     logger.warn('[openai] Direct fetch failed, trying CORS proxy:', errMsg);
-    const proxiedUrl = corsProxy.proxyUrl(`${baseUrl}/chat/completions`);
+    const proxiedUrl = corsProxy.proxyUrl(endpoint('/chat/completions'));
     res = await attemptFetch(proxiedUrl);
   }
   if (!res.ok) {
     if (res.status === 429) freeTier.markRateLimited(providerId);
+    if (providerId === 'pollinations' && res.status === 403) {
+      throw new Error(ctx.friendlyError(
+        label,
+        'Pollinations now blocks browser requests with a Turnstile check. Use the Android app, run GIA locally, or connect another provider.',
+      ));
+    }
     const e: { error?: { message?: string } } = await res.json().catch(() => ({}));
     throw new Error(ctx.friendlyError(label, e?.error?.message || `${label} error ${res.status}`));
   }

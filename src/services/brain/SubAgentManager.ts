@@ -116,7 +116,16 @@ export class SubAgentManager {
     if (tasks.length > agentCount) {
       emit('error', `Nexus received ${tasks.length} delegated tasks but this run supports ${agentCount}; the remaining ${tasks.length - agentCount} task(s) were not started.`);
     }
-    const selected = tasks.slice(0, agentCount).map(task => {
+
+    // A single un-pinned sub_agent_call is a *panel*, not one lone agent: fan
+    // it out to 4 specialists (8 in extended mode) so the answer carries more
+    // than one perspective. Passing `agent: "Name"` pins a single specialist.
+    const expandedTasks: SubAgentTask[] =
+      tasks.length === 1 && !tasks[0].agent?.trim()
+        ? selectAgents(tasks[0].prompt, agentCount).map(role => ({ ...tasks[0], agent: role.name }))
+        : tasks;
+
+    const selected = expandedTasks.slice(0, agentCount).map(task => {
       const requested = task.agent?.trim().toLowerCase();
       const requestedRole = requested && AGENT_ROLES.find(role => role.name.toLowerCase() === requested);
       if (requestedRole) return requestedRole;
@@ -291,7 +300,14 @@ REPORT FORMAT
       summary += ` Synthesize a final answer that accounts for the full range of insights.`;
     }
 
-    summary += `\n\nWeigh the evidence and produce a final answer that synthesizes the best insights.`;
+    summary += `\n\n### Verdict (required)\n\n`;
+    summary += `Do not end with a neutral pile of findings. Deliver an explicit decision the user can act on:\n\n`;
+    summary += `1. **Recommendation** — the single best answer or next action, stated plainly.\n`;
+    summary += `2. **Strongest evidence** — the 2-3 findings that actually support it, with sources.\n`;
+    summary += `3. **Dissent** — where a specialist disagreed and why it does not overturn the verdict (or does).\n`;
+    summary += `4. **Uncertainty** — what is still unverified or could change the recommendation.\n`;
+    summary += `5. **Confidence** — High / Medium / Low, with one sentence of justification.\n`;
+    summary += `\nIf the evidence genuinely does not support a recommendation, say that directly instead of hedging.`;
 
     return summary;
   }

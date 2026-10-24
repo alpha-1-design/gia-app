@@ -176,6 +176,7 @@ export const DeveloperSettings: React.FC = () => {
           description="Display token counts after each response in the chat."
           accentColor="#f59e0b"
         />
+
       </div>
 
       {/* ── Feature Flags ─────────────────────────────────────── */}

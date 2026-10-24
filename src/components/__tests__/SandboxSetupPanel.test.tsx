@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import SandboxSetupPanel from '../SandboxSetupPanel';
 import type { useSandboxSetup } from '../../hooks/useSandboxSetup';
 
 type HookState = ReturnType<typeof useSandboxSetup>;
@@ -41,7 +42,7 @@ function makeState(overrides: Partial<HookState> = {}): HookState {
 
 async function renderPanel(state: HookState) {
   hook.state = state;
-  const { default: SandboxSetupPanel } = await import('../SandboxSetupPanel');
+  cleanup();
   return render(<SandboxSetupPanel />);
 }
 

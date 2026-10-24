@@ -20,7 +20,8 @@ describe('ProviderRegistry', () => {
       expect(providerRegistry.getAllIds()).toContain('ollama');
       expect(providerRegistry.getAllIds()).toContain('openai');
       expect(providerRegistry.getAllIds()).toContain('nvidia');
-      expect(providerRegistry.getAllProviders()).toHaveLength(22);
+      expect(providerRegistry.getAllIds()).toContain('pollinations');
+      expect(providerRegistry.getAllProviders()).toHaveLength(23);
     });
 
     it('does not list gateways, placeholders, or unconfigured local servers as providers', () => {

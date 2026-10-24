@@ -103,6 +103,22 @@ export class UnimindClient {
     } catch { /* best-effort */ }
   }
 
+  setUnimindId(id: string): void {
+    const next = id.trim();
+    if (!next || next === this.unimindId) return;
+    this.unimindId = next;
+    try {
+      localStorage.setItem(LS_UNIMIND_ID, next);
+    } catch { /* best-effort */ }
+    this.peers.clear();
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.close();
+      this.ws = null;
+      this.stopPresence();
+      this.scheduleReconnect();
+    }
+  }
+
   getUnimindId(): string {
     return this.unimindId;
   }

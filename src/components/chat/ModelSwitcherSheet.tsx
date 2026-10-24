@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Check, ChevronRight, KeyRound, Settings2, Zap, Eye, Wrench, Cpu, RefreshCw, ExternalLink } from 'lucide-react';
+import { X, Check, ChevronRight, KeyRound, Zap, Eye, Wrench, Cpu, RefreshCw, ExternalLink } from 'lucide-react';
 import { useProviderStore } from '../../store/useProviderStore';
 import { providerRegistry } from '../../services/ProviderRegistry';
 import LocalLLMService from '../../services/LocalLLMService';
@@ -10,7 +10,6 @@ import BottomSheet from '../ui/BottomSheet';
 interface ModelSwitcherSheetProps {
   open: boolean;
   onClose: () => void;
-  onOpenEngine?: () => void;
 }
 
 const ModelBadges: React.FC<{ free?: boolean; vision?: boolean; tools?: boolean }> = ({ free, vision, tools }) => (
@@ -33,7 +32,7 @@ const ModelBadges: React.FC<{ free?: boolean; vision?: boolean; tools?: boolean 
   </div>
 );
 
-const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, onOpenEngine }) => {
+const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose }) => {
   const {
     providers, activeProvider, availableModels, modelListStatus,
     setActiveProvider, setProviderModel, setProviderImageModel, setProviderKey, fetchModels,
@@ -147,16 +146,6 @@ const ModelSwitcherSheet: React.FC<ModelSwitcherSheetProps> = ({ open, onClose, 
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {onOpenEngine && (
-                  <button
-                    onClick={() => { onClose(); onOpenEngine(); }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all"
-                    style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: 'var(--gia-muted)' }}
-                    title="View live agent thinking, tool calls, and results"
-                  >
-                    <Settings2 size={12} /> Activity
-                  </button>
-                )}
                 <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
                   <X size={15} />
                 </button>

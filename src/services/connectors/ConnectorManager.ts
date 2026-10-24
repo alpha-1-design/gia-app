@@ -15,7 +15,7 @@ export interface ConnectorConfig {
   baseUrl?: string;
   apiKey?: string;
   enabled: boolean;
-  status: 'connected' | 'disconnected' | 'error';
+  status: 'connected' | 'configured' | 'disconnected' | 'error';
   lastChecked?: number;
   errorMessage?: string;
   config?: Record<string, string>;
@@ -135,7 +135,13 @@ class ConnectorManager {
     if (config.enabled !== undefined) connector.enabled = config.enabled;
     connector.lastChecked = Date.now();
     const hasRequired = connector.fields?.every(f => !f.required || (connector.config?.[f.key] || connector.apiKey));
-    if (hasRequired && (connector.apiKey || Object.keys(connector.config || {}).length > 0)) connector.status = 'connected';
+    if (hasRequired && (connector.apiKey || Object.keys(connector.config || {}).length > 0)) {
+      // Saved credentials are not proof of a working connection. Only a real
+      // probe may promote this to 'connected'.
+      connector.status = 'configured';
+    } else {
+      connector.status = 'disconnected';
+    }
     this.save();
     return true;
   }
@@ -197,11 +203,40 @@ class ConnectorManager {
       this.save();
       return connector.status === 'connected';
     }
-    if (id === 'supabase' || id === 'firebase' || id === 'aws' || id === 'email' || id === 'google-services') {
-      connector.status = 'connected';
-      connector.errorMessage = undefined;
+    if (id === 'supabase') {
+      const base = (cfg.projectUrl || connector.baseUrl || '').replace(/\/+$/, '');
+      const key = cfg.anonKey || cfg.apiKey || connector.apiKey || '';
+      if (!base || !key) {
+        connector.status = 'disconnected';
+        connector.errorMessage = 'Project URL and anon key are required';
+        this.save();
+        return false;
+      }
+      try {
+        // Read-only probe: the REST root answers 200 and proves both the URL
+        // and the key are accepted. It does not touch any table.
+        const res = await fetch(`${base}/rest/v1/`, {
+          headers: { apikey: key, Authorization: `Bearer ${key}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        connector.status = res.ok ? 'connected' : 'error';
+        connector.errorMessage = res.ok ? undefined : `HTTP ${res.status} — check the project URL and anon key`;
+      } catch (e) {
+        connector.status = 'error';
+        connector.errorMessage = e instanceof Error ? e.message : 'Could not reach the Supabase project';
+      }
       this.save();
-      return true;
+      return connector.status === 'connected';
+    }
+    if (id === 'firebase' || id === 'aws' || id === 'email' || id === 'google-services') {
+      // There is no safe generic read-only probe for these from a browser:
+      // Firebase/AWS require signed requests and IMAP/SMTP is not reachable
+      // over fetch(). Be honest: credentials are saved, connection is verified
+      // on the first real call.
+      connector.status = 'configured';
+      connector.errorMessage = 'Credentials saved. Verified on first real request.';
+      this.save();
+      return false;
     }
     if (!connector.baseUrl) {
       connector.status = 'error';
@@ -212,7 +247,7 @@ class ConnectorManager {
     try {
       const apiKey = cfg.apiKey || connector.apiKey || '';
       const testUrl = `${connector.baseUrl.replace(/\/+$/, '')}/`;
-      const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.17' };
+      const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.19' };
       if (id === 'github') headers['Authorization'] = `Bearer ${apiKey}`;
       else if (id === 'twilio') headers['Authorization'] = 'Basic ' + btoa(`${cfg.accountSid || apiKey}:${cfg.authToken || ''}`);
       else headers['x-api-key'] = apiKey;
@@ -242,7 +277,7 @@ class ConnectorManager {
     const start = performance.now();
 
     let urlStr: string;
-    const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.17', ...request.headers };
+    const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.19', ...request.headers };
 
     if (id === 'supabase') {
       const base = cfg.projectUrl || connector.baseUrl || '';
@@ -305,7 +340,7 @@ class ConnectorManager {
     const start = performance.now();
     const res = await fetch(url, {
       method,
-      headers: { 'User-Agent': 'GIA/2.4.0.17', ...headers },
+      headers: { 'User-Agent': 'GIA/2.4.0.19', ...headers },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000),
     });

@@ -35,6 +35,10 @@ const UBUNTU_NAMES: Record<string, string> = {
   'build-base': 'build-essential',
   openssh: 'openssh-client',
   sqlite: 'sqlite3',
+  'bind-tools': 'dnsutils',
+  fd: 'fd-find',
+  php83: 'php',
+  redis: 'redis-server',
 };
 
 export function toDistroPackage(pkg: string, os: DistroOs): string {

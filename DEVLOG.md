@@ -4,6 +4,19 @@ Chronological record of changes, rationale, and decisions.
 
 ---
 
+## 2026-10-24
+
+### Release 2.4.0.19 — honest wake word, monochrome first run, Analyst timeout
+**Files:** `src/components/SetupWizard.tsx`, `src/components/GiaIntroMark.tsx`, `src/components/settings/VoiceSection.tsx`, `src/modules/AnalystModule.tsx`, `src/utils/generateWithRetry.ts`, `src/components/__tests__/AppNavigation.test.tsx`, `manual.md`, `public/docs/gia-docs.json`, version strings across `src/`, `package.json`, `package-lock.json`, `android/app/build.gradle` (`versionCode` 25→26).
+
+- **Wake word:** the Android app already had a real openWakeWord foreground service (`GIAWakeWordService.java` + `OpenWakeWordEngine.java`) but Settings still exposed an editable “hey gia” phrase that no bundled model could detect. Removed the field and made the UI state the truth: the only bundled classifier is **Hey Jarvis**; a custom Hey GIA phrase needs a trained `.onnx`. The simulated preview log no longer prints “HEY GIA”.
+- **First run:** replaced the spirit-wave welcome with a monochrome canvas sequence — thinking dots → particle-assembled GIA wordmark → provider cards. No orb, no spirit art.
+- **Analyst:** added a 75s `AbortController` timeout and abort-aware retry so a stalled provider cannot spin forever; replaced the old spinner with the neutral `ThinkingDots` state.
+- **Docs:** corrected the manual and `public/docs/gia-docs.json`, which still described wake word as a disabled sherpa-onnx stub with a Porcupine access key. They now document the real openWakeWord service, the Hey Jarvis-only limitation, custom-model licensing, and Android-only availability.
+- **Verification:** `npm run lint` clean; `npm run test:run` 143 files / 1176 tests pass; `npm run build` succeeds. Native HUD, wake-word foreground service, widget and manifest behavior still need a real Android build/device check.
+
+---
+
 ## 2026-10-19
 
 ### Stable work status, studio, sub-agents

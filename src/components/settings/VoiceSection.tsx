@@ -31,7 +31,6 @@ function formatMB(bytes: number): string {
 }
 
 export const VoiceSection: React.FC = () => {
-  const [wakeWord, setWakeWord] = useState(() => localStorage.getItem('gia-wake-word') || 'hey gia');
   const [keepListening, setKeepListening] = useState(() => localStorage.getItem('gia-keep-listening') === 'true');
   const [autoStart, setAutoStart] = useState(() => localStorage.getItem('gia-auto-start-wake-word') === 'true');
   const [ttsEnabled, setTtsEnabled] = useState(() => TTSService.isEnabled());
@@ -117,9 +116,40 @@ export const VoiceSection: React.FC = () => {
     testingRef.current = false;
     setTesting(false);
     setLiveScore(0);
-    try { await GIAWakeWord.stopListening(); } catch { /* service already gone */ }
+    try {
+      if (nativeWW) {
+        // A test and the background listener share one mic. Hand it back
+        // instead of leaving the wake word silently off.
+        await GIAWakeWord.startListening({ keyword: nativeKeyword || 'hey_jarvis', sensitivity, emitScores: false });
+      } else {
+        await GIAWakeWord.stopListening();
+      }
+    } catch { /* service already gone */ }
     void checkService();
-  }, [checkService]);
+  }, [checkService, nativeWW, nativeKeyword, sensitivity]);
+
+  const setBackgroundWakeWord = useCallback(async (on: boolean) => {
+    setNativeWW(on);
+    if (!hasNativeModule) return;
+    try {
+      if (on) {
+        await GIAWakeWord.startListening({
+          keyword: nativeKeyword || 'hey_jarvis',
+          sensitivity,
+          emitScores: false,
+        });
+        logLine('Background wake word on', 0);
+      } else {
+        await GIAWakeWord.stopListening();
+        logLine('Background wake word off', 0);
+      }
+    } catch (e) {
+      logLine(`Could not change wake word: ${e instanceof Error ? e.message : 'Unknown'}`, 0);
+      if (on) setNativeWW(false);
+    }
+    // The service starts asynchronously; read the real state shortly after.
+    setTimeout(() => { void checkService(); }, 600);
+  }, [hasNativeModule, nativeKeyword, sensitivity, logLine, checkService]);
 
   const testWakeWord = useCallback(async () => {
     if (testingRef.current) { await stopTest(); return; }
@@ -139,7 +169,7 @@ export const VoiceSection: React.FC = () => {
         }),
       ];
       await GIAWakeWord.startListening({
-        keyword: nativeKeyword || wakeWord,
+        keyword: nativeKeyword || 'hey_jarvis',
         sensitivity,
         emitScores: true,
       });
@@ -150,12 +180,20 @@ export const VoiceSection: React.FC = () => {
       logLine(`Error: ${e instanceof Error ? e.message : 'Unknown'}`, 0);
       await stopTest();
     }
-  }, [nativeKeyword, wakeWord, sensitivity, checkService, logLine, stopTest]);
+  }, [nativeKeyword, sensitivity, checkService, logLine, stopTest]);
 
-  // Leaving the screen mid-test must not leave the microphone open.
+  // Leaving the screen mid-test must not leave the microphone open — and if
+  // Background Wake Word was on, hand the mic back to it instead of silently
+  // turning listening off.
+  const backgroundRef = useRef({ on: nativeWW, keyword: nativeKeyword || 'hey_jarvis', sensitivity });
+  backgroundRef.current = { on: nativeWW, keyword: nativeKeyword || 'hey_jarvis', sensitivity };
   useEffect(() => () => {
     testHandlesRef.current.forEach(h => { void h.remove(); });
-    if (testingRef.current) void GIAWakeWord.stopListening().catch(() => undefined);
+    if (!testingRef.current) return;
+    void GIAWakeWord.stopListening().then(() => {
+      const b = backgroundRef.current;
+      if (b.on) return GIAWakeWord.startListening({ keyword: b.keyword, sensitivity: b.sensitivity, emitScores: false });
+    }).catch(() => undefined);
   }, []);
 
   // Explicit, separate action — never triggered by the real "Test" button.
@@ -164,7 +202,7 @@ export const VoiceSection: React.FC = () => {
   const previewSimulatedLog = useCallback(async () => {
     setTesting(true);
     setDetectionLog([]);
-    const simPatterns = ['JARVIS', 'HEY GIA', 'ALEXA', 'OK GOOGLE'];
+    const simPatterns = ['HEY JARVIS', 'JARVIS', 'HEY JARVIS'];
     for (let i = 0; i < 5; i++) {
       await new Promise(r => setTimeout(r, 800));
       const e: DetectionEvent = {
@@ -181,11 +219,6 @@ export const VoiceSection: React.FC = () => {
 
   useEffect(() => { checkService(); }, [checkService]);
   useEffect(() => { if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [detectionLog]);
-
-  useEffect(() => {
-    localStorage.setItem('gia-wake-word', wakeWord);
-    useGiaStore.getState().setWakeWord(wakeWord);
-  }, [wakeWord]);
 
   useEffect(() => {
     localStorage.setItem('gia-keep-listening', String(keepListening));
@@ -241,8 +274,9 @@ export const VoiceSection: React.FC = () => {
           </span>
         </div>
         <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>
-          GIA&apos;s hands-free wake word runs fully on this phone using openWakeWord with its default
-          &ldquo;Hey Jarvis&rdquo; model. No audio leaves the device.
+          GIA&apos;s hands-free wake word runs fully on this phone using openWakeWord. The bundled phrase is
+          &ldquo;Hey Jarvis&rdquo; &mdash; that is the model that actually exists in this build. There is no
+          &ldquo;Hey GIA&rdquo; model yet. No audio leaves the device.
           {hasNativeModule
             ? (nativeWW ? ' Say “Hey Jarvis” any time.' : ' Switch on Background Wake Word below to start it.')
             : ''}
@@ -251,27 +285,9 @@ export const VoiceSection: React.FC = () => {
           <p className="text-[10px]" style={{ color: '#ef4444' }}>
             {Capacitor.isNativePlatform()
               ? 'The engine isn’t part of the app version you have installed. Install the latest GIA build to get it.'
-              : (Capacitor.isNativePlatform() ? 'Not in this installed version — install the latest build.' : 'Runs in the Android app only.')}
+              : 'Runs in the Android app only.'}
           </p>
         )}
-      </div>
-
-      <div>
-        <label className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--gia-muted)', display: 'block', marginBottom: '4px' }}>
-          Listen phrase (in-chat speech recognition)
-        </label>
-        <div className="flex gap-2">
-          <input
-            className="gia-input"
-            value={wakeWord}
-            onChange={e => setWakeWord(e.target.value)}
-            placeholder="hey gia"
-            style={{ fontSize: '12px', flex: 1 }}
-          />
-        </div>
-        <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-          Phrase for the speech-recognition mode. Tap "Listen" in Chat to start. Background Wake Word below uses its own on-device phrase.
-        </p>
       </div>
 
       <div>
@@ -292,7 +308,7 @@ export const VoiceSection: React.FC = () => {
 
       <Switch
         checked={nativeWW}
-        onChange={setNativeWW}
+        onChange={(on) => { void setBackgroundWakeWord(on); }}
         disabled={!hasNativeModule}
         icon={<Radio size={11} />}
         label="Background Wake Word"
@@ -332,7 +348,8 @@ export const VoiceSection: React.FC = () => {
               </div>
             )}
             <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
-              For now GIA answers to &ldquo;Hey Jarvis&rdquo; &mdash; that is the phrase the on-device model was trained on. A custom &ldquo;Hey GIA&rdquo; voice is coming in a later update.
+              This build ships the &ldquo;Hey Jarvis&rdquo; openWakeWord model. A custom &ldquo;Hey GIA&rdquo;
+              model is not included yet; adding one requires a trained classifier.
             </p>
           </div>
 

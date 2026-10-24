@@ -1,100 +1,100 @@
-import { logger } from './logger';
-
 export function extractJSON<T = unknown>(text: string): T {
-  const cleaned = text
+  const cleaned = stripThinking(text)
     .replace(/```tool[\s\S]*?```/g, '')
-    .replace(/```(?:json)?/gi, '')
     .trim();
 
-  const jsonCandidate = findFirstJsonValue(cleaned);
-  if (!jsonCandidate) {
-    // Strategy 2: try parsing the whole thing
-    try { return JSON.parse(cleaned); } catch (e) { logger.error('[helpers] JSON parse failed (strategy 2):', e); }
-    throw new Error('No valid JSON found');
+  // The whole response is already JSON in the common case.
+  const whole = tryParseJson<T>(cleaned);
+  if (whole.ok) return whole.value;
+
+  // Models often show a schema example before the real payload, or write a
+  // short citation after it. Prefer the largest balanced value; ties go to
+  // the later one. Think blocks are removed before this scan, so examples
+  // inside them cannot win.
+  const candidates = findJsonCandidates(cleaned)
+    .map((value, index) => ({ value, index }))
+    .sort((a, b) => b.value.length - a.value.length || b.index - a.index);
+  for (const candidate of candidates) {
+    const parsed = tryParseJson<T>(candidate.value);
+    if (parsed.ok) return parsed.value;
   }
 
-  // Strategy 3: try direct parse
-  try { return JSON.parse(jsonCandidate); } catch (e) {
-    // Strategy 4: fix common issues
-    const fixed = jsonCandidate
-      .replace(/,\s*([\]}])/g, '$1')
-      .replace(/([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
-      .replace(/,\s*$/gm, '')
-      .replace(/\/\/.*$/gm, '')
-      .replace(/([\s\S]*?)([{[]).*/, '$2') // Remove text before first { or [
-      .replace(/.*([}\]])[\s\S]*/, '$1'); // Remove text after last } or ]
-
-    // Strategy 4b: handle broken/incomplete lines - try to complete truncated JSON
-    if (fixed !== jsonCandidate) {
-      try { return JSON.parse(fixed); } catch (e) { logger.error('[helpers] JSON parse failed (strategy 4):', e); }
-    }
-
-    // Strategy 5: try to extract just the JSON-like part by counting braces
-    try {
-      let depth = 0;
-      let jsonStart = -1;
-      let jsonEnd = -1;
-      for (let i = 0; i < jsonCandidate.length; i++) {
-        const ch = jsonCandidate[i];
-        if (ch === '{' || ch === '[') {
-          if (depth === 0) jsonStart = i;
-          depth++;
-        } else if (ch === '}' || ch === ']') {
-          depth--;
-          if (depth === 0) { jsonEnd = i + 1; break; }
-        }
-      }
-      if (jsonStart >= 0 && jsonEnd > jsonStart) {
-        return JSON.parse(jsonCandidate.slice(jsonStart, jsonEnd));
-      }
-    } catch (e) { logger.error('[helpers] JSON parse failed (strategy 5):', e); }
-
-    // Strategy 6: try to repair truncated JSON by adding missing closing brackets
-    try {
-      const repaired = repairTruncatedJSON(jsonCandidate);
-      if (repaired !== jsonCandidate) {
-        return JSON.parse(repaired);
-      }
-    } catch (e) { logger.error('[helpers] JSON parse failed (strategy 6):', e); }
-
-    // Strategy 7: aggressively strip all non-JSON text (markdown prose, code fences, etc.)
-    try {
-      const aggressive = jsonCandidate
-        .replace(/```[\s\S]*?```/g, '')           // remove all code fences
-        .replace(/^(?!.*[[{}]).*/gm, '')           // remove lines without JSON chars
-        .trim();
-      const aggFirstObj = aggressive.indexOf('{');
-      const aggLastObj = aggressive.lastIndexOf('}');
-      const aggFirstArr = aggressive.indexOf('[');
-      const aggLastArr = aggressive.lastIndexOf(']');
-      let aggStart = -1, aggEnd = -1;
-      if (aggFirstObj !== -1 && aggLastObj > aggFirstObj) { aggStart = aggFirstObj; aggEnd = aggLastObj + 1; }
-      else if (aggFirstArr !== -1 && aggLastArr > aggFirstArr) { aggStart = aggFirstArr; aggEnd = aggLastArr + 1; }
-      if (aggStart >= 0 && aggEnd > aggStart) {
-        const aggCandidate = aggressive.slice(aggStart, aggEnd);
-        try { return JSON.parse(aggCandidate); } catch {
-          // Try with truncated repair
-          const aggRepaired = repairTruncatedJSON(aggCandidate);
-          return JSON.parse(aggRepaired);
-        }
-      }
-    } catch (e) { logger.error('[helpers] JSON parse failed (strategy 7):', e); }
-
-    throw e;
-  }
+  throw new Error('No valid JSON found');
 }
 
-function findFirstJsonValue(text: string): string | null {
-  const objectStart = text.indexOf('{');
-  const arrayStart = text.indexOf('[');
-  const start = objectStart < 0 ? arrayStart
-    : arrayStart < 0 ? objectStart
-      : Math.min(objectStart, arrayStart);
-  if (start < 0) return null;
+function stripThinking(text: string): string {
+  return text
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+    .replace(/<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>/gi, '')
+    .replace(/<\|begin_of_solution\|>[\s\S]*?<\|end_of_solution\|>/gi, '')
+    .replace(/<\|(?:begin|end)_of_(?:thought|solution)\|>/gi, '');
+}
 
+interface ParseAttempt<T> {
+  ok: true;
+  value: T;
+}
+
+function tryParseJson<T>(candidate: string): ParseAttempt<T> | { ok: false } {
+  const trimmed = candidate.trim();
+  if (!trimmed) return { ok: false };
+
+  try {
+    return { ok: true, value: JSON.parse(trimmed) as T };
+  } catch {
+    // Fall through to the repair passes.
+  }
+
+  const fixed = trimmed
+    .replace(/,\s*([\]}])/g, '$1')
+    .replace(/([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+    .replace(/,\s*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+  if (fixed !== trimmed) {
+    try {
+      return { ok: true, value: JSON.parse(fixed) as T };
+    } catch {
+      // Fall through to truncated-JSON repair.
+    }
+  }
+
+  const repaired = repairTruncatedJSON(trimmed);
+  if (repaired !== trimmed) {
+    try {
+      return { ok: true, value: JSON.parse(repaired) as T };
+    } catch {
+      // The candidate is genuinely invalid.
+    }
+  }
+
+  return { ok: false };
+}
+
+function findJsonCandidates(text: string): string[] {
+  const candidates: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index];
+    if (char !== '{' && char !== '[') {
+      index++;
+      continue;
+    }
+    const end = findBalancedEnd(text, index);
+    if (end > index) {
+      candidates.push(text.slice(index, end));
+      index = end;
+    } else {
+      index++;
+    }
+  }
+  return candidates;
+}
+
+function findBalancedEnd(text: string, start: number): number {
   const closers: string[] = [];
   let inString = false;
   let escaped = false;
+
   for (let i = start; i < text.length; i++) {
     const char = text[i];
     if (inString) {
@@ -110,80 +110,43 @@ function findFirstJsonValue(text: string): string | null {
     } else if (char === '[') {
       closers.push(']');
     } else if (char === '}' || char === ']') {
-      if (closers.pop() !== char) return text.slice(start);
-      if (closers.length === 0) return text.slice(start, i + 1);
+      if (closers.pop() !== char) return -1;
+      if (closers.length === 0) return i + 1;
     }
   }
-  return text.slice(start);
+
+  // Truncated response: return the rest so the repair pass can close it.
+  return text.length;
 }
 
 function repairTruncatedJSON(json: string): string {
   let result = json;
-  let depth = 0;
+  const stack: string[] = [];
   let inString = false;
-  let escapeNext = false;
+  let escaped = false;
 
-  // Count unclosed brackets/braces
   for (let i = 0; i < result.length; i++) {
     const ch = result[i];
-    if (escapeNext) { escapeNext = false; continue; }
-    if (ch === '\\') { escapeNext = true; continue; }
-    if (ch === '"' && !escapeNext) { inString = !inString; continue; }
-    if (!inString) {
-      if (ch === '{' || ch === '[') depth++;
-      else if (ch === '}' || ch === ']') depth--;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') {
+      if (stack[stack.length - 1] === ch) stack.pop();
     }
   }
 
-  // Close unclosed string if needed
-  if (inString) {
-    result += '"';
-    inString = false;
-  }
+  if (inString) result += '"';
+  while (stack.length > 0) result += stack.pop();
 
-  // Add missing closing brackets
-  while (depth > 0) {
-    // Check if we're in an object or array context
-    let lastOpenType = '';
-    let tempInString = false;
-    let tempEscape = false;
-    for (let i = 0; i < result.length; i++) {
-      const ch = result[i];
-      if (tempEscape) { tempEscape = false; continue; }
-      if (ch === '\\') { tempEscape = true; continue; }
-      if (ch === '"' && !tempEscape) { tempInString = !tempInString; continue; }
-      if (!tempInString) {
-        if (ch === '{' || ch === '[') { lastOpenType = ch; }
-      }
-    }
-    if (lastOpenType === '{') result += '}';
-    else if (lastOpenType === '[') result += ']';
-    depth--;
-  }
-
-  // Fix trailing commas before closing brackets
+  // Fix trailing commas before closing brackets and unquoted keys.
   result = result.replace(/,\s*([\]}])/g, '$1');
-
-  // Fix unquoted keys
   result = result.replace(/([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
-
-  // Fix unclosed strings at the end
-  if (result.match(/[^\\]"$/) && !result.endsWith('"')) {
-    result += '"';
-  }
-
-  // Fix truncated values: "key": "partial...  -> "key": "partial..."
-  if (result.match(/:\s*"[^"]*$/)) {
-    result += '"';
-  }
-
-  // Fix truncated array values: "key": ["a", "b
-  if (result.match(/:\s*\[[^\]]*$/)) {
-    result += ']';
-  }
-
-  // Final trailing comma cleanup after all repairs
-  result = result.replace(/,\s*([\]}])/g, '$1');
 
   return result;
 }

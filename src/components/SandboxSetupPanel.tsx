@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useSandboxSetup } from '../hooks/useSandboxSetup';
 import ShellPanel from './ShellPanel';
-import { runFullInstall, runUpdatePackages, parseInstalledPackageNames, tailOutput, confirmPackageInstalled } from '../services/terminalInstall';
+import { runFullInstall, runUpdatePackages, parseInstalledPackageNames, tailOutput, confirmPackageInstalled, toDistroPackage } from '../services/terminalInstall';
 
 type Tab = 'system' | 'shell' | 'packages' | 'workspace' | 'mcp';
 
@@ -79,7 +79,7 @@ const PACKAGE_SECTIONS = [
     icon: FolderOpen,
     packages: [
       { name: 'ffmpeg', label: 'FFmpeg', desc: 'Audio/video processing' },
-      { name: 'ImageMagick', label: 'ImageMagick', desc: 'Image processing' },
+      { name: 'imagemagick', label: 'ImageMagick', desc: 'Image processing' },
       { name: 'tree', label: 'Tree', desc: 'Directory tree viewer' },
       { name: 'zip', label: 'zip', desc: 'ZIP archiver' },
       { name: 'unzip', label: 'unzip', desc: 'ZIP extractor' },
@@ -138,6 +138,8 @@ export default function SandboxSetupPanel() {
   const [workspaceInfoLoading, setWorkspaceInfoLoading] = useState(false);
 
   const logRef = useRef<HTMLDivElement>(null);
+  const rootfsBusy = isInstalling || fullInstalling || updating;
+  const packageOs = setupStatus?.os === 'ubuntu' ? 'ubuntu' : 'alpine';
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -157,8 +159,8 @@ export default function SandboxSetupPanel() {
   // The workspace folder tiles used to be static labels with no connection
   // to what's actually on disk. Read real state instead: does each folder
   // exist, and how many entries does it have.
-  const refreshWorkspaceInfo = useCallback(async () => {
-    if (!setupStatus?.installed) return;
+  const refreshWorkspaceInfo = useCallback(async (force = false) => {
+    if (!force && !setupStatus?.installed) return;
     setWorkspaceInfoLoading(true);
     try {
       const cmd = WORKSPACE_FOLDERS.map(f =>
@@ -197,6 +199,22 @@ export default function SandboxSetupPanel() {
       // Counts stay stale; the tab itself is unaffected.
     }
   }, [listInstalledPackages]);
+
+  // A distro switch replaces every package on disk; never carry the previous
+  // distro's installed-package list into the new one.
+  useEffect(() => {
+    setInstalledPkgs([]);
+    setSearchResults([]);
+    setUpdateResult(null);
+  }, [setupStatus?.os]);
+
+  // Refresh package truth whenever a verified rootfs appears or changes
+  // distro. Without this, the System tab kept showing "Full Install" after a
+  // restart (installedPkgs started empty) even though packages were present.
+  useEffect(() => {
+    if (!setupStatus?.installed) return;
+    void refreshInstalled();
+  }, [setupStatus?.installed, setupStatus?.os, refreshInstalled]);
 
   const toggleSection = useCallback((idx: number) => {
     setExpandedSections(prev => {
@@ -257,24 +275,42 @@ export default function SandboxSetupPanel() {
     }
   }, [execCommand, appendLog, setupStatus?.os, refreshInstalled]);
 
+  const handleRootfsAction = useCallback(async (os: 'alpine' | 'ubuntu') => {
+    setSelectedOS(os);
+    setPkgError(null);
+    setFullInstallFailures([]);
+    setFullInstallProgress('');
+    setUpdateResult(null);
+    setInstalledPkgs([]);
+    setSearchResults([]);
+    setWorkspaceInfo({});
+
+    await startSetup('aarch64', os);
+
+    // Re-read both regardless of success: a failed reinstall may have left the
+    // old rootfs (and packages) intact, or removed it entirely.
+    await refreshInstalled();
+    await refreshWorkspaceInfo(true);
+  }, [startSetup, refreshInstalled, refreshWorkspaceInfo]);
+
   // Single package install
   const handleInstall = useCallback(async (pkg: string) => {
     setPkgError(null);
-    const r = await installPackage(pkg);
+    const r = await installPackage(toDistroPackage(pkg, packageOs));
     if (!r || r.exitCode !== 0) {
       // A non-zero exit isn't proof of failure under proot — check the package database.
-      const actuallyInstalled = r ? await confirmPackageInstalled(execCommand, setupStatus?.os === 'ubuntu' ? 'ubuntu' : 'alpine', pkg) : false;
+      const actuallyInstalled = r ? await confirmPackageInstalled(execCommand, packageOs, pkg) : false;
       if (!actuallyInstalled) {
         setPkgError(`Couldn't install ${pkg}: ${tailOutput(r?.output) || 'no response from terminal'}`);
       }
     }
     await refreshInstalled();
-  }, [installPackage, refreshInstalled, execCommand, setupStatus?.os]);
+  }, [installPackage, refreshInstalled, execCommand, packageOs]);
 
   const handleRemove = useCallback(async (pkg: string) => {
-    await removePackage(pkg);
+    await removePackage(toDistroPackage(pkg, packageOs));
     await refreshInstalled();
-  }, [removePackage, refreshInstalled]);
+  }, [removePackage, refreshInstalled, packageOs]);
 
   // Search
   const handleSearch = useCallback(async () => {
@@ -286,9 +322,11 @@ export default function SandboxSetupPanel() {
   }, [searchQuery, searchPackages]);
 
   // `apk list --installed` lines start with name-version-release, so compare
-  // against parsed package names rather than string prefixes.
+  // against parsed package names rather than string prefixes. On Ubuntu the
+  // package database uses different names (build-essential, python3-pip,
+  // sqlite3...), so map the catalog name before checking it.
   const installedNames = useMemo(() => parseInstalledPackageNames(installedPkgs.join('\n')), [installedPkgs]);
-  const isPkgInstalled = useCallback((name: string) => installedNames.has(name), [installedNames]);
+  const isPkgInstalled = useCallback((name: string) => installedNames.has(toDistroPackage(name, packageOs)), [installedNames, packageOs]);
 
   // Not native
   if (!isNative) {
@@ -333,8 +371,16 @@ export default function SandboxSetupPanel() {
         {/* ═══════ SYSTEM TAB ═══════ */}
         {tab === 'system' && (
           <>
+            {phase === 'error' && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                <p className="text-xs text-red-300 leading-relaxed">
+                  The last terminal install did not complete. Check Live Output below, then try again or reinstall.
+                </p>
+              </div>
+            )}
+
             {/* Status */}
-            {setupStatus?.installed ? (
+            {setupStatus?.installed && !isInstalling ? (
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="text-emerald-400" size={18} />
@@ -349,10 +395,11 @@ export default function SandboxSetupPanel() {
                   <div>Path: ~/terminal/rootfs</div>
                 </div>
                 <button
-                  onClick={() => startSetup('aarch64', selectedOS).catch(() => {})}
-                  className="mt-1 text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  onClick={() => handleRootfsAction(selectedOS)}
+                  disabled={rootfsBusy}
+                  className="mt-1 text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-40 flex items-center gap-1"
                 >
-                  <RefreshCw size={12} /> Reinstall {selectedOS === 'ubuntu' ? 'Ubuntu' : 'Alpine'}
+                  <RefreshCw size={12} className={isInstalling ? 'animate-spin' : ''} /> {isInstalling ? 'Installing...' : `Reinstall ${selectedOS === 'ubuntu' ? 'Ubuntu' : 'Alpine'}`}
                 </button>
 
                 {/* Switch distro -- was previously impossible once installed:
@@ -379,15 +426,16 @@ export default function SandboxSetupPanel() {
                   </div>
                   {selectedOS !== setupStatus.os && (
                     <button
-                      onClick={() => startSetup('aarch64', selectedOS).catch(() => {})}
-                      className="w-full text-xs rounded-lg py-2 bg-white/10 hover:bg-white/15 transition-colors"
+                      onClick={() => handleRootfsAction(selectedOS)}
+                      disabled={rootfsBusy}
+                      className="w-full text-xs rounded-lg py-2 bg-white/10 hover:bg-white/15 disabled:opacity-40 transition-colors"
                     >
                       Install {selectedOS === 'ubuntu' ? 'Ubuntu' : 'Alpine'} instead (replaces current rootfs)
                     </button>
                   )}
                 </div>
               </div>
-            ) : phase === 'idle' || phase === 'error' ? (
+            ) : !isInstalling ? (
               <div className="space-y-3">
                 {/* OS Selector */}
                 <div className="flex rounded-xl overflow-hidden border border-white/10">
@@ -413,7 +461,7 @@ export default function SandboxSetupPanel() {
                   </button>
                 </div>
                 <button
-                  onClick={() => startSetup('aarch64', selectedOS).catch(() => {})}
+                  onClick={() => handleRootfsAction(selectedOS)}
                   disabled={isInstalling}
                   className={`w-full rounded-xl p-5 flex flex-col items-center gap-2 transition-colors ${
                     selectedOS === 'ubuntu'
@@ -436,7 +484,7 @@ export default function SandboxSetupPanel() {
             ) : null}
 
             {/* Full Install — only until anything is installed; then Update Packages covers it */}
-            {setupStatus?.installed && !fullInstalling && installedPkgs.length === 0 && (
+            {setupStatus?.installed && !fullInstalling && !rootfsBusy && installedPkgs.length === 0 && (
               <button
                 onClick={handleFullInstall}
                 className="w-full bg-violet-600/80 hover:bg-violet-500/80 rounded-xl p-4 flex items-center gap-3 transition-colors"
@@ -473,7 +521,7 @@ export default function SandboxSetupPanel() {
             )}
 
             {/* Update Packages — only once something is actually installed */}
-            {setupStatus?.installed && installedPkgs.length > 0 && !updating && (
+            {setupStatus?.installed && installedPkgs.length > 0 && !updating && !rootfsBusy && (
               <button
                 onClick={handleUpdatePackages}
                 className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 flex items-center gap-3 transition-colors"
@@ -536,7 +584,7 @@ export default function SandboxSetupPanel() {
         )}
 
         {/* ═══════ PACKAGES TAB ═══════ */}
-        {tab === 'shell' && <ShellPanel />}
+        {tab === 'shell' && <ShellPanel os={packageOs} />}
 
         {tab === 'packages' && (
           <>
@@ -555,7 +603,7 @@ export default function SandboxSetupPanel() {
                 placeholder={setupStatus?.os === 'ubuntu' ? 'Search Ubuntu packages...' : 'Search Alpine packages...'}
                 className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:opacity-40 focus:outline-none focus:border-purple-400/50"
               />
-              <button onClick={handleSearch} className="bg-purple-600 hover:bg-purple-500 rounded-lg px-3 py-2">
+              <button onClick={handleSearch} disabled={!searchQuery.trim() || rootfsBusy} className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 rounded-lg px-3 py-2">
                 <Search size={16} />
               </button>
             </div>
@@ -601,7 +649,8 @@ export default function SandboxSetupPanel() {
                             {installed ? (
                               <button
                                 onClick={() => handleRemove(name)}
-                                className="ml-2 p-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                                disabled={rootfsBusy}
+                                className="ml-2 p-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40"
                                 title="Remove"
                               >
                                 <Trash2 size={12} />
@@ -609,8 +658,8 @@ export default function SandboxSetupPanel() {
                             ) : (
                               <button
                                 onClick={() => handleInstall(name)}
-                                disabled={pkgInstalling === name}
-                                className="ml-2 p-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 disabled:opacity-50"
+                                disabled={pkgInstalling === name || rootfsBusy}
+                                className="ml-2 p-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 disabled:opacity-40"
                                 title="Install"
                               >
                                 {pkgInstalling === name ? (

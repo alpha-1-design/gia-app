@@ -1,4 +1,4 @@
-import { TOOL_META } from '../WorkLog';
+import { TOOL_META } from '../turn/toolMeta';
 import { statusLabel, type ThinkingPhase } from '../ThinkingStatus';
 
 /**

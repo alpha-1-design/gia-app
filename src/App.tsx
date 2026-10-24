@@ -23,7 +23,7 @@ import { healProviderKeys } from './services/credentialRecovery';
 import { useNotificationStore } from './store/useNotificationStore';
 import { logger } from './utils/logger';
 import { wakeWordIsClaimed } from './services/wakeWordOwner';
-import FloatingOrb from './components/FloatingOrb';
+import FloatingHud from './components/FloatingHud';
 import LegalGate from './components/LegalGate';
 import FloatingDownload from './components/FloatingDownload';
 import { PermissionPopup } from './components/PermissionPopup';
@@ -33,6 +33,8 @@ import { useNativeIntents } from './hooks/useNativeIntents';
 import { useAutomationBridge } from './hooks/useAutomationBridge';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFirstLaunch } from './hooks/useFirstLaunch';
+import { useWakeWordBridge } from './hooks/useWakeWordBridge';
+import { useNativeHud } from './hooks/useNativeHud';
 import CommandPalette from './components/CommandPalette';
 import type { UpdateInfo } from './services/UpdateService';
 import { beginEdgeSwipe, shouldOpenFromEdgeSwipe, type EdgeSwipeState } from './utils/edgeSwipe';
@@ -40,7 +42,6 @@ import { needsLegalAcceptance } from './utils/legal';
 import './styles/globals.css';
 
 const EngineRoom = lazy(() => import('./components/EngineRoom'));
-const GiaConsole = lazy(() => import('./components/GiaConsole'));
 const TaskBoard = lazy(() => import('./components/TaskBoard').then(m => ({ default: m.TaskBoard })));
 const NotesPanel = lazy(() => import('./components/NotesPanel').then(m => ({ default: m.NotesPanel })));
 const RegionSelectorOverlay = lazy(() => import('./components/RegionSelectorOverlay').then(m => ({ default: m.RegionSelectorOverlay })));
@@ -141,11 +142,10 @@ const ModuleView: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, showConsole, consoleLogs, setShowConsole, theme, reduceMotion, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
+  const { setModule, showTerminal, setShowTerminal, notifications, clearNotification, theme, reduceMotion, addNotification, autoStartWakeWord, fullScreenMode } = useGiaStore(useShallow(s => ({
       setModule: s.setModule,
       showTerminal: s.showTerminal, setShowTerminal: s.setShowTerminal,
       notifications: s.notifications, clearNotification: s.clearNotification,
-      showConsole: s.showConsole, consoleLogs: s.consoleLogs, setShowConsole: s.setShowConsole,
       theme: s.theme,
       reduceMotion: s.reduceMotion,
       addNotification: s.addNotification,
@@ -153,6 +153,7 @@ const App: React.FC = () => {
       fullScreenMode: s.fullScreenMode,
     })));
   const setShowLeftDrawer = useGiaStore((s) => s.setShowLeftDrawer);
+  useNativeHud();
   const [locked, setLocked] = useState(BiometricService.isLockEnabled());
   const edgeSwipeRef = useRef<EdgeSwipeState | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -176,6 +177,7 @@ const App: React.FC = () => {
     { key: 'k', meta: true, handler: () => setPaletteOpen(o => !o), preventDefault: true },
   ], []);
   useKeyboardShortcuts(paletteShortcuts);
+  useWakeWordBridge();
 
   // First launch — run a quick system self-check and surface the summary so
   // new users immediately see that GIA is healthy and what's available.
@@ -238,7 +240,6 @@ const App: React.FC = () => {
   backActionRef.current = () => {
     const st = useGiaStore.getState();
     if (st.showModelSwitcher) { st.setShowModelSwitcher(false); return; }
-    if (st.showEngine) { st.setShowEngine(false); return; }
     if (st.showLeftDrawer) { st.setShowLeftDrawer(false); return; }
     if (showTerminal) { setShowTerminal(false); return; }
     if (st.currentModule !== 'chat') { st.goBack(); return; }
@@ -966,7 +967,7 @@ const App: React.FC = () => {
       </main>
        )}
 
-      {showWorkspace && <FloatingOrb />}
+      {showWorkspace && <FloatingHud />}
       <FloatingDownload />
       <LegalGate />
 
@@ -1077,16 +1078,6 @@ const App: React.FC = () => {
           >
             <EngineRoom />
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showConsole && (
-          <GiaConsole
-            logs={consoleLogs}
-            isVisible={showConsole}
-            onClose={() => setShowConsole(false)}
-          />
         )}
       </AnimatePresence>
 

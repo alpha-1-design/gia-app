@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idb-storage';
 import { genId } from '../utils/id';
 import { useMemoryStore } from './useMemoryStore';
+import { useGiaIdentity } from './useGiaIdentity';
 import type { MessageSegment } from '../utils/streamParser';
 import { appConfig, prefOrDefault } from '../config/appConfig';
 
@@ -311,7 +312,6 @@ interface GiaState {
   intentState: IntentState;
   showTerminal: boolean;
   showModelSwitcher: boolean;
-  showEngine: boolean;
   showLeftDrawer: boolean;
   setShowLeftDrawer: (show: boolean) => void;
   moduleHistory: Module[];
@@ -328,7 +328,6 @@ interface GiaState {
   activeSkillId: string | null;
   examHistory: ExamResult[];
   consoleLogs: { id: string; timestamp: number; type: 'thought' | 'tool' | 'result' | 'error'; content: string }[];
-  showConsole: boolean;
   showProtocols: boolean;
   
   webSearch: boolean;
@@ -380,7 +379,9 @@ interface GiaState {
   legalAcceptedVersion: string;
   /** Design style picked in the Build Studio (id from config/buildStyles). */
   buildStyleId: string;
-  showFloatingOrb: boolean;
+  /** Floating chat HUD, explicitly enabled by the user. */
+  showHud: boolean;
+  setShowHud: (on: boolean) => void;
   generationState: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal };
   generationControllers: Map<string, AbortController>;
   showCircleSearch: boolean;
@@ -415,7 +416,6 @@ interface GiaState {
 
   setModule: (module: Module) => void;
   goBack: () => boolean;
-  setShowEngine: (v: boolean) => void;
   setGenerationState: (state: { active: boolean; module: 'chat' | 'agents' | null; sessionId: string | null; messageId: string | null; abortSignal?: AbortSignal }) => void;
   setCurrentTool: (tool: string | null) => void;
   registerGenerationController: (key: string, controller: AbortController) => void;
@@ -445,7 +445,6 @@ interface GiaState {
   setVoiceState: (state: 'off' | 'listening' | 'hearing') => void;
   acceptLegal: (version: string) => void;
   setBuildStyleId: (id: string) => void;
-  setShowFloatingOrb: (on: boolean) => void;
   setLiveThoughts: (thoughts: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   setLiveSegments: (segments: Record<string, MessageSegment[]> | ((prev: Record<string, MessageSegment[]>) => Record<string, MessageSegment[]>)) => void;
   setShowThoughts: (thoughts: string[]) => void;
@@ -493,8 +492,6 @@ interface GiaState {
   setCustomInstructions: (text: string) => void;
   togglePinnedMemory: (id: string) => void;
   addConsoleLog: (log: { type: 'thought' | 'tool' | 'result' | 'error'; content: string }) => void;
-  setShowConsole: (show: boolean) => void;
-  clearConsole: () => void;
   setShowProtocols: (show: boolean) => void;
   buildMode: boolean;
   setBuildMode: (v: boolean) => void;
@@ -536,7 +533,6 @@ export const useGiaStore = create<GiaState>()(
       intentState: 'idle',
       showTerminal: false,
       showModelSwitcher: false,
-      showEngine: false,
       showLeftDrawer: false,
       moduleHistory: [],
       sharedData: {},
@@ -600,7 +596,6 @@ export const useGiaStore = create<GiaState>()(
       activeSkillId: 'core-general',
       examHistory: [],
       consoleLogs: [],
-      showConsole: false,
       showProtocols: false,
       webSearch: true,
       deepSearch: false,
@@ -644,7 +639,7 @@ export const useGiaStore = create<GiaState>()(
       voiceState: 'off',
       legalAcceptedVersion: '',
       buildStyleId: 'neon-glass',
-      showFloatingOrb: prefOrDefault('gia-floating-orb', appConfig.ui.floatingOrbDefault),
+      showHud: (() => { try { return localStorage.getItem('gia-floating-hud') === 'true'; } catch { return false; } })(),
       generationState: { active: false, module: null, sessionId: null, messageId: null },
       generationControllers: new Map(),
       showCircleSearch: false,
@@ -726,7 +721,6 @@ export const useGiaStore = create<GiaState>()(
         }));
         return true;
       },
-      setShowEngine: (v) => set({ showEngine: v }),
       setGenerationState: (generationState) => set((s) => {
         // Single choke point for all 5 "generation finished" call sites (chat
         // streaming, agents, errors, aborts) rather than touching each one.
@@ -771,7 +765,9 @@ export const useGiaStore = create<GiaState>()(
         const prevEntry = mem.getMemories().find(m => m.key === prevKey);
         if (prevEntry) mem.deleteMemory(prevEntry.id);
 
-        if (!wasSet) {
+        // Feedback is consent-gated: the reaction still shows in the UI, but
+        // nothing is written to long-term memory when memory is switched off.
+        if (!wasSet && useGiaIdentity.getState().identity.allowsMemory) {
           mem.addMemory({
             key: FEEDBACK_KEYS[value],
             value: value === 'up'
@@ -804,9 +800,9 @@ export const useGiaStore = create<GiaState>()(
       setVoiceState: (voiceState) => set({ voiceState }),
       acceptLegal: (version) => set({ legalAcceptedVersion: version }),
       setBuildStyleId: (id) => set({ buildStyleId: id }),
-      setShowFloatingOrb: (on) => {
-        try { localStorage.setItem('gia-floating-orb', String(on)); } catch { /* storage blocked */ }
-        set({ showFloatingOrb: on });
+      setShowHud: (on) => {
+        try { localStorage.setItem('gia-floating-hud', String(on)); } catch { /* storage blocked */ }
+        set({ showHud: on });
       },
       setLiveThoughts: (thoughts) => set((state) => ({
         liveThoughts: typeof thoughts === 'function' ? thoughts(state.liveThoughts) : thoughts
@@ -1149,8 +1145,6 @@ export const useGiaStore = create<GiaState>()(
       addConsoleLog: (log) => set((s) => ({
         consoleLogs: [...s.consoleLogs, { ...log, id: Math.random().toString(36).slice(2), timestamp: Date.now() }].slice(-100)
       })),
-      setShowConsole: (show) => set({ showConsole: show }),
-      clearConsole: () => set({ consoleLogs: [] }),
       setShowProtocols: (show) => set({ showProtocols: show }),
       setTheme: (theme) => set({ theme }),
       setReduceMotion: (v) => {

@@ -353,22 +353,7 @@ const MarkdownRenderer: React.FC<Props> = ({ content, className = '', sources, i
       } else if (lang === 'visual') {
         nodes.push(<VisualRenderer key={`vis-${i}`} code={codeLines.join('\n')} isStreaming={isStreaming} />);
       } else if (lang === 'suggestions') {
-        const items = codeLines.join('\n').split('\n').filter(s => s.trim());
-        nodes.push(
-          <div key={`su-${i}`} className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-            {items.map((item, si) => (
-              <button key={si} onClick={() => {
-                const ta = document.querySelector<HTMLTextAreaElement>('textarea');
-                if (ta) { ta.value = item.trim(); ta.dispatchEvent(new Event('input', { bubbles: true }));
-                  requestAnimationFrame(() => { const form = ta.closest('form'); if (form) { const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]'); btn?.click(); } });
-                }
-              }} className="text-[11px] opacity-40 hover:opacity-90 transition-opacity cursor-pointer text-left"
-                style={{ color: 'var(--gia-text)' }}>
-                → {item.trim()}
-              </button>
-            ))}
-          </div>
-        );
+        // Parsed into msg.suggestions before the answer is stored; chips render once under the message.
       } else {
         nodes.push(<CodeBlock key={`cb-${i}`} lang={lang} code={codeLines.join('\n')} showRun={true} />);
       }

@@ -29,8 +29,8 @@ export const Switch: React.FC<SwitchProps> = ({
         className="w-8 h-4 rounded-full relative transition-all shrink-0"
         style={{
           background: checked
-            ? `${accentColor}40`
-            : 'rgba(255,255,255,0.1)',
+            ? `color-mix(in srgb, ${accentColor} 25%, transparent)`
+            : 'var(--gia-surface-3)',
         }}
       >
         <div

@@ -19,7 +19,7 @@ interface BottomSheetProps {
 // drag it down past a distance/velocity threshold (or just let go with some
 // downward momentum) and it closes, same as the OS-level sheets people are
 // used to. New sheets should use this instead of duplicating the animation
-// wiring; existing ones (ModelSwitcherSheet, EngineSheet) have been migrated,
+// wiring; existing ones (ModelSwitcherSheet) have been migrated,
 // the rest (BuildPreviewSheet, ComposerToolsSheet, MessageActionSheet,
 // ClarificationBottomSheet, ToolsCatalogSheet) still need the same migration.
 // Extracted as a pure function (dragDismiss.ts) so the actual dismiss

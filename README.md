@@ -1,19 +1,19 @@
 # GIA — Generative Interface Agent
 
-GIA is a local-first AI workspace for chat, writing, analysis, planning, agents,
-and device-aware workflows. Connect a cloud provider or use a supported local
+GIA is a local-first AI workspace built for Android, with a browser build for
+compatibility. It covers chat, writing, analysis, planning, agents, and
+device-aware workflows. Connect a cloud provider or use a supported local
 model; when collaboration is enabled, GIA can send a request to up to three
 configured cloud providers.
 
-Part of the GIA family: [GIA Cowork](https://github.com/alpha-1-design/gia-cowork)
-(desktop, real shell and screen control) · [GIA CLI](https://github.com/alpha-1-design/gia-cli)
-(terminal coding agent).
+This is the Android app. Related projects in the GIA family:
+[GIA CLI](https://github.com/alpha-1-design/gia-cli) · [GIA Cowork](https://github.com/alpha-1-design/gia-cowork).
 
 ![GIA app icon](docs/screenshots/gia-icon-hero.png)
 
 [![CI](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml/badge.svg)](https://github.com/alpha-1-design/gia-app/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.0.17-amber.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.4.0.19-amber.svg)](package.json)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web-blue.svg)](capacitor.config.ts)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
@@ -36,6 +36,13 @@ Part of the GIA family: [GIA Cowork](https://github.com/alpha-1-design/gia-cowor
 | Analysis | Android sandbox |
 | --- | --- |
 | ![Analyst charts](docs/screenshots/analyst-bar.png) | ![Terminal execution](docs/screenshots/terminal-execution.png) |
+
+## One job timeline
+
+Live work and the finished result share one timeline: actions are grouped by
+what they touched, the plan is one sentence, and details stay one tap away.
+
+![GIA job timeline, live work and the finished result](docs/screenshots/job-timeline.png)
 
 ## Feature guides
 

@@ -7,7 +7,7 @@ interface ChangelogProps {
   onClose: () => void;
 }
 
-const VERSION = '2.4.0.17';
+const VERSION = '2.4.0.19';
 
 const sections = [
   {
@@ -16,8 +16,9 @@ const sections = [
     icon: Sparkles,
     color: '#a78bfa',
     items: [
+      'A quieter first run: thinking dots gather into the GIA wordmark, then the provider choices appear in plain boxed cards. No orb, no spirit artwork, no wall of colour.',
       'Root Terminal now has a Shell tab: run commands in the on-device Alpine Linux environment with live output, a Stop button, command history, and a remembered working directory. Full-screen programs such as nano and vim are not supported yet.',
-      'Settings → Voice now shows the “Hey Jarvis” openWakeWord status up front (On, Off, or Unavailable with the reason), and the older in-chat phrase is labelled separately.',
+      'Settings → Voice now shows the “Hey Jarvis” openWakeWord status up front (On, Off, or Unavailable with the reason). The misleading editable “hey gia” phrase was removed.',
       'Added an experimental Android on-device wake-word engine with the “Hey Jarvis” phrase. The browser build does not provide native wake-word listening.',
       'Added voice notes, a live Jarvis Orb status surface, and an Integration Orbit hub for connected services.',
       'Added Build Studio with a visual style carousel and starter prompts, plus weather and calendar cards for supported assistant output.',
@@ -51,6 +52,7 @@ const sections = [
     icon: Wrench,
     color: '#f59e0b',
     items: [
+      'Analyst can no longer hang forever. A stalled provider now aborts after 75 seconds, cancellation stops the retry loop, and the module shows a visible thinking state instead of an endless spinner.',
       'Your own messages now sit right next to your avatar. The bubble was left-aligned in a full-width column while the avatar was pinned to the right edge, so short messages ended up far from it.',
       'Wake word is more dependable in the background: a “Heard Hey Jarvis” alert now actually pops up when Android blocks GIA from opening itself, and listening restarts automatically when you return to the app if the system stopped it while you were away.',
       'On-device Whisper now shows real download progress, the reason a download failed, and a Retry button. “Delete model” removes the downloaded files (Unload only freed memory before).',
@@ -91,6 +93,9 @@ const sections = [
     icon: Terminal,
     color: '#22d3ee',
     items: [
+      'Wake word is described honestly: the Android build really listens on-device with openWakeWord, but the only bundled model is “Hey Jarvis”. There is no “Hey GIA” classifier yet, and the UI no longer pretends there is.',
+      'Removed the floating orb, console, protocol, reasoning-chain, segmented-reasoning and work-log panels. Live work and the finished result now stay in the single job timeline.',
+      'Version references across the app, Android package, documentation, user-agent strings and landing page are now 2.4.0.19 (versionCode 26).',
       'Sandbox tools now use the shared native/remote service instead of a desktop-only localhost path.',
       'File generation and document browsing self-provision their helper scripts inside the configured workspace.',
       'Gateway daemon configuration reloads preserve the last valid config, reconcile pollers, and no longer log Telegram token prefixes.',

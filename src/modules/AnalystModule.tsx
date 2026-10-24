@@ -1,11 +1,12 @@
 import { logger } from '../utils/logger';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { BarChart2 as BarChartIcon, Loader2, Paperclip, X, TrendingUp as LineChartIcon, Grid, Download, RefreshCw, PieChart as PieChartIcon } from 'lucide-react';
+import { BarChart2 as BarChartIcon, Paperclip, X, TrendingUp as LineChartIcon, Grid, Download, RefreshCw, PieChart as PieChartIcon } from 'lucide-react';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { useMemoryStore } from '../store/useMemoryStore';
 import AmbientInput from '../components/AmbientInput';
+import ThinkingDots from '../components/feedback/ThinkingDots';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, AreaChart, Area
@@ -17,7 +18,7 @@ import { normalizeAnalysisOutput } from './analyst/normalizeAnalysisOutput';
 
 interface DataPoint { label: string; value: number; color?: string; [key: string]: unknown }
 type ChartType = 'bar' | 'pie' | 'line' | 'table';
-const COLORS = ['#7c3aed','#4f46e5','#059669','#dc2626','#d97706','#0891b2','#be185d','#65a30d','#9333ea','#0284c7'];
+const COLORS = ['#f5f5f5','#d4d4d4','#b0b0b0','#8c8c8c','#6b6b6b','#525252','#3f3f3f','#9a9a9a','#c9c9c9','#737373'];
 
 const ANALYST_STORAGE_KEY = 'gia-analyst-last-result';
 
@@ -47,15 +48,24 @@ const AnalystModule: React.FC = () => {
   const [narrative, setNarrative] = useState(saved?.narrative ?? '');
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [error, setError] = useState('');
+  const [retryStatus, setRetryStatus] = useState('');
   const [fileData, setFileData] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const analysisAbortRef = useRef<AbortController | null>(null);
+  const analysisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { setIntentState, addNotification } = useGiaStore(useShallow(s => ({
     setIntentState: s.setIntentState,
     addNotification: s.addNotification,
   })));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, []);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
+      analysisAbortRef.current?.abort();
+    };
+  }, []);
 
   const getVal = (v: unknown) => typeof v === 'number' ? v : parseFloat(v as string) || 0;
 
@@ -76,7 +86,11 @@ const AnalystModule: React.FC = () => {
 
   const handleAnalyze = useCallback(async () => {
     const text = query.trim(); if (!text || loading) return;
-    setLoading(true); setError(''); setNarrative(''); setIntentState('thinking');
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 75_000);
+    analysisTimeoutRef.current = timeoutId;
+    setLoading(true); setError(''); setNarrative(''); setRetryStatus(''); setIntentState('thinking');
     try {
       const prompt = fileData ? `Analyze this data:\n\n${fileData.slice(0,8000)}\n\nUser: ${text}` : text;
       
@@ -90,8 +104,14 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
           forceJson: true,
           temperature: 0.25,
           maxTokens: 1500,
+          signal: controller.signal,
         }),
-        { moduleName: 'AnalystModule', transform: normalizeAnalysisOutput }
+        {
+          moduleName: 'AnalystModule',
+          transform: normalizeAnalysisOutput,
+          signal: controller.signal,
+          onRetry: () => setRetryStatus('Retrying with a cleaner format…'),
+        }
       );
       const mapped = parsed.data.map((d, i: number) => ({ ...d, color: COLORS[i%COLORS.length] }));
       setData(mapped);
@@ -104,6 +124,12 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       setIntentState('responding');
       timerRef.current = setTimeout(() => setIntentState('idle'), 2000);
     } catch (err: unknown) {
+      const aborted = controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError');
+      if (aborted) {
+        setError('Analysis stopped after 75 seconds. The provider did not return usable data — try again, simplify the request, or switch providers in Settings.');
+        setIntentState('idle');
+        return;
+      }
       const errMsg = err instanceof Error ? err.message : '';
       const isNetwork = errMsg.includes('No internet') || errMsg.includes('offline');
       if (isNetwork) {
@@ -113,7 +139,13 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
         setError(errMsg || 'Could not analyze. Try a more specific query.');
         setIntentState('idle');
       }
-    } finally { setLoading(false); }
+    } finally {
+      clearTimeout(timeoutId);
+      if (analysisAbortRef.current === controller) analysisAbortRef.current = null;
+      if (analysisTimeoutRef.current === timeoutId) analysisTimeoutRef.current = null;
+      setRetryStatus('');
+      setLoading(false);
+    }
   }, [query, fileData, loading, setIntentState]);
 
   const chartTypes: { id: ChartType; icon: React.ReactNode; label: string }[] = [
@@ -148,13 +180,14 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
     <div className="flex flex-col h-full px-4 py-5 gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <BarChartIcon size={16} className="text-indigo-500" />
+          <BarChartIcon size={16} style={{ color: 'var(--gia-text)' }} />
           <h2 className="text-sm font-semibold">Analyst</h2>
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileRef} type="file" className="hidden" onChange={handleFile} accept=".csv,.json,.txt,.tsv" />
           <button onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1.5 text-[11px] text-zinc-500 border border-zinc-800 rounded-lg px-2.5 py-1.5 hover:border-indigo-300 hover:text-indigo-600 transition-all">
+            className="flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5 transition-all"
+            style={{ color: 'var(--gia-muted)', border: '1px solid var(--gia-border)' }}>
             <Paperclip size={11} /> Feed data
           </button>
         </div>
@@ -162,12 +195,12 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
 
       {fileName && (
         <div className="flex flex-col gap-1 shrink-0">
-          <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-2">
-            <span className="text-xs text-indigo-400 flex-1 truncate">📎 {fileName}</span>
-            <button onClick={() => { setFileData(null); setFileName(''); setFileTruncated(false); }} className="text-zinc-500 hover:text-rose-400"><X size={13} /></button>
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+            <span className="text-xs flex-1 truncate" style={{ color: 'var(--gia-text)' }}>{fileName}</span>
+            <button onClick={() => { setFileData(null); setFileName(''); setFileTruncated(false); }} style={{ color: 'var(--gia-muted)' }}><X size={13} /></button>
           </div>
           {fileTruncated && (
-            <p className="text-[10px] text-amber-400 flex items-center gap-1 px-1">
+            <p className="text-[10px] flex items-center gap-1 px-1" style={{ color: 'var(--gia-muted)' }}>
               File truncated to first 8000 characters for analysis
             </p>
           )}
@@ -180,13 +213,16 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
           isLoading={loading} />
       </div>
 
-      {error && <p className="text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-3 shrink-0">{error}</p>}
+      {error && <p className="text-xs rounded-xl px-4 py-3 shrink-0" style={{ color: 'var(--gia-text)', background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>{error}</p>}
 
       {loading && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 size={22} className="text-indigo-400 animate-spin" />
-            <span className="text-[11px] text-zinc-500">Analyzing…</span>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <ThinkingDots visible color="bg-[var(--gia-text)]" size={7} />
+          <div className="space-y-1">
+            <p className="text-sm font-medium" style={{ color: 'var(--gia-text)' }}>GIA is reading your data</p>
+            <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>
+              {retryStatus || 'Finding the pattern and building the chart.'}
+            </p>
           </div>
         </div>
       )}
@@ -194,22 +230,25 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       {!loading && data.length > 0 && (
         <div className="flex-1 overflow-y-auto space-y-3">
           {summary && (
-            <p className="text-xs text-zinc-100 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 leading-relaxed font-medium">{summary}</p>
+            <p className="text-xs rounded-xl px-4 py-3 leading-relaxed font-medium" style={{ color: 'var(--gia-text)', background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>{summary}</p>
           )}
-          {narrative && <p className="text-xs text-zinc-400 leading-relaxed px-1">{narrative}</p>}
+          {narrative && <p className="text-xs leading-relaxed px-1" style={{ color: 'var(--gia-muted)' }}>{narrative}</p>}
 
           <div className="flex items-center justify-between">
             <div className="flex gap-1.5">
               {chartTypes.map(ct => (
                 <button key={ct.id} onClick={() => setChartType(ct.id)}
-                  className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg border transition-all ${chartType===ct.id?'bg-indigo-500 text-white border-indigo-500':'border-zinc-800 text-zinc-500 hover:border-indigo-300'}`}>
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg border transition-all"
+                  style={chartType===ct.id
+                    ? { background: 'var(--gia-text)', color: 'var(--gia-bg)', borderColor: 'var(--gia-text)' }
+                    : { color: 'var(--gia-muted)', borderColor: 'var(--gia-border)' }}>
                   {ct.icon}{ct.label}
                 </button>
               ))}
             </div>
             <div className="flex gap-1">
-              <button onClick={handleAnalyze} className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500" title="Refresh"><RefreshCw size={12} /></button>
-              <button onClick={exportCSV} className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500" title="Export CSV"><Download size={12} /></button>
+              <button onClick={handleAnalyze} className="p-1.5 rounded-lg" style={{ color: 'var(--gia-muted)' }} title="Refresh"><RefreshCw size={12} /></button>
+              <button onClick={exportCSV} className="p-1.5 rounded-lg" style={{ color: 'var(--gia-muted)' }} title="Export CSV"><Download size={12} /></button>
             </div>
           </div>
 
@@ -217,14 +256,14 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
             {chartType === 'bar' && (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="label" stroke="#8888a0" fontSize={10} />
-                  <YAxis stroke="#8888a0" fontSize={10} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--gia-border)" />
+                  <XAxis dataKey="label" stroke="var(--gia-muted)" fontSize={10} />
+                  <YAxis stroke="var(--gia-muted)" fontSize={10} />
                   <Tooltip 
-                    contentStyle={{ background: '#111118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                    itemStyle={{ color: '#f0f0f5', fontSize: '12px' }}
+                    contentStyle={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', borderRadius: '8px' }}
+                    itemStyle={{ color: 'var(--gia-text)', fontSize: '12px' }}
                   />
-                  <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="var(--gia-text)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -244,8 +283,8 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ background: '#111118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                    itemStyle={{ color: '#f0f0f5', fontSize: '12px' }}
+                    contentStyle={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', borderRadius: '8px' }}
+                    itemStyle={{ color: 'var(--gia-text)', fontSize: '12px' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -255,18 +294,18 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
                 <AreaChart data={data}>
                   <defs>
                     <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="var(--gia-text)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--gia-text)" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="label" stroke="#8888a0" fontSize={10} />
-                  <YAxis stroke="#8888a0" fontSize={10} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--gia-border)" />
+                  <XAxis dataKey="label" stroke="var(--gia-muted)" fontSize={10} />
+                  <YAxis stroke="var(--gia-muted)" fontSize={10} />
                   <Tooltip 
-                    contentStyle={{ background: '#111118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                    itemStyle={{ color: '#f0f0f5', fontSize: '12px' }}
+                    contentStyle={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', borderRadius: '8px' }}
+                    itemStyle={{ color: 'var(--gia-text)', fontSize: '12px' }}
                   />
-                  <Area type="monotone" dataKey="value" stroke="#7c3aed" fillOpacity={1} fill="url(#colorVal)" />
+                  <Area type="monotone" dataKey="value" stroke="var(--gia-text)" fillOpacity={1} fill="url(#colorVal)" />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -274,17 +313,17 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
               <div className="overflow-auto h-full">
                 <table className="w-full text-left border-collapse min-w-[300px]">
                   <thead>
-                    <tr className="border-b border-zinc-800">
+                    <tr style={{ borderBottom: '1px solid var(--gia-border)' }}>
                       {Object.keys(data[0] || {}).filter(k => !['color','id'].includes(k)).map(k => (
-                        <th key={k} className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider py-2 px-1">{k}</th>
+                        <th key={k} className="text-[10px] font-bold uppercase tracking-wider py-2 px-1" style={{ color: 'var(--gia-muted)' }}>{k}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {data.map((d, i) => (
-                      <tr key={i} className="border-b border-zinc-900/50 last:border-0">
+                      <tr key={i} style={{ borderBottom: '1px solid var(--gia-border)' }}>
                         {Object.entries(d).filter(([k]) => !['color','id'].includes(k)).map(([k, v], j) => (
-                          <td key={j} className="text-xs text-zinc-300 py-2.5 px-1 truncate max-w-[120px]">
+                          <td key={j} className="text-xs py-2.5 px-1 truncate max-w-[120px]" style={{ color: 'var(--gia-text)' }}>
                             {k === 'label' && <div className="w-1.5 h-1.5 rounded-full inline-block mr-2" style={{background:d.color}} />}
                             {String(v)}
                           </td>
@@ -298,15 +337,15 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
           </div>
 
           <div className="gia-card overflow-hidden">
-            <div className="grid grid-cols-2 bg-zinc-900/50 px-4 py-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800">
+            <div className="grid grid-cols-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)', borderBottom: '1px solid var(--gia-border)' }}>
               <span>Label</span><span className="text-right">Value</span>
             </div>
             {data.map(d => (
-              <div key={d.label} className="grid grid-cols-2 px-4 py-2.5 border-b border-zinc-900/50 last:border-0">
-                <span className="text-xs text-zinc-300 flex items-center gap-2">
+              <div key={d.label} className="grid grid-cols-2 px-4 py-2.5" style={{ borderBottom: '1px solid var(--gia-border)' }}>
+                <span className="text-xs flex items-center gap-2" style={{ color: 'var(--gia-text)' }}>
                   <div className="w-2 h-2 rounded-sm shrink-0" style={{background:d.color}} />{d.label}
                 </span>
-                <span className="text-xs text-zinc-500 font-mono text-right">{getVal(d.value).toLocaleString()}</span>
+                <span className="text-xs font-mono text-right" style={{ color: 'var(--gia-muted)' }}>{getVal(d.value).toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -316,9 +355,9 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
       {!loading && data.length === 0 && !error && (
         <div className="flex-1 flex items-center justify-center text-center">
           <div>
-            <BarChartIcon size={32} className="text-zinc-800 mx-auto mb-3" />
-            <p className="text-xs text-zinc-500">Paste data, a URL, or ask about any topic.</p>
-            <p className="text-[10px] text-zinc-600 mt-1">CSV/JSON files supported.</p>
+            <BarChartIcon size={32} className="mx-auto mb-3" style={{ color: 'var(--gia-border)' }} />
+            <p className="text-xs" style={{ color: 'var(--gia-muted)' }}>Paste data, a URL, or ask about any topic.</p>
+            <p className="text-[10px] mt-1" style={{ color: 'var(--gia-muted)' }}>CSV/JSON files supported.</p>
           </div>
         </div>
       )}

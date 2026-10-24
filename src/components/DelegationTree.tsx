@@ -25,7 +25,7 @@ export const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; on
       className="overflow-hidden"
       style={{
         width: '100%',
-        background: '#0a0a0a',
+        background: 'var(--gia-surface)',
         border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: 16,
       }}
@@ -33,13 +33,13 @@ export const AgentCard: React.FC<{ agent: NexusAgentState; expanded: boolean; on
       <button onClick={onToggle} className="w-full text-left px-3 py-2.5 flex items-start gap-2.5">
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-          style={{ background: '#18181b' }}
+          style={{ background: 'var(--gia-surface-2)' }}
         >
-          <Icon size={14} style={{ color: '#fafafa' }} />
+          <Icon size={14} style={{ color: 'var(--gia-text)' }} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold truncate" style={{ color: '#fafafa' }}>{agent.name}</span>
+            <span className="text-[13px] font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{agent.name}</span>
             <span className="text-[11px]" style={{ color: agent.status === 'failed' ? '#f87171' : '#a1a1aa' }}>
               {meta.label}
             </span>
@@ -165,7 +165,7 @@ export const DelegationTree: React.FC<{
             className="relative flex"
           >
             {rail({ last: isLastRow, stubColor: `${agent.color}99`, marker: (
-              <span className="relative flex h-2 w-2 items-center justify-center rounded-full" style={{ background: isLive ? '#fafafa' : '#3f3f46' }} />
+              <span className="relative flex h-2 w-2 items-center justify-center rounded-full" style={{ background: isLive ? '#fafafa' : 'var(--gia-muted-2)' }} />
             ) })}
             <div className="min-w-0 flex-1 pb-2.5 pl-1">
               <AgentCard

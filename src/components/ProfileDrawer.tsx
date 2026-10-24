@@ -91,12 +91,12 @@ const ProfileDrawer: React.FC = () => {
               <button
                 key={mod.id}
                 onClick={() => { setShowLeftDrawer(false); setModule(mod.id); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left tap-feedback transition-colors active:bg-white/5"
-                style={{ background: active ? 'rgba(168,85,247,0.1)' : 'transparent' }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left tap-feedback transition-colors active:bg-[var(--gia-surface-2)]"
+                style={{ background: active ? 'var(--gia-surface-2)' : 'transparent' }}
               >
                 <span style={{ color: mod.color }}>{mod.icon}</span>
                 <span className="flex-1 text-[13px] font-medium" style={{ color: active ? 'var(--gia-text)' : 'var(--gia-muted)' }}>{mod.label}</span>
-                {active && <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a855f7' }} />}
+                {active && <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--gia-text)' }} />}
               </button>
             );
           })}

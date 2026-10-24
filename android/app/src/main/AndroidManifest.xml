@@ -56,6 +56,12 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
+    <!-- Android 11+ package visibility: without this, getPackageInfo("com.termux")
+         throws NameNotFound and the Termux readiness check always looks broken. -->
+    <queries>
+        <package android:name="com.termux" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:extractNativeLibs="true"
@@ -198,6 +204,17 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="floating_screen_orb" />
+        </service>
+
+        <!-- Persistent floating chat HUD (survives leaving the app) -->
+        <service
+            android:name=".GIAHudService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_chat_hud" />
         </service>
 
         <!-- Media Playback Service -->

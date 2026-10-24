@@ -354,6 +354,7 @@ public class GIATerminalService extends Service {
                 // Sentinel so a partial/failed extraction is retried next launch
                 if (rootfsHasCriticalBinaries(rootfsDir)) {
                     marker.createNewFile();
+                    writeInstalledOsMarker(terminalDir, distroLabel);
                     Log.i(TAG, "Unpacked " + distroLabel + " rootfs to " + rootfsDir.getAbsolutePath());
                 } else {
                     throw new IOException(distroLabel + " rootfs extraction incomplete — /bin/sh or /usr/bin/env missing");
@@ -376,12 +377,61 @@ public class GIATerminalService extends Service {
      * unusable until the user manually clears app data.
      */
     static boolean rootfsHasCriticalBinaries(File rootfsDir) {
-        File busybox = new File(rootfsDir, "bin/busybox");
         File sh = new File(rootfsDir, "bin/sh");
         File env = new File(rootfsDir, "usr/bin/env");
+        if (!sh.exists() || sh.length() == 0 || !env.exists() || env.length() == 0) return false;
+
+        // Ubuntu/Debian rootfs has no busybox: its /bin/sh is dash and
+        // /usr/bin/env is coreutils. Requiring busybox unconditionally made
+        // every Ubuntu install look broken to startSession() (and, worse,
+        // made extractAssets() delete and replace a valid Ubuntu rootfs with
+        // the bundled Alpine one on the next app launch).
+        if (isUbuntuRootfs(rootfsDir)) return true;
+
+        File busybox = new File(rootfsDir, "bin/busybox");
         File libz = new File(rootfsDir, "usr/lib/libz.so.1");
-        boolean libzOk = !libz.exists() || libz.length() > 0; // absent is fine (Ubuntu rootfs), empty is not
-        return busybox.exists() && sh.exists() && env.exists() && libzOk;
+        boolean libzOk = !libz.exists() || libz.length() > 0; // absent is fine, empty is not
+        return busybox.exists() && busybox.length() > 0 && libzOk;
+    }
+
+    /**
+     * Best-effort distro detection from the rootfs itself, so status checks and
+     * package commands don't depend on a separate marker file being written
+     * correctly (or surviving a failed download/marker write).
+     */
+    static String detectRootfsOs(File rootfsDir) {
+        if (rootfsDir == null || !rootfsDir.isDirectory()) return "unknown";
+        if (new File(rootfsDir, "etc/alpine-release").exists()) return "alpine";
+        File osRelease = new File(rootfsDir, "etc/os-release");
+        if (osRelease.exists()) {
+            try {
+                String text = new String(java.nio.file.Files.readAllBytes(osRelease.toPath()));
+                String lower = text.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("id=ubuntu") || lower.contains("id=debian") || lower.contains("ubuntu")) {
+                    return "ubuntu";
+                }
+                if (lower.contains("id=alpine") || lower.contains("alpine")) return "alpine";
+            } catch (Exception ignored) { /* fall through */ }
+        }
+        if (new File(rootfsDir, "etc/debian_version").exists()) return "ubuntu";
+        if (new File(rootfsDir, "bin/busybox").exists()) return "alpine";
+        return "unknown";
+    }
+
+    static boolean isUbuntuRootfs(File rootfsDir) {
+        return "ubuntu".equals(detectRootfsOs(rootfsDir));
+    }
+
+    /** Persist the distro label for older callers/UI; detection no longer relies on it. */
+    private static void writeInstalledOsMarker(File terminalDir, String distroLabel) {
+        try {
+            File marker = new File(terminalDir, "installed-os.txt");
+            try (FileOutputStream out = new FileOutputStream(marker)) {
+                out.write(("Ubuntu".equalsIgnoreCase(distroLabel) ? "ubuntu" : "alpine").getBytes());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to write installed-os marker: " + e.getMessage());
+        }
     }
 
     /**
@@ -613,6 +663,7 @@ public class GIATerminalService extends Service {
             boolean ok = rootfsHasCriticalBinaries(rootfsDir);
             if (ok) {
                 marker.createNewFile();
+                writeInstalledOsMarker(terminalDir, distroLabel);
                 Log.i(TAG, "Re-extraction succeeded — " + distroLabel + " rootfs ready");
             } else {
                 Log.e(TAG, "Re-extraction incomplete — critical binaries missing");
@@ -706,9 +757,15 @@ public class GIATerminalService extends Service {
             service = (GIATerminalService) context;
         }
 
-        // Never run proot against an empty/missing rootfs: block until the
-        // (few-second) first-run extraction finishes, and fail with a clear
-        // message instead of proot's cryptic "'/usr/bin/env' not found".
+        File rootfsDir = new File(new File(context.getFilesDir(), TERMINAL_DIR), ROOTFS_DIR);
+        if (!rootfsHasCriticalBinaries(rootfsDir)) {
+            throw new IOException("Terminal is not installed or its root filesystem is incomplete. Install it in Settings > Terminal before running commands.");
+        }
+
+        // The rootfs itself is valid already; this latch only covers the
+        // foreground service extracting the bundled proot binary. Waiting here
+        // is harmless, but a missing service must not turn every command into
+        // a 60-second stall.
         try {
             if (!extractionLatch.await(60, TimeUnit.SECONDS)) {
                 throw new IOException("Terminal rootfs extraction timed out — try again in a few seconds.");
@@ -720,10 +777,7 @@ public class GIATerminalService extends Service {
         if (extractionFailed) {
             throw new IOException("Terminal rootfs failed to extract — check the terminal setup in Settings and tap Set Up Environment.");
         }
-        File rootfsDir = new File(new File(context.getFilesDir(), TERMINAL_DIR), ROOTFS_DIR);
-        if (!rootfsHasCriticalBinaries(rootfsDir)) {
-            throw new IOException("Terminal rootfs is missing critical binaries (/bin/sh, /usr/bin/env). Restart the app to re-extract, or tap Set Up Environment.");
-        }
+
 
         String prootPath = resolveProotPath(context);
         String rootfsPath = new File(new File(context.getFilesDir(), TERMINAL_DIR), ROOTFS_DIR).getAbsolutePath();

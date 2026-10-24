@@ -18,8 +18,6 @@ function renderList(role: 'user' | 'assistant') {
       streamingMsgId={null}
       expandedMsgs={new Set()}
       setExpandedMsgs={noop}
-      showThoughts={new Set()}
-      setShowThoughts={noop}
       thinkingPhase={'idle' as never}
       currentTool={null}
       responseTimesRef={{ current: {} }}

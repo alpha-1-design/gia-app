@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import GiaBrain from '../services/GiaBrain';
+import type { BrainResponse } from '../services/providers/types';
 import TTSService from '../services/TTSService';
 import { useGiaStore } from '../store/useGiaStore';
 import { useAgentStore } from '../store/useAgentStore';
@@ -10,14 +11,13 @@ import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
 import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock, flushToolBlock, appendThought, appendThinking } from '../utils/streamParser';
 import type { MessageSegment } from '../utils/streamParser';
-import { generateSuggestions } from '../utils/suggestionEngine';
+import { extractSuggestions, stripSuggestionScaffolding } from '../utils/suggestions';
 import { streamPush, streamCancel } from '../utils/streamThrottle';
 import OutputValidator from '../services/OutputValidator';
 import InputGuardrails from '../services/InputGuardrails';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { giaCoreServices } from '../services/GIACoreServices';
 import HapticService from '../services/HapticService';
-import type { CollaborativeProviderStatus } from '../services/providers/types';
 import type { Message } from '../store/useGiaStore';
 import { isNativePlatform } from '../utils/helpers';
 
@@ -26,25 +26,9 @@ const BACKGROUND_NOTIF_ID = 42;
 // ── Follow-up suggestions ───────────────────────────────────────────────────
 // Fired in the BACKGROUND after a message completes, so it never delays the
 // answer. Failures are silent — suggestions are a nicety, not a contract.
-const SUGGESTION_MIN_LEN = 80;
-
-function applyFollowUpSuggestions(sessionId: string, asstId: string, content: string): void {
-  try {
-    const suggestions = generateSuggestions(content);
-    if (suggestions.length > 0) {
-      useGiaStore.setState({
-        sessions: useGiaStore.getState().sessions.map(s =>
-          s.id === sessionId
-            ? { ...s, messages: s.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, suggestions } } : m) }
-            : s
-        ),
-      });
-    }
-  } catch {
-    // Suggestions are a nicety — never surface failures.
-  }
-}
-
+// The model writes a ```suggestions block at the end of an answer. We lift it
+// out of the stored text and attach it to the message, so the transcript stays
+// clean and the chips are exactly what the model chose to offer.
 async function notifyIfBackground(module: 'chat' | 'agents', sessionId: string, asstId: string): Promise<void> {
   const state = useGiaStore.getState();
   if (state.currentModule === module) return;
@@ -85,7 +69,6 @@ export function useChatGeneration() {
   const [streamingMsgIds, setStreamingMsgIds] = useState<Set<string>>(new Set());
   const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
   const [liveSegments, setLiveSegments] = useState<Record<string, MessageSegment[]>>({});
-  const [providerStatuses, setProviderStatuses] = useState<CollaborativeProviderStatus[]>([]);
   const activeStreamsRef = useRef<Set<string>>(new Set());
 
   // Sync streaming state with store generationState (survives module switches)
@@ -173,7 +156,7 @@ export function useChatGeneration() {
               const finMap = new Map(finalized.map(f => [f.id, f]));
               messages = messages.map(m => {
                 const f = finMap.get(m.message.id);
-                return f ? { ...m, message: { ...m.message, content: f.content, thinking: false } } : m;
+                return f ? { ...m, message: { ...m.message, content: f.content, thinking: false, wasTruncated: true } } : m;
               });
             }
             return { ...s, messages, updatedAt: Date.now() };
@@ -252,8 +235,8 @@ export function useChatGeneration() {
     try {
       AnalyticsService.trackMessage('user');
       giaCoreServices.onMessage(userContent, userMsg.id, 'user');
-      TTSService.stop();
     } catch { /* non-critical */ }
+    try { TTSService.stop(); } catch { /* non-critical */ }
     setInput('');
     setAttachments([]);
     lastUserMsgRef.current = text || fileNames;
@@ -377,14 +360,57 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
       let displayAccumulated = '';
       streamKey = `${sessionId}:${asstId}`;
 
+      const handleChunk = (chunk: string) => {
+        if (ctrl.signal.aborted) return;
+        const prevThoughts = parserState.thoughtsAccumulated;
+        const newDisplay = sharedProcessStreamChunk(chunk, parserState);
+        if (newDisplay) displayAccumulated += newDisplay;
+        // Emit thinking incrementally as tokens arrive (like Claude/OpenAI)
+        if (parserState.thoughtsAccumulated !== prevThoughts) {
+          setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+          useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+        }
+        if (parserState.thoughtsAccumulated !== prevThoughts || newDisplay) {
+          // Segments change whenever thinking OR visible response text
+          // grows -- pushing on both keeps interleaved think/work
+          // panels updating live, not just the flat thoughts blob.
+          setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+          useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+        }
+        streamPush(streamKey, sessionId, asstId, stripSuggestionScaffolding(displayAccumulated), parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
+        if (parserState.artifacts.length > lastFlushedArtifactCount) {
+          lastFlushedArtifactCount = parserState.artifacts.length;
+          state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
+        }
+        const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
+        if (lastChunk.length > 1) {
+          TTSService.speak(lastChunk, true);
+        }
+      };
+
+      const handleThought = (thought: string) => {
+        appendThought(parserState, thought);
+        setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+        useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+        setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+        useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+        streamPush(streamKey, sessionId, asstId, stripSuggestionScaffolding(displayAccumulated), parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+        useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
+      };
+
+      const handleThinkingDelta = (text: string) => {
+        appendThinking(parserState, text);
+        setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+        useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
+        setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+        useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
+        streamPush(streamKey, sessionId, asstId, stripSuggestionScaffolding(displayAccumulated), parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+      };
+
       const multiProviderEnabled = useGiaStore.getState().multiProvider;
       const useCollaborative = multiProviderEnabled;
 
-      if (useCollaborative) {
-        setProviderStatuses([]);
-      }
-
-      const generateFn = useCollaborative
+      const generateFn: () => Promise<BrainResponse> = useCollaborative
         ? () => GiaBrain.generateCollaborative(
             {
               signal: ctrl.signal,
@@ -398,57 +424,9 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
               useWebSearch: webSearch,
               useExtendedThinking: extThinking,
               temperature: extThinking ? undefined : 0.7,
-              onStream: (chunk) => {
-                if (ctrl.signal.aborted) return;
-                const prevThoughts = parserState.thoughtsAccumulated;
-                const newDisplay = sharedProcessStreamChunk(chunk, parserState);
-                if (newDisplay) displayAccumulated += newDisplay;
-                // Emit thinking incrementally as tokens arrive (like Claude/OpenAI)
-                if (parserState.thoughtsAccumulated !== prevThoughts) {
-                  setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                  useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                }
-                if (parserState.thoughtsAccumulated !== prevThoughts || newDisplay) {
-                  // Segments change whenever thinking OR visible response text
-                  // grows -- pushing on both keeps interleaved think/work
-                  // panels updating live, not just the flat thoughts blob.
-                  setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                  useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                }
-                streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
-                if (parserState.artifacts.length > lastFlushedArtifactCount) {
-                  lastFlushedArtifactCount = parserState.artifacts.length;
-                  state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
-                }
-                const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
-                if (lastChunk.length > 1) {
-                  TTSService.speak(lastChunk, true);
-                }
-              },
-onThought: (thought) => {
-                 appendThought(parserState, thought);
-                 setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                 useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                 setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                 useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
-                useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
-              },
-              onThinkingDelta: (text) => {
-                appendThinking(parserState, text);
-                setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
-              },
-            },
-            (status) => {
-              setProviderStatuses(prev => {
-                const next = prev.filter(s => !(s.provider === status.provider && s.model === status.model));
-                next.push(status);
-                return next;
-              });
+              onStream: handleChunk,
+              onThought: handleThought,
+              onThinkingDelta: handleThinkingDelta,
             },
           )
         : () => GiaBrain.generate({
@@ -463,47 +441,9 @@ onThought: (thought) => {
             useWebSearch: webSearch,
             useExtendedThinking: extThinking,
             temperature: extThinking ? undefined : 0.7,
-            onStream: (chunk) => {
-              if (ctrl.signal.aborted) return;
-              const prevThoughts = parserState.thoughtsAccumulated;
-              const newDisplay = sharedProcessStreamChunk(chunk, parserState);
-              if (newDisplay) displayAccumulated += newDisplay;
-              // Emit thinking incrementally as tokens arrive (like Claude/OpenAI)
-              if (parserState.thoughtsAccumulated !== prevThoughts) {
-                setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-                useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-              }
-              if (parserState.thoughtsAccumulated !== prevThoughts || newDisplay) {
-                setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-                useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-              }
-              streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
-              if (parserState.artifacts.length > lastFlushedArtifactCount) {
-                lastFlushedArtifactCount = parserState.artifacts.length;
-                state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts.slice());
-              }
-              const lastChunk = chunk.replace(/```tool[^]*$/g, '').trim();
-              if (lastChunk.length > 1) {
-                TTSService.speak(lastChunk, true);
-              }
-            },
-            onThought: (thought) => {
-              appendThought(parserState, thought);
-              setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-              useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-              setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-              useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-              streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
-              useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
-            },
-            onThinkingDelta: (text) => {
-              appendThinking(parserState, text);
-              setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-              useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-              setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-              useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
-              streamPush(streamKey, sessionId, asstId, displayAccumulated, parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
-            },
+            onStream: handleChunk,
+            onThought: handleThought,
+            onThinkingDelta: handleThinkingDelta,
           });
 
       const res = await generateFn();
@@ -551,7 +491,18 @@ onThought: (thought) => {
         // Last resort: if everything is tool blocks, show raw to avoid blank message
         (res.text || '').trim().slice(0, 200) ||
         '🤖 _Taking action..._';
-      state.updateMessage(sessionId, asstId, finalText, parserState.thoughtsAccumulated || undefined);
+      const parsedFinal = extractSuggestions(finalText);
+      const cleanText = parsedFinal.content || finalText;
+      state.updateMessage(sessionId, asstId, cleanText, parserState.thoughtsAccumulated || undefined);
+      if (parsedFinal.suggestions.length > 0) {
+        useGiaStore.setState(s => ({
+          sessions: s.sessions.map(sess =>
+            sess.id === sessionId
+              ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, suggestions: parsedFinal.suggestions } } : m) }
+              : sess
+          ),
+        }));
+      }
       state.updateMessageSegments(sessionId, asstId, parserState.segments);
       if (parserState.artifacts.length > 0) {
         state.updateMessageArtifacts(sessionId, asstId, parserState.artifacts);
@@ -563,7 +514,7 @@ onThought: (thought) => {
         }));
         state.updateMessageTasks(sessionId, asstId, finalTasks);
       }
-      giaCoreServices.onMessage(finalText, asstId, 'assistant');
+      if (cleanText) giaCoreServices.onMessage(cleanText, asstId, 'assistant');
       useGiaStore.setState(s => ({
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
@@ -593,8 +544,8 @@ onThought: (thought) => {
         state.addNotification(res.switchReason);
       }
       // Final spoken output — prefers the model's native voice (OpenAI/Gemini TTS).
-      if (finalText.trim().length > 1) {
-        TTSService.speakFinal(finalText);
+      if (cleanText.trim().length > 1) {
+        TTSService.speakFinal(cleanText);
       }
       if (res.wasTruncated) {
         // Show a "tap to continue" chip instead of a silent cut-off.
@@ -605,9 +556,6 @@ onThought: (thought) => {
               : s
           ),
         });
-      } else if (finalText.length >= SUGGESTION_MIN_LEN && !finalText.startsWith('🤖 _Taking action..._')) {
-        // Non-blocking tappable follow-ups for completed answers.
-        applyFollowUpSuggestions(sessionId, asstId, finalText);
       }
       notifyIfBackground('chat', sessionId, asstId);
     } catch (err: unknown) {
@@ -669,10 +617,19 @@ onThought: (thought) => {
     const lastContent = msgs[msgIndex]?.content || '';
     if (!lastContent) return;
 
-    const asstId = genId();
-    state.addMessage(state.activeSessionId, {
-      id: asstId, role: 'assistant', content: '', timestamp: Date.now(), thinking: true,
-    });
+    const sessionId = state.activeSessionId;
+    const asstId = msgId;
+    // Merge the continuation into the answer that was cut off instead of
+    // starting a second bubble. Strip the "Response stopped" marker while it
+    // streams; it is re-added only if the user stops again.
+    const baseContent = lastContent.replace(/\n\n\*[^*]*Response stopped[^*]*\*$/, '').trimEnd();
+    useGiaStore.setState(s => ({
+      sessions: s.sessions.map(sess =>
+        sess.id === sessionId
+          ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, content: baseContent, thinking: true, wasTruncated: false, suggestions: undefined } } : m) }
+          : sess
+      ),
+    }));
     setStreamingMsgId(asstId);
     setLoading(true);
     const genKey = `chat-continue-${state.activeSessionId}-${asstId}`;
@@ -710,7 +667,7 @@ onThought: (thought) => {
         checkpointKey: streamKey,
         messageId: asstId,
         prompt: 'Continue from where you left off. Do not repeat what was already said. Just continue naturally.',
-        history: [...history, { role: 'assistant', content: lastContent }],
+        history,
         onStream: (chunk) => {
           if (ctrl.signal.aborted) return;
           const newDisplay = sharedProcessStreamChunk(chunk, contParserState);
@@ -719,7 +676,7 @@ onThought: (thought) => {
             setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
             useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           }
-          streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated || undefined, null, () => ctrl.signal.aborted);
+          streamPush(streamKey, state.activeSessionId!, asstId, baseContent + stripSuggestionScaffolding(contDisplayAccumulated), contParserState.thoughtsAccumulated || undefined, null, () => ctrl.signal.aborted);
           if (contParserState.artifacts.length > contLastFlushedArtifactCount) {
             contLastFlushedArtifactCount = contParserState.artifacts.length;
             state.updateMessageArtifacts(state.activeSessionId!, asstId, contParserState.artifacts.slice());
@@ -735,7 +692,7 @@ onThought: (thought) => {
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
           setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
-          streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+          streamPush(streamKey, state.activeSessionId!, asstId, baseContent + stripSuggestionScaffolding(contDisplayAccumulated), contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         },
         onThinkingDelta: (text) => {
           appendThinking(contParserState, text);
@@ -743,7 +700,7 @@ onThought: (thought) => {
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
           setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
-          streamPush(streamKey, state.activeSessionId!, asstId, contDisplayAccumulated, contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
+          streamPush(streamKey, state.activeSessionId!, asstId, baseContent + stripSuggestionScaffolding(contDisplayAccumulated), contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         },
       });
       if (!ctrl.signal.aborted) {
@@ -753,7 +710,18 @@ onThought: (thought) => {
         let contContent = processStreamForDisplay(contParserState.accumulated) || contDisplayAccumulated;
         const contValidation = OutputValidator.validate(contContent);
         if (contValidation.issues.length > 0 && contValidation.sanitized.length > 0) contContent = contValidation.sanitized;
-        state.updateMessage(state.activeSessionId!, asstId, contContent, contParserState.thoughtsAccumulated || undefined);
+        const parsedCont = extractSuggestions(contContent);
+        const mergedContent = parsedCont.content ? `${baseContent}\n\n${parsedCont.content}` : baseContent;
+        state.updateMessage(state.activeSessionId!, asstId, mergedContent, contParserState.thoughtsAccumulated || undefined);
+        if (parsedCont.suggestions.length > 0) {
+          useGiaStore.setState(s => ({
+            sessions: s.sessions.map(sess =>
+              sess.id === state.activeSessionId
+                ? { ...sess, messages: sess.messages.map(m => m.message.id === asstId ? { ...m, message: { ...m.message, suggestions: parsedCont.suggestions } } : m) }
+                : sess
+            ),
+          }));
+        }
         state.updateMessageSegments(state.activeSessionId!, asstId, contParserState.segments);
         if (contParserState.artifacts.length > 0) {
           state.updateMessageArtifacts(state.activeSessionId!, asstId, contParserState.artifacts);
@@ -785,7 +753,7 @@ onThought: (thought) => {
       streamCancel(streamKey);
       if (!ctrl.signal.aborted) {
         const msg = err instanceof Error ? err.message : 'Something went wrong.';
-        state.updateMessage(state.activeSessionId!, asstId, msg);
+        state.updateMessage(state.activeSessionId!, asstId, `${baseContent}\n\n${msg}`);
         useGiaStore.setState({
           sessions: useGiaStore.getState().sessions.map(s =>
             s.id === state.activeSessionId
@@ -890,7 +858,6 @@ onThought: (thought) => {
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
-          useGiaStore.setState({ showConsole: true });
         },
         onThinkingDelta: (text) => {
           appendThinking(clarParserState, text);
@@ -1081,7 +1048,6 @@ onThought: (thought) => {
     streamingMsgIds, setStreamingMsgIds,
     liveThoughts, setLiveThoughts,
     liveSegments, setLiveSegments,
-    providerStatuses,
     abortTimeoutRef,
     responseStartRef, responseTimesRef, lastUserMsgRef,
     handleSend, handleContinue, handleClarificationAnswer,

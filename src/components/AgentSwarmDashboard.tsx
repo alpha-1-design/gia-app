@@ -51,7 +51,7 @@ const AgentSwarmDashboard: React.FC = () => {
         exit={{ opacity: 0, y: -10 }}
         className="mx-3 mb-2 overflow-hidden"
         style={{
-          background: '#000',
+          background: 'var(--gia-surface)',
           border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 18,
         }}
@@ -60,9 +60,9 @@ const AgentSwarmDashboard: React.FC = () => {
           onClick={() => setCollapsed(c => !c)}
           className="w-full flex items-center gap-2.5 px-3.5 py-2.5"
         >
-          <Layers size={15} style={{ color: '#fafafa' }} />
+          <Layers size={15} style={{ color: 'var(--gia-text)' }} />
           <div className="flex-1 text-left min-w-0">
-            <div className="text-[13px] font-semibold" style={{ color: '#fafafa' }}>
+            <div className="text-[13px] font-semibold" style={{ color: 'var(--gia-text)' }}>
               Nexus{activeRun.isGodMode ? ' · extended' : ''}
             </div>
             <div className="text-[12px]" style={{ color: '#a1a1aa' }}>

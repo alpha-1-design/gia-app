@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGiaStore } from '../store/useGiaStore';
-import { useProtocolStore } from '../store/useProtocolStore';
 import { useSearchActivity } from '../store/useSearchActivity';
 import { useChatState } from '../hooks/useChatState';
 import { useProactiveMessage } from '../hooks/useProactiveMessage';
@@ -29,9 +28,7 @@ import { getSlashCommands } from '../services/SlashCommands';
 import BuildPreviewSheet from '../components/BuildPreviewSheet';
 import { KnowledgePanel } from '../components/KnowledgePanel';
 import FileManager from '../components/FileManager';
-import ToolTray from '../components/ToolTray';
 import { ClarificationBottomSheet } from '../components/chat/ClarificationBottomSheet';
-import { EngineSheet } from '../components/chat/EngineSheet';
 import ModelSwitcherSheet from '../components/chat/ModelSwitcherSheet';
 import ToolsCatalogSheet from '../components/chat/ToolsCatalogSheet';
 import ProviderIcon from '../components/ProviderIcon';
@@ -40,9 +37,7 @@ import { SummaryBanner } from '../components/chat/SummaryBanner';
 import RecentChats from '../components/chat/RecentChats';
 import AgentMentionPicker from '../components/AgentMentionPicker';
 import { useProviderStore } from '../store/useProviderStore';
-import { CarouselRing } from '../components/CarouselRing';
 import AgentSwarmDashboard from '../components/AgentSwarmDashboard';
-import { CollaborationActivity } from '../components/chat/CollaborationActivity';
 import { AttachmentPreviewModal } from '../components/chat/AttachmentPreviewModal';
 import type { Attachment } from '../hooks/useFileAttachments';
 import { TemplateSelector } from '../components/TemplateSelector';
@@ -61,13 +56,6 @@ const QUICK_STARTS = [
   { icon: Zap, label: 'Plan My Week', prompt: 'Help me plan my study week. My exams are:', color: '#f59e0b', category: 'productivity' },
 ];
 
-const hexToRgb = (hex: string): string => {
-  const h = hex.replace('#', '');
-  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  const num = parseInt(v, 16);
-  return `${(num >> 16) & 255},${(num >> 8) & 255},${num & 255}`;
-};
-
 const LOCALHOST_RE = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|(10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(192\.168\.\d{1,3}\.\d{1,3})|(172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}))(:\d+)?(\/[^\s<]*)?/i;
 const extractLocalhostUrl = (text: string): string | null => {
   const m = text?.match(LOCALHOST_RE);
@@ -82,11 +70,10 @@ interface ChatModuleProps {
 const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const {
     input, setInput, loading, streamingMsgId, streamingMsgIds, voiceEnabled,
-    providerStatuses,
     showHistory, setShowHistory, historySearch, setHistorySearch, attachments, setAttachments,
     processingFiles, processingFileName,
     showScrollBtn, undoMsg, showSkillPicker,
-    expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
+    expandedMsgs, setExpandedMsgs,
     showKnowledge, setShowKnowledge,
     isDragging, showFileManager, setShowFileManager, showTools,
     inputContainerHeight,
@@ -115,7 +102,6 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
     liveFileEdit, setLiveFileEdit,
   } = useChatState();
 
-  const reduceMotion = useGiaStore((s) => s.reduceMotion);
   const buildModeStore = useGiaStore((s) => s.buildMode);
   const buildMode = forceBuild ?? buildModeStore;
   const setModule = useGiaStore((s) => s.setModule);
@@ -177,8 +163,6 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
     }
   }, [buildMode]);
 
-  const showEngine = useGiaStore((s) => s.showEngine);
-  const setShowEngine = useGiaStore((s) => s.setShowEngine);
   const showModelSwitcher = useGiaStore((s) => s.showModelSwitcher);
   const [showToolsCatalog, setShowToolsCatalog] = React.useState(false);
   const [showLocalAIFlow, setShowLocalAIFlow] = React.useState(false);
@@ -191,7 +175,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
   const [showProjectWorkspace, setShowProjectWorkspace] = React.useState(false);
   const [previewAttachmentIdx, setPreviewAttachmentIdx] = React.useState<number | null>(null);
 
-  const { greeting, tip } = useProactiveMessage();
+  const { greeting } = useProactiveMessage();
 
   if (showHistory) {
     return (
@@ -343,12 +327,13 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
       <div ref={scrollRef} onScroll={handleScroll} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop} className="flex-1 overflow-y-auto pt-4 relative z-0" style={{ paddingBottom: `${inputContainerHeight + 120}px` }}>
         {messages.length === 0 && buildMode && (
           <div className="flex flex-col items-center justify-center min-h-full gap-5 text-center pt-12 sm:pt-16 pb-24 sm:pb-40 animate-fade-in">
-            <div className="w-20 h-20 rounded-3xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.25), rgba(234,88,12,0.1))', border: '1px solid rgba(249,115,22,0.3)', boxShadow: '0 0 40px rgba(249,115,22,0.25)' }}>
-              <Hammer size={38} style={{ color: '#f97316' }} />
+            <div className="w-20 h-20 rounded-3xl flex items-center justify-center" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
+              <Hammer size={34} style={{ color: 'var(--gia-text)' }} />
             </div>
             <div>
               <p className="text-lg font-semibold" style={{ color: 'var(--gia-text)' }}>Build Mode</p>
-              <p className="text-xs mt-1 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>Describe the app you want to build. GIA scaffolds it, runs a dev server, and a Preview button appears when it's live — tap it to see your app.</p>
+              <p className="text-xs mt-1 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>Describe the app you want to build. GIA scaffolds it and a Preview button appears when it's live — tap it to see your app.</p>
+              <p className="text-[10px] mt-1.5 max-w-[260px] leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>Builds run in the on-device sandbox. GIA will prompt you if it needs setting up.</p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-xs mt-1">
               {[
@@ -356,15 +341,20 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
                 { label: 'Quiz game', prompt: 'Build a quiz game with multiple-choice questions and a live score.' },
                 { label: 'Landing page', prompt: 'Build a landing page for a fictional product with hero, features, and CTA.' },
               ].map((ex) => (
-                <button key={ex.label} onClick={() => setInput(ex.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback" style={{ background: 'linear-gradient(135deg, #f973160a, #f9731603)', border: '1px solid #f9731640', backdropFilter: 'blur(8px)' }}>
-                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#f9731620', border: '1px solid #f9731630' }}><Hammer size={13} style={{ color: '#f97316' }} /></div>
+                <button key={ex.label} onClick={() => setInput(ex.prompt)} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all tap-feedback" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }}>
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}><Hammer size={13} style={{ color: 'var(--gia-muted)' }} /></div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold" style={{ color: 'var(--gia-text)' }}>{ex.label}</p>
-                    <p className="text-[10px] truncate mt-0.5" style={{ color: '#f97316', opacity: 0.7 }}>{ex.prompt}</p>
+                    <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--gia-muted-2)' }}>{ex.prompt}</p>
                   </div>
                 </button>
               ))}
             </div>
+            <button type="button" onClick={() => setShowBuildStudio(true)}
+              className="flex items-center gap-2 text-[11px] px-3 py-2 rounded-xl transition-colors tap-feedback"
+              style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}>
+              <Hammer size={12} /> Open Build Studio
+            </button>
           </div>
         )}
         {messages.length === 0 && !buildMode && providersReady && (
@@ -383,9 +373,9 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
                   ? 'Your personal AI workspace. Ask anything, attach files, or pick a quick start below.'
                   : 'Choose an option below to start chatting: set up Local AI or connect a provider.'}
               </p>
-              {providerConnected && !messages.length && (
-                <p className="text-[10px] mt-2 animate-fade-in" style={{ color: 'var(--gia-muted-2)' }}>
-                  {tip.emoji} {tip.text}
+              {providerConnected && (
+                <p className="text-[10px] mt-2 max-w-[280px] leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
+                  GIA can act on your device and can be wrong — check important details.
                 </p>
               )}
             </div>
@@ -413,24 +403,23 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               onResume={setActiveSession}
             />
             {providerConnected && (
-            <div className="w-full max-w-xs mt-1">
-              <CarouselRing
-                items={QUICK_STARTS.map(qs => ({
-                  id: qs.label,
-                  label: qs.label,
-                  tagline: qs.prompt,
-                  color: hexToRgb(qs.color),
-                  icon: <qs.icon size={22} style={{ color: qs.color }} />,
-                }))}
-                selectedId=""
-                onSelect={id => setInput(QUICK_STARTS.find(q => q.label === id)?.prompt ?? '')}
-                round
-                width={76}
-                height={76}
-                autoSpin={!reduceMotion}
-                keepSpinning
-              />
-            </div>
+              <div className="grid grid-cols-2 gap-2 w-full max-w-xs mt-1">
+                {QUICK_STARTS.map((qs, i) => {
+                  const Icon = qs.icon;
+                  return (
+                    <button
+                      key={qs.label}
+                      onClick={() => setInput(qs.prompt)}
+                      aria-label={`${qs.label}: ${qs.prompt}`}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-left tap-feedback transition-colors ${i === QUICK_STARTS.length - 1 && QUICK_STARTS.length % 2 === 1 ? 'col-span-2' : ''}`}
+                      style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+                    >
+                      <Icon size={14} style={{ color: 'var(--gia-muted)' }} />
+                      <span className="text-[11px] font-medium truncate" style={{ color: 'var(--gia-text)' }}>{qs.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -449,7 +438,6 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           </div>
         )}
 
-        <CollaborationActivity providers={providerStatuses} />
         <AgentSwarmDashboard />
 
         <MessageList
@@ -459,8 +447,6 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           streamingMsgIds={streamingMsgIds}
           expandedMsgs={expandedMsgs}
           setExpandedMsgs={setExpandedMsgs}
-          showThoughts={showThoughts}
-          setShowThoughts={setShowThoughts}
           thinkingPhase={thinkingPhase}
           currentTool={currentTool}
           responseTimesRef={responseTimesRef}
@@ -477,9 +463,6 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
           onClarificationFormAnswer={handleClarificationAnswer}
         />
 
-        {/* Inline tool execution cards — show recent tools inline in the chat flow */}
-        <RecentToolExecutions loading={loading} />
-
         {/* Build mode — live preview rendered inline as part of the response */}
         {buildMode && buildPreviewUrl && !showPreviewSheet && (
           <BuildInlinePreview url={buildPreviewUrl} onOpenFull={() => setShowPreviewSheet(true)} />
@@ -495,8 +478,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             onDismiss={() => setClarification(null)}
           />
         )}
-        {createPortal(<EngineSheet open={showEngine} onClose={() => setShowEngine(false)} />, document.body)}
-        {createPortal(<ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} onOpenEngine={() => setShowEngine(true)} />, document.body)}
+        {createPortal(<ModelSwitcherSheet open={showModelSwitcher} onClose={() => setShowModelSwitcher(false)} />, document.body)}
         {createPortal(<ToolsCatalogSheet
             open={showToolsCatalog}
             onClose={() => setShowToolsCatalog(false)}
@@ -542,12 +524,12 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             className="absolute left-4 right-4 bottom-28 z-20"
           >
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl"
-              style={{ background: '#1a1a24', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)' }}>
+              style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', backdropFilter: 'blur(20px)' }}>
               <Trash2 size={13} style={{ color: '#f87171' }} />
               <span className="text-xs flex-1" style={{ color: 'var(--gia-text)' }}>Message deleted</span>
               <button onClick={handleUndoDelete}
                 className="text-xs font-semibold flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors"
-                style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+                style={{ background: 'var(--gia-surface-3)', color: 'var(--gia-text)' }}>
                 <Undo2 size={11} /> Undo
               </button>
             </div>
@@ -555,7 +537,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
       </AnimatePresence>
 
-        <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: messages.length === 0 ? 'rgba(10,10,15,0.7)' : 'rgba(10,10,15,0.2)', borderColor: messages.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)' }}>
+        <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}>
         {showAgentMention && (
           <AgentMentionPicker
             query={agentMentionQuery}
@@ -567,8 +549,8 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
 
         {processingFiles && (
           <div className="flex items-center gap-2 mb-2.5 px-1">
-            <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />
-            <span className="text-[10px] text-zinc-400 truncate">
+            <Loader2 size={12} className="animate-spin shrink-0" style={{ color: 'var(--gia-muted)' }} />
+            <span className="text-[10px] truncate" style={{ color: 'var(--gia-muted)' }}>
               Processing {processingFileName}...
             </span>
           </div>
@@ -616,10 +598,10 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
 
           <div className="flex-1 relative overflow-hidden">
             <div className="overflow-x-auto flex items-center gap-1.5 py-1 [&::-webkit-scrollbar]:hidden">
-            <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+            <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-[var(--gia-border)] bg-[var(--gia-surface)] text-[var(--gia-muted)] hover:text-[var(--gia-text)] transition-colors shrink-0">
               <Paperclip size={11} /> File
             </button>
-            <button type="button" onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+            <button type="button" onClick={() => imgRef.current?.click()} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-[var(--gia-border)] bg-[var(--gia-surface)] text-[var(--gia-muted)] hover:text-[var(--gia-text)] transition-colors shrink-0">
               <ImageIcon size={11} /> Photo
             </button>
             <button type="button" onClick={async () => {
@@ -636,19 +618,19 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
                   imgRef.current?.click();
                 }
               }
-            }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 transition-all shrink-0">
+            }} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-[var(--gia-border)] bg-[var(--gia-surface)] text-[var(--gia-muted)] hover:text-[var(--gia-text)] transition-colors shrink-0">
               <Camera size={11} /> Camera
             </button>
-            <button type="button" onClick={() => setShowTemplateSelector(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-purple-400 hover:text-purple-300 transition-all shrink-0">
+            <button type="button" onClick={() => setShowTemplateSelector(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-[var(--gia-border)] bg-[var(--gia-surface)] text-[var(--gia-muted)] hover:text-[var(--gia-text)] transition-colors shrink-0">
               <LayoutTemplate size={11} /> Templates
             </button>
-            <button type="button" onClick={() => setShowBuildStudio(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-orange-400 hover:text-orange-300 transition-all shrink-0">
+            <button type="button" onClick={() => setShowBuildStudio(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-[var(--gia-border)] bg-[var(--gia-surface)] text-[var(--gia-muted)] hover:text-[var(--gia-text)] transition-colors shrink-0">
               <Hammer size={11} /> Studio
             </button>
-            <button type="button" onClick={() => { void voiceNote.start(); }} disabled={voiceNote.state !== 'idle'} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-rose-400 hover:text-rose-300 transition-all shrink-0 disabled:opacity-40">
+            <button type="button" onClick={() => { void voiceNote.start(); }} disabled={voiceNote.state !== 'idle'} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border border-[var(--gia-border)] bg-[var(--gia-surface)] text-[var(--gia-muted)] hover:text-[var(--gia-text)] transition-colors shrink-0 disabled:opacity-40">
               <Mic size={11} /> Voice note
             </button>
-            <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
+            <div className="w-px h-4 bg-[var(--gia-border)] mx-1 shrink-0" />
             <button
               type="button"
               aria-label={buildMode ? 'Switch to Chat mode' : 'Switch to Build mode'}
@@ -664,9 +646,9 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             }}
               className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0"
               style={{
-                background: buildMode && !forceBuild ? '#f9731620' : 'var(--gia-surface)',
-                border: `1px solid ${buildMode && !forceBuild ? '#f9731640' : 'var(--gia-border)'}`,
-                color: buildMode && !forceBuild ? '#f97316' : 'var(--gia-muted)',
+                background: buildMode && !forceBuild ? 'var(--gia-surface-3)' : 'var(--gia-surface)',
+                border: `1px solid ${buildMode && !forceBuild ? 'var(--gia-border-2)' : 'var(--gia-border)'}`,
+                color: buildMode && !forceBuild ? 'var(--gia-text)' : 'var(--gia-muted)',
                 fontWeight: 500,
               }}
             >
@@ -690,14 +672,14 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               Browser
             </button>
             {buildMode && (
-              <button type="button" onClick={() => setShowProjectWorkspace(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: showProjectWorkspace ? '#f9731620' : 'var(--gia-surface)', border: `1px solid ${showProjectWorkspace ? '#f9731640' : 'var(--gia-border)'}`, color: showProjectWorkspace ? '#fb923c' : 'var(--gia-muted)', fontWeight: 500 }}>
+              <button type="button" onClick={() => setShowProjectWorkspace(true)} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0" style={{ background: showProjectWorkspace ? 'var(--gia-surface-3)' : 'var(--gia-surface)', border: `1px solid ${showProjectWorkspace ? 'var(--gia-border-2)' : 'var(--gia-border)'}`, color: showProjectWorkspace ? 'var(--gia-text)' : 'var(--gia-muted)', fontWeight: 500 }}>
                 <FolderGit2 size={11} />
                 Project
               </button>
             )}
             {buildMode && (
-              <button type="button" onClick={() => setShowPreviewSheet(true)} disabled={!buildPreviewUrl} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: buildPreviewUrl ? '#22c55e15' : 'var(--gia-surface)', border: `1px solid ${buildPreviewUrl ? '#22c55e40' : 'var(--gia-border)'}`, color: buildPreviewUrl ? '#22c55e' : 'var(--gia-muted)', fontWeight: 500 }}>
-                {buildPreviewUrl && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />}
+              <button type="button" onClick={() => setShowPreviewSheet(true)} disabled={!buildPreviewUrl} className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-xl border transition-all tap-feedback shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: buildPreviewUrl ? 'var(--gia-surface-3)' : 'var(--gia-surface)', border: `1px solid ${buildPreviewUrl ? 'var(--gia-border-2)' : 'var(--gia-border)'}`, color: buildPreviewUrl ? 'var(--gia-text)' : 'var(--gia-muted)', fontWeight: 500 }}>
+                {buildPreviewUrl && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--gia-text)' }} />}
                 <Eye size={11} />
                 Preview
               </button>
@@ -706,13 +688,13 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none" style={{ background: 'linear-gradient(to right, transparent, var(--gia-bg))' }} />
           </div>
           {buildMode && sandboxEnvReady === false && (
-            <button type="button" onClick={() => useGiaStore.getState().setModule('settings')} className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-lg self-start transition-colors tap-feedback" style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}>
+            <button type="button" onClick={() => useGiaStore.getState().setModule('settings')} className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-lg self-start transition-colors tap-feedback" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)', border: '1px solid var(--gia-border)' }}>
               <Terminal size={11} />
               Set up sandbox to preview apps
             </button>
           )}
           {activeToolCount > 0 && (
-            <span className="text-[10px] shrink-0 px-2 py-1 rounded-full" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>
+            <span className="text-[10px] shrink-0 px-2 py-1 rounded-full" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
               {activeToolCount} active
             </span>
           )}
@@ -721,7 +703,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
               onClick={() => setShowSkillPicker(true)}
               title={`Active skill: ${activeSkill.name}`}
               className="flex items-center gap-1 text-[10px] shrink-0 px-2 py-1 rounded-full tap-feedback transition-all"
-              style={{ background: 'rgba(168,85,247,0.12)', color: '#c4b5fd', border: '1px solid rgba(168,85,247,0.3)' }}
+              style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}
             >
               <Sparkles size={10} />
               <span className="font-semibold max-w-[80px] truncate">{activeSkill.name}</span>
@@ -796,7 +778,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
             onSend={() => { void voiceNote.finish().then(text => { if (text) sendText(text); }); }}
           />
         ) : (
-        <AmbientInput value={input} onChange={handleInputChange} onLargeInsert={(text) => { void addFiles([new File([text], `pasted-text-${Date.now()}.txt`, { type: 'text/plain' })]); }} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={buildMode ? 'Describe what to build…' : webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} prefix={buildMode ? <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium shrink-0 mr-1"><Hammer size={10} />Build</span> : undefined} />
+        <AmbientInput value={input} onChange={handleInputChange} onLargeInsert={(text) => { void addFiles([new File([text], `pasted-text-${Date.now()}.txt`, { type: 'text/plain' })]); }} onSubmit={handleSend} onStop={loading ? handleStop : undefined} isLoading={loading} onVoiceToggle={() => toggleFeature('listen')} isVoiceListening={voiceEnabled} placeholder={buildMode ? 'Describe what to build…' : webSearch ? 'Ask anything — I\'ll search the web…' : handsOff ? 'GIA has control — ask and it acts…' : 'Message GIA…'} prefix={buildMode ? <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0" style={{ background: 'var(--gia-surface-3)', color: 'var(--gia-text)', border: '1px solid var(--gia-border)' }}><Hammer size={10} />Build</span> : undefined} />
         )}
       </div>
 
@@ -896,14 +878,14 @@ const SearchActivityButton: React.FC = () => {
 const BuildInlinePreview: React.FC<{ url: string; onOpenFull: () => void }> = ({ url, onOpenFull }) => {
   const [refreshKey, setRefreshKey] = React.useState(0);
   return (
-    <div className="mx-1 rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(249,115,22,0.3)', background: '#0a0a0a', boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
-      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid rgba(249,115,22,0.2)' }}>
-        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
-        <span className="text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ color: '#f97316' }}>Live preview</span>
+    <div className="mx-1 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--gia-border)', background: 'var(--gia-surface)', boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
+      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--gia-border)' }}>
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--gia-muted)' }} />
+        <span className="text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ color: 'var(--gia-text)' }}>Live preview</span>
         <span className="text-[10px] truncate flex-1 min-w-0" style={{ color: 'var(--gia-muted)' }}>{url}</span>
         <button
           onClick={() => setRefreshKey((k) => k + 1)}
-          className="p-1.5 rounded-lg transition-colors hover:bg-white/10 active:bg-white/15 shrink-0"
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)] shrink-0"
           style={{ color: 'var(--gia-muted-2)' }}
           aria-label="Refresh preview"
           title="Refresh preview"
@@ -912,8 +894,8 @@ const BuildInlinePreview: React.FC<{ url: string; onOpenFull: () => void }> = ({
         </button>
         <button
           onClick={onOpenFull}
-          className="p-1.5 rounded-lg transition-colors hover:bg-white/10 active:bg-white/15 shrink-0"
-          style={{ color: '#f97316' }}
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)] shrink-0"
+          style={{ color: 'var(--gia-text)' }}
           aria-label="Open full preview"
           title="Open full preview"
         >
@@ -928,29 +910,6 @@ const BuildInlinePreview: React.FC<{ url: string; onOpenFull: () => void }> = ({
         style={{ height: 240, border: 'none', background: '#fff', display: 'block' }}
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-pointer-lock"
       />
-    </div>
-  );
-};
-
-const RecentToolExecutions: React.FC<{ loading: boolean }> = ({ loading }) => {
-  const consoleProtocols = useProtocolStore(s => s.consoleProtocols);
-
-  if (consoleProtocols.length === 0) return null;
-
-  const active = consoleProtocols.filter(p => p.state === 'executing' || p.state === 'proposed');
-  const done = consoleProtocols.filter(p => p.state === 'completed' || p.state === 'failed' || p.state === 'rejected').slice(-6);
-
-  if (done.length === 0 && active.length === 0) return null;
-
-  const activeTray = loading && active.length > 0 ? <ToolTray protocols={active} /> : null;
-  const doneTray = !loading && done.length > 0 ? <ToolTray protocols={done} /> : null;
-
-  if (!activeTray && !doneTray) return null;
-
-  return (
-    <div className="space-y-2 px-1">
-      {activeTray}
-      {doneTray}
     </div>
   );
 };

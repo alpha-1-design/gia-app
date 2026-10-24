@@ -45,7 +45,6 @@ describe('useGiaStore', () => {
       activeSkillId: 'core-general',
       examHistory: [],
       consoleLogs: [],
-      showConsole: false,
       showProtocols: false,
       webSearch: true,
       extThinking: false,
@@ -487,17 +486,6 @@ describe('useGiaStore', () => {
     it('caps console logs at 100', () => {
       for (let i = 0; i < 120; i++) useGiaStore.getState().addConsoleLog({ type: 'thought', content: `log${i}` });
       expect(useGiaStore.getState().consoleLogs).toHaveLength(100);
-    });
-
-    it('clearConsole empties the log', () => {
-      useGiaStore.getState().addConsoleLog({ type: 'thought', content: 'test' });
-      useGiaStore.getState().clearConsole();
-      expect(useGiaStore.getState().consoleLogs).toHaveLength(0);
-    });
-
-    it('setShowConsole toggles visibility', () => {
-      useGiaStore.getState().setShowConsole(true);
-      expect(useGiaStore.getState().showConsole).toBe(true);
     });
   });
 

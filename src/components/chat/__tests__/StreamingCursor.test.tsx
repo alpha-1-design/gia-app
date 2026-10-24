@@ -14,7 +14,7 @@ beforeEach(() => {
 describe('StreamingCursor', () => {
   it('shows the phase label beside the orb while streaming', () => {
     render(<StreamingCursor phase="writing" />);
-    expect(screen.getByText('Spilling ink')).toBeDefined();
+    expect(screen.getByText('Writing')).toBeDefined();
   });
 
   it('tags the running tool label when a tool is active', () => {

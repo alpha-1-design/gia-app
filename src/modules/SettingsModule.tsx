@@ -54,6 +54,30 @@ const CATEGORIES: { id: SettingsPage; icon: React.ReactNode; label: string; desc
   { id: 'unimind', icon: <Laptop size={20} />, label: 'Unimind', desc: 'Pair your desktop — presence, remote actions, lock & unlock across devices', sections: 'Cross-device', color: '#8b5cf6' },
 ];
 
+const SETTING_INDEX: { page: SettingsPage; title: string; path: string; keywords: string; color: string }[] = [
+  { page: 'terminal', title: 'Terminal & Termux', path: 'App & Extensions · Terminal', keywords: 'shell command line termux bash run linux root cli', color: '#a855f7' },
+  { page: 'system', title: 'Background wake word', path: 'System & Performance · Voice', keywords: 'wake word hey jarvis listening microphone hands free background audio', color: '#ec4899' },
+  { page: 'system', title: 'Voice, TTS & language', path: 'System & Performance · Voice', keywords: 'speech speak aloud tts language recognition microphone voice', color: '#ec4899' },
+  { page: 'system', title: 'Power saving & battery', path: 'System & Performance · Power', keywords: 'battery drain background activity long running mode power saving energy', color: '#34d399' },
+  { page: 'system', title: 'Security & app lock', path: 'System & Performance · Security', keywords: 'lock biometric fingerprint face password privacy security', color: '#34d399' },
+  { page: 'system', title: 'Code execution & sandbox', path: 'System & Performance · Code', keywords: 'piston sandbox run code python endpoint', color: '#34d399' },
+  { page: 'system', title: 'Tool approvals', path: 'System & Performance · Protocols', keywords: 'approval permission confirm delete command gate', color: '#34d399' },
+  { page: 'connections', title: 'Connectors & API keys', path: 'Connections', keywords: 'api key token github supabase firebase email google services social gateway browser search', color: '#f59e0b' },
+  { page: 'mcp', title: 'MCP servers', path: 'MCP Servers', keywords: 'model context protocol tools data source oauth server', color: '#a855f7' },
+  { page: 'knowledge', title: 'Knowledge base', path: 'Knowledge Base', keywords: 'rag documents upload index semantic search memory', color: '#10b981' },
+  { page: 'permissions', title: 'App permissions', path: 'Permissions', keywords: 'camera location contacts sms microphone notification access', color: '#f87171' },
+  { page: 'local-ai', title: 'On-device models', path: 'Local AI', keywords: 'local llm model download offline vision on-device', color: '#22c55e' },
+  { page: 'app-extensions', title: 'Widgets, HUD & extensions', path: 'App & Extensions', keywords: 'widget hud overlay plugins apk install developer code history', color: '#a855f7' },
+  { page: 'profile-identity', title: 'Profile, memory & brain export', path: 'Profile & Identity', keywords: 'name bio goals identity skills memory export backup', color: '#a855f7' },
+  { page: 'dashboard', title: 'Performance dashboard', path: 'Dashboard', keywords: 'analytics performance tool usage errors insights stats', color: '#3b82f6' },
+  { page: 'nexus', title: 'Nexus sub-agents', path: 'Nexus', keywords: 'agents specialists multi agent delegation personas', color: '#a855f7' },
+  { page: 'neura', title: 'Neura', path: 'Neura', keywords: 'neura neural canvas generative', color: '#06b6d4' },
+  { page: 'unimind', title: 'Unimind desktop pairing', path: 'Unimind', keywords: 'desktop pair presence remote lock unlock devices', color: '#8b5cf6' },
+  { page: 'skills-marketplace', title: 'Skills marketplace', path: 'Skills Marketplace', keywords: 'skills install create marketplace plugins', color: '#f59e0b' },
+  { page: 'about', title: 'About & updates', path: 'About', keywords: 'version update apk analytics danger zone reset', color: '#94a3b8' },
+  { page: 'capabilities', title: 'Device capabilities', path: 'GIA Capabilities', keywords: 'device inventory what can gia use sensors hardware', color: '#06b6d4' },
+];
+
 const SettingsModule: React.FC = () => {
   const {
     setShowTerminal, userProfile, setUserProfile,
@@ -132,6 +156,7 @@ const SettingsModule: React.FC = () => {
   const q = settingsQuery.toLowerCase().trim();
   const match = (label: string, desc: string, extra = '') => !q || label.toLowerCase().includes(q) || desc.toLowerCase().includes(q) || extra.toLowerCase().includes(q);
   const filteredCategories = CATEGORIES.filter(c => match(c.label, c.desc, c.sections));
+  const filteredIndex = q ? SETTING_INDEX.filter(item => match(item.title, item.path, item.keywords)) : [];
 
   // ── Sub-page routing ──────────────────────────────────────────────
   // Each sub-page gets its own named boundary. A crash on one screen (e.g.
@@ -484,12 +509,37 @@ const SettingsModule: React.FC = () => {
         </div>
       </div>
 
+      {/* Direct matches for individual settings, not just category cards */}
+      {q && filteredIndex.length > 0 && (
+        <>
+          <p className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--gia-muted)' }}>
+            Matching settings
+          </p>
+          <div className="flex flex-col gap-2">
+            {filteredIndex.slice(0, 8).map(item => (
+              <button
+                key={`${item.page}-${item.title}`}
+                onClick={() => setSettingsPage(item.page)}
+                className="gia-card px-3 py-2.5 flex items-center gap-3 w-full text-left tap-feedback"
+              >
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: item.color }} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-xs font-semibold truncate" style={{ color: 'var(--gia-text)' }}>{item.title}</span>
+                  <span className="block text-[10px] truncate" style={{ color: 'var(--gia-muted)' }}>{item.path}</span>
+                </span>
+                <ChevronRight size={13} style={{ color: 'var(--gia-muted)' }} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Category grid */}
       <p className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--gia-muted)' }}>
         All Settings
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {filteredCategories.length === 0 && q ? (
+        {filteredCategories.length === 0 && filteredIndex.length === 0 && q ? (
           <p className="text-xs text-center py-4 col-span-full" style={{ color: 'var(--gia-muted)' }}>No settings match “{settingsQuery}”</p>
         ) : (
           filteredCategories.map(cat => (
@@ -577,7 +627,7 @@ const SettingsModule: React.FC = () => {
 
       {/* Version */}
       <p className="text-center text-[10px] pb-4 pt-2" style={{ color: 'var(--gia-muted-2)' }}>
-        GIA v2.4.0.18 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
+        GIA v2.4.0.19 · Built by Samuel Mensah · Alpha-1 Studio, Ghana
       </p>
 
       <ConfirmDialog

@@ -72,6 +72,7 @@ function getPlugin(): GIASetupPlugin | null {
 
 export function useSandboxSetup() {
   const plugin = useRef<GIASetupPlugin | null>(null);
+  const installInFlight = useRef(false);
   const [isNative, setIsNative] = useState(false);
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [phase, setPhase] = useState<SetupPhase>('idle');
@@ -121,12 +122,15 @@ export function useSandboxSetup() {
   }, []);
 
   // Start the full on-device setup
-  const startSetup = useCallback(async (arch?: string, os?: string) => {
-    if (!plugin.current) {
+  const startSetup = useCallback(async (arch?: string, os?: string): Promise<SetupStatus | null> => {
+    const p = plugin.current;
+    if (!p) {
       logger.warn('[useSandboxSetup] Plugin not available (web)');
-      return;
+      return null;
     }
+    if (installInFlight.current) return null;
 
+    installInFlight.current = true;
     setIsInstalling(true);
     setPhase('downloading');
     setProgress(0);
@@ -134,18 +138,36 @@ export function useSandboxSetup() {
     setLog([`[setup] Starting on-device ${osLabel} installation...`]);
 
     try {
-      const result = await plugin.current.downloadRootfs({ arch: arch || 'aarch64', os: os || 'alpine' });
-      setPhase('ready');
-      setProgress(100);
-      setLog(prev => [...prev, `[ready] ${result.message}`]);
+      const result = await p.downloadRootfs({ arch: arch || 'aarch64', os: os || 'alpine' });
 
-      // Refresh status
-      const status = await plugin.current.getSetupStatus();
+      // "downloadRootfs resolved" is not the same as "the rootfs works".
+      // Always re-read native status and only show Ready when it verifies.
+      const status = await p.getSetupStatus();
       setSetupStatus(status);
+      if (status.installed) {
+        setPhase('ready');
+        setProgress(100);
+        setLog(prev => [...prev, `[ready] ${result.message}`]);
+      } else {
+        setPhase('error');
+        setLog(prev => [...prev, `[error] Install finished but ${osLabel} did not verify. The terminal is not usable yet.`]);
+      }
+      return status;
     } catch (e) {
       setPhase('error');
       setLog(prev => [...prev, `[error] ${e instanceof Error ? e.message : String(e)}`]);
+
+      // A failed reinstall can still leave an older, working rootfs in place;
+      // or it can leave nothing. Re-read so the screen doesn't keep claiming
+      // "Installed" after the files are gone.
+      try {
+        setSetupStatus(await p.getSetupStatus());
+      } catch {
+        // Keep the last known status rather than inventing one.
+      }
+      return null;
     } finally {
+      installInFlight.current = false;
       setIsInstalling(false);
     }
   }, []);

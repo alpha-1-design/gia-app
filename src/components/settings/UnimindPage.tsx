@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Smartphone, Laptop, Plug, PlugZap, RefreshCw, Link2, Lock, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Smartphone, Laptop, Plug, PlugZap, RefreshCw, Link2, Lock, MessageSquare, ScanLine, X } from 'lucide-react';
+import jsQR from 'jsqr';
 import { unimindClient } from '../../services/unimindClient';
 import type { UnimindStatus } from '../../services/unimindClient';
+import { parseUnimindPairingUrl } from '../../services/unimindPairing';
 import { SubPageHeader } from './SubPageHeader';
 
 interface Props {
@@ -14,6 +16,10 @@ export const UnimindPage: React.FC<Props> = ({ onBack }) => {
   const [busy, setBusy] = useState(false);
   const [chatText, setChatText] = useState('');
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const refresh = useCallback(() => setStatus(unimindClient.getStatus()), []);
 
@@ -21,6 +27,65 @@ export const UnimindPage: React.FC<Props> = ({ onBack }) => {
     const timer = setInterval(refresh, 3000);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!scanOpen) return;
+    let cancelled = false;
+    let raf = 0;
+    let stream: MediaStream | null = null;
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setScanStatus('Camera is not available in this environment.');
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas) return;
+        video.srcObject = stream;
+        await video.play();
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        const tick = () => {
+          if (cancelled) return;
+          if (video.readyState >= 2 && video.videoWidth > 0) {
+            canvas.width = Math.min(640, video.videoWidth);
+            canvas.height = Math.min(480, video.videoHeight);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(image.data, canvas.width, canvas.height, { inversionAttempts: 'dontInvert' });
+            if (code?.data) {
+              const payload = parseUnimindPairingUrl(code.data);
+              if (payload) {
+                unimindClient.setRelayUrl(payload.relay);
+                unimindClient.setUnimindId(payload.id);
+                setUrl(payload.relay);
+                setScanOpen(false);
+                setActionMsg(`✅ Paired — connecting to ${payload.relay}…`);
+                void unimindClient.connect(payload.relay);
+                refresh();
+                return;
+              }
+            }
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      } catch (err) {
+        if (!cancelled) setScanStatus(`Camera error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [scanOpen, refresh]);
 
   const connect = async () => {
     setBusy(true);
@@ -102,10 +167,17 @@ export const UnimindPage: React.FC<Props> = ({ onBack }) => {
             </button>
           )}
         </div>
+        <button
+          onClick={() => { setScanStatus(null); setScanOpen(true); }}
+          style={{ ...btnBase, width: '100%', marginTop: 8, background: 'rgba(139,92,246,0.12)', color: '#a78bfa' }}
+        >
+          <ScanLine size={13} className="inline mr-1" /> Scan to pair
+        </button>
         <p className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--gia-muted-2)' }}>
           Pairing id: <code style={{ color: '#a78bfa' }}>{status.unimindId}</code>
           <br />
-          On your desktop: GIA Cowork → Settings → Unimind — set the <strong>same relay URL + same pairing id</strong>.
+          On your desktop: GIA Cowork → Settings → Unimind — show the pairing QR and <strong>scan it here</strong>, or set the
+          <strong> same relay URL + same pairing id</strong> by hand.
         </p>
       </div>
 
@@ -166,6 +238,18 @@ export const UnimindPage: React.FC<Props> = ({ onBack }) => {
         GIA can run your phone's tools from the desktop and the desktop's tools from here — ask GIA to "text John from my phone", "lock my laptop",
         or "take a photo". Unlock requires <strong>remote unlock</strong> to be enabled in GIA Cowork settings first.
       </p>
+
+      {scanOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 p-6" style={{ background: 'rgba(0,0,0,0.88)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--gia-text)' }}>Scan the pairing QR on GIA Cowork</p>
+          <video ref={videoRef} autoPlay playsInline muted className="w-full max-w-sm rounded-xl border" style={{ borderColor: 'var(--gia-border)', maxHeight: '55vh', objectFit: 'contain' }} />
+          <canvas ref={canvasRef} className="hidden" />
+          {scanStatus && <p className="text-[11px] text-center" style={{ color: '#fbbf24' }}>{scanStatus}</p>}
+          <button onClick={() => setScanOpen(false)} style={{ ...btnBase, background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
+            <X size={13} className="inline mr-1" /> Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 };

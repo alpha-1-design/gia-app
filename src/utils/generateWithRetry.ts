@@ -13,6 +13,8 @@ interface RetryOptions<T> {
   moduleName?: string;
   transform?: (parsed: unknown) => T;
   onRetry?: (attempt: number, error: string) => void;
+  /** Abort the retry loop when the caller's time limit expires. */
+  signal?: AbortSignal;
 }
 
 export interface RetryContext {
@@ -46,13 +48,16 @@ export async function generateWithRetry<T>(
     moduleName = 'Module',
     transform,
     onRetry,
+    signal,
   } = options;
 
+  const abortError = () => new Error('Generation stopped after the time limit. Try again or switch providers.');
   let lastError: Error | null = null;
   let wasRepaired = false;
   let previousResponse = '';
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (signal?.aborted) throw abortError();
     // If network is down, wait and check again before retrying
     if (attempt > 0 && typeof navigator !== 'undefined' && !navigator.onLine) {
       logger.log(`[${moduleName}] Network offline — waiting before retry ${attempt + 1}`);
@@ -93,6 +98,7 @@ export async function generateWithRetry<T>(
       return { data: parsed, attempts: attempt + 1, wasRepaired };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      if (signal?.aborted) throw abortError();
       const msg = lastError.message.slice(0, 100);
       logger.warn(`[${moduleName}] Attempt ${attempt + 1}/${maxRetries + 1} failed:`, msg);
       onRetry?.(attempt, msg);

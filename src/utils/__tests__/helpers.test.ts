@@ -59,6 +59,29 @@ describe('extractJSON', () => {
     expect(result).toEqual({ real: 'data' });
   });
 
+  it('ignores a JSON example inside a think block', () => {
+    const text = ` thinkingThe schema is {"questions":[]} but I need real data.</think>
+{"questions":[{"id":"1","question":"Q"}]}`;
+    expect(extractJSON(text)).toEqual({ questions: [{ id: '1', question: 'Q' }] });
+  });
+
+  it('uses the final JSON block when the model shows an example first', () => {
+    const text = `Here is the shape:
+\`\`\`json
+{"questions":[]}
+\`\`\`
+Now the answer:
+\`\`\`json
+{"questions":[{"id":"2"}]}
+\`\`\``;
+    expect(extractJSON(text)).toEqual({ questions: [{ id: '2' }] });
+  });
+
+  it('skips bracket-like prose before the JSON', () => {
+    const text = 'I considered [A, B] and {x} but the result is {"ok":true}';
+    expect(extractJSON(text)).toEqual({ ok: true });
+  });
+
   it('repairs truncated JSON with missing closing brace', () => {
     const result = extractJSON('{"a": 1, "b": {"c": 2');
     expect(result).toEqual({ a: 1, b: { c: 2 } });

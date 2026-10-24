@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
-  Rocket, MessageSquare, GraduationCap, BarChart3, PenLine,
+  Rocket, Hammer, MessageSquare, GraduationCap, BarChart3, PenLine,
   ListTodo, Bot, Target, Cpu, ShieldCheck, BookOpen, Wrench, Sparkles, AudioLines,
 } from 'lucide-react'
 
@@ -43,6 +43,12 @@ const fallbackSections: DocSection[] = [
         'GIA streams responses token-by-token and runs tools in a loop.',
         'Every response is tagged on-device or cloud so you always know where it ran.',
       ] },
+    ],
+  },
+  {
+    id: 'build', icon: Hammer, title: 'Build',
+    blocks: [
+      { type: 'p', text: 'A phone studio for mini apps and websites, with a project workspace, sandbox, starter prompts, and a live preview.' },
     ],
   },
   {
@@ -93,6 +99,7 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; className?: str
   start: Rocket,
   modules: Target,
   chat: MessageSquare,
+  build: Hammer,
   writer: PenLine,
   planner: ListTodo,
   exam: GraduationCap,

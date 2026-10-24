@@ -7,17 +7,18 @@
    ============================================================ */
 
 :root, [data-theme="dark"] {
-  /* Core palette */
-  --gia-bg:          #0a0a0f;
-  --gia-surface:     #111118;
-  --gia-surface-2:   #18181f;
-  --gia-surface-3:   #202028;
-  --gia-border:      rgba(255,255,255,0.07);
-  --gia-border-2:    rgba(255,255,255,0.12);
-  --gia-code-bg:     #0d0d14;
-  --gia-text:        #f0f0f5;
-  --gia-muted:       #8888a0;
-  --gia-muted-2:     #5a5a70;
+  /* Core palette — true black, so OLED pixels are actually off */
+  --gia-bg:          #000000;
+  --gia-surface:     #060607;
+  --gia-surface-2:   #0b0b0d;
+  --gia-surface-3:   #131316;
+  --gia-border:      rgba(255,255,255,0.09);
+  --gia-border-2:    rgba(255,255,255,0.16);
+  --gia-code-bg:     #030304;
+  --gia-text:        #f2f2f7;
+  --gia-muted:       #8b8b99;
+  --gia-muted-2:     #5c5c68;
+  --gia-muted-3:     #5c5c68;
 
   /* Accent — electric violet */
   --gia-accent:      #a855f7;
@@ -42,11 +43,11 @@
   --glow-size:    40px;
   --glow-speed:   4s;
 
-  /* Spacing / radius */
-  --radius-sm:  10px;
-  --radius-md:  14px;
-  --radius-lg:  20px;
-  --radius-xl:  28px;
+  /* Spacing / radius — deliberately boxy. Pills and avatars stay round. */
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  9px;
+  --radius-xl:  12px;
 }
 
 [data-theme="light"] {
@@ -63,6 +64,7 @@
   --gia-text:        #1b1b2a;
   --gia-muted:       #5a5a70;
   --gia-muted-2:     #87879b;
+  --gia-muted-3:     #87879b;
 
   /* Accent */
   --gia-accent:      #a855f7;
@@ -128,6 +130,7 @@
   --gia-text:        #f0f0f5;
   --gia-muted:       #7a7a95;
   --gia-muted-2:     #4a4a60;
+  --gia-muted-3:     #4a4a60;
 
   /* Accent — aurora gradient (teal → violet → pink) */
   --gia-accent:      #06b6d4;
@@ -484,7 +487,7 @@ body {
 }
 
 @media (max-width: 640px) {
-  .gia-card { border-radius: 18px; }
+  .gia-card { border-radius: var(--radius-xl); }
   .gia-phone .text-\[10px\] { line-height: 1.45; }
 }
 
@@ -537,14 +540,14 @@ body {
    TAILWIND THEME EXTENSIONS
    ============================================================ */
 @theme {
-  --color-gia-bg:       #0a0a0f;
-  --color-gia-surface:  #111118;
-  --color-gia-surface2: #18181f;
-  --color-gia-surface3: #202028;
+  --color-gia-bg:       #000000;
+  --color-gia-surface:  #060607;
+  --color-gia-surface2: #0b0b0d;
+  --color-gia-surface3: #131316;
   --color-gia-accent:   #a855f7;
-  --color-gia-text:     #f0f0f5;
-  --color-gia-muted:    #8888a0;
-  --color-gia-border:   rgba(255,255,255,0.07);
+  --color-gia-text:     #f2f2f7;
+  --color-gia-muted:    #8b8b99;
+  --color-gia-border:   rgba(255,255,255,0.09);
 }
 
 /* ============================================================
@@ -672,18 +675,18 @@ body {
 .msg-user {
   background: linear-gradient(135deg, #a855f7, #7c3aed);
   color: white;
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 14px 14px 3px 14px;
 }
 .msg-assistant {
   background: var(--gia-surface-2);
   border: 1px solid var(--gia-border);
-  border-radius: 4px 18px 18px 18px;
+  border-radius: 3px 14px 14px 14px;
   color: var(--gia-text);
 }
 .msg-error {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 4px 18px 18px 18px;
+  border-radius: 3px 14px 14px 14px;
   color: #f87171;
 }
 
@@ -691,26 +694,27 @@ body {
    MARKDOWN CONTENT
    ============================================================ */
 .gia-markdown {
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 14.5px;
+  line-height: 1.7;
   color: var(--gia-text);
   overflow-wrap: break-word;
   word-break: break-word;
 }
-.gia-markdown h1 { font-size: 20px; font-weight: 700; margin: 16px 0 8px; color: var(--gia-text); }
-.gia-markdown h2 { font-size: 16px; font-weight: 600; margin: 14px 0 6px; color: var(--gia-text); }
-.gia-markdown h3 { font-size: 14px; font-weight: 600; margin: 12px 0 4px; color: var(--gia-text); }
-.gia-markdown p  { margin: 6px 0; }
+.gia-markdown h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; margin: 18px 0 8px; color: var(--gia-text); }
+.gia-markdown h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; margin: 15px 0 6px; color: var(--gia-text); }
+.gia-markdown h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; margin: 13px 0 4px; color: var(--gia-text); }
+.gia-markdown p  { margin: 7px 0; }
 .gia-markdown ul, .gia-markdown ol { margin: 8px 0; padding-left: 20px; }
-.gia-markdown li { margin: 3px 0; }
+.gia-markdown li { margin: 4px 0; }
 .gia-markdown a  { color: var(--gia-accent); text-decoration: underline; text-underline-offset: 2px; }
 .gia-markdown strong { font-weight: 600; color: white; }
 .gia-markdown em { font-style: italic; color: var(--gia-muted); }
 .gia-markdown code {
-  background: rgba(168, 85, 247, 0.12);
-  color: #c084fc;
-  padding: 1px 6px;
-  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #e6e6ee;
+  padding: 1px 5px;
+  border-radius: 4px;
   font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -749,41 +753,45 @@ body {
    CODE BLOCK
    ============================================================ */
 .code-block {
-  margin: 10px 0;
+  margin: 12px 0;
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--gia-border);
+  background: var(--gia-code-bg);
 }
 .code-block-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--gia-surface-3);
-  padding: 6px 12px;
+  gap: 8px;
+  background: var(--gia-surface-2);
+  border-bottom: 1px solid var(--gia-border);
+  padding: 6px 10px 6px 12px;
 }
 .code-block-lang {
-  font-size: 10px;
+  font-size: 9.5px;
   font-family: 'JetBrains Mono', monospace;
   color: var(--gia-muted);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 .code-block-body {
-  background: var(--gia-code-bg, #0d0d14);
-  padding: 14px;
+  background: var(--gia-code-bg, #030304);
+  padding: 14px 16px;
   overflow-x: auto;
-  font-size: 12px;
+  font-size: 12.5px;
   font-family: 'JetBrains Mono', monospace;
-  line-height: 1.6;
-  color: #e2e8f0;
+  line-height: 1.65;
+  color: #d8d8e2;
   white-space: pre;
   tab-size: 2;
+  -webkit-overflow-scrolling: touch;
 }
 .code-block-body code {
   font-family: inherit;
 }
 .code-block-body.shiki-body {
-  background: var(--gia-code-bg, #0d0d14);
+  background: var(--gia-code-bg, #030304);
   padding: 0;
 }
 .code-block-body.shiki-body .shiki {
@@ -791,7 +799,7 @@ body {
   font-size: inherit;
   line-height: inherit;
   font-family: 'JetBrains Mono', monospace;
-  padding: 14px;
+  padding: 14px 16px;
   white-space: pre;
   tab-size: 2;
 }
@@ -1281,7 +1289,55 @@ body {
   animation: cosmic-ray var(--duration, 8s) ease-in-out var(--delay, 0s) infinite;
 }
 
-/* Reduce Motion — toggled from Settings (useGiaStore.reduceMotion).
+/* ============================================================
+   VISUAL POLISH
+   ============================================================ */
+
+/* Boxy geometry: Tailwind's standard radius utilities are re-mapped here so
+ * the whole app shares one crisp scale. Pills (.rounded-full) and avatars are
+ * deliberately untouched. */
+.rounded-sm   { border-radius: 3px; }
+.rounded,
+.rounded-md   { border-radius: 5px; }
+.rounded-lg   { border-radius: 7px; }
+.rounded-xl   { border-radius: 9px; }
+.rounded-2xl  { border-radius: 11px; }
+.rounded-3xl  { border-radius: 14px; }
+
+/* Type: slightly tighter display tracking, comfortable body rhythm. */
+h1, h2, h3, h4 { letter-spacing: -0.025em; }
+.font-mono, code, pre, kbd, samp, .tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+code, pre, kbd, samp { font-feature-settings: 'liga' 0, 'calt' 0; }
+
+/* Selection & focus: one accent, consistently visible. */
+::selection {
+  background: rgba(var(--gia-accent-rgb), 0.28);
+  color: var(--gia-text);
+}
+:focus-visible {
+  outline: 2px solid rgba(var(--gia-accent-rgb), 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Inputs inherit the same crisp geometry and text size everywhere. */
+input, textarea, select {
+  font-family: inherit;
+  accent-color: var(--gia-accent);
+}
+input::placeholder, textarea::placeholder { color: var(--gia-muted-2); }
+
+/* Hairline separators on black read as structure, not noise. */
+hr { border-color: var(--gia-border); }
+
+/* Keep long code/output blocks scrollable without a visible chunky track. */
+.code-block-body::-webkit-scrollbar,
+pre::-webkit-scrollbar { height: 3px; }
+
+/* ============================================================
+   Reduce Motion — toggled from Settings (useGiaStore.reduceMotion).
  * Same technique the OS-level prefers-reduced-motion media query uses:
  * collapse every animation/transition to effectively instant rather than
  * trying to hunt down and special-case each animated component (motion/

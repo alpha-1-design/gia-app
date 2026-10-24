@@ -82,6 +82,7 @@ export const ConnectorsSection: React.FC = () => {
                   </span>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
                     c.status === 'connected' ? 'text-emerald-400 bg-emerald-500/10' :
+                    c.status === 'configured' ? 'text-amber-400 bg-amber-500/10' :
                     c.status === 'error' ? 'text-red-400 bg-red-500/10' :
                     'text-zinc-500 bg-zinc-500/10'
                   }`}>

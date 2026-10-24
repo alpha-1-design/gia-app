@@ -17,7 +17,9 @@ const START_DIR = '/workspace';
 
 interface Entry { id: number; cmd: string; cwd: string; out: string; exit: number | null; running: boolean }
 
-export default function ShellPanel() {
+export default function ShellPanel({ os = 'alpine' }: { os?: 'alpine' | 'ubuntu' }) {
+  const distroLabel = os === 'ubuntu' ? 'Ubuntu' : 'Alpine';
+  const installHint = os === 'ubuntu' ? 'apt-get install nano' : 'apk add nano';
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState('');
   const [cwd, setCwd] = useState(START_DIR);
@@ -116,7 +118,7 @@ export default function ShellPanel() {
       >
         {entries.length === 0 && (
           <p className="opacity-50">
-            Alpine Linux shell. Try <span className="text-emerald-400">ls</span>, <span className="text-emerald-400">python3 --version</span> or <span className="text-emerald-400">apk add nano</span>.
+            {distroLabel} Linux shell. Try <span className="text-emerald-400">ls</span>, <span className="text-emerald-400">python3 --version</span> or <span className="text-emerald-400">{installHint}</span>.
             Interactive full-screen programs (nano, vim, top) aren't supported yet.
           </p>
         )}

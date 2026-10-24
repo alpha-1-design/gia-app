@@ -39,7 +39,6 @@ export function useChatState() {
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
-  const [showThoughts, setShowThoughts] = useState<Set<string>>(new Set());
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [clarAnswer, setClarAnswer] = useState('');
   const [showFileManager, setShowFileManager] = useState(false);
@@ -67,7 +66,6 @@ export function useChatState() {
     forkSession, clearSession, getActiveSession,
     getBranchMessages, switchBranch, addBranch, renameBranch, deleteBranch, getAllBranchIds,
     userProfile, setIntentState, addNotification,
-    setShowConsole, showConsole, consoleLogs,
     webSearch, setWebSearch,
     deepSearch, setDeepSearch,
     extThinking, setExtThinking,
@@ -89,7 +87,6 @@ export function useChatState() {
     addBranch: s.addBranch, renameBranch: s.renameBranch, deleteBranch: s.deleteBranch, getAllBranchIds: s.getAllBranchIds,
     userProfile: s.userProfile,
     setIntentState: s.setIntentState, addNotification: s.addNotification,
-    setShowConsole: s.setShowConsole, showConsole: s.showConsole, consoleLogs: s.consoleLogs,
     webSearch: s.webSearch, setWebSearch: s.setWebSearch,
     deepSearch: s.deepSearch, setDeepSearch: s.setDeepSearch,
     extThinking: s.extThinking, setExtThinking: s.setExtThinking,
@@ -119,7 +116,6 @@ export function useChatState() {
     gen.setStreamingMsgIds(new Set());
     gen.setLiveThoughts({});
     setExpandedMsgs(new Set());
-    setShowThoughts(new Set());
     msgOps.setUndoMsg(null);
     // Tool execution logs are session-scoped — never leak the previous
     // session's tool cards into a fresh chat.
@@ -567,7 +563,6 @@ export function useChatState() {
   return {
     input, setInput,
     loading: gen.loading, streamingMsgId: gen.streamingMsgId, streamingMsgIds: gen.streamingMsgIds,
-    providerStatuses: gen.providerStatuses,
     showAgentMention, setShowAgentMention, agentMentionQuery,
     handleAgentMentionSelect,
     voiceEnabled, setVoiceEnabled, showHistory, setShowHistory,
@@ -578,7 +573,7 @@ export function useChatState() {
     showSkillPicker, setShowSkillPicker,
     showSlashMenu, setShowSlashMenu, slashQuery,
     handleSlashPickCommand, handleSlashPickSkill,
-    expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
+    expandedMsgs, setExpandedMsgs,
     liveThoughts: gen.liveThoughts, setLiveThoughts: gen.setLiveThoughts,
     liveSegments: gen.liveSegments, setLiveSegments: gen.setLiveSegments,
     showKnowledge, setShowKnowledge,
@@ -597,7 +592,7 @@ sessions, activeSessionId, createSession, setActiveSession,
     clearSession, getActiveSession, getBranchMessages, switchBranch,
     addBranch, renameBranch, deleteBranch, getAllBranchIds,
     userProfile, setIntentState,
-    addNotification, setShowConsole, showConsole, consoleLogs,
+    addNotification,
     webSearch, setWebSearch, deepSearch, setDeepSearch, extThinking, setExtThinking,
     handsOff, setHandsOff,
     localVision, setLocalVision,

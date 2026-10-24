@@ -15,7 +15,7 @@ The development command starts the sandbox server and Vite on port 3000.
 
 ## Build projects
 
-In Build Mode, open **Project** to clone a Git repository and browse its files.
+In the Build module, open **Project** to clone a Git repository and browse its files.
 Clones live in the sandbox at `/workspace/projects/<project-name>` on both the
 desktop sandbox and the on-device terminal; this is separate from the app's
 Documents folder and any folder opened in the general File Browser. Select a
@@ -25,7 +25,7 @@ project file tree can preview text and source files up to 512 KB.
 
 The sandbox must be available before cloning. Public HTTPS repositories work
 without credentials; SSH repositories require usable SSH credentials in the
-sandbox. Build Mode can also search GitHub repositories; add a fine-grained
+sandbox. Build can also search GitHub repositories; add a fine-grained
 GitHub token with repository metadata and contents read access to discover and
 clone private repositories. The token is saved in GIA's credential store and is
 passed to Git only through its environment, not the clone URL or command.

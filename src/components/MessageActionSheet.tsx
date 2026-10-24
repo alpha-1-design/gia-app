@@ -25,11 +25,13 @@ const REWRITE_OPTIONS: { label: string; instruction: string }[] = [
   { label: 'Casual', instruction: 'Rewrite this response in a more casual, friendly tone.' },
 ];
 
-const Btn: React.FC<{ icon: React.ComponentType<{ size?: number }>; label: string; onClick: () => void; active?: boolean; activeColor?: string; danger?: boolean }> = ({ icon: Icon, label, onClick, active, activeColor, danger }) => (
+const Btn: React.FC<{ icon: React.ComponentType<{ size?: number }>; label: string; onClick: () => void; active?: boolean; activeColor?: string; danger?: boolean; ariaLabel?: string }> = ({ icon: Icon, label, onClick, active, activeColor, danger, ariaLabel }) => (
   <button
     onClick={onClick}
+    aria-label={ariaLabel || label || undefined}
+    title={ariaLabel || label || undefined}
     className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors active:bg-white/5"
-    style={{ color: danger ? '#f87171' : active ? (activeColor || '#22c55e') : 'var(--gia-muted)' }}
+    style={{ color: danger ? '#f87171' : active ? (activeColor || 'var(--gia-text)') : 'var(--gia-muted)' }}
   >
     <Icon size={12} />
     <span>{label}</span>
@@ -54,8 +56,8 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
           <Btn icon={Maximize} label="Expand" onClick={() => { onExpand(msg.id); }} />
           <Btn icon={RotateCcw} label="Retry" onClick={() => { onRetry(msg.id); onClose(); }} />
           <Btn icon={Play} label="Continue" onClick={() => { onContinue(msg.id); onClose(); }} />
-          <Btn icon={ThumbsUp} label="" onClick={() => onReact('up')} active={reaction === 'up'} />
-          <Btn icon={ThumbsDown} label="" onClick={() => onReact('down')} active={reaction === 'down'} activeColor="#f87171" />
+          <Btn icon={ThumbsUp} label="" ariaLabel="Good response" onClick={() => onReact('up')} active={reaction === 'up'} />
+          <Btn icon={ThumbsDown} label="" ariaLabel="Bad response" onClick={() => onReact('down')} active={reaction === 'down'} />
         </>
       )}
     </div>

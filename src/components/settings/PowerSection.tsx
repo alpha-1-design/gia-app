@@ -1,11 +1,17 @@
-import React from 'react';
-import { Battery, BatteryCharging, Cpu, Moon, Sparkles, Vibrate, Wind } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Activity, Battery, BatteryCharging, Cpu, MessageSquare, Moon, Radio, Vibrate, Wind } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Switch } from '../ui/Switch';
+import { GIAWakeWord } from '../../services/GIAWakeWord';
 
 export const PowerSection: React.FC = () => {
-  const { longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload, hapticFeedback, setHapticFeedback, reduceMotion, setReduceMotion, showFloatingOrb, setShowFloatingOrb } = useGiaStore(useShallow(s => ({
+  const {
+    longRunningMode, setLongRunningMode, autoModelUnload, setAutoModelUnload,
+    hapticFeedback, setHapticFeedback, reduceMotion, setReduceMotion,
+    showHud, setShowHud, nativeWakeWord, setNativeWakeWord,
+  } = useGiaStore(useShallow(s => ({
     longRunningMode: s.longRunningMode,
     setLongRunningMode: s.setLongRunningMode,
     autoModelUnload: s.autoModelUnload,
@@ -13,10 +19,32 @@ export const PowerSection: React.FC = () => {
     hapticFeedback: s.hapticFeedback,
     setHapticFeedback: s.setHapticFeedback,
     reduceMotion: s.reduceMotion,
-    showFloatingOrb: s.showFloatingOrb,
-    setShowFloatingOrb: s.setShowFloatingOrb,
     setReduceMotion: s.setReduceMotion,
+    showHud: s.showHud,
+    setShowHud: s.setShowHud,
+    nativeWakeWord: s.nativeWakeWord,
+    setNativeWakeWord: s.setNativeWakeWord,
   })));
+
+  const native = Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('GIAWakeWord');
+  const [wakeRunning, setWakeRunning] = useState(false);
+
+  useEffect(() => {
+    if (!native) return;
+    let alive = true;
+    const read = () => GIAWakeWord.getStatus()
+      .then(s => { if (alive) setWakeRunning(s.running); })
+      .catch(() => { if (alive) setWakeRunning(false); });
+    void read();
+    const id = setInterval(read, 5000);
+    return () => { alive = false; clearInterval(id); };
+  }, [native]);
+
+  const stopWakeWord = async () => {
+    try { await GIAWakeWord.stopListening(); } catch { /* already stopped */ }
+    setNativeWakeWord(false);
+    setWakeRunning(false);
+  };
 
   return (
     <div className="gia-card p-4">
@@ -72,13 +100,51 @@ export const PowerSection: React.FC = () => {
 
       <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>
         <Switch
-          checked={showFloatingOrb}
-          onChange={setShowFloatingOrb}
-          label="Floating Orb"
-          description="A draggable orb that shows what GIA is doing: listening, thinking, speaking, or running a tool. Tap it to jump to chat."
-          icon={<Sparkles size={13} />}
-          accentColor="#00f0ff"
+          checked={showHud}
+          onChange={setShowHud}
+          label="Floating Chat HUD"
+          description="A compact chat window that stays with you across modules. It is off unless you turn it on, and it has a visible off switch."
+          icon={<MessageSquare size={13} />}
+          accentColor="#a855f7"
         />
+      </div>
+
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>
+        <div className="flex items-center gap-2 mb-2">
+          <Activity size={12} style={{ color: 'var(--gia-muted)' }} />
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Background activity</span>
+        </div>
+
+        <div className="flex items-center gap-2 py-1.5">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: wakeRunning ? 'var(--gia-text)' : 'var(--gia-muted-2)' }} />
+          <Radio size={11} style={{ color: 'var(--gia-muted)' }} />
+          <span className="text-[11px] flex-1" style={{ color: 'var(--gia-text)' }}>Wake word listener</span>
+          <span className="text-[9px] uppercase tracking-wider" style={{ color: wakeRunning ? 'var(--gia-text)' : 'var(--gia-muted-2)' }}>
+            {wakeRunning ? 'listening' : nativeWakeWord ? 'starting' : 'off'}
+          </span>
+          {(wakeRunning || nativeWakeWord) && (
+            <button
+              onClick={() => { void stopWakeWord(); }}
+              className="text-[9px] px-1.5 py-0.5 rounded tap-feedback"
+              style={{ color: 'var(--gia-muted)', border: '1px solid var(--gia-border-2)' }}
+            >
+              Stop
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 py-1.5">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: showHud ? 'var(--gia-text)' : 'var(--gia-muted-2)' }} />
+          <MessageSquare size={11} style={{ color: 'var(--gia-muted)' }} />
+          <span className="text-[11px] flex-1" style={{ color: 'var(--gia-text)' }}>Floating chat HUD</span>
+          <span className="text-[9px] uppercase tracking-wider" style={{ color: showHud ? 'var(--gia-text)' : 'var(--gia-muted-2)' }}>
+            {showHud ? 'on screen' : 'off'}
+          </span>
+        </div>
+
+        <p className="text-[9px] leading-relaxed mt-1.5" style={{ color: 'var(--gia-muted-2)' }}>
+          These are the only features that keep working while you are elsewhere in the app. Wake word uses the microphone and shows a notification; the HUD uses no microphone or location.
+        </p>
       </div>
 
       <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--gia-border)' }}>

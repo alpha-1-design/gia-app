@@ -218,7 +218,7 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
       <section className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }}>
         <header className="flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-5" style={{ borderColor: 'var(--gia-border)' }}>
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: 'rgba(249,115,22,0.14)', color: '#fb923c' }}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
               <FolderGit2 size={18} />
             </div>
             <div className="min-w-0">
@@ -254,7 +254,7 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
                   className="min-w-0 flex-1 rounded-lg px-3 py-2 text-xs outline-none"
                   style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: 'var(--gia-text)' }}
                 />
-                <button type="submit" disabled={busy} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60" style={{ background: '#ea580c' }}>
+                <button type="submit" disabled={busy} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: 'var(--gia-text)', color: 'var(--gia-bg)' }}>
                   {busy ? <LoaderCircle size={13} className="animate-spin" /> : <GitBranch size={13} />}
                   Clone
                 </button>
@@ -267,7 +267,7 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
             <section className="space-y-2 border-b p-3 sm:p-4" style={{ borderColor: 'var(--gia-border)' }}>
               <div className="flex items-center justify-between gap-2">
                 <label htmlFor="github-repo-search" className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted-2)' }}>Discover on GitHub</label>
-                <button type="button" onClick={connectGitHub} className="shrink-0 text-[10px] font-medium" style={{ color: hasGitHubToken ? '#86efac' : '#a78bfa' }}>
+                <button type="button" onClick={connectGitHub} className="shrink-0 text-[10px] font-medium" style={{ color: hasGitHubToken ? 'var(--gia-text)' : 'var(--gia-muted)' }}>
                   {hasGitHubToken ? 'Token connected' : 'Add GitHub token'}
                 </button>
               </div>
@@ -297,7 +297,7 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
                         <p className="truncate text-[11px] font-medium" style={{ color: 'var(--gia-text)' }}>{repo.full_name}</p>
                         <p className="truncate text-[9px]" style={{ color: 'var(--gia-muted-2)' }}>{repo.description || repo.language || 'Repository'}</p>
                       </div>
-                      <button type="button" aria-label={`Clone ${repo.full_name}`} disabled={busy} onClick={() => void cloneDiscoveredRepo(repo)} className="rounded-md px-2 py-1 text-[9px] font-semibold disabled:opacity-50" style={{ background: 'rgba(249,115,22,0.15)', color: '#fb923c' }}>
+                      <button type="button" aria-label={`Clone ${repo.full_name}`} disabled={busy} onClick={() => void cloneDiscoveredRepo(repo)} className="rounded-md px-2 py-1 text-[9px] font-semibold disabled:opacity-50" style={{ background: 'var(--gia-surface-3)', color: 'var(--gia-text)' }}>
                         Clone
                       </button>
                     </div>
@@ -327,7 +327,7 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
                       key={project.name}
                       onClick={() => void openProject(project.name)}
                       className="mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-colors"
-                      style={{ background: selected ? 'rgba(249,115,22,0.12)' : 'transparent', color: selected ? '#fb923c' : 'var(--gia-text)' }}
+                      style={{ background: selected ? 'var(--gia-surface-2)' : 'transparent', color: selected ? 'var(--gia-text)' : 'var(--gia-muted)' }}
                     >
                       <Folder size={15} className="shrink-0" />
                       <span className="min-w-0 flex-1 truncate text-xs font-medium">{project.name}</span>
@@ -372,8 +372,8 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
                       type="button"
                       key={entry.name}
                       onClick={() => void openEntry(entry)}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
-                      style={{ color: entry.isDir ? '#fbbf24' : 'var(--gia-text)' }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-[var(--gia-surface-2)]"
+                      style={{ color: entry.isDir ? 'var(--gia-muted)' : 'var(--gia-text)' }}
                     >
                       {entry.isDir ? <Folder size={14} className="shrink-0" /> : canPreview(entry) ? <FileCode2 size={14} className="shrink-0" /> : <FileText size={14} className="shrink-0" />}
                       <span className="min-w-0 flex-1 truncate text-xs">{entry.name}</span>
@@ -381,9 +381,9 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
                     </button>
                   ))}
                 </div>
-                <section className="flex min-h-0 flex-col border-t" style={{ borderColor: 'var(--gia-border)', background: 'rgba(0,0,0,0.14)' }}>
+                <section className="flex min-h-0 flex-col border-t" style={{ borderColor: 'var(--gia-border)', background: 'var(--gia-surface-2)' }}>
                   <div className="flex min-h-9 items-center gap-2 border-b px-3" style={{ borderColor: 'var(--gia-border)' }}>
-                    <FileCode2 size={12} style={{ color: '#fb923c' }} />
+                    <FileCode2 size={12} style={{ color: 'var(--gia-muted)' }} />
                     <span className="truncate text-[10px] font-medium" style={{ color: 'var(--gia-muted)' }}>{preview?.path || 'Select a text file to preview'}</span>
                   </div>
                   <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-relaxed" style={{ color: preview ? 'var(--gia-text)' : 'var(--gia-muted-2)' }}>
@@ -398,7 +398,7 @@ const ProjectWorkspacePanel: React.FC<ProjectWorkspacePanelProps> = ({ onClose }
         </div>
 
         {(error || notice) && (
-          <div className="flex items-start gap-2 border-t px-4 py-2.5 text-[11px]" style={{ borderColor: 'var(--gia-border)', color: error ? '#fca5a5' : '#86efac' }} role={error ? 'alert' : 'status'}>
+          <div className="flex items-start gap-2 border-t px-4 py-2.5 text-[11px]" style={{ borderColor: 'var(--gia-border)', color: error ? '#fca5a5' : 'var(--gia-muted)' }} role={error ? 'alert' : 'status'}>
             {error ? <AlertCircle size={13} className="mt-0.5 shrink-0" /> : <Check size={13} className="mt-0.5 shrink-0" />}
             <span className="min-w-0 break-words">{error || notice}</span>
           </div>

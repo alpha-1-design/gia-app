@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { motion } from 'motion/react';
-import { User, AlertCircle, RotateCcw, Paperclip, Brain, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { User, AlertCircle, RotateCcw, Paperclip, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { ReasoningChain } from './ReasoningChain';
-import { WorkLog } from './WorkLog';
-import { SegmentedReasoning } from './SegmentedReasoning';
+import { TurnTrace } from './turn/TurnTrace';
+import { extractJobPlan } from './turn/buildTrace';
 import TaskProgress from './TaskProgress';
 import GiaIcon from './GiaIcon';
 import GiaMascot from './GiaMascot';
 import OrbAvatar from './OrbAvatar';
 import { useGiaStore } from '../store/useGiaStore';
+import { useGiaIdentity } from '../store/useGiaIdentity';
 import MarkdownRenderer from './MarkdownRenderer';
 import ArtifactsPanel from './ArtifactsPanel';
 import MessageActionSheet, { RewriteBar } from './MessageActionSheet';
@@ -45,8 +45,6 @@ interface MessageListProps {
   streamingMsgIds?: Set<string>;
   expandedMsgs: Set<string>;
   setExpandedMsgs: React.Dispatch<React.SetStateAction<Set<string>>>;
-  showThoughts: Set<string>;
-  setShowThoughts: React.Dispatch<React.SetStateAction<Set<string>>>;
   thinkingPhase: ThinkingPhase;
   currentTool: string | null;
   responseTimesRef: React.MutableRefObject<Record<string, number>>;
@@ -152,8 +150,6 @@ interface MessageRowProps {
   clarification?: Clarification | null;
   expandedMsgs: Set<string>;
   setExpandedMsgs: React.Dispatch<React.SetStateAction<Set<string>>>;
-  showThoughts: Set<string>;
-  setShowThoughts: React.Dispatch<React.SetStateAction<Set<string>>>;
   sheetMsgId: string | null;
   openSheet: (id: string | null) => void;
   extThinking: boolean;
@@ -173,7 +169,7 @@ interface MessageRowProps {
 const MessageRow = memo<MessageRowProps>(({
   msg, isStreaming, loading, thinkingPhase, currentTool,
   responseTimesRef, messagesRef, reactions, clarification,
-  expandedMsgs, setExpandedMsgs, showThoughts, setShowThoughts,
+  expandedMsgs, setExpandedMsgs,
   sheetMsgId, openSheet, extThinking, showTokenUsage,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue, onFork,
   onRetry, onEditResend, onRewrite, onSuggestionClick, onClarificationFormAnswer,
@@ -184,6 +180,7 @@ const MessageRow = memo<MessageRowProps>(({
   // defeated the memoization.)
   const liveThought = useGiaStore(s => s.liveThoughts[msg.id]);
   const liveSegs = useGiaStore(s => s.liveSegments[msg.id]);
+  const allowsMemory = useGiaIdentity(s => s.identity.allowsMemory);
   // Protocols for this message only; shallow-compare so unrelated
   // protocol updates (other messages, other progress ticks) don't
   // re-render this row.
@@ -202,15 +199,15 @@ const MessageRow = memo<MessageRowProps>(({
 
   const thoughts = liveThought ?? msg.thoughts ?? '';
   const segs = liveSegs ?? msg.segments;
-
-  const toggleThoughts = useCallback(() => {
-    setShowThoughts(prev => {
-      const next = new Set(prev);
-      if (next.has(msg.id)) next.delete(msg.id);
-      else next.add(msg.id);
-      return next;
-    });
-  }, [msg.id, setShowThoughts]);
+  const trail = useMemo(() => (segs ?? []).filter(segment => segment.type !== 'text'), [segs]);
+  const hasTrail = trail.length > 0;
+  const job = useMemo(() => extractJobPlan(segs ?? [], msg.content), [segs, msg.content]);
+  const displayContent = hasTrail ? job.body : msg.content;
+  const recordedDuration = responseTimesRef.current[msg.id] ?? 0;
+  const fallbackDuration = trail.length > 0
+    ? Math.max(...trail.map(segment => segment.startedAt)) - msg.timestamp
+    : 0;
+  const jobDuration = recordedDuration > 0 ? recordedDuration : Math.max(0, fallbackDuration);
 
   const handleReact = useCallback((value: 'up' | 'down') => {
     const m = messagesRef.current.find(x => x.id === msg.id);
@@ -272,16 +269,16 @@ const MessageRow = memo<MessageRowProps>(({
               openSheet(sheetMsgId === msg.id ? null : msg.id);
             }}
           >
-            {msg.thinking ? (
-              <div className="mb-2">
-                <WorkLog
+            {!msg.error && (msg.thinking || hasTrail || !!thoughts) ? (
+              <div className="mb-2.5">
+                <TurnTrace
+                  segments={segs ?? []}
                   thoughts={thoughts}
-                  isLive={!!liveThought || !!msg.thinking}
-                  isExpanded={showThoughts.has(msg.id)}
-                  onToggle={toggleThoughts}
-                  currentTool={currentTool}
-                  thinkingPhase={thinkingPhase}
-                  startTime={msg.timestamp}
+                  isLive={!!msg.thinking}
+                  startedAt={msg.timestamp}
+                  durationMs={jobDuration}
+                  phase={thinkingPhase}
+                  plan={job.plan}
                 />
               </div>
             ) : null}
@@ -311,7 +308,7 @@ const MessageRow = memo<MessageRowProps>(({
                     <span className="text-[8px]" style={{ color: 'var(--gia-muted-2)' }} title={new Date(msg.timestamp).toLocaleString()}>
                       {formatTimeAgo(msg.timestamp)}
                     </span>
-                    {responseTimesRef.current[msg.id] && !msg.thinking ? (
+                    {responseTimesRef.current[msg.id] && !msg.thinking && !hasTrail ? (
                       <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
                         {(responseTimesRef.current[msg.id] / 1000).toFixed(1)}s
                       </span>
@@ -323,54 +320,17 @@ const MessageRow = memo<MessageRowProps>(({
                     )}
                   </div>
                 )}
-                {(() => {
-                  if (segs && segs.length > 0) {
-                    // New path: render the real think -> tool -> think
-                    // sequence as discrete blocks, always visible (not
-                    // hidden behind a single toggle) since each step
-                    // is already collapsed on its own.
-                    return <SegmentedReasoning segments={segs} isLive={!!liveSegs} />;
-                  }
-                  // Fallback for messages generated before this existed
-                  // (or any path that doesn't populate segments) --
-                  // same single collapsible blob as before.
-                  return thoughts ? (
-                  <div className="mb-3 rounded-xl overflow-hidden transition-all duration-300" style={{
-                    border: '1px solid rgba(251,191,36,0.12)',
-                    background: 'linear-gradient(135deg, rgba(251,191,36,0.04), rgba(217,119,6,0.02))',
-                  }}>
-                    <button
-                      onClick={toggleThoughts}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:opacity-80 transition-opacity"
-                      style={{ color: '#f59e0b' }}
-                    >
-                      <Brain size={12} />
-                      <span className="text-[11px] font-medium flex-1">
-                        {showThoughts.has(msg.id) ? 'Hide' : 'Show'} reasoning ({thoughts.split(' ').length} words)
-                      </span>
-                      {showThoughts.has(msg.id) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                    </button>
-                    <ReasoningChain
-                      messageId={msg.id}
-                      thoughts={thoughts}
-                      isLive={!!liveThought}
-                      isExpanded={showThoughts.has(msg.id)}
-                      onToggle={toggleThoughts}
-                    />
-                  </div>
-                  ) : null;
-                })()}
-                {msg.content.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
+                {displayContent.length > LONG_MSG_CHARS && !expandedMsgs.has(msg.id) ? (
                   <>
-                    <MarkdownRenderer content={msg.content.slice(0, LONG_MSG_CHARS)} sources={msg.sources} isStreaming={isStreaming} />
+                    <MarkdownRenderer content={displayContent.slice(0, LONG_MSG_CHARS)} sources={msg.sources} isStreaming={isStreaming} />
                     <button onClick={() => setExpandedMsgs(prev => new Set(prev).add(msg.id))} className="mt-2 text-[11px] font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
-                      Show more ({Math.ceil((msg.content.length - LONG_MSG_CHARS) / 1000)}k+ chars)
+                      Show more ({Math.ceil((displayContent.length - LONG_MSG_CHARS) / 1000)}k+ chars)
                     </button>
                   </>
                 ) : (
                   <div className="token-reveal">
-                    <MarkdownRenderer content={msg.content} sources={msg.sources} isStreaming={isStreaming} />
-                    {isStreaming && msg.content && loading && (
+                    <MarkdownRenderer content={displayContent} sources={msg.sources} isStreaming={isStreaming} />
+                    {isStreaming && displayContent && loading && (
                       <StreamingCursor phase={thinkingPhase} currentTool={currentTool} />
                     )}
                     {expandedMsgs.has(msg.id) && (
@@ -398,9 +358,12 @@ const MessageRow = memo<MessageRowProps>(({
                   </div>
                 )}
                 {msg.role === 'assistant' && reactions[msg.id] && (
-                  <div className="mt-1 flex items-center gap-1" style={{ color: reactions[msg.id].value === 'up' ? '#22c55e' : '#f87171' }}>
+                  <div className="mt-1 flex items-center gap-1" style={{ color: 'var(--gia-muted)' }}>
                     {reactions[msg.id].value === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
-                    <span className="text-[9px] tracking-wider select-none">{reactions[msg.id].value === 'up' ? 'Liked' : 'Disliked'}</span>
+                    <span className="text-[9px] tracking-wider select-none">
+                      {reactions[msg.id].value === 'up' ? 'Liked' : 'Disliked'}
+                      {allowsMemory ? ' · saved to memory' : ' · feedback saved'}
+                    </span>
                   </div>
                 )}
                 {msg.artifacts && msg.artifacts.length > 0 && (
@@ -518,7 +481,6 @@ let openFullScreenMsg: ((id: string) => void) | null = null;
 const MessageList: React.FC<MessageListProps> = ({
   messages, loading, streamingMsgId, streamingMsgIds,
   expandedMsgs, setExpandedMsgs,
-  showThoughts, setShowThoughts,
   thinkingPhase, currentTool,
   responseTimesRef,
   onCopyMessage, onEdit, onDeleteWithUndo, onContinue,
@@ -563,8 +525,6 @@ const MessageList: React.FC<MessageListProps> = ({
           clarification={clarification}
           expandedMsgs={expandedMsgs}
           setExpandedMsgs={setExpandedMsgs}
-          showThoughts={showThoughts}
-          setShowThoughts={setShowThoughts}
           sheetMsgId={sheetMsgId}
           openSheet={openSheet}
           extThinking={extThinking}

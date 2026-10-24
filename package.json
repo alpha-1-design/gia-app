@@ -1,7 +1,7 @@
 {
   "name": "gia-app",
   "private": true,
-  "version": "2.4.0.18",
+  "version": "2.4.0.19",
   "type": "module",
   "scripts": {
     "dev": "node server/sandbox-server.cjs & vite --port=3000 --host=0.0.0.0",
@@ -44,6 +44,7 @@
     "clsx": "^2.1.1",
     "esbuild": "^0.28.0",
     "happy-dom": "^20.11.1",
+    "jsqr": "^1.4.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.47",
     "leaflet": "^1.9.4",
@@ -60,6 +61,7 @@
     "recharts": "^3.8.1",
     "shiki": "^4.5.0",
     "tailwind-merge": "^2.6.0",
+    "thinking-orbs": "^0.3.2",
     "three": "^0.185.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.3"

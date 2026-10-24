@@ -56,8 +56,8 @@ public class GIATerminalPlugin extends Plugin {
     private void startTerminalService() {
         try {
             Context context = getContext();
-            File marker = new File(new File(context.getFilesDir(), "terminal"), "rootfs/.gia-rootfs-ok");
-            if (!marker.isFile()) {
+            File rootfsDir = new File(new File(context.getFilesDir(), "terminal"), "rootfs");
+            if (!GIATerminalService.rootfsHasCriticalBinaries(rootfsDir)) {
                 Log.i(TAG, "Skipping terminal service startup: rootfs is not installed");
                 return;
             }
@@ -90,6 +90,11 @@ public class GIATerminalPlugin extends Plugin {
         int timeout = call.getInt("timeout", 30000); // default 30s
 
         try {
+            // A fresh install happens while the plugin is already loaded; the
+            // load-time service start was skipped because no rootfs existed
+            // then. Start it now so startSession()'s extraction latch can
+            // release and the foreground service owns the session.
+            startTerminalService();
             // Start the session
             GIATerminalService.TerminalSession session =
                     GIATerminalService.startSession(getContext(), sessionId, command, workdirFrom(call), envFrom(call));
@@ -177,6 +182,7 @@ public class GIATerminalPlugin extends Plugin {
 
         String sessionId = UUID.randomUUID().toString();
         try {
+            startTerminalService();
             GIATerminalService.TerminalSession session =
                     GIATerminalService.startSession(getContext(), sessionId, command, workdirFrom(call), envFrom(call));
 
@@ -342,6 +348,7 @@ public class GIATerminalPlugin extends Plugin {
             try {
                 boolean ok = GIATerminalService.forceReextractRootfs(getContext());
                 if (ok) {
+                    startTerminalService();
                     JSObject result = new JSObject();
                     result.put("success", true);
                     result.put("message", "Rootfs re-extracted successfully");
@@ -413,6 +420,7 @@ public class GIATerminalPlugin extends Plugin {
         new Thread(() -> {
             try {
                 doDownloadRootfs(arch, archId, os);
+                startTerminalService();
                 downloadInProgress.set(false);
                 JSObject result = new JSObject();
                 result.put("success", true);
@@ -677,13 +685,14 @@ public class GIATerminalPlugin extends Plugin {
         // For Alpine: need busybox, /bin/sh, /usr/bin/env
         boolean ok;
         if (isUbuntu) {
-            ok = shCheck.exists() || envCheck.exists(); // Ubuntu: at least one shell needed
+            ok = shCheck.exists() && shCheck.length() > 0 && envCheck.exists() && envCheck.length() > 0;
             if (!ok) {
                 // Try copying dash/bash to /bin/sh one more time
                 File dash = new File(rootfsDir, "bin/dash");
                 File bash = new File(rootfsDir, "bin/bash");
                 if (dash.exists()) { GIATerminalService.copyFile(dash, shCheck); ok = shCheck.exists(); }
                 else if (bash.exists()) { GIATerminalService.copyFile(bash, shCheck); ok = shCheck.exists(); }
+                if (ok) ok = envCheck.exists() && envCheck.length() > 0;
             }
         } else {
             ok = GIATerminalService.rootfsHasCriticalBinaries(rootfsDir);
@@ -775,10 +784,14 @@ public class GIATerminalPlugin extends Plugin {
     }
 
     private String readInstalledOs() {
+        String detected = GIATerminalService.detectRootfsOs(new File(currentRootfsPath()));
+        if (!"unknown".equals(detected)) return detected;
+
         File marker = new File(getContext().getFilesDir(), "terminal/installed-os.txt");
         if (!marker.exists()) return "alpine";
         try {
-            return new String(java.nio.file.Files.readAllBytes(marker.toPath())).trim();
+            String value = new String(java.nio.file.Files.readAllBytes(marker.toPath())).trim();
+            return "ubuntu".equals(value) ? "ubuntu" : "alpine";
         } catch (Exception ignored) {
             return "alpine";
         }
@@ -832,27 +845,25 @@ public class GIATerminalPlugin extends Plugin {
         Context ctx = getContext();
         File terminalDir = new File(ctx.getFilesDir(), "terminal");
         File rootfsDir = new File(terminalDir, "rootfs");
-        File marker = new File(rootfsDir, ".gia-rootfs-ok");
         File busybox = new File(rootfsDir, "bin/busybox");
         File sh = new File(rootfsDir, "bin/sh");
 
-        // .gia-rootfs-ok is only ever written by extractAndVerify() after it
-        // ran the correct distro-aware checks (busybox is required there
-        // only for Alpine -- Ubuntu's rootfs uses coreutils and never has
-        // it). Requiring busybox again here unconditionally meant a
-        // correctly-installed Ubuntu rootfs could never report as
-        // "installed" -- the UI would loop back to the install screen
-        // forever even though the terminal itself worked fine.
-        boolean installed = marker.exists() && sh.exists();
+        // Verify the binaries proot actually needs instead of trusting a
+        // sentinel file. The old marker + /bin/sh check reported "installed"
+        // for a rootfs whose busybox/env/libz had been removed, and required a
+        // separate path to special-case Ubuntu (which has no busybox).
+        boolean installed = GIATerminalService.rootfsHasCriticalBinaries(rootfsDir);
 
-        String installedOs = "unknown";
-        File osMarker = new File(terminalDir, "installed-os.txt");
-        if (osMarker.exists()) {
-            try {
-                byte[] bytes = java.nio.file.Files.readAllBytes(osMarker.toPath());
-                String val = new String(bytes).trim();
-                if (val.equals("ubuntu") || val.equals("alpine")) installedOs = val;
-            } catch (Exception ignored) { /* fall through to heuristic below */ }
+        String installedOs = GIATerminalService.detectRootfsOs(rootfsDir);
+        if ("unknown".equals(installedOs)) {
+            File osMarker = new File(terminalDir, "installed-os.txt");
+            if (osMarker.exists()) {
+                try {
+                    byte[] bytes = java.nio.file.Files.readAllBytes(osMarker.toPath());
+                    String val = new String(bytes).trim();
+                    if (val.equals("ubuntu") || val.equals("alpine")) installedOs = val;
+                } catch (Exception ignored) { /* fall through to heuristic below */ }
+            }
         }
         if (installedOs.equals("unknown") && installed) {
             // Marker predates this fix (installed by an older build) --

@@ -1,7 +1,24 @@
 import { defineConfig } from 'vitest/config'
+import type { ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+
+// Pollinations rejects browser-origin requests with a Turnstile check. Vite's
+// proxy forwards the call from Node and strips Origin/Referer, so the keyless
+// free tier keeps working locally without starting the sandbox server.
+const pollinationsProxy: ProxyOptions = {
+  target: 'https://text.pollinations.ai',
+  changeOrigin: true,
+  secure: true,
+  rewrite: (requestPath) => requestPath.replace(/^\/api\/pollinations/, '/openai'),
+  configure: (proxy) => {
+    proxy.on('proxyReq', (proxyReq) => {
+      proxyReq.removeHeader('origin');
+      proxyReq.removeHeader('referer');
+    });
+  },
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -25,6 +42,14 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/sandbox/, ''),
       },
+      '/api/pollinations': pollinationsProxy,
+    },
+  },
+  preview: {
+    port: 3001,
+    host: '0.0.0.0',
+    proxy: {
+      '/api/pollinations': pollinationsProxy,
     },
   },
   // CRITICAL for Capacitor Android APK — assets must use relative paths

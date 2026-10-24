@@ -19,6 +19,7 @@
  */
 
 const http = require('http');
+const https = require('https');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -72,6 +73,49 @@ function execCmd(cmd, opts = {}) {
     child.stderr.on('data', d => stderr += d.toString());
     child.on('close', code => resolve({ stdout, stderr, exitCode: code }));
     child.on('error', err => reject(err));
+  });
+}
+
+// Pollinations' legacy keyless endpoint is the app's no-signup fallback. It
+// rejects browser requests with "Missing Turnstile token", but accepts the same
+// request from a server. Forward it from here without the browser's Origin
+// header, and stream the response straight back so SSE still works in dev.
+function handlePollinationsProxy(req, res) {
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk;
+    if (body.length > 10 * 1024 * 1024) {
+      req.destroy();
+      sendJSON(res, 413, { error: 'Request body too large' });
+    }
+  });
+  req.on('end', () => {
+    const target = new URL('https://text.pollinations.ai/openai/chat/completions');
+    const proxyReq = https.request(target, {
+      method: 'POST',
+      headers: {
+        'Content-Type': req.headers['content-type'] || 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'Accept': req.headers.accept || 'application/json',
+      },
+    }, proxyRes => {
+      res.writeHead(proxyRes.statusCode || 502, {
+        'Content-Type': proxyRes.headers['content-type'] || 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-cache',
+      });
+      proxyRes.pipe(res);
+    });
+    proxyReq.on('error', err => {
+      log('Pollinations proxy error:', err.message);
+      if (!res.headersSent) sendJSON(res, 502, { error: `Pollinations proxy error: ${err.message}` });
+      else res.end();
+    });
+    proxyReq.end(body);
+  });
+  req.on('error', err => {
+    log('Pollinations proxy request error:', err.message);
+    if (!res.headersSent) sendJSON(res, 400, { error: err.message });
   });
 }
 
@@ -524,6 +568,10 @@ async function main() {
         rootfs: USE_DOCKER ? null : ROOTFS,
         backendReady,
       });
+    }
+
+    if (parsed.pathname === '/pollinations/chat/completions' && method === 'POST') {
+      return handlePollinationsProxy(req, res);
     }
 
     const routes = {

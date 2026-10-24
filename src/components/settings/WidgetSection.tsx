@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Smartphone, Mic, Camera, MessageSquare, RefreshCw,
-  Eye, Cpu, CheckCircle2, Sparkles, Layers, Activity,
+  Cpu, CheckCircle2, Sparkles, Layers,
 } from 'lucide-react';
 import { useGiaStore } from '../../store/useGiaStore';
 import { useProviderStore } from '../../store/useProviderStore';
 import { useTaskStore } from '../../store/useTaskStore';
 import { handleWidgetAction } from '../../hooks/useNativeIntents';
-import { GIAScreenAgent } from '../../services/GIAScreenAgent';
 import { MetricWidgetVisual } from '../visual/MetricWidgetVisual';
 
 export const WidgetSection: React.FC = () => {
@@ -24,10 +23,6 @@ export const WidgetSection: React.FC = () => {
 
   const pendingTasks = tasks.filter(t => t.status !== 'done');
 
-  // Orb status
-  const [orbShowing, setOrbShowing] = useState(false);
-  const [orbSize, setOrbSize] = useState(48);
-
   // Time state for widget simulator
   const [now, setNow] = useState(new Date());
 
@@ -35,37 +30,6 @@ export const WidgetSection: React.FC = () => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    GIAScreenAgent.isOrbShowing().then((res: { showing: boolean; size: number }) => {
-      setOrbShowing(res.showing);
-      if (res.size) setOrbSize(res.size);
-    }).catch(() => setOrbShowing(false));
-  }, []);
-
-  const toggleOrb = async () => {
-    try {
-      if (orbShowing) {
-        await GIAScreenAgent.hideOrb();
-        setOrbShowing(false);
-        addNotification('Screen Orb hidden');
-      } else {
-        await GIAScreenAgent.showOrb();
-        // showOrb() only confirms the service *started* — the overlay view
-        // attaches a moment later inside that service and can fail there
-        // (e.g. permission revoked mid-flight) without the start call ever
-        // knowing. Re-check real state instead of assuming success.
-        await new Promise(resolve => setTimeout(resolve, 400));
-        const status = await GIAScreenAgent.isOrbShowing();
-        setOrbShowing(status.showing);
-        addNotification(status.showing ? 'Screen Orb activated' : 'Screen Orb did not appear — check the "Draw over other apps" permission in system settings');
-      }
-    } catch (e) {
-      // Don't flip the toggle state on failure — the overlay didn't change.
-      // Surface the real reason instead of the old generic "Screen Orb toggled".
-      addNotification(e instanceof Error ? e.message : 'Screen Orb unavailable on this device');
-    }
-  };
 
   const handleTestVoice = () => {
     handleWidgetAction('voice_start');
@@ -93,14 +57,14 @@ export const WidgetSection: React.FC = () => {
   return (
     <div className="flex flex-col gap-4">
       {/* Panel Header Banner */}
-      <div className="gia-card p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(168,85,247,0.06)', borderColor: 'rgba(168,85,247,0.2)' }}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7' }}>
-          <Layers size={18} />
+      <div className="gia-card p-4 rounded-xl flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
+          <Layers size={17} />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-bold" style={{ color: 'var(--gia-text)' }}>Widgets & Screen Overlay</h3>
+          <h3 className="text-xs font-bold" style={{ color: 'var(--gia-text)' }}>Widgets & In-Chat Visuals</h3>
           <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--gia-muted)' }}>
-            Configure Android Home Screen widgets, floating Screen Agent Orb overlay, and in-chat metric visual cards.
+            Configure the Android Home Screen widget and the metric cards GIA renders inside a conversation. The floating chat HUD lives in the top bar.
           </p>
         </div>
       </div>
@@ -109,12 +73,12 @@ export const WidgetSection: React.FC = () => {
       <div className="gia-card p-4 rounded-xl flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Smartphone size={16} style={{ color: '#a855f7' }} />
+            <Smartphone size={16} style={{ color: 'var(--gia-muted)' }} />
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--gia-text)' }}>
               Android Home Screen Widget
             </span>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
             Native AppWidget
           </span>
         </div>
@@ -194,58 +158,16 @@ export const WidgetSection: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Floating Screen Orb Service */}
+      {/* 2. In-Chat Metric Visual Cards */}
       <div className="gia-card p-4 rounded-xl flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Eye size={16} style={{ color: '#3b82f6' }} />
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--gia-text)' }}>
-              Screen Agent Orb
-            </span>
-          </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: orbShowing ? 'rgba(16,185,129,0.1)' : 'rgba(148,163,184,0.1)', color: orbShowing ? '#34d399' : '#94a3b8' }}>
-            {orbShowing ? 'Active' : 'Standby'}
-          </span>
-        </div>
-
-        <p className="text-[11px]" style={{ color: 'var(--gia-muted)' }}>
-          The Screen Agent Orb floats above all Android applications to grant instantaneous access to screen analysis, voice queries, and context awareness.
-        </p>
-
-        <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}>
-          <div>
-            <p className="text-xs font-bold" style={{ color: 'var(--gia-text)' }}>Enable Floating Screen Orb</p>
-            <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>Overlay on Android screen</p>
-          </div>
-          <button
-            onClick={toggleOrb}
-            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${orbShowing ? 'bg-purple-600' : 'bg-gray-600'}`}
-          >
-            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${orbShowing ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
-        </div>
-
-        {orbShowing && (
-          <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
-            <Activity size={16} style={{ color: '#3b82f6' }} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold" style={{ color: 'var(--gia-text)' }}>Orb Size: {orbSize}px</p>
-              <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>Tap orb to talk, drag to reposition, long-press for screen capture.</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 3. In-Chat Metric Visual Cards */}
-      <div className="gia-card p-4 rounded-xl flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Cpu size={16} style={{ color: '#10b981' }} />
+            <Cpu size={16} style={{ color: 'var(--gia-muted)' }} />
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--gia-text)' }}>
               In-Chat Metric Visual Cards
             </span>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
             Markdown Widget
           </span>
         </div>

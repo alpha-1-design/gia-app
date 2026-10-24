@@ -1,23 +1,29 @@
-# GIA v2.4.0.17 — User Manual
+# GIA v2.4.0.19 — User Manual
 
-GIA (Generative Interface Agent) is a private, on-device AI workspace for students, developers, and creators.
+GIA (Generative Interface Agent) is a private, local-first AI workspace for students, developers, and creators, built for Android. The browser build is a compatibility target.
 
-## 🌌 The Vision — GIA Everywhere
+## 🌌 Built for Android
 
-GIA started as an app. It's about to stop being just an app.
+GIA is designed for the phone first: one hand, one screen, and your context always with you. The Android app is the primary experience; the browser build exists for compatibility and for trying GIA without installing the APK.
 
-You've got GIA in your pocket today. **GIA Desktop is coming** — same brain, bigger canvas, a real workspace you actually sit down and build in. And the magic? They sync. Phone to desktop, desktop to phone — your memory, your agents, your context, trailing along like they always should have. Start something on the bus, finish it at your desk, and GIA just… knows.
+GIA is part of a wider family of tools, but this manual covers the Android app. Every workflow below is written for touch, with a physical keyboard treated as an optional extra.
 
-But we're not stopping at two screens.
+## 🆕 What's New in v2.4.0.19
 
-- **GIA CLI** — a terminal-native GIA for people who live in the shell, that writes, runs, and ships code with you. ([gia-cli](https://github.com/alpha-1-design/gia-cli))
-- **GIA Cowork** — an autonomous desktop workspace with a real shell, real files, and screen control. ([gia-cowork](https://github.com/alpha-1-design/gia-cowork))
-- **GIA Watch** — your assistant on the wrist, surfacing context before you even ask.
-- **GIA Car** — hands-free, eyes-on-the-road GIA that runs your life while you drive.
-- **GIA Phone** — yeah, maybe we build the whole phone one day. Why not.
-- **GIA Everything** — the long game: one continuous intelligence woven through every device you own, not *on* them but *part* of them.
+| Change | Description |
+|-----|-------------|
+| **Monochrome first run** | The welcome screen is now a quiet, boxed sequence: thinking dots gather into the GIA wordmark, then the provider choices appear. No orb, no spirit artwork. |
+| **Wake word, told honestly** | The Android build really listens on-device with openWakeWord, but the only bundled phrase is **Hey Jarvis**. The old editable “hey gia” field is gone; Settings > Voice now says plainly that a custom Hey GIA model is not included. |
+| **Analyst can't hang forever** | Analysis now aborts after 75 seconds with a visible thinking state, and retries stop when you cancel. A stalled provider no longer leaves the module spinning. |
+| **One timeline, less chrome** | Removed the floating orb, console, protocol, reasoning-chain, segmented-reasoning and work-log panels. Live work and the finished result stay in the single job timeline. |
+| **Docs corrected** | The manual and in-app docs no longer describe wake word as a disabled stub or mention a Porcupine access key. Version references are now 2.4.0.19 / versionCode 26. |
 
-They've not seen this one before. They won't see this one coming. GIA isn't a chatbot — it's the start of something packed, powerful, and everywhere, including right here in this app.
+## 🆕 What's New in v2.4.0.18
+
+| Change | Description |
+|-----|-------------|
+| **One job timeline** | Live work and the finished result now share one timeline. Actions are grouped by what they touched, the plan is a single sentence, and details stay one tap away. |
+| **Navigation bar** | The top bar now has a persistent menu button, the GIA wordmark, and the current module, so navigation is always visible. |
 
 ## 🆕 What's New in v2.4.0.17
 
@@ -201,8 +207,9 @@ This is a beta release. Some features are experimental, Android-only, or depende
 | Module | Purpose |
 |--------|---------|
 | **Chat** | Primary workspace with full agentic tools and visualizations |
+| **Build** | Studio for mini apps and websites — project workspaces, sandbox, and live preview |
 | **Analyst** | Deep research + data analysis with persistent memory |
-| **Writer** | Professional drafting and creative writing |
+| **Writer** | Focused drafting for essays, emails, reports, stories, and study notes, with Markdown export |
 | **Planner** | Task management and goal-oriented execution |
 | **Exam** | Educational assessment, WASSCE-tuned testing |
 | **Settings** | API keys (Engine Room), skills, MCP, plugins, theme, export data |
@@ -530,39 +537,37 @@ GIA handles network interruptions gracefully across all modules:
 
 ## 🎙 Voice Control
 
-### Wake Word System (Coming in a later release)
+### Wake Word System (Android, on-device)
 
-**This is not currently functional.** `GIAWakeWordService.java` is a stub in this build — it starts, immediately fires "Wake word detection is disabled in this build," and stops itself. The Settings → Voice Control toggle exists in the UI, but turning it on does not start real background detection.
+GIA ships a real on-device wake-word listener on Android, built on [openWakeWord](https://github.com/dscripka/openWakeWord) and ONNX Runtime. It is a foreground service: while it is on, Android shows a persistent notification and the microphone is held by GIA. Audio is processed on the phone and never uploaded.
 
-An earlier attempt at this feature used [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (`KeywordSpotter`) for on-device, keyless detection — not Porcupine/Picovoice. It was removed after a sherpa-onnx version bump broke the API the code depended on, and the service was stubbed out rather than fixed. Everything below describes the **target design** once this is revived, not current behavior.
+**The only bundled phrase is “Hey Jarvis”.** There is no custom “Hey GIA” model in this build. GIA does not pretend otherwise: Settings > Voice states the bundled phrase, and the old editable “hey gia” field has been removed. A different phrase requires a trained openWakeWord classifier; the engine already accepts a custom `.onnx` model.
 
-#### How it's meant to work
+#### What happens on detection
 
-1. An on-device keyword spotter continuously monitors the microphone audio stream, on-device
-2. When the wake word is detected, it fires a signal with low latency
-3. GIA's **Android Foreground Service** receives the signal and notifies the app
-4. GIA starts a **speech-to-text session** to capture your command
-5. The transcribed text is **polished** (grammar, punctuation, noise rejection) via AI
-6. The polished text appears in the chat input field and GIA processes your request
+1. The service scores 80 ms audio frames with the bundled openWakeWord models.
+2. When the score crosses your sensitivity threshold, GIA opens Chat and arms the microphone for your request.
+3. If Android blocks GIA from opening itself, a high-priority “Tap to talk” notification appears instead.
+4. If Android stops the service while GIA is away, it restarts when you return (with Auto-Start enabled).
+5. The service hands the microphone to speech recognition, then resumes listening.
 
 #### Settings
 
-Go to **Settings → Voice Control**. Note: with the engine disabled, "Background Wake Word" does not start real detection — the toggle and sensitivity slider are UI-only right now.
+Go to **Settings > Voice**:
 
-- **Wake Word** — the phrase that would activate listening (default: "hey gia")
-- **Recognition Language** — speech-to-text language (e.g., en-US, fr-FR)
-- **Background Wake Word** — currently non-functional; see status note above
-- **Sensitivity** — reserved for when the engine is restored
-- **Auto-Start** — automatically start listening when the app opens (no effect while the engine is disabled)
-- **Stay Listening** — keep listening after each wake word (vs. one-shot)
-- **Voice Response (TTS)** — GIA reads responses out loud (this part works independently of wake word)
+- **Background Wake Word** — turn the real on-device listener on or off. Shows On, Off, or Unavailable with the reason.
+- **Wake phrase** — shows the bundled **Hey Jarvis** model. If you add more classifiers, they appear here as choices.
+- **Sensitivity** — 0 (fewer false triggers) to 1 (catches quieter speech).
+- **Auto-Start Wake Word** — restart listening when the app opens.
+- **Stay Listening** — keep listening after each detection instead of one-shot.
+- **Test Wake Word** — uses the real microphone and shows live confidence and detection events. The separate “preview” action is labelled SIMULATED and is never presented as a real detection.
+- **Voice Response (TTS)** — GIA reads replies aloud. This works independently of wake word.
 
-#### Reviving this feature
+#### Custom models and licensing
 
-Per the comment left in `GIAWakeWordService.java`:
-1. Restore the old service class from git history, updated against the current sherpa-onnx API (`KeywordSpotter(AssetManager, KeywordSpotterConfig)`, `createStream(...)`)
-2. Re-add the AAR dependency in `android/app/build.gradle`
-3. Re-add model assets under `android/app/src/main/assets/wakeword/` and the `<service>` entry in `AndroidManifest.xml`
+The bundled `hey_jarvis_v0.1.onnx` classifier is **CC BY-NC-SA 4.0 (non-commercial)**. The shared feature extractors are Apache 2.0. Before monetising GIA, replace the classifier with one you trained. Any `<name>.onnx` placed in `android/app/src/main/assets/wakeword/` is picked up automatically, and the plugin accepts an absolute `customModelPath` for a classifier outside the APK. See [`docs/wake-word.md`](docs/wake-word.md) and the assets README.
+
+The browser build has no native wake word. In the browser, tap **Listen** in Chat and use the browser's speech recognition.
 
 ---
 
@@ -576,19 +581,18 @@ When enabled in Settings, GIA reads her responses out loud using the device's te
 
 ---
 
-## ⚡ Neural Command Palette
+## ⚡ Quick Actions & Skills
 
-Tap `Cmd+K` (or `/` in Chat) to open the command palette:
-- Switch between **Skills** (Developer Mode, General Assistant, etc.)
-- Quick actions: New Session, Open Settings, Toggle Protocols
-- Keyboard shortcuts displayed inline
+GIA is touch-first. Open the composer's **Tools & Modes** sheet to switch skills and tools, or use the navigation drawer for modules and settings.
+
+On a tablet or Chromebook with a physical keyboard, `Ctrl/Cmd+K` opens the command palette for the same quick actions. It is optional — every action is reachable by touch.
 
 ## ⚙️ Skills
 
 1. Go to **Settings → Neural Skills**
 2. Tap **+** to create a custom assistant
 3. Define system prompt + allowed tools
-4. Skills appear in `/` command palette
+4. Skills appear in the composer's **Tools & Modes** sheet
 
 Pre-installed skills:
 - **General Assistant** — Balanced help for general tasks
@@ -694,7 +698,7 @@ Every tool execution follows a transparent approval workflow:
 
 - **Low-risk tools** (web_search, read_url, show_map, file_read, clarification): Auto-approved
 - **High-risk tools** (terminal_run, filesystem_write, ...): Require explicit user confirmation
-- **Protocol Panel**: `Ctrl+Shift+O` or tap the ⚡ button to see pending/active/completed tool executions
+- **Approvals**: Tool-call approvals appear inline under GIA's message; confirm or reject there
 - **Modify**: You can edit tool arguments before approving
 - **Reject**: Decline tool execution — GIA will try an alternative approach
 
@@ -777,14 +781,16 @@ Prevent the app from sleeping during extended tasks (Settings → Power):
 
 ## 🎙 Voice & Wake Word Settings
 
-Full configuration in Settings → Voice:
+Full configuration in Settings > Voice:
 
-- **Wake Word Access Key**: Picovoice Porcupine access key input
-- **Sensitivity Slider**: 0–1 sensitivity for native wake word detection
-- **Test Wake Word**: Button with detection event log (confidence %, timestamp)
-- **Service Status**: Badges showing running/idle/error state
-- **On-Device Whisper**: Download ~50MB ONNX model — toggle between local Whisper and browser STT
-- **Wake Word Diagnostics**: Mic permission indicator, model loaded status
+- **Background Wake Word**: real Android on-device listener (Hey Jarvis). Shows On, Off, or Unavailable.
+- **Wake phrase**: the bundled model, or any custom classifier you add.
+- **Sensitivity**: 0–1 threshold for detection.
+- **Auto-Start / Stay Listening**: restart on launch; keep listening after a detection.
+- **Test Wake Word**: real microphone test with confidence and event log.
+- **Recognition Language**: speech-to-text language.
+- **On-Device Whisper**: download the ~50 MB ONNX model; choose local Whisper or browser STT.
+- **Voice Response (TTS) / Model Voice**: device speech or the provider's native voice.
 
 ## 👁 On-Device Vision Management
 
@@ -923,16 +929,22 @@ Beyond autonomous goals, GIA runs a proactive engine during user idle time:
 - **Personality-Driven**: Messages match configured identity personality
 - **Full Autonomy Mode**: When enabled in Protocols settings, GIA executes all tools without asking for approval — per-tool auto-approval can be configured for granular control
 
-## 📋 Keyboard Shortcuts
+## 📱 Touch & Navigation
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+K` | Toggle Command Palette |
-| `Cmd+N` | New Session |
-| `Cmd+Shift+S` | Open Settings |
-| `Cmd+Shift+O` | Toggle Protocol Panel |
-| `Escape` | Close Command Palette |
-| Right-click / Long-press | Message context menu (Copy/Edit/Retry/Fork/Delete) |
+GIA is designed for the phone. These are the primary gestures:
+
+| Action | How |
+|--------|-----|
+| Switch modules | Open the navigation drawer and tap a module |
+| Open the navigation drawer | Swipe from the left edge, or tap the menu button in the top bar |
+| Message actions | Long-press a message (Copy/Edit/Retry/Fork/Delete/Continue) |
+| Preview an attachment | Tap its chip in the composer |
+| Circle a photo region | Open the attachment preview, then **Circle region** |
+| Voice note | Tap **Voice note** in the composer to record |
+| Voice input | Tap the mic, or turn on **Listen** in the composer |
+| Read replies aloud | Enable **Text-to-speech** in Settings → Voice |
+| Move the floating orb | Drag it; tap it to return to Chat |
+| Back | Android back closes the top overlay, then steps back through module history, then exits |
 
 ## 🖥 Engine Room
 
