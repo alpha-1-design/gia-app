@@ -304,14 +304,6 @@ class PersistenceManager {
       // Terminal FS info is informational; we don't actively restore it
     }
 
-    // After import, reload the provider registry to pick up custom providers
-    try {
-      const { mergeIntoRegistry } = await import('./providers/customProviders');
-      mergeIntoRegistry();
-    } catch {
-      // ignore
-    }
-
     return {
       success: errors.length === 0,
       errors,

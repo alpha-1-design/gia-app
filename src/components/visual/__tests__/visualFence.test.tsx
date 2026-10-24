@@ -3,7 +3,6 @@
  * JSON printed as literal text in the message body. A properly line-anchored
  * fence should render the visual component instead.
  */
-import React from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 import MarkdownRenderer from '../../MarkdownRenderer';

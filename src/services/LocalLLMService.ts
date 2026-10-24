@@ -89,9 +89,6 @@ class LocalLLMService {
   /** Current loaded model. */
   private _loadedModel: LocalModelId | null = null;
 
-  /** Cached tokenizer/processor for chat template. */
-  private _processor: unknown | null = null;
-
   /** Per-model status. */
   private _status: Record<LocalModelId, LocalLLMState>;
 
@@ -323,7 +320,6 @@ class LocalLLMService {
       this._setStatus(this._loadedModel, this.getDownloadedModels().includes(this._loadedModel) ? 'downloaded' : 'not_loaded');
     }
     this._pipeline = null;
-    this._processor = null;
     this._loadedModel = null;
     // Force GC hint
     if (typeof globalThis.gc === 'function') {

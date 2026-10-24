@@ -6,7 +6,6 @@
  * result looked like an empty box with a fragment of text in it, and the map
  * was wider than the viewport with no way to reach the right-hand branches.
  */
-import React from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MindMapVisual } from '../MindMapVisual';

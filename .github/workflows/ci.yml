@@ -20,3 +20,26 @@ jobs:
       - run: npm run lint
       - run: npm run test:run
       - run: npm run build
+
+  android-compile:
+    name: Android native compile
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+      - run: npx cap sync android
+      - run: chmod +x android/gradlew
+      - name: Compile Android Java
+        run: cd android && ./gradlew :app:compileDebugJavaWithJavac --no-daemon --stacktrace

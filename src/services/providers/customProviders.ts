@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from '../../store/idb-storage';
-import { logger } from '../../utils/logger';
 import { corsProxy } from '../CorsProxy';
 import { providerRegistry } from '../ProviderRegistry';
 import type { ProviderDef } from '../ProviderRegistry';
@@ -109,41 +108,6 @@ export async function validateCustomProvider(p: CustomProvider): Promise<Validat
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return { valid: false, models: [], error: msg };
-  }
-}
-
-/**
- * Merge all custom providers into the global ProviderRegistry.
- * This creates synthetic ProviderDef entries for each custom provider.
- */
-export function mergeIntoRegistry(): void {
-  const { customProviders } = useCustomProviderStore.getState();
-
-  for (const cp of customProviders) {
-    const existing = providerRegistry.getProvider(cp.id);
-    if (existing) continue;
-
-    // We can't directly add to providerRegistry since it uses a Map internally.
-    // Instead, we leverage the fact that providers are added in init().
-    // For dynamic runtime addition, we inject via the registry's internal map.
-    // This is a pragmatic approach — we patch the registry at runtime.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const __def: ProviderDef = {
-      id: cp.id,
-      label: cp.name,
-      baseUrl: cp.baseUrl,
-      defaultModel: '',
-      needsApiKey: !!cp.apiKey,
-      listingType: 'none',
-      headers: cp.headers,
-    };
-
-    // Access the private providers Map via prototype/reflection
-    // Since ProviderRegistry stores providers in a private Map, we use
-    // an alternative: store custom provider info and resolve through our own logic.
-    // For runtime usage, the GiaBrain or buildGiaSystem functions can check
-    // custom providers separately.
-    logger.info(`[customProviders] Registered custom provider: ${cp.name} (${cp.id})`);
   }
 }
 

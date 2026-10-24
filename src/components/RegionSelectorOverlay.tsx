@@ -139,7 +139,7 @@ function subsample(points: Point[], step: number): Point[] {
 
 // --- Snap path to nearest strong edges (gradient-weighted) ---
 function snapToEdges(
-  path: Point[], edgeMap: Float32Array, dir: Float32Array, ew: number, eh: number,
+  path: Point[], edgeMap: Float32Array, ew: number, eh: number,
   sx: number, sy: number, radius: number,
 ): Point[] {
   if (!path.length) return path;
@@ -368,7 +368,7 @@ export const RegionSelectorOverlay: React.FC<RegionSelectorOverlayProps> = ({ im
 
     const sampled = subsample(raw, 2);
     const smoothed = smoothPath(sampled, 2);
-    const snapped = snapToEdges(smoothed, edge.map, edge.dir, edge.w, edge.h, imSx, imSy, 18);
+    const snapped = snapToEdges(smoothed, edge.map, edge.w, edge.h, imSx, imSy, 18);
     const final = smoothPath(snapped, 2);
 
     snappedRef.current = final;

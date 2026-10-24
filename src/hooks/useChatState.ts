@@ -437,7 +437,7 @@ export function useChatState() {
     setAgentMentionQuery('');
   }, [setInput]);
 
-  const handleAgentMentionSelect = useCallback((agentId: string, agentName: string, task?: string) => {
+  const handleAgentMentionSelect = useCallback((_agentId: string, agentName: string, task?: string) => {
     const atIdx = input.lastIndexOf('@');
     if (atIdx >= 0) {
       const beforeAt = input.slice(0, atIdx);

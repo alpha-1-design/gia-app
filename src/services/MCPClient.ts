@@ -21,7 +21,6 @@ interface MCPClientHandle {
 
 export class MCPClient {
   private _client: MCPClientHandle | null = null;
-  private _transport: unknown = null;
   private _tools: MCPToolDefinition[] = [];
   private _config: MCPServerConfig;
   private _events: MCPClientEvents;
@@ -62,12 +61,10 @@ export class MCPClient {
       ) as unknown as MCPClientHandle;
 
       await this._client.connect(transport);
-      this._transport = transport;
 
       await this._refreshTools();
     } catch (err) {
       this._client = null;
-      this._transport = null;
       throw err;
     }
   }
@@ -80,7 +77,6 @@ export class MCPClient {
       }
     } finally {
       this._client = null;
-      this._transport = null;
       this._tools = [];
     }
   }

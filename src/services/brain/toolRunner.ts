@@ -189,7 +189,6 @@ function withToolTimeout<T>(
 
 async function executeSingleTool(
   toolCall: ToolCall,
-  text: string,
   state: ExecutionState,
   onThought?: ThoughtFn,
   signal?: AbortSignal,
@@ -517,7 +516,7 @@ export async function executeToolBlocks(
     if (group.length === 1) {
       const call = group[0];
       try {
-        const { result, observations } = await executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId, allowedToolIds);
+        const { result, observations } = await executeSingleTool(call, state, onThought, signal, sourcesAcc, messageId, allowedToolIds);
         allObservations.push(...observations);
         if (result === '__CLARIFICATION__') {
           const cleanText = text.replace(/```tool\n[\s\S]*?\n```/g, '').trim();
@@ -541,7 +540,7 @@ export async function executeToolBlocks(
       try {
         onThought?.(`⚡ Running ${group.length} tools in parallel...`);
         const results = await Promise.all(
-          group.map((call) => executeSingleTool(call, text, state, onThought, signal, sourcesAcc, messageId, allowedToolIds))
+          group.map((call) => executeSingleTool(call, state, onThought, signal, sourcesAcc, messageId, allowedToolIds))
         );
 
         for (const { result, observations } of results) {

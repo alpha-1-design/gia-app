@@ -30,9 +30,6 @@ function generateRandomString(length: number): string {
 }
 
 class OAuthManager {
-  private pendingVerifier: string | null = null;
-  private pendingState: string | null = null;
-
   getRedirectUri(): string {
     const origin = window.location.origin;
     return `${origin}/oauth-callback.html`;
@@ -45,9 +42,6 @@ class OAuthManager {
     const encoder = new TextEncoder();
     const hash = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
     const codeChallenge = base64UrlEncode(hash);
-
-    this.pendingVerifier = codeVerifier;
-    this.pendingState = state;
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -86,8 +80,6 @@ class OAuthManager {
           return;
         }
 
-        this.pendingState = null;
-
         const code = event.data.code;
         if (!code) {
           reject(new Error('No authorization code received'));
@@ -108,7 +100,6 @@ class OAuthManager {
       }, 500);
     });
 
-    this.pendingVerifier = null;
     return tokens;
   }
 

@@ -279,7 +279,7 @@ public class GIAHudService extends Service {
             stopSelf();
             return;
         }
-        applyExpanded(expanded, false);
+        setExpanded(expanded, false);
         clampPosition();
         windowManager.updateViewLayout(root, params);
     }

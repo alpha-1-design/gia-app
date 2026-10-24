@@ -35,7 +35,6 @@ class MessagingBridge {
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private lastUpdateId = 0;
   private active = false;
-  private polling = false;
   private processedUpdates: Set<number> = new Set();
   private botToken: string | null = null;
   private botUsername: string | null = null;
@@ -244,7 +243,6 @@ class MessagingBridge {
     if (this.pollTimer) clearTimeout(this.pollTimer);
     this.pollTimer = setTimeout(async () => {
       if (!this.active) return;
-      this.polling = true;
       let delayForNext = 1000;
       try {
         await this.pollTelegram();
@@ -260,8 +258,6 @@ class MessagingBridge {
         // Back off briefly on failure so a persistent error (bad token,
         // offline, etc.) can't hot-loop and burn battery/requests.
         delayForNext = 5000;
-      } finally {
-        this.polling = false;
       }
       if (this.active) this.scheduleNextPoll(delayForNext);
     }, delayMs);

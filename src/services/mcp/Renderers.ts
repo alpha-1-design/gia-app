@@ -14,7 +14,7 @@ function dataToDataURL(data: Uint8Array | string, mimeType: string): string {
   return `data:${mimeType};base64,${uint8ArrayToBase64(data)}`;
 }
 
-function createContainer(title: string, mimeType: string): HTMLElement {
+function createContainer(mimeType: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.style.cssText = `
     background: var(--gia-surface-2);
@@ -46,7 +46,7 @@ export const ImageRenderer: MCPContentRenderer = {
   contentType: 'image/png' as MCPContentType,
   canRender(ct: MCPContentType) { return ct.startsWith('image/'); },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Image', result.contentType);
+    const wrapper = createContainer(result.contentType);
     const content = wrapper.querySelector('div:last-child')!;
     const url = dataToDataURL(result.data, result.contentType);
     const img = document.createElement('img');
@@ -71,7 +71,7 @@ export const SVGRenderer: MCPContentRenderer = {
   contentType: 'image/svg+xml' as MCPContentType,
   canRender(ct: MCPContentType) { return ct === 'image/svg+xml'; },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'SVG', 'SVG');
+    const wrapper = createContainer('SVG');
     const content = wrapper.querySelector('div:last-child')!;
     if (typeof result.data === 'string') {
       content.innerHTML = result.data;
@@ -96,7 +96,7 @@ export const GIFRenderer: MCPContentRenderer = {
   contentType: 'motion-graphic/gif' as MCPContentType,
   canRender(ct: MCPContentType) { return ct === 'motion-graphic/gif'; },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Animation', 'GIF');
+    const wrapper = createContainer('GIF');
     const content = wrapper.querySelector('div:last-child')!;
     const url = dataToDataURL(result.data, 'image/gif');
     const img = document.createElement('img');
@@ -112,7 +112,7 @@ export const VideoRenderer: MCPContentRenderer = {
   contentType: 'video/mp4' as MCPContentType,
   canRender(ct: MCPContentType) { return ct.startsWith('video/'); },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Video', result.contentType);
+    const wrapper = createContainer(result.contentType);
     const content = wrapper.querySelector('div:last-child')!;
     const url = dataToDataURL(result.data, result.contentType);
     const video = document.createElement('video');
@@ -129,7 +129,7 @@ export const AudioRenderer: MCPContentRenderer = {
   contentType: 'audio/mp3' as MCPContentType,
   canRender(ct: MCPContentType) { return ct.startsWith('audio/'); },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Audio', result.contentType);
+    const wrapper = createContainer(result.contentType);
     const content = wrapper.querySelector('div:last-child')!;
     const url = dataToDataURL(result.data, result.contentType);
     const audio = document.createElement('audio');
@@ -146,7 +146,7 @@ export const JSONRenderer: MCPContentRenderer = {
   contentType: 'application/json' as MCPContentType,
   canRender(ct: MCPContentType) { return ct === 'application/json'; },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'JSON', 'JSON');
+    const wrapper = createContainer('JSON');
     const content = wrapper.querySelector('div:last-child')!;
     let jsonStr: string;
     if (typeof result.data === 'string') {
@@ -175,7 +175,7 @@ export const TextRenderer: MCPContentRenderer = {
   contentType: 'text/plain' as MCPContentType,
   canRender(ct: MCPContentType) { return ct === 'text/plain'; },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Text', 'Text');
+    const wrapper = createContainer('Text');
     const content = wrapper.querySelector('div:last-child')!;
     const text = typeof result.data === 'string' ? result.data : new TextDecoder().decode(result.data);
     const pre = document.createElement('pre');
@@ -191,7 +191,7 @@ export const MarkdownRenderer: MCPContentRenderer = {
   contentType: 'text/markdown' as MCPContentType,
   canRender(ct: MCPContentType) { return ct === 'text/markdown'; },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Markdown', 'Markdown');
+    const wrapper = createContainer('Markdown');
     const content = wrapper.querySelector('div:last-child')!;
     const text = typeof result.data === 'string' ? result.data : new TextDecoder().decode(result.data);
     const div = document.createElement('div');
@@ -207,7 +207,7 @@ export const CodeRenderer: MCPContentRenderer = {
   contentType: 'code/html' as MCPContentType,
   canRender(ct: MCPContentType) { return ct.startsWith('code/'); },
   async render(result: MCPStructuredResult, container: HTMLElement) {
-    const wrapper = createContainer(result.metadata?.title || 'Code', result.contentType);
+    const wrapper = createContainer(result.contentType);
     const content = wrapper.querySelector('div:last-child')!;
     const codeText = typeof result.data === 'string' ? result.data : new TextDecoder().decode(result.data);
     const pre = document.createElement('pre');

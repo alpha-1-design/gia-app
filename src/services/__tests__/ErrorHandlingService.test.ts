@@ -168,7 +168,7 @@ describe('ErrorHandlingService', () => {
     // Only the fallback provider call succeeds -- verified by asserting the
     // call args below, not by call order, since mockRejectedValue applies
     // to every call by default.
-    callProviderMock.mockImplementation((req: unknown, providerId?: string) =>
+    callProviderMock.mockImplementation((_req: unknown, providerId?: string) =>
       providerId === 'gemini' ? Promise.resolve({ text: 'from gemini' }) : Promise.reject(new Error('invalid api key')),
     );
 

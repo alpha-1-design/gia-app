@@ -278,7 +278,7 @@ Rules: 4-15 data points, labels under 20 chars, no markdown, pure JSON. If user 
                     dataKey="value"
                     nameKey="label"
                   >
-                    {data.map((entry, index) => (
+                    {data.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>

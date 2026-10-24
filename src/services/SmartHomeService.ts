@@ -61,7 +61,6 @@ const DISCOVERY_CACHE_TTL = 120_000;
 class SmartHomeService {
   private devices: Map<string, SmartDevice> = new Map();
   private lastDiscovery: number = 0;
-  private mqttClients: Map<string, { broker: string; connected: boolean }> = new Map();
 
   private async sandboxExec(cmd: string, timeout = 15000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     // Routed through SandboxService rather than hardcoding http://localhost:3081.

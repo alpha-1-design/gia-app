@@ -1,7 +1,5 @@
 import { useMemoryStore, type MemoryEntry } from '../store/useMemoryStore';
 import { useGiaStore } from '../store/useGiaStore';
-import type { Tool } from './tools/types';
-import ToolRegistry from './ToolRegistry';
 
 export type TimeOfDay = 'early_morning' | 'morning' | 'midday' | 'afternoon' | 'evening' | 'night' | 'late_night';
 export type SuggestionType = 'morning_prep' | 'entity_followup' | 'wellness_check' | 'memory_cleanup' | 'end_of_day' | 'calendar_reminder' | 'focus_mode' | 'social_prompt';
@@ -85,8 +83,6 @@ class ContextFusionEngine {
     const total = candidates.reduce((s, c) => s + c.interactionCount, 0);
     return { activityType: candidates[0].activityType, confidence: candidates[0].interactionCount / total };
   }
-
-  registerTool(id: string, tool: Tool): void { ToolRegistry.register(tool); }
 
   private gatherSignals(): ContextSignal {
     const now = new Date();

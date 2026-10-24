@@ -155,7 +155,7 @@ class VisionRouter {
     let localResult: ProcessedImageResult | null = null;
 
     try {
-      localResult = await this._runLocal(imageUrl, task, localModel);
+      localResult = await this._runLocal(imageUrl, task);
       this.stats.localCalls++;
       const latency = Math.round(performance.now() - localStart);
       this._localLatencyTotal += latency;
@@ -292,8 +292,6 @@ class VisionRouter {
   private async _runLocal(
     imageUrl: string,
     task: VisionTask,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    model: ModelMeta,
   ): Promise<ProcessedImageResult> {
     const start = performance.now();
 
