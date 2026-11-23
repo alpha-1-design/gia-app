@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { registerAllTools } from '../../tools/index';
+import GiaTools from '../../GiaTools';
+import { TOOL_PERMISSIONS } from '../../PermissionService';
 import { getAllToolSchemas, buildOpenAITools, buildAnthropicTools, buildGeminiTools, validateToolArgs } from '../toolSchemas';
 
 describe('tool schema integrity', () => {
@@ -13,6 +15,16 @@ describe('tool schema integrity', () => {
       expect(typeof schema.description, `${id} has a description`).toBe('string');
       expect(schema.description.length, `${id} description is non-empty`).toBeGreaterThan(0);
       expect(schema.properties, `${id} properties is an object`).toBeTypeOf('object');
+    }
+  });
+
+  it('every TOOL_PERMISSIONS key is a registered tool id', () => {
+    // Regression guard: the permission map once drifted (camera_capture vs
+    // capture_photo etc.), silently disabling the in-app gate for the most
+    // sensitive capabilities — the OS dialog was the only line of defense.
+    registerAllTools();
+    for (const toolId of Object.keys(TOOL_PERMISSIONS)) {
+      expect(GiaTools.getTool(toolId), `tool "${toolId}" in TOOL_PERMISSIONS must exist in the registry`).toBeDefined();
     }
   });
 

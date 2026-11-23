@@ -61,12 +61,16 @@ const PlannerModule: React.FC = () => {
     deleteTask: s.deleteTask,
     addNotification: s.addNotification,
   })));
-  const mountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountTimeoutRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
-      if (mountTimeoutRef.current) clearTimeout(mountTimeoutRef.current);
+      // Safe: mountTimeoutRef.current is a stable Set identity (mutated,
+      // never reassigned), so reading .current here always sees the same Set.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      for (const id of mountTimeoutRef.current) clearTimeout(id);
+      mountTimeoutRef.current.clear();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
@@ -87,7 +91,13 @@ const PlannerModule: React.FC = () => {
     const pending = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun > now);
     for (const task of pending) {
       const delay = Math.max(0, task.nextRun - now);
-      mountTimeoutRef.current = setTimeout(() => runTask(task), Math.min(delay, 86400000));
+      // Track EVERY handle — overwriting a single ref leaked earlier timers,
+      // which then fired runTask after unmount.
+      const id = setTimeout(() => {
+        mountTimeoutRef.current.delete(id);
+        runTask(task);
+      }, Math.min(delay, 86400000));
+      mountTimeoutRef.current.add(id);
     }
     const overdue = scheduledTasks.filter(t => t.status === 'pending' && t.nextRun <= now);
     for (const task of overdue) {
@@ -195,7 +205,11 @@ Provide 5-9 steps. Priorities must reflect actual importance. No markdown, only 
       setSchedPrompt('');
       addNotification(`⏰ Scheduled: ${task.title.slice(0,25)}...`);
 
-      mountTimeoutRef.current = setTimeout(() => runTask(task), delayMs);
+      const id = setTimeout(() => {
+        mountTimeoutRef.current.delete(id);
+        runTask(task);
+      }, delayMs);
+      mountTimeoutRef.current.add(id);
     } catch (e) { logger.error('[PlannerModule] Scheduling failed:', e); } finally { setSchedLoading(false); }
   }, [schedPrompt, schedInterval, schedLoading, editingTask, addScheduledTask, deleteTask, addNotification, runTask]);
 

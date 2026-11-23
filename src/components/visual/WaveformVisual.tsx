@@ -15,15 +15,40 @@ export const WaveformVisual: React.FC<WaveformVisualProps> = ({ data }) => {
   useEffect(() => {
     if (!isPlaying || !barsRef.current) return;
     const bars = barsRef.current.querySelectorAll('.wave-bar');
+    let raf = 0;
+    let running = true;
     const anim = () => {
+      if (!running) return;
+      // Animate transform (compositor-only) instead of height (layout).
+      // The bars keep a fixed height and are scaled around their center —
+      // no reflow per frame.
       bars.forEach((_, idx) => {
-        const h = 10 + Math.random() * 30;
-        (bars[idx] as HTMLElement).style.height = `${h}px`;
+        const s = 0.8 + Math.random() * 2.6;
+        (bars[idx] as HTMLElement).style.transform = `scaleY(${s})`;
       });
-      if (isPlaying) requestAnimationFrame(anim);
+      // Re-queue through the same `raf` slot so cleanup can always cancel
+      // the pending frame. The previous code re-queued into a discarded id:
+      // after the first frame the loop became uncancellable and ran forever
+      // even after Stop (or unmount) — a permanent battery drain.
+      raf = requestAnimationFrame(anim);
     };
-    const raf = requestAnimationFrame(anim);
-    return () => cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(anim);
+    const onVisibility = () => {
+      // Pause the redraw loop while the app is hidden; resume on return.
+      if (document.visibilityState === 'hidden') {
+        running = false;
+        cancelAnimationFrame(raf);
+      } else if (!running) {
+        running = true;
+        raf = requestAnimationFrame(anim);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [isPlaying]);
 
   return (
@@ -34,7 +59,19 @@ export const WaveformVisual: React.FC<WaveformVisualProps> = ({ data }) => {
         </button>
         <div ref={barsRef} className="flex-1 flex items-center gap-0.5 h-10">
           {Array.from({ length: 40 }).map((_, idx) => (
-            <div key={idx} className="wave-bar rounded-full" style={{ width: '4px', height: '12px', background: isPlaying ? '#a855f7' : 'var(--gia-border)', transition: 'height 0.1s ease', opacity: isPlaying ? 0.4 + Math.random() * 0.6 : 0.3 }} />
+            <div
+              key={idx}
+              className="wave-bar rounded-full"
+              style={{
+                width: '4px',
+                height: '12px',
+                background: isPlaying ? '#a855f7' : 'var(--gia-border)',
+                transformOrigin: 'center',
+                // scaleY (transform) only — height transitions force layout.
+                transition: 'transform 0.1s ease, background 0.15s ease',
+                opacity: isPlaying ? 0.4 + (idx % 7) * 0.09 : 0.3,
+              }}
+            />
           ))}
         </div>
       </div>

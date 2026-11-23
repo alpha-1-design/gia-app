@@ -114,7 +114,12 @@ export function useChatState() {
     gen.setLoading(false);
     gen.setStreamingMsgId(null);
     gen.setStreamingMsgIds(new Set());
-    gen.setLiveThoughts({});
+    // Clear the live thinking/segments trace for the new session — these are
+    // store-level records keyed by message id; leaving the previous
+    // session's entries mounted accumulates every turn's full thinking text
+    // for the app's lifetime (unbounded memory growth).
+    useGiaStore.getState().setLiveThoughts({});
+    useGiaStore.getState().setLiveSegments({});
     setExpandedMsgs(new Set());
     msgOps.setUndoMsg(null);
     // Tool execution logs are session-scoped — never leak the previous
@@ -574,8 +579,6 @@ export function useChatState() {
     showSlashMenu, setShowSlashMenu, slashQuery,
     handleSlashPickCommand, handleSlashPickSkill,
     expandedMsgs, setExpandedMsgs,
-    liveThoughts: gen.liveThoughts, setLiveThoughts: gen.setLiveThoughts,
-    liveSegments: gen.liveSegments, setLiveSegments: gen.setLiveSegments,
     showKnowledge, setShowKnowledge,
     clarAnswer, setClarAnswer, processingFiles, processingFileName, isDragging,
     showFileManager, setShowFileManager, showTools, setShowTools,

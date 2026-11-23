@@ -1,4 +1,5 @@
 import GiaTools from '../GiaTools';
+import { logger } from '../../utils/logger';
 import type { ToolResult } from '../tools/types';
 import { useProtocolStore } from '../../store/useProtocolStore';
 import { useGiaStore } from '../../store/useGiaStore';
@@ -241,7 +242,15 @@ async function executeSingleTool(
   }
 
   const tool = GiaTools.getTool(toolCall.id);
-  if (!tool) return { observations };
+  if (!tool) {
+    // The model hallucinated a tool id. Previously this returned zero
+    // observations, so the turn ended silently with the raw ```tool block
+    // shown as the answer. Feed the failure back so the model adapts.
+    useGiaStore.getState().setCurrentTool(null);
+    logger.warn(`[toolRunner] Unknown tool requested: ${toolCall.id}`);
+    observations.push(`ERROR: tool "${toolCall.id}" does not exist. Available tools are listed in your instructions — pick one of those, or answer directly without a tool.`);
+    return { result: 'unknown_tool', observations };
+  }
 
   // On-Device Mode check runs BEFORE the permission gate: never pop a
   // permission dialog for a tool that offline mode is about to block.

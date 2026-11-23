@@ -98,14 +98,18 @@ const OrbAvatar: React.FC<OrbAvatarProps> = ({
       className={`orb-root relative shrink-0 inline-flex ${className}`}
       style={{ width: size, height: size }}
     >
-      {/* Outer glow halo */}
+      {/* Outer glow halo.
+          Radial-gradient only — the previous layer added filter:blur(5px) on
+          top of the gradient, forcing a separate composited blur layer per
+          avatar that re-rendered every pulse frame. The gradient already
+          gives the soft falloff; the blur added GPU cost for ~0 visible
+          difference. */}
       {glow && (
         <div
           className="orb-glow absolute rounded-full"
           style={{
             inset: -size * 0.22,
-            background: `radial-gradient(circle, ${resolved}40 0%, transparent 70%)`,
-            filter: 'blur(5px)',
+            background: `radial-gradient(circle, ${resolved}55 0%, ${resolved}18 55%, transparent 72%)`,
             animation: animate ? 'orb-pulse 2.8s ease-in-out infinite' : undefined,
           }}
         />
@@ -268,23 +272,9 @@ const OrbAvatar: React.FC<OrbAvatarProps> = ({
         </div>
       )}
 
-      <style>{`
-        .orb-root { animation: orb-enter 0.42s cubic-bezier(.2,.8,.2,1) both; }
-        .orb-body { transition: transform 0.28s cubic-bezier(.2,.8,.2,1); transform-origin: 50% 50%; }
-        .orb-glow { transition: opacity 0.28s ease, transform 0.28s ease; transform-origin: 50% 50%; }
-        .orb-root:hover .orb-body { transform: scale(1.08); }
-        .orb-root:hover .orb-glow { opacity: 1 !important; transform: scale(1.2); }
-        .orb-root:hover .orb-icon { transform: scale(1.08); }
-        .orb-icon { transition: transform 0.28s cubic-bezier(.2,.8,.2,1); }
-        @keyframes orb-enter {
-          from { opacity: 0; transform: scale(0.6); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes orb-pulse {
-          0%, 100% { opacity: 0.55; transform: scale(0.96); }
-          50% { opacity: 1; transform: scale(1.12); }
-        }
-      `}</style>
+      {/* Keyframes/transition rules are injected ONCE via a module-level
+          <style> in globals.css — the per-instance copy below used to render
+          N identical style tags for N avatars on a page. */}
     </div>
   );
 };

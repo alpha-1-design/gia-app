@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Terminal, Bug, Wifi, Trash2, RefreshCw, Database, Eye, ShieldAlert, ScrollText, Cpu, Binary, HardDrive, Flag } from 'lucide-react';
+import { Terminal, Bug, Wifi, Trash2, RefreshCw, Database, Eye, ShieldAlert, ScrollText, Cpu, Binary, HardDrive, Flag, Globe } from 'lucide-react';
 import { Switch } from '../ui/Switch';
+import { corsProxy } from '../../services/CorsProxy';
 import { useGiaStore } from '../../store/useGiaStore';
 import { featureFlags } from '../../services/GIACoreServices';
 import { logger } from '../../utils/logger';
@@ -282,7 +283,51 @@ export const DeveloperSettings: React.FC = () => {
         </p>
       </div>
 
-      {/* ── Network Capture ────────────────────────────────────── */}
+      {/* ── Trusted CORS Proxy ─────────────────────────────── */}
+      <div>
+        <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-medium mb-2" style={{ color: 'var(--gia-muted)' }}>
+          <Globe size={11} />
+          Trusted CORS Proxy
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            defaultValue={corsProxy.getActiveProxy() || ''}
+            id="cors-proxy-input"
+            placeholder="https://your-proxy.example.com/?url="
+            className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-mono"
+            style={{
+              background: 'var(--gia-bg-2)',
+              color: 'var(--gia-text)',
+              border: '1px solid var(--gia-border)',
+            }}
+          />
+          <button
+            onClick={() => {
+              const input = document.getElementById('cors-proxy-input') as HTMLInputElement;
+              if (!input) return;
+              const val = input.value.trim() || null;
+              corsProxy.setProxy(val);
+              addNotification(val ? 'CORS proxy saved — used for requests that fail direct' : 'CORS proxy cleared');
+            }}
+            className="px-3 py-1.5 rounded-lg text-[10px] font-medium transition-colors whitespace-nowrap"
+            style={{
+              background: 'rgba(34,197,94,0.1)',
+              color: '#22c55e',
+              border: '1px solid rgba(34,197,94,0.2)',
+            }}
+          >
+            Save
+          </button>
+        </div>
+        <p className="text-[9px] mt-1" style={{ color: 'var(--gia-muted-2)' }}>
+          Optional. When a direct provider request fails (CORS/network), GIA retries through this proxy.
+          Use infrastructure you control — requests and API keys pass through it. Left empty, GIA never
+          sends credentials to any third-party proxy.
+        </p>
+      </div>
+
+      {/* ── Network Capture ────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--gia-muted)' }}>

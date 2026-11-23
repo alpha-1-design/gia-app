@@ -523,6 +523,10 @@ const App: React.FC = () => {
         import('./services/ContextFusionEngine').then(c => c.contextFusionEngine.recordActivity(ev.type)).catch(() => {});
       });
       bridge.start();
+      // Stop the bridge on unmount — without this, React StrictMode's
+      // double-mount (and any remount) stacked a second bridge that
+      // duplicated every store event for the app's lifetime.
+      cleanupFns.push(() => bridge.stop());
     });
 
     // Deep system embedding — monitor battery, network, and feed into GIA context
@@ -1076,7 +1080,9 @@ const App: React.FC = () => {
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[160]"
           >
-            <EngineRoom />
+            <Suspense fallback={null}>
+              <EngineRoom />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1098,7 +1104,11 @@ const App: React.FC = () => {
             >
               <X size={16} />
             </button>
-            <TaskBoard />
+            <Suspense fallback={
+              <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'var(--gia-muted)' }}>Loading tasks…</div>
+            }>
+              <TaskBoard />
+            </Suspense>
           </div>
         </div>
       )}
@@ -1113,7 +1123,11 @@ const App: React.FC = () => {
             >
               <X size={16} />
             </button>
-            <NotesPanel />
+            <Suspense fallback={
+              <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'var(--gia-muted)' }}>Loading notes…</div>
+            }>
+              <NotesPanel />
+            </Suspense>
           </div>
         </div>
       )}
@@ -1129,18 +1143,22 @@ const App: React.FC = () => {
             className="fixed inset-0 z-[200] w-full h-[100dvh] bg-[var(--gia-bg)] flex flex-col overflow-y-auto"
             style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            <SetupWizard onClose={() => setWizardClosed(true)} onComplete={() => setWizardClosed(true)} />
+            <Suspense fallback={null}>
+              <SetupWizard onClose={() => setWizardClosed(true)} onComplete={() => setWizardClosed(true)} />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showCircleSearch && capturedImage && (
-          <RegionSelectorOverlay
-            imageSrc={capturedImage}
-            onSelect={handleRegionSelect}
-            onCancel={handleCircleCancel}
-          />
+          <Suspense fallback={null}>
+            <RegionSelectorOverlay
+              imageSrc={capturedImage}
+              onSelect={handleRegionSelect}
+              onCancel={handleCircleCancel}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 

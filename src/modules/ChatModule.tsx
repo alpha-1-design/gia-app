@@ -537,7 +537,7 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
         )}
       </AnimatePresence>
 
-        <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 backdrop-blur-2xl rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}>
+        <div ref={inputContainerRef} onPaste={handlePaste} className="px-3 pb-4 pt-2 absolute bottom-3 left-3 right-3 z-10 rounded-2xl border shadow-2xl transition-all duration-300" style={{ background: 'var(--gia-surface)', borderColor: 'var(--gia-border)' }}>
         {showAgentMention && (
           <AgentMentionPicker
             query={agentMentionQuery}

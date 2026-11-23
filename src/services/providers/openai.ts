@@ -9,6 +9,33 @@ import { createStreamWatchdog, STREAM_IDLE_TIMEOUT_MS } from './streamWatchdog';
 import { freeTier } from '../FreeTierService';
 import { isNativePlatform } from '../../utils/helpers';
 
+/**
+ * Collapse an error response body into a short, human-readable line.
+ * Tries the provider's JSON `{error:{message}}` shape first; otherwise
+ * strips HTML and truncates — an error page used to be dumped verbatim
+ * into the chat bubble.
+ */
+export function summarizeErrorBody(raw: string, maxLen = 160): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as { error?: { message?: string } | string; message?: string; detail?: string };
+      const msg = typeof parsed.error === 'string'
+        ? parsed.error
+        : parsed.error?.message || parsed.message || parsed.detail;
+      if (msg) return msg.slice(0, maxLen);
+    } catch { /* fall through to raw handling */ }
+  }
+  const text = trimmed
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+}
+
 export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Promise<BrainResponse> {
   const { activeProvider, providers } = useProviderStore.getState();
   const providerId = req.providerId || activeProvider;
@@ -291,8 +318,8 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
             reject(err);
             return;
           }
-          const preview = (xhr.responseText || '').slice(0, 200);
-          const err = new Error(ctx.friendlyError(label, `${label} error ${xhr.status}: ${preview}`)) as Error & { retryable?: boolean };
+          const preview = summarizeErrorBody(xhr.responseText || '');
+          const err = new Error(ctx.friendlyError(label, `${label} error ${xhr.status}${preview ? `: ${preview}` : ''}`)) as Error & { retryable?: boolean };
           err.retryable = false;
           reject(err);
           return;
@@ -408,7 +435,10 @@ export async function callOpenAICompat(req: BrainRequest, ctx: BrainContext): Pr
     usedProxy = true;
   }
   if (!res.ok && !usedProxy && res.status !== 429 && !localDevProxy && providerId !== 'pollinations') {
-    const errMsg = `${label} error ${res.status}: ${await res.text().catch(() => '')}`;
+    // Truncate + strip the error body: an HTML error page (or a 10KB JSON
+    // blob) used to be dumped verbatim into the chat bubble.
+    const rawBody = await res.text().catch(() => '');
+    const errMsg = `${label} error ${res.status}: ${summarizeErrorBody(rawBody)}`;
     logger.warn('[openai] Direct fetch failed, trying CORS proxy:', errMsg);
     const proxiedUrl = corsProxy.proxyUrl(endpoint('/chat/completions'));
     res = await attemptFetch(proxiedUrl);

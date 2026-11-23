@@ -22,7 +22,8 @@ function TaskCard({
   task: GiaTask;
   onDragStart: (e: React.DragEvent, taskId: string) => void;
 }) {
-  const { updateTask, deleteTask } = useTaskStore();
+  const updateTask = useTaskStore(st => st.updateTask);
+  const deleteTask = useTaskStore(st => st.deleteTask);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
 
@@ -99,7 +100,7 @@ function TaskCard({
 }
 
 function AddTaskForm({ status, onClose }: { status: GiaTask['status']; onClose: () => void }) {
-  const { addTask } = useTaskStore();
+  const addTask = useTaskStore(st => st.addTask);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
@@ -161,7 +162,9 @@ function AddTaskForm({ status, onClose }: { status: GiaTask['status']; onClose: 
 }
 
 export function TaskBoard() {
-  const { tasks, columns, moveTask } = useTaskStore();
+  const tasks = useTaskStore(st => st.tasks);
+  const columns = useTaskStore(st => st.columns);
+  const moveTask = useTaskStore(st => st.moveTask);
   const [addingTo, setAddingTo] = useState<GiaTask['status'] | null>(null);
   const [search, setSearch] = useState('');
   const dragOverCol = useRef<string | null>(null);

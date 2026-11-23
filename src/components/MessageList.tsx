@@ -141,6 +141,8 @@ function useShowTokenUsage(): boolean {
 interface MessageRowProps {
   msg: Message;
   isStreaming: boolean;
+  /** True only for the newest assistant message — the only row allowed to run its animated mascot. */
+  isLatestAssistant: boolean;
   loading: boolean;
   thinkingPhase: ThinkingPhase;
   currentTool: string | null;
@@ -167,7 +169,7 @@ interface MessageRowProps {
 }
 
 const MessageRow = memo<MessageRowProps>(({
-  msg, isStreaming, loading, thinkingPhase, currentTool,
+  msg, isStreaming, isLatestAssistant, loading, thinkingPhase, currentTool,
   responseTimesRef, messagesRef, reactions, clarification,
   expandedMsgs, setExpandedMsgs,
   sheetMsgId, openSheet, extThinking, showTokenUsage,
@@ -234,7 +236,16 @@ const MessageRow = memo<MessageRowProps>(({
         {msg.error ? <AlertCircle size={13} style={{ color: '#f87171' }} /> : extThinking ? <GiaIcon size={13} animate color="#a855f7" /> : <div className="flex gap-0.5">{[0,1,2].map(d => <div key={d} className="thinking-dot" style={{ animationDelay: `${d * 0.16}s` }} />)}</div>}
       </div>
   ) : (
-      <div className="w-8 h-8 shrink-0 mt-0.5" aria-hidden="true"><GiaMascot size={32} /></div>
+      // Battery/perf: the mascot runs 7 concurrent infinite animations.
+      // It's mounted once per assistant message in an unvirtualized list,
+      // so a 100-message chat used to run ~350 concurrent JS animations on
+      // the main thread. Only the LATEST assistant message gets the live
+      // mascot; history rows render a static glyph.
+      <div className="w-8 h-8 shrink-0 mt-0.5" aria-hidden="true">
+        {isLatestAssistant
+          ? <GiaMascot size={32} />
+          : <GiaIcon size={22} />}
+      </div>
   );
 
   return (
@@ -506,6 +517,15 @@ const MessageList: React.FC<MessageListProps> = ({
 
   const openSheet = useCallback((id: string | null) => setSheetMsgId(id), []);
 
+  // Track the newest assistant message id so only that row runs animated
+  // ornaments (mascot) — every history row must stay static.
+  const latestAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+
   return (
     <>
       {loading && messages.length === 0 && (
@@ -516,6 +536,7 @@ const MessageList: React.FC<MessageListProps> = ({
           key={msg.id}
           msg={msg}
           isStreaming={streamingMsgId === msg.id || !!streamingMsgIds?.has(msg.id)}
+          isLatestAssistant={msg.id === latestAssistantId}
           loading={loading}
           thinkingPhase={thinkingPhase}
           currentTool={currentTool}

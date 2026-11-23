@@ -66,9 +66,7 @@ public class GIACoreService extends Service {
         instance = this;
         keepAlive = false;
         createNotificationChannel();
-        acquireWakeLock();
         registerNetworkMonitor();
-        startWakeLockWatchdog();
         Log.i(TAG, "GIACoreService created");
     }
 
@@ -108,6 +106,17 @@ public class GIACoreService extends Service {
 
     // ── Wake Lock ──────────────────────────────────────────────────────
 
+    // Battery contract (Android Vitals flags excessive partial wake locks —
+    // sessions held >1h while the app is backgrounded trigger Play Console
+    // warnings). A PARTIAL_WAKE_LOCK held from service creation with no
+    // timeout keeps the CPU pinned 24/7 even when the user never enabled
+    // long-running mode. The lock is now tied to keepAlive mode only,
+    // acquired with a hard timeout, and released the moment keepAlive is
+    // turned off or the service dies. See:
+    // https://developer.android.com/topic/performance/power/wake-lock
+
+    private static final long WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1000L; // hard cap: 6h
+
     private void acquireWakeLock() {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         if (pm != null) {
@@ -115,9 +124,11 @@ public class GIACoreService extends Service {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "GIACoreService:WakeLock"
             );
-            // Acquire indefinitely (watchdog re-acquires periodically)
-            wakeLock.acquire();
-            Log.d(TAG, "Wake lock acquired (indefinite)");
+            wakeLock.setReferenceCounted(false);
+            // Bounded acquire: even if release logic were never reached, the
+            // OS reclaims the lock after the cap instead of draining forever.
+            wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS);
+            Log.d(TAG, "Wake lock acquired (timeout " + WAKE_LOCK_TIMEOUT_MS / 3600000 + "h)");
         }
     }
 
@@ -132,11 +143,12 @@ public class GIACoreService extends Service {
     private void startWakeLockWatchdog() {
         wakeLockWatchdog = new android.os.Handler(getMainLooper());
         wakeLockGuard = () -> {
-            if (!isRunning) return;
-            // Re-acquire wake lock to prevent OS from stripping it
+            if (!isRunning || !keepAlive) return;
+            // Re-acquire wake lock to prevent OS from stripping it — but
+            // only while keep-alive mode (the user's explicit choice) is on.
             if (wakeLock != null && !wakeLock.isHeld()) {
                 try {
-                    wakeLock.acquire();
+                    wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS);
                     Log.d(TAG, "Wake lock re-acquired by watchdog");
                 } catch (Exception e) {
                     Log.w(TAG, "Failed to re-acquire wake lock", e);
@@ -159,6 +171,17 @@ public class GIACoreService extends Service {
     public void setKeepAlive(boolean enable) {
         keepAlive = enable;
         Log.i(TAG, "Keep-alive mode: " + (enable ? "ON" : "OFF"));
+        if (enable) {
+            // The wake lock belongs to keep-alive mode: acquire on enable,
+            // release on disable. It is NOT held for the service's whole
+            // lifetime — a foreground service alone already exempts the
+            // process from most Doze restrictions.
+            if (wakeLock == null) acquireWakeLock();
+            startWakeLockWatchdog();
+        } else {
+            stopWakeLockWatchdog();
+            releaseWakeLock();
+        }
         // Refresh notification to show keep-alive status
         if (isRunning) {
             Notification notification = buildNotification();

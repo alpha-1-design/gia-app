@@ -47,6 +47,8 @@ interface PendingRequest {
 interface PermissionStoreState {
   grants: Record<PermissionId, GrantState>;
   pending: PendingRequest | null;
+  /** FIFO of requests waiting while another popup is on screen. */
+  queue: PendingRequest[];
   setGrant: (id: PermissionId, state: GrantState) => void;
   requestPermission: (req: PendingRequest) => void;
   resolvePending: (granted: boolean, dontAskAgain: boolean) => void;
@@ -62,13 +64,23 @@ export const usePermissionStore = create<PermissionStoreState>()(
         batteryExemption: 'ask', installPackages: 'ask',
       },
       pending: null,
+      queue: [],
       setGrant: (id, state) => set(s => ({ grants: { ...s.grants, [id]: state } })),
-      requestPermission: (req) => set({ pending: req }),
+      requestPermission: (req) => set((s) => (
+        // Two tools can ask concurrently (e.g. a parallel tool block with a
+        // camera + a location call). The old single slot OVERWROTE the first
+        // request, whose promise then never resolved — the tool call hung
+        // until its 120s timeout. Queue instead; the popup shows them one
+        // at a time.
+        s.pending ? { queue: [...s.queue, req] } : { pending: req }
+      )),
       resolvePending: (granted, dontAskAgain) => {
         const pending = get().pending;
         if (!pending) return;
+        const [next, ...rest] = get().queue;
         set(s => ({
-          pending: null,
+          pending: next ?? null,
+          queue: rest,
           grants: dontAskAgain
             ? { ...s.grants, [pending.permission]: granted ? 'granted' : 'denied' }
             : s.grants,
@@ -85,32 +97,45 @@ export const usePermissionStore = create<PermissionStoreState>()(
 );
 
 /**
- * The tool → permission map. Audited against AndroidManifest.xml:
- * a permission appears here only if the manifest declares it AND a tool
- * actually exercises it. Tools not listed need nothing sensitive.
+ * The tool → permission map, keyed by the ACTUAL registered tool ids.
+ *
+ * The previous revision used stale ids (camera_capture, scan_document,
+ * geolocation_watch, local_notify, schedule_task, screen_capture,
+ * show_overlay, toggle_dnd, install_update, read_sms,
+ * image_generation_cam, analyze_image_camera) — none of which match a
+ * registered tool, so permissionsForTool() returned [] and the in-app gate
+ * silently no-op'd for the most sensitive capabilities (camera, GPS,
+ * notifications, screen capture). Only the OS dialog stood between the
+ * model and the hardware, and sticky-deny was unenforceable. Ids verified
+ * against src/services/tools/*.ts (see tools/index.ts registry).
  */
 export const TOOL_PERMISSIONS: Record<string, PermissionId[]> = {
-  image_generation_cam: ['camera'],
-  analyze_image_camera: ['camera'],
-  scan_document: ['camera'],
-  camera_capture: ['camera'],
+  // Camera (tools/camera.ts)
+  capture_photo: ['camera'],
+  // Location (tools/location.ts MapService + tools/geolocation.ts)
   get_user_location: ['location'],
   search_places: ['location'],
   get_directions: ['location'],
-  geolocation_watch: ['location'],
+  geolocation_get_current_position: ['location'],
+  geolocation_watch_position: ['location'],
+  geolocation_request_permissions: ['location'],
+  // Contacts (tools/deviceIntegration.ts)
   get_contacts: ['contacts'],
+  // SMS (tools/deviceIntegration.ts)
   send_sms: ['sms'],
-  read_sms: ['sms'],
+  // Notifications (tools/notifications.ts + deviceIntegration.ts + personal.ts)
   send_whatsapp: ['notifications'],
-  make_phone_call: ['contacts'],
-  local_notify: ['notifications'],
-  schedule_task: ['notifications'],
+  notifications_send: ['notifications'],
+  notifications_schedule: ['notifications'],
+  set_reminder: ['notifications'],
+  // Exact alarms (tools/deviceIntegration.ts)
   set_alarm: ['exactAlarm'],
-  set_reminder: ['exactAlarm'],
-  screen_capture: ['overlay'],
-  show_overlay: ['overlay'],
-  toggle_dnd: ['notificationsPolicy'],
-  install_update: ['installPackages'],
+  // Screen capture (tools/powerTools.ts)
+  screenshot: ['overlay'],
+  // NOTE: tools/scheduledTasks.ts defines scheduled_task_create/list/delete/run
+  // but the array is never included in registerAllTools() — those tools are
+  // dead code and intentionally not mapped here. Registering them is a
+  // product decision (PlannerModule drives scheduling directly today).
 };
 
 /** User-facing metadata per permission: label, why GIA asks, which tools use it. */

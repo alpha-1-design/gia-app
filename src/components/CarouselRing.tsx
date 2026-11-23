@@ -94,6 +94,10 @@ export const CarouselRing: React.FC<CarouselRingProps> = ({
     });
   }, [step]);
 
+  /** Resumes the rAF loop after it went dormant (settled). Set by the loop itself. */
+  const wake = useRef<(() => void) | null>(null);
+  const wakeLoop = useCallback(() => { if (wake.current) wake.current(); }, []);
+
   // Turn the chosen card to the front. No selection (e.g. a non-persistent
   // shortcut ring) means we never leave idle, so it can keep spinning.
   useEffect(() => {
@@ -101,31 +105,53 @@ export const CarouselRing: React.FC<CarouselRingProps> = ({
     const i = Math.max(0, items.findIndex(s => s.id === selectedId));
     target.current = angle.current + shortestDelta(angle.current, angleForIndex(i, n));
     idle.current = false;
-  }, [selectedId, items, n, flat]);
+    wakeLoop(); // loop may be dormant (settled) — a selection restarts it
+  }, [selectedId, items, n, flat, wakeLoop]);
 
   useEffect(() => {
     if (flat) return;
     let raf = 0;
     let last = 0;
+    let lastPaintedAngle = NaN;
     const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
       const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
       last = now;
+      let moved = false;
       if (!dragging.current) {
         if (target.current !== null) {
           const d = target.current - angle.current;
           if (Math.abs(d) < 0.2) { angle.current = target.current; target.current = null; if (keepSpinning) idle.current = true; }
-          else angle.current += d * Math.min(1, dt * 8);
+          else { angle.current += d * Math.min(1, dt * 8); moved = true; }
         } else if (idle.current && autoSpin && n > 0) {
           angle.current += AUTO_SPEED * dt;
+          moved = true;
         }
+      } else {
+        moved = true; // drag handlers move the angle; paint below
       }
-      paint();
+      // Paint only when the angle actually changed — the previous version
+      // wrote styles 60×/s even when the ring was fully settled (both opacity
+      // and transform writes force style recalc on every card).
+      if (moved || angle.current !== lastPaintedAngle) {
+        paint();
+        lastPaintedAngle = angle.current;
+      }
+      // Keep the loop alive while settling/spinning/hidden-flag pending;
+      // stop scheduling entirely when fully settled to drop the rAF churn.
+      if (!moved && target.current === null && !(idle.current && autoSpin && n > 0)) {
+        raf = 0;
+        const resume = () => {
+          if (raf === 0) { last = 0; raf = requestAnimationFrame(tick); }
+        };
+        wake.current = resume;
+        return; // do not re-queue — dormant until a drag/selection/resize
+      }
+      raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    const onHidden = () => { last = 0; };
+    const onHidden = () => { last = 0; if (raf === 0 && wake.current) wake.current(); };
     document.addEventListener('visibilitychange', onHidden);
-    return () => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', onHidden); };
+    return () => { cancelAnimationFrame(raf); raf = 0; document.removeEventListener('visibilitychange', onHidden); };
   }, [paint, flat, autoSpin, n, keepSpinning]);
 
   const drag = useRef({ x: 0, moved: 0 });
@@ -166,17 +192,19 @@ export const CarouselRing: React.FC<CarouselRingProps> = ({
         idle.current = false;
         target.current = null;
         drag.current = { x: e.clientX, moved: 0 };
+        wakeLoop();
       }}
       onPointerMove={e => {
         if (!dragging.current) return;
+        wakeLoop();
         const dx = e.clientX - drag.current.x;
         drag.current.x = e.clientX;
         drag.current.moved += Math.abs(dx);
         angle.current += dx * 0.45;
       }}
-      onPointerUp={() => { dragging.current = false; if (keepSpinning) idle.current = true; }}
-      onPointerCancel={() => { dragging.current = false; if (keepSpinning) idle.current = true; }}
-      onPointerLeave={() => { dragging.current = false; if (keepSpinning) idle.current = true; }}
+      onPointerUp={() => { dragging.current = false; if (keepSpinning) idle.current = true; wakeLoop(); }}
+      onPointerCancel={() => { dragging.current = false; if (keepSpinning) idle.current = true; wakeLoop(); }}
+      onPointerLeave={() => { dragging.current = false; if (keepSpinning) idle.current = true; wakeLoop(); }}
     >
       <div
         ref={ringRef}

@@ -18,7 +18,17 @@ const MermaidRenderer: React.FC<Props> = ({ definition }) => {
 
   useEffect(() => {
     if ('mermaid' in window) { setLoaded(true); return; }
-    if (document.querySelector('script[src*="mermaid.min.js"]')) { setLoaded(true); return; }
+    const existing = document.querySelector('script[src*="mermaid.min.js"]');
+    if (existing) {
+      // The script may still be loading — piggyback on its onload instead of
+      // assuming it finished (the previous early-return showed a blank box
+      // when a sibling had just inserted the tag).
+      existing.addEventListener('load', () => {
+        (window as unknown as { mermaid: MermaidAPI }).mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+        setLoaded(true);
+      }, { once: true });
+      return;
+    }
     const s = document.createElement('script');
     s.src = MERMAID_CDN;
     s.onload = () => {
@@ -27,13 +37,20 @@ const MermaidRenderer: React.FC<Props> = ({ definition }) => {
     };
     s.onerror = () => setError('Could not load Mermaid renderer');
     document.head.appendChild(s);
-    return () => s.remove();
+    // No cleanup: the script tag is shared by every MermaidRenderer on the
+    // page and window.mermaid stays useful after this instance unmounts.
+    // Removing it here aborted in-flight loads for sibling renderers.
   }, []);
 
   useEffect(() => {
     if (!loaded || !ref.current) return;
+    // A diagram streams in token by token: intermediate states legitimately
+    // fail to parse. Reset the error on every new definition and only mark
+    // the error if the FINAL version also fails.
+    setError('');
     (window as unknown as { mermaid: MermaidAPI }).mermaid
       .run({ nodes: [ref.current] })
+      .then(() => setError(''))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [loaded, definition]);
 

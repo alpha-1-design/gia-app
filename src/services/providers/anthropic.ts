@@ -165,11 +165,17 @@ export async function callAnthropic(req: BrainRequest, ctx: BrainContext): Promi
               if (parsed.type === 'message_start' && parsed.message?.usage) {
                 streamTokenUsage = { ...parsed.message.usage };
               }
-              if (parsed.type === 'message_delta' && parsed.usage) {
-                streamTokenUsage = { ...streamTokenUsage, ...parsed.usage };
-              }
-              if (parsed.type === 'message_stop' && parsed.stop_reason) {
-                finishReason = parsed.stop_reason;
+              if (parsed.type === 'message_delta') {
+                // Wire format: { type:'message_delta', delta:{ stop_reason }, usage }.
+                // The previous code read `parsed.stop_reason` off the top level of
+                // message_stop — that event carries no fields, so finishReason was
+                // always '' and max_tokens truncation continuation never fired.
+                if (parsed.delta?.stop_reason) {
+                  finishReason = parsed.delta.stop_reason;
+                }
+                if (parsed.usage) {
+                  streamTokenUsage = { ...streamTokenUsage, ...parsed.usage };
+                }
               }
             } catch (e) { logger.error('[anthropic] Failed to parse streaming response chunk:', e); }
           }

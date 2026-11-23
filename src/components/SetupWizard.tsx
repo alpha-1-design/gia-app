@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { clsx } from 'clsx';
 import {
@@ -106,7 +107,10 @@ interface SetupWizardProps {
 
 const SetupWizard: React.FC<SetupWizardProps> = ({ onClose, onComplete }) => {
   const wizard = useWizardStore();
-  const { setProviderKey, setProviderModel, setActiveProvider, fetchModels } = useProviderStore();
+  const { setProviderKey, setProviderModel, setActiveProvider, fetchModels } = useProviderStore(useShallow((s) => ({
+    setProviderKey: s.setProviderKey, setProviderModel: s.setProviderModel,
+    setActiveProvider: s.setActiveProvider, fetchModels: s.fetchModels,
+  })));
   const { addCustomProvider } = useCustomProviderStore();
   const setShowTerminal = useGiaStore(s => s.setShowTerminal);
   const [testing, setTesting] = useState(false);

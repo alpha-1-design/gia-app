@@ -187,8 +187,11 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
     el.addEventListener('touchmove', onTouchMove, { passive: true });
     el.addEventListener('touchend', onTouchEnd, { passive: true });
 
-    let frameId: number;
+    let frameId = 0;
     const start = Date.now();
+    const needsLoop = meshes.some(e => e.animate) || !!sceneData.autoRotate;
+    let inView = true;
+    let pageVisible = true;
     const animate = () => {
       frameId = requestAnimationFrame(animate);
       const t = (Date.now() - start) / 1000;
@@ -208,7 +211,31 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
       if (sceneData.autoRotate) { orbit.theta += 0.003; updateCam(); }
       renderer.render(scene, camera);
     };
-    animate();
+    // Render-loop gating (mobile battery): a static scene renders once —
+    // the previous code called renderer.render() 60×/s forever even when
+    // nothing moved. Animated scenes pause while the card is scrolled out
+    // of view or the app is hidden.
+    if (needsLoop) {
+      animate();
+    } else {
+      renderer.render(scene, camera);
+    }
+    const syncLoop = () => {
+      const shouldRun = needsLoop && inView && pageVisible;
+      if (shouldRun && frameId === 0) {
+        animate();
+      } else if (!shouldRun && frameId !== 0) {
+        cancelAnimationFrame(frameId);
+        frameId = 0;
+      }
+    };
+    const onVis = () => { pageVisible = document.visibilityState === 'visible'; syncLoop(); };
+    document.addEventListener('visibilitychange', onVis);
+    const io = new IntersectionObserver((entries) => {
+      inView = entries.some(e => e.isIntersecting);
+      syncLoop();
+    }, { rootMargin: '64px' });
+    io.observe(container);
 
     const ro = new ResizeObserver(() => {
       const cw = container.clientWidth;
@@ -218,7 +245,10 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
     ro.observe(container);
 
     return () => {
-      cancelAnimationFrame(frameId); ro.disconnect();
+      cancelAnimationFrame(frameId);
+      io.disconnect();
+      ro.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
       el.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
@@ -227,6 +257,15 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
       if (container.contains(el)) container.removeChild(el);
+      // Dispose the full scene graph — renderer.dispose() alone leaks every
+      // geometry/material/uploaded texture on the GPU.
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+        else if (mat) mat.dispose();
+      });
       renderer.dispose();
     };
   }, [objects, lights, sceneData]);

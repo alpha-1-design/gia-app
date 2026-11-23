@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, Brain, Repeat, Wifi, FileCheck, Users, Lock } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useGiaStore } from '../../store/useGiaStore';
 
 interface ToggleRowProps {
@@ -32,6 +33,8 @@ const ToggleRow: React.FC<ToggleRowProps> = ({ label, desc, icon, enabled, onTog
 );
 
 export const ReliabilitySection: React.FC = () => {
+  // useShallow: the bare useGiaStore() re-rendered this whole section on
+  // EVERY store change (every stream token) in Zustand v5.
   const {
     inputGuardrails, setInputGuardrails,
     outputValidation, setOutputValidation,
@@ -40,7 +43,15 @@ export const ReliabilitySection: React.FC = () => {
     multiProvider, setMultiProvider,
     localSummarize, setLocalSummarize,
     onDeviceMode, setOnDeviceMode,
-  } = useGiaStore();
+  } = useGiaStore(useShallow((s) => ({
+    inputGuardrails: s.inputGuardrails, setInputGuardrails: s.setInputGuardrails,
+    outputValidation: s.outputValidation, setOutputValidation: s.setOutputValidation,
+    responseCache: s.responseCache, setResponseCache: s.setResponseCache,
+    smartFallback: s.smartFallback, setSmartFallback: s.setSmartFallback,
+    multiProvider: s.multiProvider, setMultiProvider: s.setMultiProvider,
+    localSummarize: s.localSummarize, setLocalSummarize: s.setLocalSummarize,
+    onDeviceMode: s.onDeviceMode, setOnDeviceMode: s.setOnDeviceMode,
+  })));
 
   return (
     <div className="gia-card p-4">

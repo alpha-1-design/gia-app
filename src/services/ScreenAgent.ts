@@ -58,6 +58,12 @@ export class ScreenAgent {
     this.activate();
     if (this.screenshotInterval) clearInterval(this.screenshotInterval);
     this.screenshotInterval = setInterval(() => {
+      // Screenshot + vision analysis is the single most expensive periodic
+      // operation in the app (MediaProjection capture + ONNX inference).
+      // Never run it while the app is hidden — the screen content can't be
+      // changing usefully for a hidden app, and each cycle costs real
+      // battery. Re-arm automatically on visible.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       this.captureAndAnalyze().catch(() => {});
     }, intervalMs);
     logger.info(`[ScreenAgent] Watching every ${intervalMs}ms`);

@@ -10,7 +10,7 @@ import AnalyticsService from '../services/AnalyticsService';
 import { genId } from '../utils/id';
 import { autoSummarizeIfNeeded } from '../services/brain/contextManager';
 import { processStreamForDisplay, processStreamChunk as sharedProcessStreamChunk, createStreamParser, flushThinkBlock, flushToolBlock, appendThought, appendThinking } from '../utils/streamParser';
-import type { MessageSegment } from '../utils/streamParser';
+
 import { extractSuggestions, stripSuggestionScaffolding } from '../utils/suggestions';
 import { streamPush, streamCancel } from '../utils/streamThrottle';
 import OutputValidator from '../services/OutputValidator';
@@ -67,8 +67,6 @@ export function useChatGeneration() {
   const [loading, setLoading] = useState(false);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [streamingMsgIds, setStreamingMsgIds] = useState<Set<string>>(new Set());
-  const [liveThoughts, setLiveThoughts] = useState<Record<string, string>>({});
-  const [liveSegments, setLiveSegments] = useState<Record<string, MessageSegment[]>>({});
   const activeStreamsRef = useRef<Set<string>>(new Set());
 
   // Sync streaming state with store generationState (survives module switches)
@@ -367,14 +365,12 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         if (newDisplay) displayAccumulated += newDisplay;
         // Emit thinking incrementally as tokens arrive (like Claude/OpenAI)
         if (parserState.thoughtsAccumulated !== prevThoughts) {
-          setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
         }
         if (parserState.thoughtsAccumulated !== prevThoughts || newDisplay) {
           // Segments change whenever thinking OR visible response text
           // grows -- pushing on both keeps interleaved think/work
           // panels updating live, not just the flat thoughts blob.
-          setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
         }
         streamPush(streamKey, sessionId, asstId, stripSuggestionScaffolding(displayAccumulated), parserState.thoughtsAccumulated || undefined, parserState.tasks.length > 0 ? parserState.tasks.map(t => ({ ...t })) : null, () => ctrl.signal.aborted);
@@ -390,9 +386,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
       const handleThought = (thought: string) => {
         appendThought(parserState, thought);
-        setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
         useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-        setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
         useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
         streamPush(streamKey, sessionId, asstId, stripSuggestionScaffolding(displayAccumulated), parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
@@ -400,9 +394,7 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
 
       const handleThinkingDelta = (text: string) => {
         appendThinking(parserState, text);
-        setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
         useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: parserState.thoughtsAccumulated }));
-        setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
         useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: parserState.segments }));
         streamPush(streamKey, sessionId, asstId, stripSuggestionScaffolding(displayAccumulated), parserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
       };
@@ -673,7 +665,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, contParserState);
           if (newDisplay) contDisplayAccumulated += newDisplay;
           if (newDisplay) {
-            setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
             useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           }
           streamPush(streamKey, state.activeSessionId!, asstId, baseContent + stripSuggestionScaffolding(contDisplayAccumulated), contParserState.thoughtsAccumulated || undefined, null, () => ctrl.signal.aborted);
@@ -688,17 +679,13 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         },
         onThought: (thought) => {
           appendThought(contParserState, thought);
-          setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
-          setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           streamPush(streamKey, state.activeSessionId!, asstId, baseContent + stripSuggestionScaffolding(contDisplayAccumulated), contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         },
         onThinkingDelta: (text) => {
           appendThinking(contParserState, text);
-          setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: contParserState.thoughtsAccumulated }));
-          setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: contParserState.segments }));
           streamPush(streamKey, state.activeSessionId!, asstId, baseContent + stripSuggestionScaffolding(contDisplayAccumulated), contParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         },
@@ -837,7 +824,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, clarParserState);
           if (newDisplay) clarDisplayAccumulated += newDisplay;
           if (newDisplay) {
-            setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
             useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
           }
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated || undefined, null, () => ctrl.signal.aborted);
@@ -852,18 +838,14 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
         },
         onThought: (thought) => {
           appendThought(clarParserState, thought);
-          setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
-          setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
           useGiaStore.getState().addConsoleLog({ type: 'thought', content: thought });
         },
         onThinkingDelta: (text) => {
           appendThinking(clarParserState, text);
-          setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
           useGiaStore.getState().setLiveThoughts(prev => ({ ...prev, [asstId]: clarParserState.thoughtsAccumulated }));
-          setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
           useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [asstId]: clarParserState.segments }));
           streamPush(streamKey, sessionId, asstId, clarDisplayAccumulated, clarParserState.thoughtsAccumulated, null, () => ctrl.signal.aborted);
         }
@@ -973,7 +955,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
           const newDisplay = sharedProcessStreamChunk(chunk, retryParserState);
           if (newDisplay) retryDisplayAccumulated += newDisplay;
           if (newDisplay) {
-            setLiveSegments(prev => ({ ...prev, [id]: retryParserState.segments }));
             useGiaStore.getState().setLiveSegments(prev => ({ ...prev, [id]: retryParserState.segments }));
           }
           streamPush(streamKey, state.activeSessionId!, id, retryDisplayAccumulated, undefined, null, () => ctrl.signal.aborted);
@@ -1046,8 +1027,6 @@ To bundle files, respond with \`[GIA:zip:filename.zip]\` after outputting the fi
     loading, setLoading,
     streamingMsgId, setStreamingMsgId,
     streamingMsgIds, setStreamingMsgIds,
-    liveThoughts, setLiveThoughts,
-    liveSegments, setLiveSegments,
     abortTimeoutRef,
     responseStartRef, responseTimesRef, lastUserMsgRef,
     handleSend, handleContinue, handleClarificationAnswer,
