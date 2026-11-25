@@ -1,11 +1,32 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, KeyRound, Link2, Loader2, RefreshCw, Search, Unlink } from 'lucide-react';
-import composioService, { type ComposioAccount, type ComposioToolkit } from '../../services/connectors/ComposioService';
+import composioService, { type ComposioAccount, type ComposioToolkit, ComposioError } from '../../services/connectors/ComposioService';
 import { useGiaStore } from '../../store/useGiaStore';
 
 function humanDate(ts?: number): string {
   if (!ts) return '';
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function friendlyKeyError(status?: number): string | undefined {
+  if (status === 401) return 'Invalid API key — get a fresh key at app.composio.dev/settings';
+  if (status === 403) return 'Composio rejected the request (HTTP 403) — check key scopes';
+  return undefined;
+}
+
+/** Human message for a failed Composio call instead of a raw JSON dump. */
+function prettyComposioError(e: unknown): string {
+  if (e instanceof ComposioError) {
+    const friendly = friendlyKeyError(e.status);
+    if (friendly) return friendly;
+    if (e.body) {
+      try {
+        const parsed = JSON.parse(e.body) as { error?: { message?: string } };
+        if (parsed.error?.message) return `Composio error (HTTP ${e.status}): ${parsed.error.message}`;
+      } catch { /* body was not JSON — keep the raw line below */ }
+    }
+  }
+  return e instanceof Error ? e.message : 'Composio request failed';
 }
 
 function statusChip(status: string) {
@@ -19,9 +40,12 @@ function statusChip(status: string) {
 }
 
 type ConnectPhase = 'connecting' | 'connected' | 'failed';
+type KeyState = 'unverified' | 'verifying' | 'verified' | 'rejected';
 
 export const ComposioSection: React.FC = () => {
   const [hasKey, setHasKey] = useState(() => composioService.hasKey());
+  const [keyState, setKeyState] = useState<KeyState>('unverified');
+  const [keyError, setKeyError] = useState<string | undefined>(undefined);
   const [keyInput, setKeyInput] = useState('');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -54,7 +78,7 @@ export const ComposioSection: React.FC = () => {
     setToolkitError(undefined);
     composioService.getToolkits(debouncedQuery)
       .then(t => { if (!cancelled) setToolkits(t); })
-      .catch(e => { if (!cancelled) setToolkitError(e instanceof Error ? e.message : 'Failed to load toolkits'); })
+      .catch(e => { if (!cancelled) setToolkitError(prettyComposioError(e)); })
       .finally(() => { if (!cancelled) setLoadingToolkits(false); });
     return () => { cancelled = true; };
   }, [hasKey, debouncedQuery]);
@@ -67,18 +91,32 @@ export const ComposioSection: React.FC = () => {
     return unsub;
   }, [hasKey, refreshConnections]);
 
-  const handleSaveKey = () => {
+  const handleSaveKey = async () => {
     const trimmed = keyInput.trim();
     if (!trimmed) return;
     composioService.setKey(trimmed);
     setKeyInput('');
     setHasKey(true);
-    useGiaStore.getState().addNotification('Composio connected');
+    setKeyError(undefined);
+    setKeyState('verifying');
+    // Verify against the live API before claiming success — a wrong key must
+    // never show as "connected".
+    const v = await composioService.verifyKey();
+    if (v.ok) {
+      setKeyState('verified');
+      useGiaStore.getState().addNotification('Composio key verified');
+    } else {
+      setKeyState('rejected');
+      setKeyError(friendlyKeyError(v.status) ?? `Composio error${v.status ? ` (HTTP ${v.status})` : ''} — check your connection`);
+      useGiaStore.getState().addNotification(`Composio key check failed${v.status ? ` (HTTP ${v.status})` : ''}`);
+    }
   };
 
   const handleRemoveKey = () => {
     composioService.clearKey();
     setHasKey(false);
+    setKeyState('unverified');
+    setKeyError(undefined);
     setToolkits([]);
     setConnections([]);
     setConnectPhases({});
@@ -116,8 +154,17 @@ export const ComposioSection: React.FC = () => {
       <div className="flex items-center gap-2 mb-3">
         <KeyRound size={16} style={{ color: '#a78bfa' }} />
         <span className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>Composio</span>
-        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ml-auto ${hasKey ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-500/10'}`}>
-          {hasKey ? 'connected' : 'not connected'}
+        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ml-auto ${
+          keyState === 'verified' ? 'text-emerald-400 bg-emerald-500/10' :
+          keyState === 'rejected' ? 'text-red-400 bg-red-500/10' :
+          keyState === 'verifying' ? 'text-amber-400 bg-amber-500/10' :
+          hasKey ? 'text-amber-400 bg-amber-500/10' :
+          'text-zinc-500 bg-zinc-500/10'
+        }`}>
+          {keyState === 'verified' ? 'connected'
+            : keyState === 'rejected' ? 'key rejected'
+            : keyState === 'verifying' ? 'verifying…'
+            : hasKey ? 'key saved' : 'not connected'}
         </span>
       </div>
 
@@ -167,6 +214,10 @@ export const ComposioSection: React.FC = () => {
               <RefreshCw size={12} style={{ color: 'var(--gia-muted-2)' }} />
             </button>
           </div>
+
+          {keyError && (
+            <p className="text-[10px] text-red-400 leading-snug break-words">{keyError}</p>
+          )}
 
           {toolkitError && (
             <p className="text-[10px] text-red-400 break-words">{toolkitError}</p>

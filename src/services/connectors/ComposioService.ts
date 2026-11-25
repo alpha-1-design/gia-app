@@ -237,6 +237,23 @@ class ComposioService {
 
   // -------------------------------------------------------------- catalog
 
+  /**
+   * Cheap live validation of the stored key against GET /toolkits?limit=1.
+   * The UI must never claim "connected" for a key Composio actually rejects.
+   */
+  async verifyKey(): Promise<{ ok: boolean; status?: number; message?: string }> {
+    try {
+      await this.request('/toolkits', { query: { limit: '1' } });
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        status: e instanceof ComposioError ? e.status : undefined,
+        message: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+
   async getToolkits(query?: string): Promise<ComposioToolkit[]> {
     const all: ComposioToolkit[] = [];
     let cursor: string | undefined;

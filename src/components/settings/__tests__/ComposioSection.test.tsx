@@ -103,4 +103,42 @@ describe('ComposioSection', () => {
 
     expect(fetchMock).toHaveBeenCalled();
   });
+
+  it('rejects an invalid key with a friendly error and never claims "connected"', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({
+        error: { message: 'Invalid API key: gia**_000', code: 801, slug: 'APIKey_InvalidAPIKey', status: 401 },
+      }), { status: 401, headers: { 'Content-Type': 'application/json' } }),
+    ));
+    render(<ComposioSection />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Paste your Composio API key/i), { target: { value: 'gia_bad_key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // Chip must show the rejection, not "connected".
+    await waitFor(() => {
+      expect(screen.getByText('key rejected')).toBeDefined();
+    });
+    expect(screen.queryByText('connected')).toBeNull();
+    // Friendly message instead of a raw JSON dump.
+    expect(screen.getAllByText(/Invalid API key — get a fresh key at app\.composio\.dev\/settings/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/"slug":"APIKey_InvalidAPIKey"/)).toBeNull();
+  });
+
+  it('verifies a valid key before showing "connected"', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const fetchMock = mockComposioApi();
+    render(<ComposioSection />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Paste your Composio API key/i), { target: { value: 'ck_live_valid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('connected')).toBeDefined();
+    });
+    // verifyKey() ping + catalog fetch both hit the API.
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/toolkits')).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/Invalid API key/)).toBeNull();
+  });
 });
