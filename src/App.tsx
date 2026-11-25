@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { Bell, X, Lock, Cpu, Download, AlertCircle, Wifi, WifiOff, ClipboardIcon } from 'lucide-react';
 import { useGiaStore, Module } from './store/useGiaStore';
 import { setStorageErrorHandler } from './store/idb-storage';
@@ -900,6 +900,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <div
       className="flex flex-col h-full overflow-hidden relative"
       style={{ background: 'var(--gia-bg)' }}
@@ -1093,44 +1094,64 @@ const App: React.FC = () => {
           store since ProtocolsApprovalsSection doesn't depend on removing
           them and nothing else references this mount anymore. */}
 
-      {showTaskBoard && (
-        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTaskBoard(false)}>
-          <div className="relative rounded-2xl w-full max-w-4xl h-[80vh] overflow-hidden shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }} onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setShowTaskBoard(false)}
-              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
-              style={{ color: 'var(--gia-muted)' }}
-              aria-label="Close task board"
-            >
-              <X size={16} />
-            </button>
-            <Suspense fallback={
-              <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'var(--gia-muted)' }}>Loading tasks…</div>
-            }>
-              <TaskBoard />
-            </Suspense>
-          </div>
-        </div>
-      )}
-      {showNotesPanel && (
-        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowNotesPanel(false)}>
-          <div className="relative rounded-2xl w-full max-w-2xl h-[80vh] overflow-hidden shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }} onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setShowNotesPanel(false)}
-              className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
-              style={{ color: 'var(--gia-muted)' }}
-              aria-label="Close notes"
-            >
-              <X size={16} />
-            </button>
-            <Suspense fallback={
-              <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'var(--gia-muted)' }}>Loading notes…</div>
-            }>
-              <NotesPanel />
-            </Suspense>
-          </div>
-        </div>
-      )}
+      {/* Task Board overlay */}
+      <AnimatePresence>
+        {showTaskBoard && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+            className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowTaskBoard(false)}
+          >
+            <div className="relative rounded-2xl w-full max-w-4xl h-[80vh] overflow-hidden shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }} onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setShowTaskBoard(false)}
+                className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+                style={{ color: 'var(--gia-muted)' }}
+                aria-label="Close task board"
+              >
+                <X size={16} />
+              </button>
+              <Suspense fallback={
+                <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'var(--gia-muted)' }}>Loading tasks…</div>
+              }>
+                <TaskBoard />
+              </Suspense>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Notes overlay */}
+      <AnimatePresence>
+        {showNotesPanel && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+            className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowNotesPanel(false)}
+          >
+            <div className="relative rounded-2xl w-full max-w-2xl h-[80vh] overflow-hidden shadow-2xl" style={{ background: 'var(--gia-surface)', border: '1px solid var(--gia-border)' }} onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setShowNotesPanel(false)}
+                className="absolute top-2 right-2 z-10 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+                style={{ color: 'var(--gia-muted)' }}
+                aria-label="Close notes"
+              >
+                <X size={16} />
+              </button>
+              <Suspense fallback={
+                <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'var(--gia-muted)' }}>Loading notes…</div>
+              }>
+                <NotesPanel />
+              </Suspense>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence initial={false}>
         {showSetup && (
@@ -1174,6 +1195,7 @@ const App: React.FC = () => {
       <InAppBrowserPanel />
       <ApiKeyInputPanel />
     </div>
+    </MotionConfig>
   );
 };
 

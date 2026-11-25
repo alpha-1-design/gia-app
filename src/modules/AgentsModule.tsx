@@ -1208,9 +1208,9 @@ const CreateAgentModal: React.FC<{
             <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--gia-surface-2)' }}>
               <motion.div
                 className="h-full rounded-full"
-                style={{ background: 'linear-gradient(90deg, #a855f7, #c084fc)' }}
-                initial={{ width: 0 }}
-                animate={{ width: `${uploadProgress}%` }}
+                style={{ background: 'linear-gradient(90deg, #a855f7, #c084fc)', transformOrigin: 'left' }}
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: uploadProgress / 100 }}
                 transition={{ duration: 0.3, ease: 'easeOut' }}
               />
             </div>

@@ -1,6 +1,9 @@
 package com.alpha1studio.gia;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Handler;
@@ -38,11 +41,49 @@ public class GIAScreenAgentPlugin extends Plugin {
     private long watchIntervalMs = 3000;
     private String lastScreenHash = "";
 
+    // Screen state — the watch loop stops scheduling while the screen is off
+    // (walking the accessibility tree against a black display is pure drain)
+    // and resumes on SCREEN_ON.
+    private BroadcastReceiver screenStateReceiver;
+    private boolean screenOn = true;
+
     @Override
     public void load() {
         super.load();
         instance = this;
         accessibilityService = GIAAccessibilityService.getInstance();
+        registerScreenStateReceiver();
+    }
+
+    private void registerScreenStateReceiver() {
+        screenStateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    screenOn = false;
+                } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                    screenOn = true;
+                    // The loop killed itself on the first tick while the
+                    // screen was off — restart it if watching is still on.
+                    if (isWatching) startWatchLoop();
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        getContext().registerReceiver(screenStateReceiver, filter);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        super.handleOnDestroy();
+        if (screenStateReceiver != null) {
+            try {
+                getContext().unregisterReceiver(screenStateReceiver);
+            } catch (Exception ignored) {}
+            screenStateReceiver = null;
+        }
     }
 
     /**
@@ -713,7 +754,7 @@ public class GIAScreenAgentPlugin extends Plugin {
         mainHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                if (!isWatching) return;
+                if (!isWatching || !screenOn) return;   // screen-off kills the chain; SCREEN_ON restarts it
 
                 AccessibilityNodeInfo root = accessibilityService != null
                     ? accessibilityService.getRootInActiveWindow()

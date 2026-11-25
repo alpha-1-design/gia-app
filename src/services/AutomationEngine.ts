@@ -40,7 +40,14 @@ function matchesCron(cron: CronExpr, date: Date): boolean {
 }
 
 export class AutomationEngine {
-  private intervalId: ReturnType<typeof setInterval> | null = null;
+  /** Never sleep longer than this before re-checking (drift / rule changes). */
+  private static readonly MAX_SCHEDULE_DELAY_MS = 15 * 60_000;
+  /** Fire this far into the target minute so the minute check still matches. */
+  private static readonly TICK_LEAD_IN_MS = 1_000;
+
+  private scheduleTimer: ReturnType<typeof setTimeout> | null = null;
+  private running = false;
+  private unsubscribeStore: (() => void) | null = null;
   private actionRegistry = new Map<string, (params: Record<string, string>) => Promise<void>>();
 
   registerAction(name: string, handler: (params: Record<string, string>) => Promise<void>): void {
@@ -48,17 +55,122 @@ export class AutomationEngine {
   }
 
   start(): void {
-    if (this.intervalId) return;
-    this.intervalId = setInterval(() => this.tick(), 30000);
-    logger.info('[AutomationEngine] Started (30s interval)');
+    if (this.running) return;
+    this.running = true;
+    this.unsubscribeStore = useAutomationStore.subscribe(() => this.onRulesChanged());
+    this.scheduleNext();
+    logger.info('[AutomationEngine] Started (self-scheduling to the next due rule)');
   }
 
   stop(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-      logger.info('[AutomationEngine] Stopped');
+    if (!this.running && !this.scheduleTimer) return;
+    this.running = false;
+    if (this.unsubscribeStore) {
+      this.unsubscribeStore();
+      this.unsubscribeStore = null;
     }
+    if (this.scheduleTimer) {
+      clearTimeout(this.scheduleTimer);
+      this.scheduleTimer = null;
+    }
+    logger.info('[AutomationEngine] Stopped');
+  }
+
+  /** Rule added/updated/deleted: restart scheduling so new rules are honoured. */
+  private onRulesChanged(): void {
+    if (!this.running) return;
+    this.scheduleNext();
+  }
+
+  /**
+   * Battery: instead of a 30s cron tick that wakes JS even with no rules,
+   * sleep until the next rule could actually fire (capped at 15 min) and
+   * schedule nothing at all when there are no time/cron rules — a rule
+   * change restarts scheduling via the store subscription.
+   *
+   * @param currentMinuteChecked true when rescheduling after a tick: that
+   *   tick already evaluated the current minute, so the next tick must aim
+   *   beyond it (otherwise it would re-schedule itself every second until
+   *   the minute rolls over).
+   */
+  private scheduleNext(currentMinuteChecked = false): void {
+    if (this.scheduleTimer) {
+      clearTimeout(this.scheduleTimer);
+      this.scheduleTimer = null;
+    }
+    if (!this.running) return;
+    const delay = this.nextScheduleDelay(currentMinuteChecked);
+    if (delay === null) return;   // nothing scheduled — wait for a rule change
+    this.scheduleTimer = setTimeout(() => {
+      this.scheduleTimer = null;
+      void this.tick();
+    }, delay);
+  }
+
+  /** Delay to the next due rule (clamped to MAX_SCHEDULE_DELAY_MS), or null when nothing to wait for. */
+  private nextScheduleDelay(currentMinuteChecked: boolean): number | null {
+    const rules = useAutomationStore.getState().getEnabledRules();
+    const now = new Date();
+    let nextDue: number | null = null;
+    let hasScheduledTrigger = false;
+    for (const rule of rules) {
+      let due: number | null = null;
+      if (rule.trigger.type === 'time') {
+        due = this.nextTimeTriggerDue(rule, now, currentMinuteChecked);
+      } else if (rule.trigger.type === 'cron') {
+        due = this.nextCronTriggerDue(rule, now, currentMinuteChecked);
+      } else {
+        continue;   // event-driven trigger: fired via fireEvent, never wakes JS
+      }
+      hasScheduledTrigger = true;
+      if (due !== null && (nextDue === null || due < nextDue)) nextDue = due;
+    }
+    if (nextDue === null) {
+      // No waitable rule (event-only or unparsable): only keep a slow
+      // heartbeat when a cron/time rule exists whose next due lies beyond
+      // the 24h scan horizon (e.g. a monthly cron).
+      return hasScheduledTrigger ? AutomationEngine.MAX_SCHEDULE_DELAY_MS : null;
+    }
+    return Math.min(nextDue - Date.now(), AutomationEngine.MAX_SCHEDULE_DELAY_MS);
+  }
+
+  /** Next fire time for a "HH:MM" time trigger, keeping a minute that already started. */
+  private nextTimeTriggerDue(rule: AutomationRule, from: Date, currentMinuteChecked: boolean): number | null {
+    const time = rule.trigger.params.time;
+    if (!time) return null;
+    const [h, m] = time.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    const due = new Date(from);
+    due.setHours(h, m, 0, 0);
+    if (due.getTime() < from.getTime() + AutomationEngine.TICK_LEAD_IN_MS) {
+      // The target minute already started: still fire inside it if we can
+      // (only when this minute hasn't been evaluated yet), otherwise aim
+      // for the same time tomorrow.
+      if (!currentMinuteChecked && from.getTime() - due.getTime() < 59_000) {
+        return from.getTime() + AutomationEngine.TICK_LEAD_IN_MS;
+      }
+      due.setDate(due.getDate() + 1);
+    }
+    return due.getTime();
+  }
+
+  /** Next fire time for a cron trigger (scans up to 24h ahead); null if nothing matches. */
+  private nextCronTriggerDue(rule: AutomationRule, from: Date, currentMinuteChecked: boolean): number | null {
+    try {
+      const cron = parseCron(rule.trigger.params.expr || '');
+      const cand = new Date(from);
+      cand.setSeconds(0, 0);
+      if (matchesCron(cron, cand) && !currentMinuteChecked && from.getTime() - cand.getTime() < 59_000) {
+        return from.getTime() + AutomationEngine.TICK_LEAD_IN_MS;
+      }
+      for (let i = 0; i < 24 * 60; i++) {
+        cand.setMinutes(cand.getMinutes() + 1);
+        if (matchesCron(cron, cand)) return cand.getTime() + AutomationEngine.TICK_LEAD_IN_MS;
+      }
+    } catch (e) {
+      logger.warn('[AutomationEngine] Cron parse error:', e);
+    }
+    return null;
   }
 
   private lastCronCheck = 0;
@@ -99,6 +211,8 @@ export class AutomationEngine {
       }
     } catch (e) {
       logger.warn('[AutomationEngine] Tick error:', e);
+    } finally {
+      this.scheduleNext(true);
     }
   }
 
@@ -250,7 +364,7 @@ export class AutomationEngine {
   getStatus(): string {
     const store = useAutomationStore.getState();
     const enabled = store.getEnabledRules();
-    return `Automation Engine: ${this.intervalId ? 'running' : 'stopped'}, ${enabled.length}/${store.rules.length} rules enabled`;
+    return `Automation Engine: ${this.running ? 'running' : 'stopped'}, ${enabled.length}/${store.rules.length} rules enabled`;
   }
 }
 

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { GraduationCap, Clock, AlertCircle, RefreshCw, ArrowLeft, Settings } from 'lucide-react';
+import haptic from '../services/HapticService';
 import GiaBrain from '../services/GiaBrain';
 import { useGiaStore } from '../store/useGiaStore';
 import { genId } from '../utils/id';
@@ -107,6 +109,7 @@ const ExamModule: React.FC = () => {
   const [retryStatus, setRetryStatus] = useState('');
   const [profile, setProfile] = useState<LearningProfile | null>(() => loadAssessmentProfile());
   const setModule = useGiaStore(s => s.setModule);
+  const reduceMotion = useGiaStore(s => s.reduceMotion);
   const submitQuizRef = useRef<() => void>(() => {});
 
   // Warn before leaving during a quiz
@@ -242,6 +245,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
 
   const handleAnswer = (questionId: string, optionIndex: number) => {
     if (submittedQuestions.has(questionId)) return;
+    void haptic.impact('light');
     setSelectedAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
   };
 
@@ -374,6 +378,16 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
         </div>
       )}
 
+      {/* Screen-fade between tabs — keyed by tab so each switch remounts
+       * the content with a short standard-ease rise. Skipped entirely when
+       * the app's reduce-motion preference is on (same flag ChatModule uses). */}
+      <motion.div
+        key={tab}
+        initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.15, ease: [0.2, 0, 0, 1] }}
+        className="flex flex-col flex-1 min-h-0"
+      >
       {tab === 'setup' && (
         <ExamSetup
           examSystem={examSystem} setExamSystem={setExamSystem}
@@ -470,6 +484,7 @@ correctAnswer is 0-indexed. Each must have exactly 4 options. Exam-level accurac
           onPracticeTopic={handlePracticeTopic}
         />
       )}
+      </motion.div>
     </div>
   );
 };

@@ -4,11 +4,18 @@ const TG_MSG_KEY = '_gia_telegram_messages';
 const TG_OFFSET_KEY = '_gia_telegram_offset';
 const TG_PENDING_KEY = '_gia_tg_pending';
 
+const TG_POLL_INTERVAL = 3000;
+const TG_MAX_BACKOFF_MS = 60000;
+
 let tgConfig = null;
 let tgLastUpdateId = 0;
 let tgPollTimer = null;
 let tgProcessedUpdates = new Set();
 let tgNoClientsCount = 0;
+// Single-flight: at most one getUpdates long-poll is outstanding at a time.
+let tgInFlight = false;
+// Doubles on error / HTTP 409 churn (capped), reset on success.
+let tgBackoffMs = 0;
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -145,97 +152,101 @@ async function tgShouldPoll() {
   return allClients.length === 0;
 }
 
+/**
+ * One polling round. Resolves true when a getUpdates request completed
+ * successfully, false when it was a no-op (stopped / clients open / warm-up);
+ * rejects on network errors or non-ok Telegram responses so the scheduler
+ * can back off.
+ */
 async function tgPoll() {
   if (!tgConfig || !tgConfig.token) {
     // No config — stop polling
     tgStopPolling();
-    return;
+    return false;
   }
 
   // Only poll when no clients are open (tab is closed/backgrounded)
   const shouldPoll = await tgShouldPoll();
   if (!shouldPoll) {
     tgNoClientsCount = 0;
-    return;
+    return false;
   }
 
   tgNoClientsCount++;
   // Wait 3 cycles (~9s) after last client closes before starting to poll
-  if (tgNoClientsCount < 3) return;
+  if (tgNoClientsCount < 3) return false;
 
-  try {
-    const params = new URLSearchParams({
-      timeout: '25',
-      offset: String(tgLastUpdateId),
-      allowed_updates: JSON.stringify(['message']),
-    });
+  const params = new URLSearchParams({
+    timeout: '25',
+    offset: String(tgLastUpdateId),
+    allowed_updates: JSON.stringify(['message']),
+  });
 
-    const res = await fetch(`https://api.telegram.org/bot${tgConfig.token}/getUpdates?${params}`, {
-      signal: AbortSignal.timeout(30000),
-    });
-    const data = await res.json();
-    if (!data.ok) return;
+  const res = await fetch(`https://api.telegram.org/bot${tgConfig.token}/getUpdates?${params}`, {
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(`getUpdates failed (${data.error_code || 'unknown'})`);
 
-    const newMessages = [];
+  const newMessages = [];
 
-    for (const update of (data.result || [])) {
-      tgLastUpdateId = Math.max(tgLastUpdateId, update.update_id + 1);
+  for (const update of (data.result || [])) {
+    tgLastUpdateId = Math.max(tgLastUpdateId, update.update_id + 1);
 
-      const msg = update.message;
-      if (!msg?.text) continue;
+    const msg = update.message;
+    if (!msg?.text) continue;
 
-      if (tgProcessedUpdates.has(update.update_id)) continue;
-      tgProcessedUpdates.add(update.update_id);
-      if (tgProcessedUpdates.size > 10000) {
-        tgProcessedUpdates.clear();
-      }
-
-      if (msg.from?.is_bot) continue;
-
-      const chat = msg.chat;
-      const isGroup = chat.type === 'group' || chat.type === 'supergroup';
-      const chatTitle = chat.title || (isGroup ? 'Group' : undefined);
-
-      if (isGroup && tgConfig.mentionOnly && tgConfig.botUsername) {
-        const mention = `@${tgConfig.botUsername.toLowerCase()}`;
-        if (!msg.text.toLowerCase().includes(mention)) continue;
-      }
-
-      newMessages.push({
-        id: String(update.update_id),
-        channel: 'telegram',
-        from: msg.from?.first_name || msg.from?.username || 'User',
-        text: msg.text,
-        timestamp: msg.date * 1000,
-        chatId: String(chat.id),
-        chatTitle,
-        isGroup,
-      });
+    if (tgProcessedUpdates.has(update.update_id)) continue;
+    tgProcessedUpdates.add(update.update_id);
+    if (tgProcessedUpdates.size > 10000) {
+      tgProcessedUpdates.clear();
     }
 
-    // Store offset periodically
-    if (newMessages.length > 0) {
-      await tgStoreOffset();
+    if (msg.from?.is_bot) continue;
 
-      // Cache messages for retrieval when app reopens
-      const cache = await caches.open(TG_CACHE);
-      const existing = await tgGetCachedMessages();
-      const all = [...existing, ...newMessages];
-      const trimmed = all.slice(-200);
-      const response = new Response(JSON.stringify(trimmed), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-      await cache.put(TG_MSG_KEY, response.clone());
+    const chat = msg.chat;
+    const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+    const chatTitle = chat.title || (isGroup ? 'Group' : undefined);
 
-      // Set pending flag
-      const pendingResp = new Response('1', {
-        headers: { 'Content-Type': 'text/plain' },
-      });
-      await cache.put(TG_PENDING_KEY, pendingResp.clone());
+    if (isGroup && tgConfig.mentionOnly && tgConfig.botUsername) {
+      const mention = `@${tgConfig.botUsername.toLowerCase()}`;
+      if (!msg.text.toLowerCase().includes(mention)) continue;
     }
-  } catch (e) {
-    // Silently fail — will retry on next interval
+
+    newMessages.push({
+      id: String(update.update_id),
+      channel: 'telegram',
+      from: msg.from?.first_name || msg.from?.username || 'User',
+      text: msg.text,
+      timestamp: msg.date * 1000,
+      chatId: String(chat.id),
+      chatTitle,
+      isGroup,
+    });
   }
+
+  // Store offset periodically
+  if (newMessages.length > 0) {
+    await tgStoreOffset();
+
+    // Cache messages for retrieval when app reopens
+    const cache = await caches.open(TG_CACHE);
+    const existing = await tgGetCachedMessages();
+    const all = [...existing, ...newMessages];
+    const trimmed = all.slice(-200);
+    const response = new Response(JSON.stringify(trimmed), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    await cache.put(TG_MSG_KEY, response.clone());
+
+    // Set pending flag
+    const pendingResp = new Response('1', {
+      headers: { 'Content-Type': 'text/plain' },
+    });
+    await cache.put(TG_PENDING_KEY, pendingResp.clone());
+  }
+
+  return true;
 }
 
 async function tgGetCachedMessages() {
@@ -250,15 +261,41 @@ async function tgGetCachedMessages() {
   return [];
 }
 
+/**
+ * Chained scheduler: one tick runs at most one poll, and the next tick is
+ * scheduled only after the current request settled (no overlapping 25s
+ * long-polls). Replaces the old setInterval, which stacked up concurrent
+ * requests and triggered Telegram HTTP 409 churn.
+ */
+function tgPollTick() {
+  tgPollTimer = null;
+  if (tgInFlight) return;
+  tgInFlight = true;
+  tgPoll()
+    .then((polled) => {
+      if (polled) tgBackoffMs = 0;   // success resets the backoff
+    })
+    .catch(() => {
+      // Network error / HTTP 409: double the delay, capped at 60s.
+      tgBackoffMs = Math.min((tgBackoffMs > 0 ? tgBackoffMs : TG_POLL_INTERVAL) * 2, TG_MAX_BACKOFF_MS);
+    })
+    .then(() => {
+      tgInFlight = false;
+      if (!tgConfig || !tgConfig.token) return;   // stopped — kill the chain
+      tgPollTimer = setTimeout(tgPollTick, tgBackoffMs > 0 ? tgBackoffMs : TG_POLL_INTERVAL);
+    });
+}
+
 function tgStartPolling() {
-  if (tgPollTimer) return;
+  if (tgPollTimer || tgInFlight) return;
   tgNoClientsCount = 0;
-  tgPollTimer = setInterval(tgPoll, 3000);
+  tgBackoffMs = 0;
+  tgPollTimer = setTimeout(tgPollTick, TG_POLL_INTERVAL);
 }
 
 function tgStopPolling() {
   if (tgPollTimer) {
-    clearInterval(tgPollTimer);
+    clearTimeout(tgPollTimer);
     tgPollTimer = null;
   }
   tgNoClientsCount = 0;

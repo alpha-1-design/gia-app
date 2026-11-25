@@ -8,7 +8,10 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -120,6 +123,11 @@ public class GIAScreenOrbService extends Service {
     private ValueAnimator glowAnim;
     private float breathePhase = 0f;
 
+    // Screen state — the infinite breathe/glow animators are paused while the
+    // screen is off so they never burn CPU against a black display.
+    private BroadcastReceiver screenStateReceiver;
+    private boolean screenOn = true;
+
     // -------------------------------------------------------------------
     // Static API
     // -------------------------------------------------------------------
@@ -183,6 +191,31 @@ public class GIAScreenOrbService extends Service {
         speechEnabled = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(PREFS_SPEECH, true);
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, buildNotification());
+        registerScreenStateReceiver();
+    }
+
+    private void registerScreenStateReceiver() {
+        screenStateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    screenOn = false;
+                    stopAnimations();
+                } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                    screenOn = true;
+                    // Resume only when the orb is actually attached; if it was
+                    // hidden while the screen was off, showOrbInternal() will
+                    // start the animators again.
+                    if (orbContainer != null && orbContainer.isAttachedToWindow()) {
+                        startAnimations();
+                    }
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        registerReceiver(screenStateReceiver, filter);
     }
 
     @Override
@@ -193,6 +226,10 @@ public class GIAScreenOrbService extends Service {
 
     @Override
     public void onDestroy() {
+        if (screenStateReceiver != null) {
+            try { unregisterReceiver(screenStateReceiver); } catch (Exception ignored) {}
+            screenStateReceiver = null;
+        }
         stopAnimations();
         hudHandler.removeCallbacksAndMessages(null);
         if (voiceRecorder != null) {
@@ -426,6 +463,7 @@ public class GIAScreenOrbService extends Service {
     // -------------------------------------------------------------------
 
     private void startAnimations() {
+        if (!screenOn) return;   // screen-off receiver restarts them on wake
         stopAnimations();
 
         // Breathe animation — gentle scale oscillation

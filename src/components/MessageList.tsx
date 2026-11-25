@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User, AlertCircle, RotateCcw, Paperclip, ChevronDown, ChevronRight, Lock, Cloud, Globe, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { TurnTrace } from './turn/TurnTrace';
@@ -249,7 +249,15 @@ const MessageRow = memo<MessageRowProps>(({
   );
 
   return (
-    <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+    <motion.div
+      key={msg.id}
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.2 }}
+      className={`flex gap-2 sm:gap-3 md:gap-3.5 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+    >
       {msg.role === 'user' && avatarNode}
       <div className={`flex-1 min-w-0 space-y-1 ${msg.role === 'user' ? 'flex flex-col items-end' : ''}`}>
         {msg.attachments?.some(a => a.preview) && (
@@ -531,37 +539,44 @@ const MessageList: React.FC<MessageListProps> = ({
       {loading && messages.length === 0 && (
         <ChatSkeleton count={3} />
       )}
-      {messages.map((msg) => (
-        <MessageRow
-          key={msg.id}
-          msg={msg}
-          isStreaming={streamingMsgId === msg.id || !!streamingMsgIds?.has(msg.id)}
-          isLatestAssistant={msg.id === latestAssistantId}
-          loading={loading}
-          thinkingPhase={thinkingPhase}
-          currentTool={currentTool}
-          responseTimesRef={responseTimesRef}
-          messagesRef={messagesRef}
-          reactions={reactions}
-          clarification={clarification}
-          expandedMsgs={expandedMsgs}
-          setExpandedMsgs={setExpandedMsgs}
-          sheetMsgId={sheetMsgId}
-          openSheet={openSheet}
-          extThinking={extThinking}
-          showTokenUsage={showTokenUsage}
-          onCopyMessage={onCopyMessage}
-          onEdit={onEdit}
-          onDeleteWithUndo={onDeleteWithUndo}
-          onContinue={onContinue}
-          onFork={onFork}
-          onRetry={onRetry}
-          onEditResend={onEditResend}
-          onRewrite={onRewrite}
-          onSuggestionClick={onSuggestionClick}
-          onClarificationFormAnswer={onClarificationFormAnswer}
-        />
-      ))}
+      {/* AnimatePresence keeps removed rows mounted long enough to play their
+          exit (fade + slight lift) instead of vanishing mid-scroll, and
+          initial={false} keeps the very first paint instant. `layout` on each
+          row lets the survivors glide smoothly when a row above them is
+          deleted. */}
+      <AnimatePresence initial={false}>
+        {messages.map((msg) => (
+          <MessageRow
+            key={msg.id}
+            msg={msg}
+            isStreaming={streamingMsgId === msg.id || !!streamingMsgIds?.has(msg.id)}
+            isLatestAssistant={msg.id === latestAssistantId}
+            loading={loading}
+            thinkingPhase={thinkingPhase}
+            currentTool={currentTool}
+            responseTimesRef={responseTimesRef}
+            messagesRef={messagesRef}
+            reactions={reactions}
+            clarification={clarification}
+            expandedMsgs={expandedMsgs}
+            setExpandedMsgs={setExpandedMsgs}
+            sheetMsgId={sheetMsgId}
+            openSheet={openSheet}
+            extThinking={extThinking}
+            showTokenUsage={showTokenUsage}
+            onCopyMessage={onCopyMessage}
+            onEdit={onEdit}
+            onDeleteWithUndo={onDeleteWithUndo}
+            onContinue={onContinue}
+            onFork={onFork}
+            onRetry={onRetry}
+            onEditResend={onEditResend}
+            onRewrite={onRewrite}
+            onSuggestionClick={onSuggestionClick}
+            onClarificationFormAnswer={onClarificationFormAnswer}
+          />
+        ))}
+      </AnimatePresence>
       <MessageFullScreen
         msg={fullScreenMsgId ? (messages.find(m => m.id === fullScreenMsgId) ?? null) : null}
         reaction={fullScreenMsgId ? reactions[fullScreenMsgId]?.value : undefined}

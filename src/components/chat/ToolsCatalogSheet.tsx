@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { X, Copy, Check, Play, Globe, Code2, FileText, Image, Cpu, Wrench } from 'lucide-react';
 import giaTools from '../../services/GiaTools';
 import type { LucideIcon } from 'lucide-react';
+import BottomSheet from '../ui/BottomSheet';
 
 interface ToolsCatalogSheetProps {
   open: boolean;
@@ -25,6 +25,8 @@ function categorize(id: string): { category: string; icon: LucideIcon } {
   return { category: rule.category, icon: rule.icon };
 }
 
+// Migrated to the shared BottomSheet primitive (enter/exit, backdrop,
+// grabber, drag-to-dismiss all come from it). Props and content unchanged.
 export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onClose, onUse }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -59,90 +61,70 @@ export const ToolsCatalogSheet: React.FC<ToolsCatalogSheetProps> = ({ open, onCl
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            className="fixed inset-x-0 bottom-0 z-[121] rounded-t-3xl overflow-hidden flex flex-col"
-            style={{ background: 'var(--gia-surface)', borderTop: '1px solid var(--gia-border)', maxHeight: '82vh' }}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.15)' }}>
-                  <Wrench size={16} style={{ color: '#a855f7' }} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>All Tools ({giaTools.getAllTools().length})</p>
-                  <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{onUse ? 'Tap a tool to build a request GIA can run for you' : 'Tap a tool to copy its ID — then just ask GIA to use it'}</p>
-                </div>
-              </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }}>
-                <X size={15} />
-              </button>
-            </div>
+    <BottomSheet open={open} onClose={onClose} zIndex={120} maxHeight="82vh">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.15)' }}>
+            <Wrench size={16} style={{ color: '#a855f7' }} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--gia-text)' }}>All Tools ({giaTools.getAllTools().length})</p>
+            <p className="text-[10px]" style={{ color: 'var(--gia-muted)' }}>{onUse ? 'Tap a tool to build a request GIA can run for you' : 'Tap a tool to copy its ID — then just ask GIA to use it'}</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'var(--gia-surface-2)', color: 'var(--gia-muted)' }} aria-label="Close tools catalog">
+          <X size={15} />
+        </button>
+      </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-4">
-              {groups.map(({ category, list }) => (
-                <div key={category}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--gia-muted-2)' }}>
-                    {category} · {list.length}
-                  </p>
-                  <div className="space-y-1">
-                    {list.map(t => {
-                      const Icon = t.icon;
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => triggerTool(t)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all tap-feedback"
-                          style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
-                        >
-                          <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.1)' }}>
-                            <Icon size={12} style={{ color: '#a855f7' }} />
-                          </span>
-                          <span className="flex-1 min-w-0">
-                            <span className="block text-[11px] font-medium font-mono truncate" style={{ color: 'var(--gia-text)' }}>{t.id}</span>
-                            {t.description && (
-                              <span className="block text-[9px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{t.description}</span>
-                            )}
-                          </span>
-                          {onUse ? (
-                            <span
-                              role="button"
-                              tabIndex={-1}
-                              onClick={(e) => { e.stopPropagation(); void copyId(t.id); }}
-                              title="Copy tool ID"
-                              className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-black/10"
-                              style={{ color: 'var(--gia-muted-2)' }}
-                            >
-                              {copiedId === t.id ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={11} />}
-                            </span>
-                          ) : null}
-                          <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.12)' }}>
-                            {copiedId === t.id ? <Check size={12} style={{ color: '#34d399' }} /> : onUse ? <Play size={11} style={{ color: '#34d399' }} /> : <Copy size={11} style={{ color: 'var(--gia-muted-2)' }} />}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4">
+        {groups.map(({ category, list }) => (
+          <div key={category}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--gia-muted-2)' }}>
+              {category} · {list.length}
+            </p>
+            <div className="space-y-1">
+              {list.map(t => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => triggerTool(t)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all tap-feedback"
+                    style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)' }}
+                  >
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(168,85,247,0.1)' }}>
+                      <Icon size={12} style={{ color: '#a855f7' }} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[11px] font-medium font-mono truncate" style={{ color: 'var(--gia-text)' }}>{t.id}</span>
+                      {t.description && (
+                        <span className="block text-[9px] truncate" style={{ color: 'var(--gia-muted-2)' }}>{t.description}</span>
+                      )}
+                    </span>
+                    {onUse ? (
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        onClick={(e) => { e.stopPropagation(); void copyId(t.id); }}
+                        title="Copy tool ID"
+                        className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-black/10"
+                        style={{ color: 'var(--gia-muted-2)' }}
+                      >
+                        {copiedId === t.id ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={11} />}
+                      </span>
+                    ) : null}
+                    <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.12)' }}>
+                      {copiedId === t.id ? <Check size={12} style={{ color: '#34d399' }} /> : onUse ? <Play size={11} style={{ color: '#34d399' }} /> : <Copy size={11} style={{ color: 'var(--gia-muted-2)' }} />}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+          </div>
+        ))}
+      </div>
+    </BottomSheet>
   );
 };
 

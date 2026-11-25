@@ -310,6 +310,7 @@ public class GIAWakeWordService extends Service {
             short[] frame = new short[OpenWakeWordEngine.FRAME_SAMPLES];
             int micFailures = 0;
             int frameCounter = 0;
+            int inferenceCounter = 0;
 
             while (!stop.get()) {
                 if (paused) {
@@ -337,15 +338,23 @@ public class GIAWakeWordService extends Service {
                     continue;
                 }
 
-                float score = engine.process(frame);
-                lastScore = score;
+                // Battery tradeoff: run the ONNX pipeline on every 4th frame
+                // (~3.1 inferences/s instead of 12.5/s). The mic read loop
+                // still consumes every 80 ms frame at the native rate, so the
+                // recorder never backs up; detection is just sampled more
+                // coarsely, trading a little latency for a lot of CPU.
+                float score = lastScore;
+                if (++inferenceCounter % 4 == 0) {
+                    score = engine.process(frame);
+                    lastScore = score;
+                    if (engine.shouldTrigger(score, SystemClock.elapsedRealtime())) {
+                        onDetected(label, score);
+                    }
+                }
+
                 if (cfg.emitScores && ++frameCounter % 3 == 0) {
                     GIAWakeWordPlugin ref = pluginRef;
                     if (ref != null) ref.notifyWakeWordScore(score);
-                }
-
-                if (engine.shouldTrigger(score, SystemClock.elapsedRealtime())) {
-                    onDetected(label, score);
                 }
             }
         } catch (InterruptedException ie) {

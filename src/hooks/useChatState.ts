@@ -379,11 +379,25 @@ export function useChatState() {
     useGiaStore.getState().setPendingAction(null);
   }, [setAttachments, pendingAction, voiceRef, setInput]);
 
-  const handleScroll = () => {
-    if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 120);
-  };
+  // Scroll events fire at input frequency; only read geometry on the last
+  // event of each frame (rAF throttle) and skip setState entirely when the
+  // "show scroll-to-bottom" decision hasn't changed.
+  const scrollBtnRafRef = useRef(0);
+  const showScrollBtnRef = useRef(false);
+  const handleScroll = useCallback(() => {
+    if (scrollBtnRafRef.current) return;
+    scrollBtnRafRef.current = requestAnimationFrame(() => {
+      scrollBtnRafRef.current = 0;
+      const el = scrollRef.current;
+      if (!el) return;
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const next = scrollHeight - scrollTop - clientHeight > 120;
+      if (showScrollBtnRef.current === next) return;
+      showScrollBtnRef.current = next;
+      setShowScrollBtn(next);
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(scrollBtnRafRef.current), []);
 
   const scrollToBottom = () => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

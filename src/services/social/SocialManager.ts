@@ -31,6 +31,8 @@ export interface SocialPost {
   postedAt?: number;
   postUrl?: string;
   error?: string;
+  /** Creation timestamp. Backfilled on load for posts saved before this field existed. */
+  createdAt?: number;
 }
 
 export interface SocialAnalytics {
@@ -101,7 +103,11 @@ class SocialManager {
   private loadPosts() {
     try {
       const raw = localStorage.getItem(this.storeKey);
-      if (raw) this.posts = JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SocialPost[];
+        // Backfill: posts saved before createdAt existed get a first-seen stamp.
+        this.posts = parsed.map(p => ({ ...p, createdAt: p.createdAt ?? Date.now() }));
+      }
     } catch { this.posts = []; }
   }
 
@@ -197,6 +203,7 @@ class SocialManager {
       mediaUrls,
       scheduledAt: scheduleAt,
       status: scheduleAt ? 'scheduled' : 'draft',
+      createdAt: Date.now(),
     };
     this.posts.unshift(post);
     this.savePosts();

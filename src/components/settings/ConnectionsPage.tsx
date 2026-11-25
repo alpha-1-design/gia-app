@@ -1,6 +1,7 @@
 import React from 'react';
 import { PlugZap, Share2 } from 'lucide-react';
 import { SubPageHeader } from './SubPageHeader';
+import { ComposioSection } from './ComposioSection';
 import { ConnectorsSection } from './ConnectorsSection';
 import { SocialSection } from './SocialSection';
 import { GatewaySection } from './GatewaySection';
@@ -19,6 +20,7 @@ export const ConnectionsPage: React.FC<{ onBack: () => void }> = ({ onBack }) =>
       <p className="font-semibold mb-2" style={{ color: '#f59e0b' }}>About this panel</p>
       <p className="mb-2">Link GIA to external services so she can fetch real-time data, send messages, browse the web, and search the internet. Each connection is optional — set up only what you need.</p>
       <ul className="space-y-1.5 pl-3" style={{ listStyle: 'disc' }}>
+        <li><strong style={{ color: '#f59e0b' }}>Composio</strong> — Paste ONE Composio API key and unlock hundreds of connectors (Gmail, GitHub, Notion, Slack…) with managed OAuth. Composio hosts the whole OAuth flow, so there are no per-service API keys to collect.</li>
         <li><strong style={{ color: '#f59e0b' }}>Connectors</strong> — API integrations for third-party services like OpenWeather, GitHub, or custom APIs. Click <em>Configure</em>, enter your API key/fields, then test the connection. Each connector can be toggled on/off independently.</li>
         <li><strong style={{ color: '#f59e0b' }}>Social Media</strong> — Connect Telegram, WhatsApp, Instagram, or Twitter. For Telegram: talk to <em>@BotFather</em> on Telegram to create a bot, get your token, then paste it here. GIA can then respond to messages sent to that bot.</li>
         <li><strong style={{ color: '#f59e0b' }}>Gateway Routes</strong> — Define rules that map incoming messages (from social/Bridge) to specific actions or responses. Each route has a source, trigger pattern, and action.</li>
@@ -34,6 +36,7 @@ export const ConnectionsPage: React.FC<{ onBack: () => void }> = ({ onBack }) =>
       <PlugZap size={14} style={{ color: '#f59e0b' }} />
       <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--gia-muted)' }}>Integrations</span>
     </div>
+    <div id="conn-composio"><ComposioSection /></div>
     <div id="conn-connectors"><ConnectorsSection /></div>
     <div id="conn-vault"><CredentialVaultSection /></div>
     <div id="conn-social"><SocialSection /></div>

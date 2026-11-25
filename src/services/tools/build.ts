@@ -2,10 +2,17 @@ import { z } from 'zod';
 import { useGiaStore } from '../../store/useGiaStore';
 import { isNativePlatform } from '../../utils/helpers';
 import { triggerDownload, blobToBase64 } from './helpers';
+import SandboxService, { SANDBOX_BUDGETS, type SandboxFileEntry } from '../SandboxService';
 import type { Tool, ToolContext } from './types';
 import type { Skill } from '../../store/useGiaStore';
 
 const isNative = isNativePlatform;
+
+/** Directories excluded when packaging the built project into a ZIP —
+ *  dependency folders and VCS/build metadata would bloat the archive. */
+const PACKAGE_EXCLUDED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '__pycache__']);
+const MAX_PACKAGED_FILES = 500;
+const MAX_PACKAGED_BYTES = 10 * 1024 * 1024;
 
 function normalizeLanguage(val: unknown): 'sh' | 'python' | 'js' | 'cpp' {
   if (typeof val !== 'string' || !val.trim()) return 'sh';
@@ -14,6 +21,55 @@ function normalizeLanguage(val: unknown): 'sh' | 'python' | 'js' | 'cpp' {
   if (['js', 'javascript', 'node', 'nodejs', 'ts', 'typescript'].includes(l)) return 'js';
   if (['cpp', 'c++', 'c', 'cplusplus'].includes(l)) return 'cpp';
   return 'sh';
+}
+
+/** Single-quote shell escaping for sandbox paths (same scheme as SandboxService). */
+function shellQuotePath(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Resolve the requested target directory to an absolute sandbox path. */
+function resolveTargetDir(raw: string | undefined): string {
+  const candidate = (raw || useGiaStore.getState().activeProjectPath || 'gia-build').trim();
+  const normalized = candidate.replace(/\\/g, '/');
+  if (normalized.split('/').filter(Boolean).includes('..')) {
+    throw new Error('target_dir cannot traverse parent directories.');
+  }
+  if (normalized.startsWith('/')) return normalized.replace(/\/+$/, '') || '/';
+  return `/workspace/${normalized.replace(/^\/+/, '')}`.replace(/\/+$/, '');
+}
+
+interface PackagedFile {
+  path: string;
+  content: string;
+}
+
+/** Recursively read the project directory from the sandbox FS so the ZIP
+ *  reflects the ACTUAL on-disk state after the build command ran —
+ *  including generated files — not just the in-memory file list. */
+async function collectDirectory(dir: string, prefix = ''): Promise<PackagedFile[]> {
+  const entries: SandboxFileEntry[] = await SandboxService.list(dir);
+  const out: PackagedFile[] = [];
+  let totalBytes = 0;
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDir) {
+      if (PACKAGE_EXCLUDED_DIRS.has(entry.name)) continue;
+      out.push(...await collectDirectory(`${dir}/${entry.name}`, relativePath));
+      if (out.length > MAX_PACKAGED_FILES) break;
+      continue;
+    }
+    if (out.length >= MAX_PACKAGED_FILES) {
+      throw new Error(`Project exceeds the ${MAX_PACKAGED_FILES}-file packaging limit. Exclude generated folders or push to GitHub instead.`);
+    }
+    totalBytes += entry.size;
+    if (totalBytes > MAX_PACKAGED_BYTES) {
+      throw new Error(`Project exceeds the ${Math.round(MAX_PACKAGED_BYTES / 1024 / 1024)}MB packaging limit. Exclude large assets and package them separately.`);
+    }
+    const content = await SandboxService.readFile(`${dir}/${entry.name}`);
+    out.push({ path: relativePath, content });
+  }
+  return out;
 }
 
 const buildProject: Tool = {
@@ -37,7 +93,7 @@ const buildProject: Tool = {
       },
       build_command: {
         type: 'string',
-        description: 'Optional build/install command to run before packaging (e.g. "npm install && npm run build", "pip install -r requirements.txt", "gcc -o output main.c"). Uses available terminal/sandbox.',
+        description: 'Optional build/install command to run before packaging (e.g. "npm install && npm run build", "pip install -r requirements.txt", "gcc -o output main.c"). Runs inside the sandbox in target_dir.',
       },
       language: {
         type: 'string',
@@ -52,6 +108,10 @@ const buildProject: Tool = {
         type: 'string',
         description: 'Main entry point or file to highlight in build output summary',
       },
+      target_dir: {
+        type: 'string',
+        description: 'Sandbox directory the project is written to (default: the active project path, else /workspace/gia-build). Files are written here before any build command runs.',
+      },
     },
     required: ['files'],
   },
@@ -65,6 +125,7 @@ const buildProject: Tool = {
       language: z.preprocess(normalizeLanguage, z.enum(['sh', 'python', 'js', 'cpp'])).default('sh'),
       output_filename: z.string().max(200).default('project.zip'),
       entry: z.string().max(500).optional(),
+      target_dir: z.string().max(500).optional(),
     });
 
     const parsed = schema.safeParse(args);
@@ -76,76 +137,121 @@ const buildProject: Tool = {
       };
     }
 
-    const { files, build_command, language, output_filename, entry } = parsed.data;
+    const { files, build_command, output_filename, entry } = parsed.data;
     const outputName = output_filename.endsWith('.zip') ? output_filename : `${output_filename}.zip`;
+
+    let targetDir: string;
+    try {
+      targetDir = resolveTargetDir(parsed.data.target_dir);
+    } catch (error) {
+      return { success: false, content: '', error: error instanceof Error ? error.message : String(error) };
+    }
 
     ctx?.onProgress?.(0.05, `Creating project with ${files.length} files...`);
     ctx?.onThought?.(`🔨 Building ${outputName} — ${files.length} files`);
     useGiaStore.getState().addNotification(`Building ${outputName}...`);
 
+    // The sandbox is now the source of truth: files land on disk BEFORE any
+    // build command runs, so installs/compilers can actually see them.
+    if (!await SandboxService.ensureAvailable()) {
+      return {
+        success: false,
+        content: '',
+        error: 'No sandbox available — building on disk needs either the sandbox server or the on-device terminal (Settings → Terminal).',
+      };
+    }
+
+    ctx?.onProgress?.(0.1, `Writing ${files.length} files to ${targetDir}...`);
+    try {
+      await SandboxService.exec(`mkdir -p ${shellQuotePath(targetDir)}`, { workdir: '/workspace' });
+      for (const file of files) {
+        const relativePath = file.path.replace(/\\/g, '/').replace(/^\/+/, '');
+        if (!relativePath || relativePath.split('/').includes('..')) {
+          return { success: false, content: '', error: `Refusing to write unsafe file path: ${file.path}` };
+        }
+        const segments = relativePath.split('/');
+        const parentDir = segments.slice(0, -1).join('/');
+        if (parentDir) {
+          const mkdirResult = await SandboxService.exec(`mkdir -p ${shellQuotePath(`${targetDir}/${parentDir}`)}`, { workdir: '/workspace' });
+          if (mkdirResult.exitCode !== 0) {
+            return { success: false, content: '', error: `Could not create directory ${parentDir}: ${mkdirResult.stderr || mkdirResult.stdout || `exit ${mkdirResult.exitCode}`}` };
+          }
+        }
+        await SandboxService.writeFile(`${targetDir}/${relativePath}`, file.content);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        content: '',
+        error: `Failed writing project files to the sandbox: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
     let buildOutput = '';
-    let buildSuccess = true;
+    let buildStatus = 'not run';
 
     if (build_command) {
-      ctx?.onProgress?.(0.15, `Running build: ${build_command.slice(0, 80)}...`);
+      ctx?.onProgress?.(0.25, `Running build: ${build_command.slice(0, 80)}...`);
       ctx?.onThought?.(`⚙️ Running build command...`);
       useGiaStore.getState().addNotification(`Running build: ${build_command.slice(0, 60)}...`);
 
       try {
-        ctx?.onThought?.('Compiling via terminal...');
-        const TerminalService = (await import('../TerminalService')).default;
-        const result = await TerminalService.exec(build_command, undefined, undefined, 120000);
-        buildOutput = result.output || '(no output)';
-        buildSuccess = result.exitCode === 0;
-        if (!buildSuccess) {
+        const result = await SandboxService.exec(build_command, { workdir: targetDir, timeout: SANDBOX_BUDGETS.long });
+        const parts: string[] = [];
+        if (result.stdout) parts.push(result.stdout);
+        if (result.stderr) parts.push(`[stderr]\n${result.stderr}`);
+        buildOutput = parts.join('\n') || '(no output)';
+        buildStatus = result.exitCode === 0 ? 'Passed' : `Failed (exit code ${result.exitCode})`;
+        if (result.exitCode !== 0) {
           useGiaStore.getState().addNotification('Build failed — check output');
-          ctx?.onProgress?.(0.4, `Build exited with code ${result.exitCode}`);
           ctx?.onThought?.(`⚠️ Build exited with code ${result.exitCode}`);
         } else {
           useGiaStore.getState().addNotification('Build completed');
-          ctx?.onProgress?.(0.4, 'Build succeeded');
           ctx?.onThought?.('✅ Build succeeded');
         }
-      } catch {
-        ctx?.onThought?.('Terminal unavailable, trying code runner...');
-        try {
-          const CodeRunner = (await import('../CodeRunner')).default;
-          const result = await CodeRunner.run({ language, code: build_command });
-          buildOutput = result.output || '(no output)';
-          buildSuccess = !result.error;
-          if (!buildSuccess) {
-            buildOutput = (result.error || '') + '\n' + buildOutput;
-          }
-          ctx?.onProgress?.(0.4, buildSuccess ? 'Build succeeded' : 'Build had errors');
-          ctx?.onThought?.(buildSuccess ? '✅ Build succeeded' : '⚠️ Build had errors');
-        } catch (e2) {
-          buildOutput = `Build execution unavailable: ${e2 instanceof Error ? e2.message : String(e2)}`;
-          buildSuccess = false;
-        }
+      } catch (error) {
+        buildStatus = 'Failed (could not execute)';
+        buildOutput = `Build execution unavailable: ${error instanceof Error ? error.message : String(error)}`;
+        useGiaStore.getState().addNotification('Build failed — check output');
+        ctx?.onThought?.('⚠️ Build command could not run');
       }
+      ctx?.onProgress?.(0.45, buildStatus.startsWith('Passed') ? 'Build succeeded' : `Build ${buildStatus}`);
     }
 
-    ctx?.onProgress?.(0.5, 'Packaging files into ZIP...');
+    ctx?.onProgress?.(0.55, 'Reading built project from disk...');
     ctx?.onThought?.('📦 Packaging files...');
+
+    // Package from the ACTUAL directory contents so build-generated files are
+    // included, not just the declared input files.
+    let packaged: PackagedFile[];
+    try {
+      packaged = await collectDirectory(targetDir);
+    } catch (error) {
+      return {
+        success: false,
+        content: '',
+        error: `Could not package the built project: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
-
-    for (const file of files) {
-      const normalizedPath = file.path.replace(/\\/g, '/');
-      zip.file(normalizedPath, file.content);
+    for (const file of packaged) {
+      zip.file(file.path, file.content);
     }
 
-    if (build_command && buildOutput) {
-      const logPath = 'build-output.log';
-      zip.file(logPath, buildOutput);
+    if (build_command) {
+      const logParts = [`$ ${build_command}`, `Status: ${buildStatus}`, '', buildOutput];
+      zip.file('build-output.log', logParts.join('\n'));
     }
 
     const summary = [
       `Project: ${outputName}`,
-      `Files: ${files.length}`,
+      `Directory: ${targetDir}`,
+      `Files: ${packaged.length}`,
       entry ? `Entry: ${entry}` : '',
       build_command ? `Build: ${build_command.slice(0, 100)}${build_command.length > 100 ? '...' : ''}` : '',
-      build_command ? `Build status: ${buildSuccess ? 'Passed' : 'Failed (see build-output.log)'}` : '',
+      build_command ? `Build status: ${buildStatus}` : '',
       build_command && buildOutput ? `Build output: ${buildOutput.slice(0, 300)}${buildOutput.length > 300 ? '...' : ''}` : '',
     ].filter(Boolean).join('\n');
 

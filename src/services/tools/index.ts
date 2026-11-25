@@ -9,6 +9,7 @@ import { calendarTools } from './calendar';
 import { cameraTools } from './camera';
 import { capabilityTools } from './capabilities';
 import { clipboardTools } from './clipboard';
+import { composioTools } from './composio';
 import { connectorTools } from './connectors';
 import { controlTools } from './controls';
 import { coreTools } from './core';
@@ -54,6 +55,7 @@ import { termuxTools } from './termux';
 import { webSearchTools } from './webSearch';
 import { siteCheckTools } from './siteCheck';
 import { websocketTools } from './websocket';
+import { requestApiKeyTools } from './requestApiKey';
 
 export function registerAllTools(): void {
   const allToolsLists: (Tool | Tool[])[] = [
@@ -65,6 +67,7 @@ export function registerAllTools(): void {
     cameraTools,
     capabilityTools,
     clipboardTools,
+    composioTools,
     connectorTools,
     controlTools,
     coreTools,
@@ -110,6 +113,9 @@ export function registerAllTools(): void {
     webSearchTools,
     siteCheckTools,
     websocketTools,
+    // requestApiKeyTools was exported but never registered in any list —
+    // registering it is safe: ToolRegistry.register only warns + overwrites.
+    requestApiKeyTools,
   ];
 
   for (const item of allToolsLists) {

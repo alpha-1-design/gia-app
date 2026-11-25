@@ -10,7 +10,7 @@ vi.mock('../TerminalService', () => ({
   },
 }));
 
-const { default: sandboxService } = await import('../SandboxService');
+const { default: sandboxService, SANDBOX_BUDGETS } = await import('../SandboxService');
 
 describe('SandboxService — native terminal fallback', () => {
   beforeEach(() => {
@@ -60,11 +60,13 @@ describe('SandboxService — native terminal fallback', () => {
 
     await sandboxService.clone('https://github.com/example/project.git');
 
+    // Clone now runs with the long-running budget (10 min) instead of the
+    // uniform 120s abort that used to kill big clones.
     expect(execMock).toHaveBeenCalledWith(
       "mkdir -p '/workspace/projects' && GIT_ASKPASS= GIT_TERMINAL_PROMPT=0 git clone --depth 1 'https://github.com/example/project.git' '/workspace/projects/project'",
       '/workspace',
       undefined,
-      undefined,
+      SANDBOX_BUDGETS.long,
     );
     vi.unstubAllGlobals();
   });
@@ -104,8 +106,10 @@ describe('SandboxService — native terminal fallback', () => {
       { name: 'App File.tsx', isDir: false, size: 23, mode: 'f' },
       { name: 'source files', isDir: true, size: 0, mode: 'd' },
     ]);
-    expect(execMock.mock.calls[0]?.[0]).toContain("'/workspace/projects/demo'/*");
-    expect(execMock.mock.calls[0]?.slice(1)).toEqual(['/workspace']);
+    // list() now probes `stat -c %Y` first (call 0) and then runs the
+    // listing loop (call 1) with the 30s list budget.
+    expect(execMock.mock.calls[1]?.[0]).toContain("'/workspace/projects/demo'/*");
+    expect(execMock.mock.calls[1]?.slice(1)).toEqual(['/workspace', undefined, SANDBOX_BUDGETS.list]);
     vi.unstubAllGlobals();
   });
 
@@ -135,7 +139,8 @@ describe('SandboxService — native terminal fallback', () => {
     execMock.mockResolvedValue({ output: '', exitCode: 0, sessionId: 's1' });
     await sandboxService.install(['python3', 'git']);
 
-    expect(execMock).toHaveBeenCalledWith('apk add --no-cache python3 git', '/workspace', undefined, undefined);
+    // Installs get the long-running budget (10 min), not the old 120s cap.
+    expect(execMock).toHaveBeenCalledWith('apk add --no-cache python3 git', '/workspace', undefined, SANDBOX_BUDGETS.long);
     vi.unstubAllGlobals();
   });
 

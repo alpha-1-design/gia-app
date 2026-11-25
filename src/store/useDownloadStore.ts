@@ -12,6 +12,10 @@ export interface DownloadTask {
   total: number;
   files: Record<string, FileProgress>;
   error?: string;
+  /** Epoch ms when this download was first reported. */
+  createdAt: number;
+  /** Epoch ms when it finished or failed; undefined while still running. */
+  completedAt?: number;
 }
 
 interface DownloadStore {
@@ -35,6 +39,9 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
         ...state.tasks,
         [id]: {
           id, label, status: 'running', files,
+          // createdAt is stamped on the first report and kept stable across
+          // progress updates; a retry after done/error starts a fresh clock.
+          createdAt: fresh ? Date.now() : prev.createdAt,
           loaded: agg.loaded, total: agg.total,
           percent: fresh ? agg.percent : monotonicPercent(prev.percent, agg.percent),
         },
@@ -42,10 +49,10 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
     };
   }),
   finish: (id) => set(state => state.tasks[id]
-    ? { tasks: { ...state.tasks, [id]: { ...state.tasks[id], status: 'done', percent: 100 } } }
+    ? { tasks: { ...state.tasks, [id]: { ...state.tasks[id], status: 'done', percent: 100, completedAt: Date.now() } } }
     : state),
   fail: (id, error) => set(state => state.tasks[id]
-    ? { tasks: { ...state.tasks, [id]: { ...state.tasks[id], status: 'error', error } } }
+    ? { tasks: { ...state.tasks, [id]: { ...state.tasks[id], status: 'error', error, completedAt: Date.now() } } }
     : state),
   dismiss: (id) => set(state => {
     const rest = { ...state.tasks };

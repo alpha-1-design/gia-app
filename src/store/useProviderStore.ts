@@ -27,6 +27,9 @@ export interface ProviderConfig {
   imageModel?: string;
   tokenBalance?: number;
   tokenLimit?: number;
+  /** Lifecycle timestamps (backfilled on hydrate for configs saved before these existed). */
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface PendingTask {
@@ -108,6 +111,8 @@ export const useProviderStore = create<GiaProviderState>()(
                 model: providerRegistry.getDefaultModel(id),
                 enabled: providerRegistry.getProvider(id)?.defaultEnabled ?? false,
                 baseUrl: providerRegistry.getProvider(id)?.baseUrl,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
               };
             }
             if (id === 'opencode' && providers[id].model === 'deepseek-v4-flash-free') {
@@ -144,25 +149,25 @@ export const useProviderStore = create<GiaProviderState>()(
         set((s) => {
           const needsKey = providerRegistry.getNeedsApiKey(p);
           const enabled = needsKey ? key.trim().length > 0 : true;
-          const providers = { ...s.providers, [p]: { ...(s.providers[p] || { model: providerRegistry.getDefaultModel(p), enabled: false }), apiKey: key, enabled } };
+          const providers = { ...s.providers, [p]: { ...(s.providers[p] || { model: providerRegistry.getDefaultModel(p), enabled: false }), apiKey: key, enabled, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } };
           const activeProvider = enabled && !s.providers[p]?.enabled ? p : s.activeProvider;
           return { providers, activeProvider };
         }),
 
       setProviderModel: (p, model) =>
-        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false }), model } } })),
+        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false }), model, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } } })),
 
       setProviderImageModel: (p, model) =>
-        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false, model: providerRegistry.getDefaultModel(p) }), imageModel: model.trim() || undefined } } })),
+        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false, model: providerRegistry.getDefaultModel(p) }), imageModel: model.trim() || undefined, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } } })),
 
       setActiveProvider: (p) => set({ activeProvider: p }),
 
       setProviderBaseUrl: (p, url) =>
-        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false, model: providerRegistry.getDefaultModel(p) }), baseUrl: url } } })),
+        set((s) => ({ providers: { ...s.providers, [p]: { ...(s.providers[p] || { apiKey: '', enabled: false, model: providerRegistry.getDefaultModel(p) }), baseUrl: url, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } } })),
 
       disconnectProvider: (p) =>
         set((s) => {
-          const providers = { ...s.providers, [p]: { ...s.providers[p], apiKey: '', enabled: false } };
+          const providers = { ...s.providers, [p]: { ...s.providers[p], apiKey: '', enabled: false, updatedAt: Date.now() } };
           let activeProvider = s.activeProvider;
           if (p === s.activeProvider) {
             const fallback = Object.entries(providers).find(([, cfg]) => cfg.enabled && cfg.apiKey);
@@ -396,10 +401,10 @@ export const useProviderStore = create<GiaProviderState>()(
       },
 
       setProviderTokenBalance: (p, balance) =>
-        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenBalance: balance } } })),
+        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenBalance: balance, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } } })),
 
       setProviderTokenLimit: (p, limit) =>
-        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenLimit: limit } } })),
+        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenLimit: limit, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } } })),
 
       deductTokens: (p, amount) => {
         const config = get().providers[p];
@@ -407,7 +412,7 @@ export const useProviderStore = create<GiaProviderState>()(
         const current = config.tokenBalance ?? Infinity;
         if (current === Infinity) return; // Unlimited — no tracking
         const remaining = Math.max(0, current - amount);
-        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenBalance: remaining } } }));
+        set((s) => ({ providers: { ...s.providers, [p]: { ...s.providers[p], tokenBalance: remaining, createdAt: s.providers[p]?.createdAt ?? Date.now(), updatedAt: Date.now() } } }));
       },
 
       getActiveProviders: () => getActiveProvidersFromState(get().providers),
@@ -442,6 +447,22 @@ export const useProviderStore = create<GiaProviderState>()(
       // timer hold a key that a killed WebView would lose (see ISSUES.md "API key lost").
       storage: createJSONStorage(() => idbStorageWriteThrough),
       partialize: (s) => ({ providers: s.providers, activeProvider: s.activeProvider, pendingTasks: s.pendingTasks }),
+      // Unversioned persist: no version bump. Backfill timestamps on hydrate
+      // for provider configs saved before the fields existed.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<GiaProviderState>;
+        const providers = { ...(p.providers ?? current.providers) };
+        const now = Date.now();
+        for (const id of Object.keys(providers)) {
+          const cfg = providers[id];
+          providers[id] = {
+            ...cfg,
+            createdAt: cfg.createdAt ?? now,
+            updatedAt: cfg.updatedAt ?? cfg.createdAt ?? now,
+          };
+        }
+        return { ...current, ...p, providers };
+      },
     }
   )
 );

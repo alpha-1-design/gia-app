@@ -105,8 +105,8 @@ const AgentSwarmDashboard: React.FC = () => {
           <div className="h-0.5 w-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
             <motion.div
               className="h-full"
-              style={{ background: activeRun.isGodMode ? 'linear-gradient(90deg, #f59e0b, #fbbf24)' : 'linear-gradient(90deg, #a855f7, #6366f1)' }}
-              animate={{ width: `${((summary.done + summary.failed) / summary.total) * 100}%` }}
+              style={{ background: activeRun.isGodMode ? 'linear-gradient(90deg, #f59e0b, #fbbf24)' : 'linear-gradient(90deg, #a855f7, #6366f1)', transformOrigin: 'left' }}
+              animate={{ scaleX: (summary.done + summary.failed) / summary.total }}
               transition={{ duration: 0.4 }}
             />
           </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Maximize2, Menu, MessageSquare, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useGiaStore, Module } from '../store/useGiaStore';
+import haptic from '../services/HapticService';
 import { useShallow } from 'zustand/react/shallow';
 import { MODULES } from '../config/appModules';
 
@@ -58,7 +59,7 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
       <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
-          onClick={() => setShowLeftDrawer(!showLeftDrawer)}
+          onClick={() => { void haptic.impact('light'); setShowLeftDrawer(!showLeftDrawer); }}
           className="w-9 h-9 flex items-center justify-center shrink-0 rounded-xl transition-transform active:scale-95"
           style={{
             color: showLeftDrawer ? '#a855f7' : 'var(--gia-text)',
@@ -102,7 +103,7 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
           </span>
           <button
             type="button"
-            onClick={() => setShowLeftDrawer(true)}
+            onClick={() => { void haptic.impact('light'); setShowLeftDrawer(true); }}
             className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold min-w-0 max-w-[112px] transition-opacity active:opacity-70"
             style={{ background: 'var(--gia-surface-2)', border: '1px solid var(--gia-border)', color: navColor }}
             aria-label={`Current module: ${cur.label}`}
@@ -117,7 +118,7 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: statusColor, boxShadow: statusGlow }} title={statusTitle} />
         <button
           type="button"
-          onClick={() => setShowHud(!showHud)}
+          onClick={() => { void haptic.impact('light'); setShowHud(!showHud); }}
           className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
           style={{ background: showHud ? 'var(--gia-surface-3)' : 'var(--gia-surface-2)', border: `1px solid ${showHud ? 'var(--gia-text)' : 'var(--gia-border)'}`, color: showHud ? 'var(--gia-text)' : 'var(--gia-muted)' }}
           title={showHud ? 'Turn off floating chat' : 'Open floating chat'}
@@ -126,7 +127,7 @@ const AppNavigation: React.FC<AppNavigationProps> = () => {
         >
           <MessageSquare size={13} />
         </button>
-        <button onClick={toggleFullScreenMode} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: fullScreenMode ? 'var(--gia-surface-3)' : 'var(--gia-surface-2)', border: `1px solid ${fullScreenMode ? 'var(--gia-text)' : 'var(--gia-border)'}`, color: fullScreenMode ? 'var(--gia-text)' : 'var(--gia-muted)' }} title={fullScreenMode ? 'Exit full screen' : 'Enter full screen'}>
+        <button onClick={() => { void haptic.impact('light'); toggleFullScreenMode(); }} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style={{ background: fullScreenMode ? 'var(--gia-surface-3)' : 'var(--gia-surface-2)', border: `1px solid ${fullScreenMode ? 'var(--gia-text)' : 'var(--gia-border)'}`, color: fullScreenMode ? 'var(--gia-text)' : 'var(--gia-muted)' }} title={fullScreenMode ? 'Exit full screen' : 'Enter full screen'}>
           <Maximize2 size={14} />
         </button>
         <button

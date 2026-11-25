@@ -65,6 +65,8 @@ export class UnimindClient {
   private reconnectDelay = 1000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  /** While the page is hidden the socket and reconnect chain are suspended. */
+  private pausedForHidden = false;
   private presence: PresenceStatus = 'offline';
   private presenceTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -88,6 +90,11 @@ export class UnimindClient {
         localStorage.setItem('gia:unimind:deviceId', this.deviceId);
       }
     } catch { /* non-browser env */ }
+    // Lives for the whole client lifetime: hidden suspends the connection,
+    // visible resumes it (see onVisibility). Must survive stopPresence().
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.onVisibility);
+    }
   }
 
   // ── Config ──────────────────────────────────────────────────────
@@ -200,10 +207,10 @@ export class UnimindClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.stopped || this.reconnectTimer) return;
+    if (this.stopped || this.pausedForHidden || this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (!this.stopped && this.relayUrl) void this.open();
+      if (!this.stopped && !this.pausedForHidden && this.relayUrl) void this.open();
     }, this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
   }
@@ -213,9 +220,6 @@ export class UnimindClient {
   private startPresence(): void {
     this.stopPresence();
     this.presenceTimer = setInterval(() => this.sendPresence(this.presence), PRESENCE_INTERVAL);
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', this.onVisibility);
-    }
   }
 
   private stopPresence(): void {
@@ -223,16 +227,54 @@ export class UnimindClient {
       clearInterval(this.presenceTimer);
       this.presenceTimer = null;
     }
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', this.onVisibility);
+  }
+
+  /**
+   * Battery: while the page is hidden, drop the relay socket (the reconnect
+   * chain stays suppressed for the hidden period) and stop the 60s presence
+   * heartbeat. On visible, reconnect and resume.
+   */
+  private onVisibility = (): void => {
+    if (typeof document === 'undefined') return;
+    if (document.visibilityState === 'hidden') {
+      this.handleHidden();
+    } else {
+      this.handleVisible();
+    }
+  };
+
+  private handleHidden(): void {
+    this.pausedForHidden = true;
+    this.stopPresence();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      try { this.ws.close(); } catch { /* ignore */ }
+      this.ws = null;
     }
   }
 
-  private onVisibility = (): void => {
-    const next: PresenceStatus =
-      typeof document !== 'undefined' && document.visibilityState === 'visible' ? 'online' : 'away';
-    this.sendPresence(next);
-  };
+  private handleVisible(): void {
+    const wasPaused = this.pausedForHidden;
+    this.pausedForHidden = false;
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      if (wasPaused) this.startPresence();
+      this.sendPresence('online');
+      return;
+    }
+    if (!wasPaused) return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.stopped || !this.relayUrl) return;
+    if (this.ws?.readyState === WebSocket.CONNECTING) return;   // opening already
+    this.ws = null;
+    this.reconnectDelay = 1000;   // snappy resume after the hidden period
+    void this.open();
+  }
 
   private sendPresence(status: PresenceStatus): void {
     if (this.ws?.readyState !== WebSocket.OPEN) return;

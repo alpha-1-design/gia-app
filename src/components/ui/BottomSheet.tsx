@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type PanInfo } from 'motion/react';
 import { shouldDismissFromDrag } from './dragDismiss';
+import haptic from '../../services/HapticService';
 
 interface BottomSheetProps {
   open: boolean;
@@ -34,8 +35,18 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   className = '',
   zIndex = 120,
 }) => {
+  // Light haptic tap when the sheet opens or is dismissed — the same
+  // feedback OS-level sheets give. Fire-and-forget; the service no-ops
+  // itself when haptics are disabled in Settings.
+  const wasOpenRef = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpenRef.current) void haptic.impact('light');
+    wasOpenRef.current = open;
+  }, [open]);
+
   const handleDragEnd = (_e: unknown, info: PanInfo) => {
     if (shouldDismissFromDrag(info)) {
+      void haptic.impact('light');
       onClose();
     }
   };
@@ -50,7 +61,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={() => { void haptic.impact('light'); onClose(); }}
           />
           <motion.div
             className={`fixed inset-x-0 bottom-0 rounded-t-3xl overflow-hidden flex flex-col ${className}`}

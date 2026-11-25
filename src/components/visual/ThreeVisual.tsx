@@ -162,18 +162,24 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
     };
 
     const el = renderer.domElement;
-    const onMouseDown = (e: MouseEvent) => { orbit.dragging = true; orbit.px = e.clientX; orbit.py = e.clientY; };
+    // Recent-interaction window: while orbiting/zooming the loop keeps the
+    // full rAF rate; an idle scene holds a 30fps cap (see loop below).
+    let interactingUntil = 0;
+    const poke = () => { interactingUntil = performance.now() + 600; };
+    const onMouseDown = (e: MouseEvent) => { orbit.dragging = true; orbit.px = e.clientX; orbit.py = e.clientY; poke(); };
     const onMouseMove = (e: MouseEvent) => {
       if (!orbit.dragging) return;
+      poke();
       orbit.theta -= (e.clientX - orbit.px) * 0.005;
       orbit.phi = Math.max(-1.5, Math.min(1.5, orbit.phi + (e.clientY - orbit.py) * 0.005));
       orbit.px = e.clientX; orbit.py = e.clientY; updateCam();
     };
     const onMouseUp = () => { orbit.dragging = false; };
-    const onWheel = (e: WheelEvent) => { e.preventDefault(); orbit.radius = Math.max(1, Math.min(50, orbit.radius + e.deltaY * 0.01)); updateCam(); };
-    const onTouchStart = (e: TouchEvent) => { if (e.touches.length === 1) { orbit.dragging = true; orbit.px = e.touches[0].clientX; orbit.py = e.touches[0].clientY; } };
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); poke(); orbit.radius = Math.max(1, Math.min(50, orbit.radius + e.deltaY * 0.01)); updateCam(); };
+    const onTouchStart = (e: TouchEvent) => { if (e.touches.length === 1) { orbit.dragging = true; orbit.px = e.touches[0].clientX; orbit.py = e.touches[0].clientY; poke(); } };
     const onTouchMove = (e: TouchEvent) => {
       if (!orbit.dragging || e.touches.length !== 1) return;
+      poke();
       orbit.theta -= (e.touches[0].clientX - orbit.px) * 0.005;
       orbit.phi = Math.max(-1.5, Math.min(1.5, orbit.phi + (e.touches[0].clientY - orbit.py) * 0.005));
       orbit.px = e.touches[0].clientX; orbit.py = e.touches[0].clientY; updateCam();
@@ -192,8 +198,28 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
     const needsLoop = meshes.some(e => e.animate) || !!sceneData.autoRotate;
     let inView = true;
     let pageVisible = true;
-    const animate = () => {
+    // Idle frame cap: rAF fires at the display's rate (60-120Hz), but an
+    // unattended 3D scene looks identical at 30fps and mid-range Android
+    // GPUs are the bottleneck — so between interactions we render every
+    // other tick and at full rate for ~600ms after any pointer/wheel event
+    // (interactingUntil, poked by the orbit handlers above).
+    const IDLE_FRAME_INTERVAL = 1000 / 30;
+    let lastFrameTime = 0;
+    const animate = (now?: number) => {
       frameId = requestAnimationFrame(animate);
+      const ts = now ?? performance.now();
+      // Compare against the rAF frame timestamp (same clock origin as
+      // performance.now(), but vsync-aligned — checking the wall clock at
+      // callback time would over-extend the window on queued frames).
+      const minInterval = ts < interactingUntil ? 0 : IDLE_FRAME_INTERVAL;
+      if (lastFrameTime !== 0 && ts - lastFrameTime < minInterval) return;
+      // Frame-delta scaling: rotation speeds were tuned as per-frame
+      // constants at 60fps; multiply by delta*60 so the visible speed is
+      // identical at 30, 60 or 120fps. Clamped so a resume after a pause
+      // (huge delta) can't teleport the scene.
+      const delta = lastFrameTime === 0 ? 1 / 60 : Math.min((ts - lastFrameTime) / 1000, 0.1);
+      lastFrameTime = ts;
+      const k = delta * 60;
       const t = (Date.now() - start) / 1000;
       for (const entry of meshes) {
         const a = entry.animate;
@@ -201,14 +227,14 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
         const m = entry.mesh;
         const rot = a.rotate as Record<string, unknown> | undefined;
         if (rot) {
-          if (rot.x) m.rotation.x += (rot.x as number) * 0.01;
-          if (rot.y) m.rotation.y += (rot.y as number) * 0.01;
-          if (rot.z) m.rotation.z += (rot.z as number) * 0.01;
+          if (rot.x) m.rotation.x += (rot.x as number) * 0.01 * k;
+          if (rot.y) m.rotation.y += (rot.y as number) * 0.01 * k;
+          if (rot.z) m.rotation.z += (rot.z as number) * 0.01 * k;
         }
         if (a.bob && entry.initialY !== undefined) m.position.y = entry.initialY + Math.sin(t * (a.bob as number)) * 0.3;
         if (a.pulse) { const s = 1 + Math.sin(t * 2) * 0.1; m.scale.x = s; m.scale.y = s; m.scale.z = s; }
       }
-      if (sceneData.autoRotate) { orbit.theta += 0.003; updateCam(); }
+      if (sceneData.autoRotate) { orbit.theta += 0.003 * k; updateCam(); }
       renderer.render(scene, camera);
     };
     // Render-loop gating (mobile battery): a static scene renders once —
@@ -227,6 +253,9 @@ const ThreeVisual: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
       } else if (!shouldRun && frameId !== 0) {
         cancelAnimationFrame(frameId);
         frameId = 0;
+        // Zero the accumulator so the first frame after a resume doesn't
+        // inherit a stale (huge) delta.
+        lastFrameTime = 0;
       }
     };
     const onVis = () => { pageVisible = document.visibilityState === 'visible'; syncLoop(); };

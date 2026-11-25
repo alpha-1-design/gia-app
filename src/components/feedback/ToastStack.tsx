@@ -1,10 +1,11 @@
 import React, { useEffect, useCallback } from 'react';
 import { clsx } from 'clsx';
+import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, AlertTriangle, Info, X, XCircle } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
-interface Toast {
+export interface Toast {
   id: string;
   type: ToastType;
   title: string;
@@ -24,12 +25,23 @@ const TOAST_CONFIG: Record<ToastType, { icon: React.FC<{ size?: number }>; bg: s
   warning: { icon: AlertTriangle, bg: 'bg-amber-900/60',  border: 'border-amber-700',  iconColor: 'text-amber-400' },
 };
 
+// Motion tokens mirroring the CSS design system (globals.css):
+// --ease-spring for entrances, --ease-standard for exits.
+const EASE_SPRING: [number, number, number, number] = [0.34, 1.56, 0.64, 1];
+const EASE_STANDARD: [number, number, number, number] = [0.2, 0, 0, 1];
+
 const ToastStack: React.FC<ToastStackProps> = ({ toasts, onDismiss }) => {
   return (
     <div className="fixed bottom-20 right-6 z-[100] flex flex-col-reverse gap-2 max-w-sm">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
-      ))}
+      {/* AnimatePresence keyed by toast id: rows slide in from the right and,
+          critically, slide OUT again on dismissal — the old CSS class
+          (animate-slide-in-right) never existed, so toasts had an entrance
+          of nothing and no exit at all. */}
+      <AnimatePresence initial={false}>
+        {toasts.map((toast) => (
+          <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
+        ))}
+      </AnimatePresence>
     </div>
   );
 };
@@ -49,14 +61,18 @@ const ToastItem: React.FC<{ toast: Toast; onDismiss: (id: string) => void }> = (
   const Icon = config.icon;
 
   return (
-    <div
+    <motion.div
+      layout
       className={clsx(
         'flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm',
-        'animate-slide-in-right transition-all duration-300',
         config.bg,
         config.border
       )}
       role="alert"
+      initial={{ opacity: 0, x: 40 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 40, transition: { duration: 0.2, ease: EASE_STANDARD } }}
+      transition={{ duration: 0.25, ease: EASE_SPRING }}
     >
       <div className={clsx('shrink-0 mt-0.5', config.iconColor)}>
         <Icon size={18} />
@@ -74,7 +90,7 @@ const ToastItem: React.FC<{ toast: Toast; onDismiss: (id: string) => void }> = (
       >
         <X size={14} />
       </button>
-    </div>
+    </motion.div>
   );
 };
 

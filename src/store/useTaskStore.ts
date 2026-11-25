@@ -14,6 +14,9 @@ export interface GiaTask {
   dueDate: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Epoch ms when the task reached 'done'; cleared whenever the status
+   *  leaves 'done' so the timestamp always reflects the latest completion. */
+  completedAt?: number;
 }
 
 interface TaskState {
@@ -25,6 +28,20 @@ interface TaskState {
   moveTask: (taskId: string, newStatus: GiaTask['status']) => void;
   reorderColumns: (columns: { id: string; title: string }[]) => void;
   getTasksByStatus: (status: GiaTask['status']) => GiaTask[];
+}
+
+/** Shared completedAt policy: set when a task lands on 'done' (an explicit
+ *  completedAt in the update wins), cleared when it leaves 'done'. */
+function applyCompletedAt<T extends { status: GiaTask['status']; completedAt?: number; updatedAt: number }>(
+  task: T,
+  now: number,
+): T {
+  if (task.status === 'done') {
+    return { ...task, completedAt: task.completedAt ?? now };
+  }
+  const { completedAt: _cleared, ...rest } = task;
+  void _cleared;
+  return rest as T;
 }
 
 export const useTaskStore = create<TaskState>()(
@@ -48,9 +65,15 @@ export const useTaskStore = create<TaskState>()(
 
       updateTask: (id, updates) =>
         set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id ? { ...t, ...updates, updatedAt: Date.now() } : t
-          ),
+          tasks: s.tasks.map((t) => {
+            if (t.id !== id) return t;
+            const now = Date.now();
+            const next = { ...t, ...updates, updatedAt: now };
+            if (updates.status && updates.status !== t.status) {
+              return applyCompletedAt(next, now);
+            }
+            return next;
+          }),
         })),
 
       deleteTask: (id) =>
@@ -58,9 +81,11 @@ export const useTaskStore = create<TaskState>()(
 
       moveTask: (taskId: string, newStatus: GiaTask['status']) =>
         set((s: TaskState) => ({
-          tasks: s.tasks.map((t: GiaTask) =>
-            t.id === taskId ? { ...t, status: newStatus, updatedAt: Date.now() } : t
-          ),
+          tasks: s.tasks.map((t: GiaTask) => {
+            if (t.id !== taskId) return t;
+            const now = Date.now();
+            return applyCompletedAt({ ...t, status: newStatus, updatedAt: now }, now);
+          }),
         })),
 
       reorderColumns: (columns: { id: string; title: string }[]) => set({ columns }),

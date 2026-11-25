@@ -22,6 +22,9 @@ export interface MCPServerConfig {
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
+  // Lifecycle timestamps (backfilled on hydrate for servers saved before this field existed).
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export type MCPConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -74,7 +77,7 @@ export const useMCPStore = create<MCPStoreState>()(
       addServer: (config) => {
         const id = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         set((s) => ({
-          servers: [...s.servers, { ...config, id }],
+          servers: [...s.servers, { ...config, id, createdAt: Date.now(), updatedAt: Date.now() }],
         }));
         return id;
       },
@@ -90,7 +93,7 @@ export const useMCPStore = create<MCPStoreState>()(
       updateServer: (id, config) =>
         set((s) => ({
           servers: s.servers.map((sv) =>
-            sv.id === id ? { ...sv, ...config } : sv
+            sv.id === id ? { ...sv, ...config, updatedAt: Date.now() } : sv
           ),
         })),
 
@@ -139,8 +142,21 @@ export const useMCPStore = create<MCPStoreState>()(
           oauthClientId: server.oauthClientId,
           oauthRedirectUri: server.oauthRedirectUri,
           oauthScopes: server.oauthScopes,
+          createdAt: server.createdAt,
+          updatedAt: server.updatedAt,
         })),
       }),
+      // Unversioned persist: no version bump. Backfill timestamps on hydrate
+      // for servers saved before the fields existed.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<MCPStoreState>;
+        const servers = (p.servers ?? current.servers).map((sv) => ({
+          ...sv,
+          createdAt: sv.createdAt ?? Date.now(),
+          updatedAt: sv.updatedAt ?? sv.createdAt ?? Date.now(),
+        }));
+        return { ...current, ...p, servers };
+      },
     }
   )
 );

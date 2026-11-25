@@ -31,6 +31,14 @@ export interface TaskItem {
   label: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   details?: string;
+  /** Epoch ms. Optional in the type because the stream parser produces items
+   *  without one; updateMessageTasks stamps (and keeps stable across stream
+   *  updates by inheriting from the previous task with the same id) so every
+   *  stored task ends up with a real timestamp. */
+  createdAt?: number;
+  /** Epoch ms when the task reached 'completed'; cleared whenever the status
+   *  leaves 'completed'. */
+  completedAt?: number;
 }
 
 export interface Artifact {
@@ -38,7 +46,18 @@ export interface Artifact {
   type: string;
   title: string;
   content: string;
+  /** Epoch ms — stamped by updateMessageArtifacts. Required on the stored
+   *  shape; the store's input type accepts parser artifacts without one. */
+  createdAt: number;
 }
+
+/** Input shape for updateMessageArtifacts: stream parser artifacts arrive
+ *  without timestamps and the store stamps them. */
+export type ArtifactInput = Omit<Artifact, 'createdAt'> & { createdAt?: number };
+
+/** Input shape for updateMessageTasks: same idea — parser items flow through
+ *  untouched and get stamped at the store boundary. */
+export type TaskItemInput = Omit<TaskItem, 'createdAt' | 'completedAt'> & { createdAt?: number; completedAt?: number };
 
 export interface Message {
   id: string;
@@ -136,11 +155,13 @@ function updateSegmentsInTree(nodes: MessageNode[], msgId: string, segments: Mes
   });
 }
 
-function updateArtifactsInTree(nodes: MessageNode[], msgId: string, artifacts: Artifact[]): MessageNode[] {
+function updateArtifactsInTree(nodes: MessageNode[], msgId: string, artifacts: ArtifactInput[]): MessageNode[] {
   if (!Array.isArray(nodes)) return [];
   return nodes.map(node => {
     if (node.message.id === msgId) {
-      return { ...node, message: { ...node.message, artifacts: [...(node.message.artifacts || []), ...artifacts] } };
+      const now = Date.now();
+      const stamped: Artifact[] = artifacts.map(a => ({ ...a, createdAt: a.createdAt ?? now }));
+      return { ...node, message: { ...node.message, artifacts: [...(node.message.artifacts || []), ...stamped] } };
     }
     if (Array.isArray(node.children) && node.children.length > 0) {
       return { ...node, children: updateArtifactsInTree(node.children, msgId, artifacts) };
@@ -149,11 +170,26 @@ function updateArtifactsInTree(nodes: MessageNode[], msgId: string, artifacts: A
   });
 }
 
-function updateTasksInTree(nodes: MessageNode[], msgId: string, tasks: TaskItem[]): MessageNode[] {
+function updateTasksInTree(nodes: MessageNode[], msgId: string, tasks: TaskItemInput[]): MessageNode[] {
   if (!Array.isArray(nodes)) return [];
   return nodes.map(node => {
     if (node.message.id === msgId) {
-      return { ...node, message: { ...node.message, tasks } };
+      const now = Date.now();
+      const previous = node.message.tasks || [];
+      // The parser replaces the whole array on every stream tick, so a task's
+      // createdAt must be inherited from the previous snapshot with the same
+      // id — otherwise the timestamp would drift forward on every token.
+      // completedAt is set the first time a task lands on 'completed' and
+      // cleared whenever its status leaves 'completed'.
+      const stamped: TaskItem[] = tasks.map(t => {
+        const prev = previous.find(p => p.id === t.id);
+        const createdAt = t.createdAt ?? prev?.createdAt ?? now;
+        const completedAt = t.status === 'completed'
+          ? (t.completedAt ?? prev?.completedAt ?? now)
+          : undefined;
+        return { ...t, createdAt, ...(completedAt !== undefined ? { completedAt } : {}) };
+      });
+      return { ...node, message: { ...node.message, tasks: stamped } };
     }
     if (Array.isArray(node.children) && node.children.length > 0) {
       return { ...node, children: updateTasksInTree(node.children, msgId, tasks) };
@@ -248,6 +284,13 @@ export interface ScheduledTask {
   lastResult?: string;
   status: 'pending' | 'running' | 'done' | 'error';
   channel?: 'telegram' | 'whatsapp';
+  /** Epoch ms — optional in the type (callers construct tasks without them);
+   *  addScheduledTask/updateTaskStatus stamp them so stored tasks always
+   *  carry real timestamps. */
+  createdAt?: number;
+  updatedAt?: number;
+  /** Epoch ms of the most recent run (set whenever a status update lands). */
+  lastRun?: number;
 }
 
 export interface SkillTool {
@@ -295,6 +338,16 @@ export interface Clarification {
    * question+options+text layout.
    */
   fields?: ClarificationField[];
+}
+
+/** Metadata for a project folder in the sandbox workspace, so the project
+ *  list can show real timestamps ("2h ago") and survive reconnects. */
+export interface ProjectMeta {
+  path: string;
+  createdAt: number;
+  updatedAt: number;
+  lastOpenedAt: number;
+  displayName: string;
 }
 
 interface InAppBrowserState {
@@ -463,8 +516,8 @@ interface GiaState {
   addMessage: (sessionId: string, msg: Message) => void;
   updateMessage: (sessionId: string, msgId: string, content: string, thoughts?: string) => void;
   updateMessageSegments: (sessionId: string, msgId: string, segments: MessageSegment[]) => void;
-  updateMessageArtifacts: (sessionId: string, msgId: string, artifacts: Artifact[]) => void;
-  updateMessageTasks: (sessionId: string, msgId: string, tasks: TaskItem[]) => void;
+  updateMessageArtifacts: (sessionId: string, msgId: string, artifacts: ArtifactInput[]) => void;
+  updateMessageTasks: (sessionId: string, msgId: string, tasks: TaskItemInput[]) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
   forkSession: (sessionId: string, msgId: string) => string;
@@ -476,7 +529,7 @@ interface GiaState {
   addBranch: (sessionId: string, fromMsgId: string, branchName?: string) => string;
   renameBranch: (sessionId: string, branchId: string, name: string) => void;
   deleteBranch: (sessionId: string, branchId: string) => void;
-  addScheduledTask: (task: ScheduledTask) => void;
+  addScheduledTask: (task: Omit<ScheduledTask, 'createdAt' | 'updatedAt' | 'lastRun'> & Partial<Pick<ScheduledTask, 'createdAt' | 'updatedAt' | 'lastRun'>>) => void;
   updateTaskStatus: (id: string, status: ScheduledTask['status'], result?: string, nextRun?: number) => void;
   deleteTask: (id: string) => void;
   setUserProfile: (p: Partial<UserProfile>) => void;
@@ -497,7 +550,15 @@ interface GiaState {
   setBuildMode: (v: boolean) => void;
   activeProjectPath: string | null;
   setActiveProjectPath: (path: string | null) => void;
-  buildSessionId: string | null;
+  /** Persisted per-project timestamps/display names, keyed by sandbox path. */
+  projectMeta: Record<string, ProjectMeta>;
+  /** Bump updatedAt (and optionally rename) for a project folder. */
+  touchProject: (path: string, opts?: { displayName?: string }) => void;
+  /** Drop a project's metadata; clears activeProjectPath if it pointed there. */
+  removeProject: (path: string) => void;
+  /** Mark a project opened: stamps lastOpenedAt/updatedAt and makes it the
+   *  active Build workspace path in one step. */
+  openProject: (path: string) => void;
   buildPreviewUrl: string | null;
   setBuildPreview: (url: string | null) => void;
   inAppBrowser: InAppBrowserState;
@@ -653,7 +714,7 @@ export const useGiaStore = create<GiaState>()(
       liveFileEdit: null,
       buildMode: false,
       activeProjectPath: null,
-      buildSessionId: null,
+      projectMeta: {},
       buildPreviewUrl: null,
       inAppBrowser: { open: false, mode: 'reader', url: '', title: '', content: '', error: '', loading: false },
       sandboxEnvReady: null,
@@ -661,8 +722,56 @@ export const useGiaStore = create<GiaState>()(
       autoModelUnload: (() => { try { return localStorage.getItem('gia-auto-model-unload') !== 'false'; } catch { return true; } })(),
       fullScreenMode: false,
 
-      setBuildMode: (v) => set((s) => ({ buildMode: v, buildSessionId: v ? s.activeSessionId : s.buildSessionId })),
+      setBuildMode: (v) => set({ buildMode: v }),
       setActiveProjectPath: (path) => set({ activeProjectPath: path }),
+      touchProject: (path, opts) => set((s) => {
+        if (!path) return {};
+        const now = Date.now();
+        const existing = s.projectMeta[path];
+        const displayName = opts?.displayName ?? existing?.displayName ?? (path.split('/').filter(Boolean).pop() || path);
+        return {
+          projectMeta: {
+            ...s.projectMeta,
+            [path]: {
+              path,
+              createdAt: existing?.createdAt ?? now,
+              updatedAt: now,
+              lastOpenedAt: existing?.lastOpenedAt ?? now,
+              displayName,
+            },
+          },
+        };
+      }),
+      removeProject: (path) => set((s) => {
+        const hadMeta = !!s.projectMeta[path];
+        const next = { ...s.projectMeta };
+        delete next[path];
+        const clearActive = s.activeProjectPath === path;
+        // Only touch state that actually changed so subscribers don't churn.
+        if (!hadMeta && !clearActive) return {};
+        return {
+          ...(hadMeta ? { projectMeta: next } : {}),
+          ...(clearActive ? { activeProjectPath: null } : {}),
+        };
+      }),
+      openProject: (path) => set((s) => {
+        if (!path) return { activeProjectPath: null };
+        const now = Date.now();
+        const existing = s.projectMeta[path];
+        return {
+          activeProjectPath: path,
+          projectMeta: {
+            ...s.projectMeta,
+            [path]: {
+              path,
+              createdAt: existing?.createdAt ?? now,
+              updatedAt: existing?.updatedAt ?? now,
+              lastOpenedAt: now,
+              displayName: existing?.displayName ?? (path.split('/').filter(Boolean).pop() || path),
+            },
+          },
+        };
+      }),
       setBuildPreview: (url) => set({ buildPreviewUrl: url }),
       setInAppBrowserState: (browserState) => set((s) => ({
         inAppBrowser: { ...s.inAppBrowser, ...browserState },
@@ -1087,10 +1196,31 @@ export const useGiaStore = create<GiaState>()(
         return sessions.find((s) => s.id === activeSessionId) ?? null;
       },
 
-      addScheduledTask: (task) => set((s) => ({ scheduledTasks: [task, ...s.scheduledTasks] })),
+      addScheduledTask: (task) => set((s) => {
+        const now = Date.now();
+        const stamped: ScheduledTask = {
+          ...task,
+          createdAt: task.createdAt ?? now,
+          updatedAt: task.updatedAt ?? now,
+          ...(task.lastRun !== undefined ? { lastRun: task.lastRun } : {}),
+        };
+        return { scheduledTasks: [stamped, ...s.scheduledTasks] };
+      }),
       updateTaskStatus: (id, status, result, nextRun) =>
         set((s) => ({
-          scheduledTasks: s.scheduledTasks.map((t) => (t.id === id ? { ...t, status, lastResult: result ?? t.lastResult, ...(nextRun !== undefined ? { nextRun } : {}) } : t)),
+          scheduledTasks: s.scheduledTasks.map((t) => {
+            if (t.id !== id) return t;
+            const now = Date.now();
+            return {
+              ...t,
+              status,
+              lastResult: result ?? t.lastResult,
+              ...(nextRun !== undefined ? { nextRun } : {}),
+              lastRun: now,
+              createdAt: t.createdAt ?? now,
+              updatedAt: now,
+            };
+          }),
         })),
       deleteTask: (id) => set((s) => ({ scheduledTasks: s.scheduledTasks.filter((t) => t.id !== id) })),
 
@@ -1184,7 +1314,7 @@ export const useGiaStore = create<GiaState>()(
     }),
     {
       name: 'gia-store-v3',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => idbStorage),
       migrate: (persistedState: unknown, version: number) => {
         if (persistedState && typeof persistedState === 'object') {
@@ -1224,6 +1354,69 @@ export const useGiaStore = create<GiaState>()(
             if (state.sharedData && typeof state.sharedData === 'object') {
               const sharedData = state.sharedData as Record<string, unknown>;
               if (sharedData.currentMode === 'build') sharedData.currentMode = 'code';
+            }
+          }
+          // v5: timestamps everywhere. Default missing createdAt/updatedAt/
+          // completedAt/lastRun on scheduled tasks, message artifacts and
+          // message tasks, and introduce the empty projectMeta slice.
+          if (version < 5) {
+            const now = Date.now();
+            const stampNumber = (value: unknown, fallback: number): number =>
+              typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+            if (Array.isArray(state.scheduledTasks)) {
+              state.scheduledTasks = state.scheduledTasks.map((t: unknown) => {
+                if (!t || typeof t !== 'object') return t;
+                const task = t as Record<string, unknown>;
+                return {
+                  ...task,
+                  createdAt: stampNumber(task.createdAt, now),
+                  updatedAt: stampNumber(task.updatedAt, now),
+                  ...(task.lastRun === undefined ? {} : { lastRun: stampNumber(task.lastRun, now) }),
+                };
+              });
+            }
+            const stampMessageTasks = (messages: unknown): void => {
+              if (!Array.isArray(messages)) return;
+              for (const node of messages) {
+                if (!node || typeof node !== 'object') continue;
+                const message = (node as Record<string, unknown>).message;
+                if (message && typeof message === 'object') {
+                  const m = message as Record<string, unknown>;
+                  if (Array.isArray(m.artifacts)) {
+                    m.artifacts = m.artifacts.map((a: unknown) => {
+                      if (!a || typeof a !== 'object') return a;
+                      const artifact = a as Record<string, unknown>;
+                      return { ...artifact, createdAt: stampNumber(artifact.createdAt, now) };
+                    });
+                  }
+                  if (Array.isArray(m.tasks)) {
+                    m.tasks = m.tasks.map((t: unknown) => {
+                      if (!t || typeof t !== 'object') return t;
+                      const task = t as Record<string, unknown>;
+                      const completedAt = task.status === 'completed' ? stampNumber(task.completedAt, now) : undefined;
+                      return {
+                        ...task,
+                        createdAt: stampNumber(task.createdAt, now),
+                        ...(completedAt !== undefined ? { completedAt } : {}),
+                      };
+                    });
+                  }
+                }
+                const children = (node as Record<string, unknown>).children;
+                if (Array.isArray(children)) stampMessageTasks(children);
+              }
+            };
+            for (const key of ['sessions', 'archivedSessions'] as const) {
+              if (Array.isArray(state[key])) {
+                for (const sess of state[key]) {
+                  if (sess && typeof sess === 'object') {
+                    stampMessageTasks((sess as Record<string, unknown>).messages);
+                  }
+                }
+              }
+            }
+            if (!state.projectMeta || typeof state.projectMeta !== 'object') {
+              state.projectMeta = {};
             }
           }
         }
@@ -1266,9 +1459,9 @@ export const useGiaStore = create<GiaState>()(
         wakeWordAccessKey: s.wakeWordAccessKey,
         nativeWakeKeyword: s.nativeWakeKeyword,
         useWhisper: s.useWhisper,
-        buildSessionId: s.buildSessionId,
         buildPreviewUrl: s.buildPreviewUrl,
         activeProjectPath: s.activeProjectPath,
+        projectMeta: s.projectMeta,
       }),
       onRehydrateStorage: () => (state) => {
         // A stream interrupted by a crash / tab close can persist a message

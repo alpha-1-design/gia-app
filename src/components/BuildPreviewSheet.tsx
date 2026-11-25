@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { X, RotateCcw, ExternalLink } from 'lucide-react';
 import GIAInAppBrowser from '../services/GIAInAppBrowser';
 import { useGiaStore } from '../store/useGiaStore';
+import BottomSheet from './ui/BottomSheet';
 
 interface BuildPreviewSheetProps {
   url: string | null;
@@ -10,6 +10,10 @@ interface BuildPreviewSheetProps {
   onClose: () => void;
 }
 
+// Migrated to the shared BottomSheet primitive (enter/exit, backdrop,
+// grabber, drag-to-dismiss all come from it). Props and content unchanged.
+// The iframe is sandboxed with allow-scripts ONLY — never allow-same-origin,
+// because it renders untrusted LLM-generated HTML.
 const BuildPreviewSheet: React.FC<BuildPreviewSheetProps> = ({ url, open, onClose }) => {
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -24,66 +28,54 @@ const BuildPreviewSheet: React.FC<BuildPreviewSheetProps> = ({ url, open, onClos
     }
   };
 
+  if (!url) return null;
+
   return (
-    <AnimatePresence>
-      {open && url && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-[150]"
-            style={{ background: 'rgba(0,0,0,0.55)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            className="fixed inset-x-0 bottom-0 z-[151] flex flex-col rounded-t-2xl overflow-hidden"
-            style={{ height: '85vh', background: 'var(--gia-surface)', borderTop: '1px solid var(--gia-border)', boxShadow: '0 -8px 40px rgba(0,0,0,0.5)' }}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-          >
-            <div className="flex items-center gap-2 px-3 py-2.5 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--gia-muted)' }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider shrink-0" style={{ color: 'var(--gia-text)' }}>Preview</span>
-              <span className="text-[11px] truncate flex-1 min-w-0" style={{ color: 'var(--gia-muted)' }}>{url}</span>
-              <button
-                onClick={() => setRefreshKey((k) => k + 1)}
-                className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)]"
-                style={{ color: 'var(--gia-muted-2)' }}
-                aria-label="Refresh preview"
-              >
-                <RotateCcw size={14} />
-              </button>
-              <button
-                onClick={() => void openInBrowser()}
-                className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)]"
-                style={{ color: 'var(--gia-muted-2)' }}
-                aria-label="Open in browser"
-              >
-                <ExternalLink size={14} />
-              </button>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)]"
-                style={{ color: 'var(--gia-muted-2)' }}
-                aria-label="Close preview"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <iframe
-              key={refreshKey}
-              src={url}
-              title="App preview"
-              className="flex-1 w-full border-0 block"
-              style={{ background: '#fff' }}
-            />
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      zIndex={150}
+      maxHeight="85vh"
+      className="h-[85vh] shadow-[0_-8px_40px_rgba(0,0,0,0.5)]"
+    >
+      <div className="flex items-center gap-2 px-3 py-2.5 shrink-0" style={{ borderBottom: '1px solid var(--gia-border)' }}>
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--gia-muted)' }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider shrink-0" style={{ color: 'var(--gia-text)' }}>Preview</span>
+        <span className="text-[11px] truncate flex-1 min-w-0" style={{ color: 'var(--gia-muted)' }}>{url}</span>
+        <button
+          onClick={() => setRefreshKey((k) => k + 1)}
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)]"
+          style={{ color: 'var(--gia-muted-2)' }}
+          aria-label="Refresh preview"
+        >
+          <RotateCcw size={14} />
+        </button>
+        <button
+          onClick={() => void openInBrowser()}
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)]"
+          style={{ color: 'var(--gia-muted-2)' }}
+          aria-label="Open in browser"
+        >
+          <ExternalLink size={14} />
+        </button>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--gia-surface-3)] active:bg-[var(--gia-surface-3)]"
+          style={{ color: 'var(--gia-muted-2)' }}
+          aria-label="Close preview"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <iframe
+        key={refreshKey}
+        src={url}
+        title="App preview"
+        sandbox="allow-scripts"
+        className="flex-1 w-full min-h-0 border-0 block"
+        style={{ background: '#fff' }}
+      />
+    </BottomSheet>
   );
 };
 

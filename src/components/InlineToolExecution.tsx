@@ -265,9 +265,9 @@ const InlineToolExecution: React.FC<InlineToolExecutionProps> = ({ protocol, ind
               <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: `${toolColor}15` }}>
                 <motion.div
                   className="h-full rounded-full"
-                  style={{ background: `linear-gradient(90deg, ${toolColor}, ${toolColor}80)` }}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${protocol.progress * 100}%` }}
+                  style={{ background: `linear-gradient(90deg, ${toolColor}, ${toolColor}80)`, transformOrigin: 'left' }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: protocol.progress }}
                   transition={{ duration: 0.3, ease: 'easeOut' }}
                 />
               </div>

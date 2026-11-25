@@ -62,6 +62,23 @@ const extractLocalhostUrl = (text: string): string | null => {
   return m ? m[0] : null;
 };
 
+// A localhost/LAN URL in an assistant message is NOT automatically the live
+// dev-server preview: docs, code samples and log pastes mention those URLs
+// all the time, and hijacking them into the Build inline preview iframe is
+// confusing and wrong. So the preview is only adopted when the message reads
+// like a server announcement (dev server / preview / serving language) OR a
+// terminal/sandbox/dev-server tool actually ran in this or the previous
+// generation. Both checks are deliberately simple regexes — this is a UI
+// heuristic, not a sandbox boundary.
+const PREVIEW_LANGUAGE_RE = /\b(dev[ -]?server|preview|serv(e|ing)|listening|running (at|on)|local( host)? server|vite|next dev|npm run dev|serve( start)?|http server|started|visit|open (in |your )?browser|available at)\b/i;
+const PREVIEW_TOOL_RE = /terminal|sandbox|exec|shell|dev[ _-]?server|build_project/i;
+
+const ranPreviewTool = (msg: { segments?: { type: string; toolName?: string }[] } | undefined): boolean =>
+  !!msg && (msg.segments || []).some((s) => s.type === 'tool' && PREVIEW_TOOL_RE.test(s.toolName || ''));
+
+const isPreviewAnnouncement = (text: string, serverToolRan: boolean): boolean =>
+  PREVIEW_LANGUAGE_RE.test(text) || serverToolRan;
+
 interface ChatModuleProps {
   /** Force Build Mode on — used by the dedicated Build module wrapper. */
   build?: boolean;
@@ -151,7 +168,14 @@ const ChatModule: React.FC<ChatModuleProps> = ({ build: forceBuild }) => {
     const last = messages[messages.length - 1];
     if (last && last.role === 'assistant' && !last.error) {
       const url = extractLocalhostUrl(last.content);
-      if (url && url !== buildPreviewUrl) setBuildPreview(url);
+      if (!url || url === buildPreviewUrl) return;
+      // Gate: only adopt the URL as the live preview when the message reads
+      // like a dev-server/preview announcement, or a terminal/sandbox/
+      // dev-server tool ran during this (or the previous) generation —
+      // otherwise arbitrary localhost URLs from unrelated answers get
+      // hijacked into the preview iframe (see PREVIEW_LANGUAGE_RE above).
+      const serverToolRan = ranPreviewTool(last) || ranPreviewTool(messages[messages.length - 2]);
+      if (isPreviewAnnouncement(last.content, serverToolRan)) setBuildPreview(url);
     }
   }, [buildMode, messages, buildPreviewUrl, setBuildPreview]);
 
@@ -902,13 +926,19 @@ const BuildInlinePreview: React.FC<{ url: string; onOpenFull: () => void }> = ({
           <Maximize2 size={12} />
         </button>
       </div>
+      {/* allow-same-origin was removed deliberately — the preview renders
+          untrusted LLM-generated code, and scripts + same-origin together
+          would let that code reach the parent app's origin (storage, tokens,
+          session). allow-popups / allow-pointer-lock were dropped too: the
+          preview doesn't need them and each grant widens the untrusted-code
+          attack surface. */}
       <iframe
         key={refreshKey}
         src={url}
         title="GIA build preview"
         className="w-full"
         style={{ height: 240, border: 'none', background: '#fff', display: 'block' }}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-pointer-lock"
+        sandbox="allow-scripts allow-forms allow-modals"
       />
     </div>
   );

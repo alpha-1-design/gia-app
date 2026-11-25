@@ -20,6 +20,16 @@ export interface ConnectorConfig {
   errorMessage?: string;
   config?: Record<string, string>;
   fields?: ConnectorField[];
+  // Lifecycle timestamps (backfilled for pre-existing saved configs on load).
+  createdAt?: number;
+  updatedAt?: number;
+  lastCalledAt?: number;
+  // Managed-auth (Composio) fields. When `managed` is true the connector has
+  // no local API key: Composio hosts the OAuth handshake and executes calls
+  // on our behalf (see the managed hook in call()).
+  managed?: boolean;
+  connectedAccountId?: string;
+  composioToolkit?: string;
 }
 
 export interface ConnectorRequest {
@@ -36,6 +46,8 @@ export interface ConnectorResponse {
   headers: Record<string, string>;
   duration: number;
 }
+
+import composioService from './ComposioService';
 
 class ConnectorManager {
   private connectors: Map<string, ConnectorConfig> = new Map();
@@ -71,8 +83,9 @@ class ConnectorManager {
         { key: 'appPassword', label: 'App Password', placeholder: 'xxxx xxxx xxxx xxxx (16 chars with spaces)', type: 'password', required: true }
       ]}
     ];
+    const now = Date.now();
     for (const c of defaults) {
-      this.connectors.set(c.id, c);
+      this.connectors.set(c.id, { ...c, createdAt: c.createdAt ?? now, updatedAt: c.updatedAt ?? now });
     }
   }
 
@@ -81,11 +94,21 @@ class ConnectorManager {
       const raw = localStorage.getItem(this.storeKey);
       if (raw) {
         const saved: ConnectorConfig[] = JSON.parse(raw);
+        const now = Date.now();
         for (const c of saved) {
           if (this.connectors.has(c.id)) {
-            this.connectors.set(c.id, { ...this.connectors.get(c.id)!, ...c });
+            const existing = this.connectors.get(c.id)!;
+            const merged: ConnectorConfig = { ...existing, ...c };
+            // Preserve/backfill createdAt; never bump updatedAt just for a load.
+            merged.createdAt = c.createdAt ?? existing.createdAt ?? now;
+            merged.updatedAt = c.updatedAt ?? existing.updatedAt ?? now;
+            this.connectors.set(c.id, merged);
           } else {
-            this.connectors.set(c.id, c);
+            this.connectors.set(c.id, {
+              ...c,
+              createdAt: c.createdAt ?? now,
+              updatedAt: c.updatedAt ?? now,
+            });
           }
         }
       }
@@ -112,6 +135,11 @@ class ConnectorManager {
     connector.apiKey = undefined;
     connector.enabled = false;
     connector.status = 'disconnected';
+    connector.updatedAt = Date.now();
+    // Clearing credentials on a managed connector disconnects it too.
+    connector.managed = false;
+    connector.connectedAccountId = undefined;
+    connector.composioToolkit = undefined;
     if (connector.config) {
       const config = { ...connector.config };
       delete config.apiKey;
@@ -133,7 +161,11 @@ class ConnectorManager {
       if (config.config.apiKey) connector.apiKey = config.config.apiKey;
     }
     if (config.enabled !== undefined) connector.enabled = config.enabled;
+    if (config.managed !== undefined) connector.managed = config.managed;
+    if (config.connectedAccountId !== undefined) connector.connectedAccountId = config.connectedAccountId;
+    if (config.composioToolkit !== undefined) connector.composioToolkit = config.composioToolkit;
     connector.lastChecked = Date.now();
+    connector.updatedAt = Date.now();
     const hasRequired = connector.fields?.every(f => !f.required || (connector.config?.[f.key] || connector.apiKey));
     if (hasRequired && (connector.apiKey || Object.keys(connector.config || {}).length > 0)) {
       // Saved credentials are not proof of a working connection. Only a real
@@ -154,6 +186,31 @@ class ConnectorManager {
     const connector = this.connectors.get(id);
     if (!connector) return false;
     connector.lastChecked = Date.now();
+    connector.updatedAt = Date.now();
+    // Managed-auth connectors have no local credentials to probe; their health
+    // is the state of the Composio connected account.
+    if (connector.managed) {
+      if (!composioService.hasKey()) {
+        connector.status = 'disconnected';
+        connector.errorMessage = 'Save your Composio API key in Settings → Connections → Composio first';
+        this.save();
+        return false;
+      }
+      try {
+        const accounts = await composioService.listAccounts(connector.composioToolkit ? [connector.composioToolkit] : undefined);
+        const active = accounts.find(a => a.id === connector.connectedAccountId) ?? accounts.find(a => a.status === 'ACTIVE');
+        if (active) connector.connectedAccountId = active.id;
+        connector.status = active?.status === 'ACTIVE' ? 'connected' : 'configured';
+        connector.errorMessage = active?.status === 'ACTIVE'
+          ? undefined
+          : 'No ACTIVE Composio account yet — run Connect to finish the OAuth flow';
+      } catch (e) {
+        connector.status = 'error';
+        connector.errorMessage = e instanceof Error ? e.message : 'Composio account check failed';
+      }
+      this.save();
+      return connector.status === 'connected';
+    }
     const cfg = connector.config || {};
     const hasRequired = connector.fields?.every(f => !f.required || cfg[f.key] || (f.key === 'apiKey' && connector.apiKey));
     if (!hasRequired) {
@@ -267,14 +324,49 @@ class ConnectorManager {
     if (!connector) throw new Error(`Connector "${id}" not found`);
     if (!connector.enabled) throw new Error(`Connector "${id}" is disabled`);
 
+    const start = performance.now();
+
+    // Managed-auth hook — runs BEFORE the per-id auth switch below. A managed
+    // connector has no locally stored API key or baseUrl at all: Composio hosts
+    // the OAuth handshake server-side, so there is nothing to sign locally and
+    // no endpoint→Composio-tool mapping is needed. The raw request shape
+    // (method / endpoint / body / params) is forwarded verbatim as the tool
+    // arguments and Composio executes it against the connected account.
+    if (connector.managed) {
+      const stamped = Date.now();
+      connector.lastCalledAt = stamped;
+      connector.updatedAt = stamped;
+      this.save();
+      const toolkit = connector.composioToolkit || id;
+      let accountId = connector.connectedAccountId;
+      if (!accountId) {
+        const accounts = await composioService.listAccounts([toolkit]);
+        accountId = accounts.find(a => a.status === 'ACTIVE')?.id;
+      }
+      if (!accountId) {
+        throw new Error(`Connector "${id}" has no ACTIVE Composio account — connect it in Settings → Connections first`);
+      }
+      connector.connectedAccountId = accountId;
+      const result = await composioService.executeTool(toolkit, {
+        method: request.method,
+        endpoint: request.endpoint,
+        body: request.body,
+        params: request.params,
+      }, accountId);
+      return {
+        status: 200,
+        data: result,
+        headers: {},
+        duration: Math.round(performance.now() - start),
+      };
+    }
+
     const cfg = connector.config || {};
     const apiKey = cfg.apiKey || connector.apiKey || '';
 
     if (!connector.baseUrl && id !== 'supabase' && id !== 'aws' && id !== 'firebase') {
       throw new Error(`Connector "${id}" has no base URL configured`);
     }
-
-    const start = performance.now();
 
     let urlStr: string;
     const headers: Record<string, string> = { 'User-Agent': 'GIA/2.4.0.19', ...request.headers };
